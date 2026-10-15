@@ -90,7 +90,7 @@ theorem utf8_2_7 : "2.7".toUTF8.toList = BSmtLibSpec.Regex.chars "2.7" := by
   rw [ByteArray.toList_eq_data]; decide
 
 /-- A symbol the spec names `not` is `not` to the literal parser. -/
-theorem Symbol.isNot_of_name {s : Nodes.Symbol} (h :
+theorem Symbol.isNot_of_name {s : Plain.SymbolView} (h :
     (Bridge.symbol s).name = BSmtLibSpec.Regex.chars "not") :
     (isNot s) = true := by
   unfold Parser.Command.Internal.Standard.Symbol.isNot

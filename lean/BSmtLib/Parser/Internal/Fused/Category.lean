@@ -51,14 +51,14 @@ variable {batch : BatchTag}
 quoted symbol. -/
 @[inline]
 def symbolOf? (version : Version) (category : TokenCategory) (next : BatchCursor batch)
-    (token : Token batch) : Option Symbol :=
+    (token : Token batch) : Option SymbolView :=
   match category with
   | .unquotedSymbol =>
     let content := contentOf next token
     match reservedAt? version next token with
-    | none => some ⟨SymbolView.Internal.newUnchecked content, false⟩
+    | none => some (SymbolView.Internal.newUnchecked false content)
     | some _ => none
-  | .quotedSymbol => some ⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩
+  | .quotedSymbol => some (SymbolView.Internal.newUnchecked true (contentOf next token))
   | _ => none
 
 /-- Whether the token is the general reserved word in the version. -/
@@ -127,7 +127,7 @@ abbrev SortOutcome (H : Type) {m : Type → Type} [Handler H m] :=
 @[inline]
 def sortComplete (h : H) (levels : List (SortLevel (Handler.«Sort» H))) (head : Identifier)
     (arguments : Array (Handler.«Sort» H)) : m (SortOutcome H) := do
-  match ← runHandler (Handler.handleSort head arguments) h with
+  match ← runHandler (Handler.handleSort head (.new arguments)) h with
   | (.error e, h) => return .error h (.handler e)
   | (.ok sort, h) =>
     match levels with
@@ -206,13 +206,13 @@ abbrev SortedVarOf (H : Type) {m : Type → Type} [Handler H m] :=
 
 /-- The list of sorted variables of the handler. -/
 abbrev SortedVarsOf (H : Type) {m : Type → Type} [Handler H m] :=
-  ListState (SortedVarOf H) (Symbol × Handler.«Sort» H)
+  ListState (SortedVarOf H) (SymbolView × Handler.«Sort» H)
 
 /-- `sortedVarStep` on the token's category. -/
 @[inline]
 def sortedVarStep {batch : BatchTag} (version : Version) (h : H) (self : SortedVarOf H)
     (category : TokenCategory) (next : BatchCursor batch) (token : Token batch) :
-    m (HandledOutcome H (SortedVarOf H) (Symbol × Handler.«Sort» H) (Cause H)) := do
+    m (HandledOutcome H (SortedVarOf H) (SymbolView × Handler.«Sort» H) (Cause H)) := do
   match self with
   | .start =>
     match category with
@@ -236,7 +236,7 @@ def sortedVarStep {batch : BatchTag} (version : Version) (h : H) (self : SortedV
 @[inline]
 def sortedVarsStep {batch : BatchTag} (version : Version) (h : H) (self : SortedVarsOf H)
     (category : TokenCategory) (next : BatchCursor batch) (token : Token batch) :
-    m (HandledOutcome H (SortedVarsOf H) (Array (Symbol × Handler.«Sort» H)) (Cause H)) := do
+    m (HandledOutcome H (SortedVarsOf H) (Array (SymbolView × Handler.«Sort» H)) (Cause H)) := do
   let { opened, outside, inner, items } := self
   if !opened then
     match category with
@@ -328,7 +328,7 @@ def sortsStepOutlined {batch : BatchTag} (version : Version) (h : H)
 def sortedVarsStepOutlined {batch : BatchTag} (version : Version) (h : H)
     (self : SortedVarsOf H) (category : TokenCategory) (next : BatchCursor batch)
     (token : Token batch) :
-    m (HandledOutcome H (SortedVarsOf H) (Array (Symbol × Handler.«Sort» H)) (Cause H)) :=
+    m (HandledOutcome H (SortedVarsOf H) (Array (SymbolView × Handler.«Sort» H)) (Cause H)) :=
   sortedVarsStep version h self category next token
 
 /-- `signatureStep`, not inlined. -/

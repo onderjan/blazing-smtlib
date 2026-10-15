@@ -47,10 +47,10 @@ open BSmtLib.Parser.Command.Internal
   unfold ByteSlice.beq
   rw [toByteArray_canonSlice]
 
-@[canon_simps] theorem isNot_canonSymbol (s : Symbol) :
+@[canon_simps] theorem isNot_canonSymbol (s : Plain.SymbolView) :
     Standard.Symbol.isNot (canonSymbol s) = Standard.Symbol.isNot s := by
   cases s
-  simp only [Standard.Symbol.isNot, canon_simps, Canon.canon]
+  simp only [Standard.Symbol.isNot, canon_simps]
 
 @[canon_simps] theorem isVersionKeyword_canon (k : BSmtLib.Plain.KeywordView) :
     isVersionKeyword (BSmtLib.Plain.KeywordView.Internal.newUnchecked (canonSlice k.asSlice)) =
@@ -83,7 +83,7 @@ theorem constructorStep_canon {version : Token.Version} {state state' : Construc
       (constructorStep version state' token') := by
   subst hs ht; unfold constructorStep; canon_step []
 
-theorem datatypeStep_canon {start start' : Array Symbol → RPM Unit}
+theorem datatypeStep_canon {start start' : Array Plain.SymbolView → RPM Unit}
     (hstart : ∀ ps ps', ps' = canon ps → CSim (start ps) (start' ps'))
     {version : Token.Version} {state state' : DatatypeState RSort} {token : Internal.Input}
     (hs : state' = canon state) (ht : token' = canon token) :
@@ -157,6 +157,8 @@ theorem commandStep_canon {version : Token.Version} {state state' : CommandState
     CSim (commandStep (H := List Event) version state token)
       (commandStep version state' token') := by
   subst hs ht; unfold commandStep; canon_step []
+  -- the recording handler names no non-standard parser
+  all_goals exact Empty.elim ‹Empty›
 
 theorem commandArrive_canon {state state' : CommandStateOf (List Event)} {token : Internal.Input}
     (hs : state' = canon state) (ht : token' = canon token) :
@@ -190,6 +192,19 @@ theorem ScriptParser_step_canon {version : Token.Version}
     {token : Internal.Input} (hp : parser' = canon parser) (ht : token' = canon token) :
     CSim (ScriptParser.Internal.step (H := List Event) version parser token)
       (ScriptParser.Internal.step version parser' token') := by
-  subst hp ht; unfold ScriptParser.Internal.step; canon_step []
+  subst hp ht; unfold ScriptParser.Internal.step
+  simp only [Canon.canon, canonScriptParser, ScriptParser.Internal.posture_mk,
+    ScriptParser.Internal.command_mk, ScriptParser.Internal.declarations_mk]
+  refine CSim.bind (commandStep_canon rfl rfl) (fun r => ?_)
+  rcases r with c | (_ | declared | _ | _)
+  · exact CSim.pure rfl
+  · exact CSim.pure rfl
+  · simp only [Canon.canon, canonStep, id_eq]
+    cases Internal.VersionPosture.check (ScriptParser.Internal.posture parser)
+        (ScriptParser.Internal.declarations parser) declared
+    · exact CSim.pure rfl
+    · exact CSim.throw (α := Internal.Flow RPM (ScriptParser (List Event)) Unit) _
+  · exact CSim.pure rfl
+  · exact CSim.pure rfl
 
 end BSmtLib.Facts.Proofs.Parser.Canon.Commands

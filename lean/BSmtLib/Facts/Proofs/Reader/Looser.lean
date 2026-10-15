@@ -10,6 +10,7 @@ import all BSmtLib.Lexer
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Parser.Script
 import all BSmtLib.Reader
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -64,7 +65,7 @@ variable (strict loose : Token.VersionPosture) (I : Watch RecAdapter → Prop)
 
 /-- The watched adapter is under `strict`, and its record satisfies `I`. -/
 def Good (w : Watch RecAdapter) : Prop :=
-  w.inner.parser.posture = strict ∧ I w
+  ScriptParser.Internal.posture w.inner.parser = strict ∧ I w
 
 /-- The relator of the watched adapter and the adapter under `loose`: every value of the first has
 a partner; once something went wrong, it stays so; and from a record where nothing went wrong,
@@ -111,8 +112,8 @@ def looserRelator : Relator (Watch RecAdapter) WM RecAdapter Id where
 
 /-- The link of the watched adapter and the adapter under `loose`: equal results, and the errors
 of the first those of the second wrapped. -/
-def looserLink : Link (Watch RecAdapter) WM Unit (Option (ParseErrorCause Unit)) RecAdapter Id
-    Unit (ParseErrorCause Unit) where
+def looserLink : Link (Watch RecAdapter) WM Unit (Option (ParseError Unit)) RecAdapter Id
+    Unit (ParseError Unit) where
   rc := looserRelator strict loose I
   rr := (· = ·)
   re := fun e₁ e₂ => e₁ = some e₂
@@ -139,11 +140,11 @@ open BSmtLib.Facts.Proofs.Reader.Param.Split (outN outS resumeOut outN_split_eq 
 theorem outN_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
     {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (h : cursor.HasNext) (adapter : RecAdapter),
-      (remaining cursor) < n → adapter.parser.posture = strict →
+      (remaining cursor) < n → ScriptParser.Internal.posture adapter.parser = strict →
       (∃ e, (outN cursor h adapter).1.1 = .error e) ∨
         (outN cursor h (adapterWith loose adapter) =
             ((outN cursor h adapter).1, adapterWith loose (outN cursor h adapter).2) ∧
-          (outN cursor h adapter).2.parser.posture = strict)
+          ScriptParser.Internal.posture (outN cursor h adapter).2.parser = strict)
   | 0, _, _, _, hn, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, h, adapter, hn, hp => by
     rw [outN_split_eq script_parse_eq, outN_split_eq script_parse_eq]
@@ -161,8 +162,9 @@ theorem outN_looser {strict loose : Token.VersionPosture} (hl : Looser strict lo
           adapter).1, adapterWith loose
             ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
               h).run adapter).2) ∧
-        ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
-          adapter).2.parser.posture = strict) at hs
+        ScriptParser.Internal.posture
+          ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
+            adapter).2.parser = strict) at hs
     generalize (Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
       h).run adapter = x at hs ⊢
     generalize (Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
@@ -186,7 +188,7 @@ theorem outN_looser {strict loose : Token.VersionPosture} (hl : Looser strict lo
 theorem consume_looserN {strict loose : Token.VersionPosture} (hl : Looser strict loose)
     {b : Token.BatchTag}
     (cursor : Token.BatchCursor b) (h : cursor.HasNext) (adapter : RecAdapter)
-    (hp : adapter.parser.posture = strict) :
+    (hp : ScriptParser.Internal.posture adapter.parser = strict) :
     (∃ e, ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
         adapter).1.1 = .error e) ∨
       ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
@@ -195,8 +197,9 @@ theorem consume_looserN {strict loose : Token.VersionPosture} (hl : Looser stric
           adapterWith loose
             ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
                 adapter).2) ∧
-        ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
-          adapter).2.parser.posture = strict) := by
+        ScriptParser.Internal.posture
+          ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
+            adapter).2.parser = strict) := by
   have hl' := outN_looser hl (remaining cursor + 1) cursor h adapter (Nat.lt_succ_self _) hp
   have eN : ∀ A, outN cursor h A =
       let x := (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A
@@ -352,17 +355,17 @@ theorem eof_looser (hl : Looser strict loose) (hI : KeepsI strict I)
     (c : LexerCore) (w : Watch RecAdapter) (he : w.errored = false) (hv : c.version = w.version)
     (hg : Good strict I w)
     (hok : isError (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+      (E := ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
       (Recovery.LexRecovery.recover Recovery.FailFast)).run c).run w.inner).1.1 = false) :
     ∃ w' : Watch RecAdapter, w'.errored = false ∧ Good strict I w' ∧
       w'.inner = (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-        (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+        (E := ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
         (Recovery.LexRecovery.recover Recovery.FailFast)).run c).run w.inner).2 ∧
-      ((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit) (E := ParseErrorCause Unit)
+      ((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit) (E := ParseError Unit)
         (Recovery.LexRecovery.abandon Recovery.FailFast)
             (Recovery.LexRecovery.recover Recovery.FailFast)).run
           c).run (adapterWith loose w.inner) =
-        ((((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit) (E := ParseErrorCause Unit)
+        ((((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit) (E := ParseError Unit)
           (Recovery.LexRecovery.abandon Recovery.FailFast)
               (Recovery.LexRecovery.recover Recovery.FailFast)).run
             c).run w.inner).1, adapterWith loose w'.inner) := by
@@ -383,13 +386,13 @@ theorem eof_looser (hl : Looser strict loose) (hI : KeepsI strict I)
   have hU := Param.UnaryCalls.lexEofStep_flag c w () he hv
   unfold Param.UnaryCalls.irun at hU
   generalize ((StateT.run (Internal.lexEofStep (H := Watch RecAdapter) (m := WM) (R := Unit)
-    (E := Option (ParseErrorCause Unit)) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (E := Option (ParseError Unit)) (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast)) c).run w).run () = rW at hA hB hU
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (E := ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast)) c).run w.inner = rP at hA hok ⊢
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (E := ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast)) c).run
     (adapterWith loose w.inner) = rL at hB ⊢
   obtain ⟨⟨⟨resW, cW⟩, w'⟩, u'⟩ := rW
@@ -492,12 +495,12 @@ theorem lexEof_looser (hl : Looser strict loose) (hI : KeepsI strict I)
     Param.Flagged.held_ofParts, handler_ofParts] at h ⊢
   rw [hpw] at h ⊢
   have hok : isError (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+      (E := ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
       (Recovery.LexRecovery.recover Recovery.FailFast)).run
           (Internal.core p)).run w.inner).1.1 = false := by
     revert h
     generalize (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+      (E := ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
       (Recovery.LexRecovery.recover Recovery.FailFast)).run (Internal.core p)).run w.inner).1.1 = r
     rcases r with e | flow
     · intro h; cases h
@@ -506,7 +509,7 @@ theorem lexEof_looser (hl : Looser strict loose) (hI : KeepsI strict I)
   rw [hloose]
   revert h hinner
   generalize ((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (E := ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast)).run (Internal.core p)).run w.inner = r
   obtain ⟨⟨res, c'⟩, a'⟩ := r
   intro h hinner

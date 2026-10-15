@@ -114,13 +114,15 @@ theorem holds_spanAt_start {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h
     {i : Nat}
     (hi : i < ls.length) : (spanAt T i).start = ls[i].start := by
   obtain ⟨-, -, -, -, e5, e6, e7, -⟩ := h.entry i hi
-  simp only [Simulation.Batch.spanAt, Span.Internal.ofNumbers, Span.start, e5, e6, e7]
+  simp only [Simulation.Batch.spanAt, Span.Internal.ofNumbers, Span.start, e5, e6, e7,
+    Span.Location.Internal.new_eta]
 
 theorem holds_spanAt_end {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h : Holds T ls)
     {i : Nat}
     (hi : i < ls.length) : (spanAt T i).end = ls[i].end := by
   obtain ⟨-, -, -, -, -, -, -, e8, e9, e10⟩ := h.entry i hi
-  simp only [Simulation.Batch.spanAt, Span.Internal.ofNumbers, Span.«end», e8, e9, e10]
+  simp only [Simulation.Batch.spanAt, Span.Internal.ofNumbers, Span.«end», e8, e9, e10,
+    Span.Location.Internal.new_eta]
 
 theorem holds_contentAt {T : Token.Internal.TokenBatch} {ls : List Lexeme} (h : Holds T ls)
     {i : Nat}
@@ -186,6 +188,61 @@ theorem consumedEndOf_at {ls : List Lexeme} {c c₀ : Token.BatchCursor g} (hc :
     (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c - 1 < ls.length) :
     (consumedEndOf c) hc = ls[cNext c - 1].end := by
   rw [consumedEndOf_eq, holds_spanAt_end hb hj]
+
+/-- The span of a lexeme, from its start to its end. -/
+def lexSpan (l : Lexeme) : Span :=
+  Span.Internal.newUnchecked l.start l.end
+
+theorem lexSpan_start (l : Lexeme) : (lexSpan l).start = l.start := by
+  simp only [lexSpan, Span.Internal.newUnchecked, Span.start, Span.Location.Internal.new_eta]
+
+theorem lexSpan_end (l : Lexeme) : (lexSpan l).end = l.end := by
+  simp only [lexSpan, Span.Internal.newUnchecked, Span.«end», Span.Location.Internal.new_eta]
+
+/-- A location of the library for one of the spec. -/
+def ofLocation (l : BSmtLibSpec.Lexer.Location) : Span.Location :=
+  Span.Location.Internal.new l.offset l.line l.column
+
+theorem ofLocation_toLocation (l : Span.Location) :
+    ofLocation (BSmtLib.Facts.Lexer.Adapters.toLocation l) = l := by
+  simp only [ofLocation, BSmtLib.Facts.Lexer.Adapters.toLocation, Span.Location.Internal.new_eta]
+
+/-- The span of the last token taken, from its start to its end. -/
+def handedSpan (t : List BSmtLibSpec.Lexer.Handed) : Span :=
+  match t.getLast? with
+  | some h => Span.Internal.newUnchecked (ofLocation h.start) (ofLocation h.end)
+  | none => Span.Internal.newZero
+
+theorem handedSpan_eq {t : List BSmtLibSpec.Lexer.Handed} {x : BSmtLibSpec.Lexer.Handed}
+    {l : Lexeme} (h : t.getLast? = some x)
+    (hs : x.start = BSmtLib.Facts.Lexer.Adapters.toLocation l.start)
+    (he : x.end = BSmtLib.Facts.Lexer.Adapters.toLocation l.end) : handedSpan t = lexSpan l := by
+  unfold handedSpan lexSpan
+  rw [h]
+  dsimp only
+  rw [hs, he, ofLocation_toLocation, ofLocation_toLocation]
+
+theorem span_eq_lexSpan {s : Span} {l : Lexeme} (h₁ : s.start = l.start) (h₂ : s.end = l.end) :
+    s = lexSpan l := by
+  unfold lexSpan
+  rw [← h₁, ← h₂]
+  rfl
+
+/-- The span of the next token of a cursor over a batch that holds the lexemes is that of the
+lexeme at its index. -/
+theorem span_peek {ls : List Lexeme} (c : Token.BatchCursor g) (h : c.HasNext)
+    (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c < ls.length) :
+    c.span (c.peek h) = lexSpan ls[cNext c] := by
+  apply span_eq_lexSpan
+  · rw [Simulation.Batch.span_eq, tokenIndex_peek, holds_spanAt_start hb hj]
+  · rw [Simulation.Batch.span_eq, tokenIndex_peek, holds_spanAt_end hb hj]
+
+/-- The span of the last token consumed from a cursor over a batch that holds the lexemes. -/
+theorem consumedSpanOf_at {ls : List Lexeme} {c c₀ : Token.BatchCursor g} (hc : c.Consumed c₀)
+    (hb : Holds (BSmtLib.Lexer.Internal.intoBatch c) ls) (hj : cNext c - 1 < ls.length) :
+    Token.BatchCursor.Internal.consumedSpanOf c hc = lexSpan ls[cNext c - 1] := by
+  rw [Simulation.Batch.consumedSpanOf_eq]
+  exact span_eq_lexSpan (holds_spanAt_start hb hj) (holds_spanAt_end hb hj)
 
 end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
 

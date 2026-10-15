@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.VEnd
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -40,7 +41,8 @@ def HandV (core : Core) (l : Lexeme)
     (r : VRes (Except (Failure (Option C.Error)) (Option (Span.Located C.Result)))) :
     HandOut C → Prop
   | .cont p => ∃ c', r = ((.ok none, c'), p.taken) ∧ VSame core c' p.ver core.holding core.activity
-  | .wait v l0 p => l0 = l ∧ ∃ c', r = ((.ok (some ⟨v, l.end⟩), c'), p.taken) ∧
+  | .wait v l0 p => l0 = l ∧
+      ∃ c', r = ((.ok (some (Span.Located.Internal.new v l.end)), c'), p.taken) ∧
       VSame core c' p.ver true core.activity
   | .stop s p =>
     match s with
@@ -56,9 +58,11 @@ def HandV (core : Core) (l : Lexeme)
             p.taken) ∧
         VSame core c' p.ver core.holding core.activity
     | .brk _ _ _ => False
-    | .brkX v l0 => l0 = l ∧ ∃ c', r = ((.ok (some ⟨v, l.end⟩), c'), p.taken) ∧
+    | .brkX v l0 => l0 = l ∧
+        ∃ c', r = ((.ok (some (Span.Located.Internal.new v l.end)), c'), p.taken) ∧
         VSame core c' p.ver true core.activity
-    | .discard v l0 => l0 = l ∧ ∃ c', r = ((.ok (v.map (⟨·, l.end⟩)), c'), p.taken) ∧
+    | .discard v l0 => l0 = l ∧
+        ∃ c', r = ((.ok (v.map (Span.Located.Internal.new · l.end)), c'), p.taken) ∧
         VSame core c' p.ver (v.isSome || core.holding) (.discarding l.end)
     | .relex l0 => l0 = l ∧ ∃ c', r = ((.ok none, c'), p.taken) ∧
         VSame core c' p.ver core.holding core.activity

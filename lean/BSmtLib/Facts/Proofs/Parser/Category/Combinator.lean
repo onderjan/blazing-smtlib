@@ -19,7 +19,7 @@ answer depends on no more than that.
 namespace BSmtLib.Facts.Proofs.Parser.Category.Combinator
 
 open BSmtLib.Token (Produce)
-open BSmtLib.Parser (Parse ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Token.Internal
@@ -29,6 +29,16 @@ open BSmtLib.Facts.Parser.Adapters.Cursor (Takes Reads noPoints)
 open BSmtLib.Facts.Parser.Adapters.Outcome (Outcome outcome answer HandlerOnly)
 open BSmtLib.Facts.Proofs.Parser.Category.Cursor BSmtLib.Facts.Proofs.Parser.Category.Token
 open BSmtLib.Facts.Proofs.Parser.Category.Steps
+
+set_option hygiene false in
+/-- Splits the answer `a` of a parse: a syntax error of the kind `kind`, the handler's error
+`error`, a wish for more, or the result `result`. -/
+macro "answer_cases" a:ident : tactic => `(tactic| (
+  rcases $a:ident with e | (_ | result)
+  all_goals (try (
+    obtain ⟨c, rfl⟩ : ∃ c, e = BSmtLib.Parser.ParseError.Internal.new c :=
+      ⟨e.cause, (BSmtLib.Parser.ParseError.Internal.new_eta e).symm⟩
+    rcases c with kind | error))))
 
 /-! ## Answers known through `outcome` -/
 
@@ -45,7 +55,7 @@ variable {P R E γ δ α : Type} {Z : Type} [Produce Z] {cursor : Z}
 
 /-- What a parse of the cursor gives. -/
 abbrev Answer (H P R E : Type) {Z : Type} [Produce Z] (cursor : Z) : Type :=
-  Except (ParseErrorCause E) (ControlFlow R) × P × ParseState H ×
+  Except (ParseError E) (ControlFlow R) × P × ParseState H ×
     { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }
 
 /-- A continuation of a parse, on what `outcome` reads of the parse; `x₀` fills in what it does
@@ -58,8 +68,9 @@ noncomputable def onOutcome (k : Answer H P R E cursor → StateT H m γ)
   | .waits parser => k (.ok .continue, parser, .new, x₀.2.2.2)
   | .rejected kind next =>
     @dite _ (Produce.HasNext cursor → Produce.Consumed next cursor) (Classical.propDecidable _)
-      (fun h => k (.error (.syntax kind), x₀.2.1, .new, ⟨next, h⟩)) fun _ => k x₀
-  | .failed error => k (.error (.handler error), x₀.2.1, .new, x₀.2.2.2)
+      (fun h => k (.error (ParseError.Internal.new (.syntax kind)), x₀.2.1, .new, ⟨next, h⟩))
+      fun _ => k x₀
+  | .failed error => k (.error (ParseError.Internal.new (.handler error)), x₀.2.1, .new, x₀.2.2.2)
 
 omit [Monad m] [LawfulMonad m] in
 theorem onOutcome_finished (k : Answer H P R E cursor → StateT H m γ) (x₀ : Answer H P R E cursor)
@@ -75,7 +86,7 @@ theorem onOutcome_rejected (k : Answer H P R E cursor → StateT H m γ) (x₀ :
     (kind : SyntaxErrorKind) {next : Z}
     (h : Produce.HasNext cursor → Produce.Consumed next cursor) :
     onOutcome k x₀ (.rejected kind next) =
-      k (.error (.syntax kind), x₀.2.1, .new, ⟨next, h⟩) := by
+      k (.error (ParseError.Internal.new (.syntax kind)), x₀.2.1, .new, ⟨next, h⟩) := by
   simp only [onOutcome]
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
@@ -142,12 +153,12 @@ theorem answer_run_bind {β : Type} {x : ExceptT (ParseErrorCause E) (StateT H m
 
 omit [LawfulMonad m] in
 /-- `outcome` reads alike two answers with the same answer, parser and cursor. -/
-theorem outcome_rewrap {cursor' : Z} (a : Except (ParseErrorCause E) (ControlFlow R)) (p : P)
+theorem outcome_rewrap {cursor' : Z} (a : Except (ParseError E) (ControlFlow R)) (p : P)
     (s s' : ParseState H) (z : Z) (h : Produce.HasNext cursor → Produce.Consumed z cursor)
     (h' : Produce.HasNext cursor' → Produce.Consumed z cursor') :
     outcome (cursor := cursor) (a, p, s, ⟨z, h⟩) =
       outcome (cursor := cursor') (a, p, s', ⟨z, h'⟩) := by
-  rcases a with (_ | _) | (_ | _) <;> rfl
+  rcases a with _ | (_ | _) <;> rfl
 
 theorem outcome_bind_pure {cursor' : Z} (X : StateT H m (Answer H P R E cursor'))
     (w : Answer H P R E cursor' → Answer H P R E cursor)
@@ -273,12 +284,13 @@ private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Produce Z] {cursor : Z}
     outcome <$> k x = outcome <$> onOutcome k x₀ (outcome x) := by
   intro k
   obtain ⟨a, p, s, ⟨z, hz⟩⟩ := x
-  rcases a with (kind | error) | (_ | result)
-  · rw [show outcome (cursor := cursor) (.error (.syntax kind), p, s, ⟨z, hz⟩) =
+  answer_cases a
+  · rw [show outcome (cursor := cursor)
+        (.error (ParseError.Internal.new (.syntax kind)), p, s, ⟨z, hz⟩) =
       .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
     simp only [k, map_pure]
     rfl
-  · simp only [onOutcome, outcome, k, map_pure]
+  · simp only [onOutcome, outcome, k, map_pure, ParseError.Internal.cause_new]
   · simp only [onOutcome, outcome, k, map_pure]
   · rw [show outcome (cursor := cursor) (.ok (.break result), p, s, ⟨z, hz⟩) =
       .finished result p z from rfl, onOutcome_finished _ _ _ _ hz, parseState_eq s .new]
@@ -301,12 +313,13 @@ theorem pair_parses {version : Token.Version} {p₁ b₁ : P₁} {p₂ b₂ : P�
   rw [pair_parse_eq, bind_outcome _ outcome _ (.ok .continue, p₁, .new, ⟨middle, hc₁⟩) (by
       intro x
       obtain ⟨a, p, s, ⟨z, hz⟩⟩ := x
-      rcases a with (kind | error) | (_ | result)
-      · rw [show outcome (cursor := cursor) (.error (.syntax kind), p, s, ⟨z, hz⟩) =
+      answer_cases a
+      · rw [show outcome (cursor := cursor)
+            (.error (ParseError.Internal.new (.syntax kind)), p, s, ⟨z, hz⟩) =
           .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
         simp only [map_pure]
         rfl
-      · simp only [onOutcome, outcome, map_pure]
+      · simp only [onOutcome, outcome, map_pure, ParseError.Internal.cause_new]
       · simp only [onOutcome, outcome, map_pure]
       · rw [show outcome (cursor := cursor) (.ok (.break result), p, s, ⟨z, hz⟩) =
           .finished result p z from rfl, onOutcome_finished _ _ _ _ hz, parseState_eq s .new]),
@@ -787,14 +800,16 @@ theorem opened_waits_inner {version : Token.Version} {p : P} {tokens : List Pars
 /-- The parenthesised parser on a `(`, the inner value and a `)`. -/
 theorem paren_parses {version : Token.Version} {p b : P} {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ []) :
-    Outcome.Finishes version (ParenParser.new (H := H) p) (.parenOpen :: (tokens ++ [.parenClose]))
-      program (ParenParser.new b) :=
+    Outcome.Finishes version (ParenParser.new (ClosedParser.new (H := H) p))
+      (.parenOpen :: (tokens ++ [.parenClose]))
+      program (ParenParser.new (ClosedParser.new b)) :=
   opened_parses (closed_parses h hne) (by simp)
 
 /-- The parenthesised parser on a first token that is not `(`. -/
 theorem paren_rejects_open {version : Token.Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
-    Outcome.Rejects version (ParenParser.new (H := H) p) [token] (pure () : PM H Unit)
+    Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+      [token] (pure () : PM H Unit)
       (.expectedToken #[.parenOpen]) :=
   opened_rejects_open htoken
 
@@ -802,7 +817,8 @@ theorem paren_rejects_open {version : Token.Version} {p : P} {token : Parser.Int
 theorem paren_rejects_inner {version : Token.Version} {p : P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p tokens program kind) (hne : tokens ≠ []) :
-    Outcome.Rejects version (ParenParser.new (H := H) p) (.parenOpen :: tokens) program kind :=
+    Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+      (.parenOpen :: tokens) program kind :=
   opened_rejects_inner (closed_rejects_inner h hne) hne
 
 /-- The parenthesised parser on a `(`, the inner value and a token that is not `)`. -/
@@ -810,7 +826,8 @@ theorem paren_rejects_close {version : Token.Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R} {token : Parser.Internal.Input}
     (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ [])
     (htoken : token ≠ .parenClose) :
-    Outcome.Rejects version (ParenParser.new (H := H) p) (.parenOpen :: (tokens ++ [token]))
+    Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+      (.parenOpen :: (tokens ++ [token]))
       (do let _ ← program; pure ()) (.expectedToken #[.parenClose]) :=
   opened_rejects_inner (closed_rejects_close h hne htoken) (by simp)
 

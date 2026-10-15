@@ -123,7 +123,7 @@ theorem value_runs (hA : TermAgrees h) (single : Bool) (value : Tree.AttributeVa
           { mode := .inside keyword (#[] ++ handled.toArray) [] true, attributes } [.parenClose]
           (do tick points .parenClose
               Parser.Internal.call (Traits.Handler.handleAttribute keyword
-                (some (.list (#[] ++ handled.toArray)))))
+                (some (.list (.new (#[] ++ handled.toArray))))))
           fun handled => pure (.more { mode := .start, attributes := attributes.push handled }) :=
       fun _ => RunsS.token (by simp [Parser.Category.Attribute.Internal.attributeStep.eq_def])
     rw [show Parser.Internal.Input.parenOpen :: (inner ++ [.parenClose]) =

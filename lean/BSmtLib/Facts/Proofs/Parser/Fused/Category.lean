@@ -27,7 +27,7 @@ proofs go by the state, then by the token's category and the reserved word it sp
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Category
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic

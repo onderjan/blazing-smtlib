@@ -162,7 +162,7 @@ theorem termComplete_erases (levels : List (TermLevel Nat Nat Nat)) (term : Nat)
   try dsimp only
   erasing_step []
 
-theorem startBinder_erases (binder : SortedBinder) (variables : Array (Nodes.Symbol × Nat)) :
+theorem startBinder_erases (binder : SortedBinder) (variables : Array (Plain.SymbolView × Nat)) :
     Erases (startBinder (H := List Event) binder variables) := by
   unfold startBinder
   try dsimp only
@@ -233,7 +233,7 @@ theorem constructorStep_erases (version : Token.Version) (state : ConstructorSta
   try dsimp only
   erasing_step [hvars]
 
-theorem datatypeStep_erases {start : Array Nodes.Symbol → RPM Unit}
+theorem datatypeStep_erases {start : Array Plain.SymbolView → RPM Unit}
     (hstart : ∀ parameters, Erases (start parameters)) (version : Token.Version)
     (state : DatatypeState Nat) (token : Parser.Internal.Input) :
     Erases (datatypeStep (H := List Event) start version state token) := by
@@ -280,28 +280,35 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
   have hsymbols := listStep_erases () symbolStep_erases none
   have hfunctions := listStep_erases (FunctionDecState.start (HandledSort := Nat))
     (functionDecStep_erases version) none
-  have hdatatypes : ∀ count (start : Array Nodes.Symbol → RPM Unit),
+  have hdatatypes : ∀ count (start : Array Plain.SymbolView → RPM Unit),
       (∀ parameters, Erases (start parameters)) →
       ∀ state token, Erases (ListState.step (DatatypeState.start (HandledSort := Nat))
         (fun state token => do
           match ← datatypeStep (H := List Event) start version state token with
           | .more state => return Parser.Internal.Step.more state
           | .done constructors =>
-            Parser.Internal.call (CommandHandler.endDatatypeDeclaration constructors)
+            Parser.Internal.call (CommandHandler.endDatatypeDeclaration
+              (Multiple.ConstructorsView.Internal.new constructors))
             return .done ()) (some count) state token) := by
     intro count start hstart state token
     apply listStep_erases
     intro state token
     erasing_step [datatypeStep_erases hstart]
   have hdeclare : ∀ symbol state token, Erases (datatypeStep (H := List Event)
-      (fun parameters => Parser.Internal.call (CommandHandler.startDeclareDatatype symbol parameters))
+      (fun parameters =>
+        Parser.Internal.call (CommandHandler.startDeclareDatatype symbol
+          (Multiple.SymbolsView.Internal.new parameters)))
       version state token) := fun symbol =>
     datatypeStep_erases (fun _ => by apply erases_call) version
   have hdeclarations := fun count => hdatatypes count
-    (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
+    (fun parameters =>
+      Parser.Internal.call (CommandHandler.startDatatypeDeclaration
+        (Multiple.SymbolsView.Internal.new parameters)))
     (fun _ => by apply erases_call)
   have hdeclareEach : ∀ state token, Erases (datatypeStep (H := List Event)
-      (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
+      (fun parameters =>
+        Parser.Internal.call (CommandHandler.startDatatypeDeclaration
+          (Multiple.SymbolsView.Internal.new parameters)))
       version state token) :=
     datatypeStep_erases (fun _ => by apply erases_call) version
   have hbodies := fun count => listStep_erases (TermState.init (HandledSExpr := Nat)
@@ -318,12 +325,15 @@ theorem payloadStep_erases (version : Token.Version) (state : Payload Nat Nat Na
     intro state token
     erasing_step [hdeclareEach]
 
-theorem commandStep_erases (version : Token.Version) (state : CommandState Nat Nat Nat Nat Nat)
+theorem commandStep_erases (version : Token.Version)
+    (state : CommandState Nat Nat Nat Nat Nat Empty)
     (token : Parser.Internal.Input) : Erases (commandStep
         (H := List Event) version state token) := by
   unfold commandStep
   try dsimp only
   erasing_step [payloadStep_erases]
+  -- the recording handler has no non-standard parser
+  all_goals exact Empty.elim ‹CommandHandler.NonstandardParser (List Event)›
 
 /-- What a step of a parser asks of its driver, with the continuations `Erases`. -/
 def FlowErases {σ ρ : Type} : Parser.Internal.Flow RPM σ ρ → Prop

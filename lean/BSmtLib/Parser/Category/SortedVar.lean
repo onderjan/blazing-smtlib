@@ -13,6 +13,7 @@ The parser of a sorted variable `(` ⟨symbol⟩ ⟨sort⟩ `)`.
 
 namespace BSmtLib.Parser.Category.SortedVar
 
+open BSmtLib.Plain (Symbol SymbolView)
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Sort
 open BSmtLib.Parser.Category.Sort.Internal
 open BSmtLib.Parser.Category.Token.Internal
@@ -27,9 +28,9 @@ inductive SortedVarState (HandledSort : Type) where
   /-- After its `(`, before its symbol. -/
   | opened
   /-- Reading its sort. -/
-  | sort (symbol : Symbol) (sort : SortState HandledSort)
+  | sort (symbol : SymbolView) (sort : SortState HandledSort)
   /-- After its sort, before the `)`. -/
-  | close (symbol : Symbol) (sort : HandledSort)
+  | close (symbol : SymbolView) (sort : HandledSort)
 
 section
 
@@ -38,7 +39,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- A step of the sorted variable parser: `(` ⟨symbol⟩ ⟨sort⟩ `)`. -/
 def sortedVarStep (version : Version) (self : SortedVarState (Handler.«Sort» H))
     (token : Internal.Input) :
-    PM H (Internal.Step (SortedVarState (Handler.«Sort» H)) (Symbol × Handler.«Sort» H)) := do
+    PM H (Internal.Step (SortedVarState (Handler.«Sort» H)) (SymbolView × Handler.«Sort» H)) := do
   match self with
   | .start =>
     expectOpen token
@@ -71,13 +72,14 @@ def SortedVarParser.new : SortedVarParser H := ⟨.start⟩
 instance : Inhabited (SortedVarParser H) := ⟨.new⟩
 
 @[no_expose]
-instance : Internal.ParseByToken (SortedVarParser H) H m (Handler.Error H)
+instance Internal.instParseByTokenSortedVarParser :
+    Internal.ParseByToken (SortedVarParser H) H m (Handler.Error H)
     (Symbol × Handler.«Sort» H) where
   arrive _ _ := pure ()
   step version parser token := do
     match ← Internal.sortedVarStep version parser.state token with
     | .more state => return .more ⟨state⟩
-    | .done result => return .done result
+    | .done (symbol, sort) => return .done (symbol.intoOwned, sort)
   reset _ := .new
 
 instance : Parse (SortedVarParser H) H m (Handler.Error H) (Symbol × Handler.«Sort» H) where

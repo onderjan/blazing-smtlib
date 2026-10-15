@@ -189,10 +189,10 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
       ∃ items' : List LibItem,
         items'.map (rcv ∘ Subtype.val) = (ansRest version cursor taken).2.map (rcv ∘ itemOf) ∧
         AdapterAt version items' (ansRest version cursor taken).1.2.version
-          { handler := ((paLoop parser cursor).run (calls log)).2,
-            parser := ((paLoop parser cursor).run (calls log)).1.2.1,
-            versionSet :=
-              ParseAdapter.Internal.versionSetAfter ((paLoop parser cursor).run (calls log)).1.1 }
+          (ParseAdapter.Internal.mk ((paLoop parser cursor).run (calls log)).2
+            ((paLoop parser cursor).run (calls log)).1.2.1
+            (ParseAdapter.Internal.versionSetAfter ((paLoop parser cursor).run (calls log)).1.1)
+            .new)
   | 0, _, _, _, _, _, hn, _, _, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, taken, items, parser, log, hn, hst, hrun, herr, hvia => by
     by_cases h : cursor.HasNext
@@ -254,6 +254,7 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
           refine ⟨trivial, by rw [← hsw, ← hdi], items ++ [item], hst', ?_⟩
           unfold AdapterAt
           rw [recRun_snoc version items item hrun, hR]
+          rfl
         | «continue» =>
           simp only [hans] at hvia herr ⊢
           have hvia' : Link.Viable commands (taken ++ [handed]) := by

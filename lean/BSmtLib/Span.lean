@@ -16,9 +16,12 @@ The offset, line, and column all start at zero.
 -/
 /- LEAN: the counts are `Nat`, Lean's arbitrary-precision natural numbers, where Rust has
 `u64`. In Rust, `u64` stands for "big enough"; `Nat` is exactly that, and small values are
-stored unboxed, so it costs little. -/
+stored unboxed, so it costs little. The constructor is private, as Rust's fields are, and the
+library builds a location with `Location.Internal.new`; the fields are read-only and stand as
+Rust's getters. -/
 structure Location where
-  /-- Zero-based byte offset from the start of the stream. -/
+  private mk ::
+  /-- Zero-based byte offset. -/
   offset : Nat
   /-- Zero-based line number. -/
   line : Nat
@@ -32,6 +35,47 @@ structure Location where
 
 namespace Location
 
+@[inline]
+def Internal.new (offset line column : Nat) : Location :=
+  { offset, line, column }
+
+@[simp]
+theorem Internal.offset_new (offset line column : Nat) :
+    (Internal.new offset line column).offset = offset :=
+  (rfl)
+
+@[simp]
+theorem Internal.line_new (offset line column : Nat) :
+    (Internal.new offset line column).line = line :=
+  (rfl)
+
+@[simp]
+theorem Internal.column_new (offset line column : Nat) :
+    (Internal.new offset line column).column = column :=
+  (rfl)
+
+/-- A location is the one built from its numbers. -/
+@[simp]
+theorem Internal.new_eta (location : Location) :
+    Internal.new location.offset location.line location.column = location :=
+  (rfl)
+
+/-- Two locations with the same numbers are equal. -/
+theorem Internal.new_inj {offset line column offset' line' column' : Nat} :
+    Internal.new offset line column = Internal.new offset' line' column' ↔
+      offset = offset' ∧ line = line' ∧ column = column' := by
+  constructor
+  · intro h
+    exact ⟨congrArg Location.offset h, congrArg Location.line h, congrArg Location.column h⟩
+  · rintro ⟨rfl, rfl, rfl⟩
+    rfl
+
+/-- Locations are equal if their numbers are. -/
+@[ext]
+theorem ext {a b : Location} (offset : a.offset = b.offset) (line : a.line = b.line)
+    (column : a.column = b.column) : a = b := by
+  cases a; cases b; cases offset; cases line; cases column; rfl
+
 def min (self other : Location) : Location :=
   if self.offset ≤ other.offset then self else other
 
@@ -41,33 +85,65 @@ def max (self other : Location) : Location :=
 /-- Location directly at the byte stream start. -/
 @[expose, inline]
 def initial : Location :=
-  { offset := 0, line := 0, column := 0 }
+  Internal.new 0 0 0
 
 @[expose, inline]
 def afterColumn (self : Location) : Location :=
-  { offset := self.offset + 1, line := self.line, column := self.column + 1 }
+  Internal.new (self.offset + 1) self.line (self.column + 1)
 
 @[expose, inline]
 def afterByte (self : Location) (c : UInt8) : Location :=
   /- LEAN: Lean has no byte literals like `b'\n'`; a character literal is converted with
   `Char.toUInt8`, which keeps the low byte and is exact for ASCII. -/
   if c == '\n'.toUInt8 then
-    { offset := self.offset + 1, line := self.line + 1, column := 0 }
+    Internal.new (self.offset + 1) (self.line + 1) 0
   else
     self.afterColumn
 
 end Location
 
 /-- A value located in an SMT-LIB stream. -/
-/- LEAN: the fields are public, as Lean structures expose their fields as accessor
-functions (`located.value`, `located.location`); they replace the Rust getters.
-`into_value` is the same as `value`, since Lean values are not moved out of. -/
+/- LEAN: the constructor is private, as Rust's fields are, and the library builds a located value
+with `Located.Internal.new`. The fields are read-only accessor functions (`located.value`,
+`located.location`); they replace the Rust getters. `into_value` is the same as `value`, since
+Lean values are not moved out of. -/
 structure Located (V : Type) where
-  /-- The value. -/
+  private mk ::
+  /-- Returns a reference to the value. -/
   value : V
-  /-- The location. -/
+  /-- Returns the location. -/
   location : Location
   deriving BEq, Hashable, Repr
+
+@[inline]
+def Located.Internal.new {V : Type} (value : V) (location : Location) : Located V :=
+  { value, location }
+
+@[simp]
+theorem Located.Internal.value_new {V : Type} (value : V) (location : Location) :
+    (Located.Internal.new value location).value = value :=
+  (rfl)
+
+@[simp]
+theorem Located.Internal.location_new {V : Type} (value : V) (location : Location) :
+    (Located.Internal.new value location).location = location :=
+  (rfl)
+
+/-- A located value is the one built from its value and location. -/
+@[simp]
+theorem Located.Internal.new_eta {V : Type} (located : Located V) :
+    Located.Internal.new located.value located.location = located :=
+  (rfl)
+
+/-- Two located values built from the same value and location are equal. -/
+theorem Located.Internal.new_inj {V : Type} {value value' : V} {location location' : Location} :
+    Located.Internal.new value location = Located.Internal.new value' location' ↔
+      value = value' ∧ location = location' := by
+  constructor
+  · intro h
+    exact ⟨congrArg Located.value h, congrArg Located.location h⟩
+  · rintro ⟨rfl, rfl⟩
+    rfl
 
 /--
 Span of an SMT-LIB element.
@@ -90,13 +166,13 @@ structure _root_.BSmtLib.Span where
 
 @[inline]
 def start (self : Span) : Location :=
-  { offset := self.startOffset, line := self.startLine, column := self.startColumn }
+  Location.Internal.new self.startOffset self.startLine self.startColumn
 
 /- LEAN: `end` is a keyword in Lean, so the name is written in guillemets where it is
 declared; `span.end` works as usual. -/
 @[inline]
 def «end» (self : Span) : Location :=
-  { offset := self.endOffset, line := self.endLine, column := self.endColumn }
+  Location.Internal.new self.endOffset self.endLine self.endColumn
 
 @[inline]
 def Internal.newUnchecked (start «end» : Location) : Span :=
@@ -117,13 +193,13 @@ def Internal.ofNumbers (startOffset startLine startColumn endOffset endLine endC
 /-- The start of a span given by its numbers. -/
 theorem start_ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
     (Internal.ofNumbers startOffset startLine startColumn endOffset endLine endColumn).start =
-      { offset := startOffset, line := startLine, column := startColumn } :=
+      Location.Internal.new startOffset startLine startColumn :=
   (rfl)
 
 /-- The end of a span given by its numbers. -/
 theorem end_ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
     (Internal.ofNumbers startOffset startLine startColumn endOffset endLine endColumn).end =
-      { offset := endOffset, line := endLine, column := endColumn } :=
+      Location.Internal.new endOffset endLine endColumn :=
   (rfl)
 
 /--
@@ -147,7 +223,10 @@ def isEmpty (self : Span) : Bool :=
 def join (self other : Span) : Span :=
   Internal.newUnchecked (self.start.min other.start) (self.end.max other.end)
 
+/- LEAN: the format is built, not rendered: rendering a format (`Std.Format.pretty`, which `s!`
+and `toString` call) holds a `panic`, which a `Repr` instance is not to reach. -/
 instance : Repr Span where
-  reprPrec span _ := s!"\{ start := {repr span.start}, end := {repr span.end} }"
+  reprPrec span _ :=
+    .text "{ start := " ++ repr span.start ++ .text ", end := " ++ repr span.end ++ .text " }"
 
 end BSmtLib.Span

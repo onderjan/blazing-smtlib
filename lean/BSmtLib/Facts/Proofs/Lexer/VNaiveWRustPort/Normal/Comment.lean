@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Normal.Basic
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 
@@ -162,14 +164,13 @@ theorem normalSpec_comment (v : Token.Version) (input : ByteSlice) (offset base 
                   CharClass.RUN_COMMENT_PLAIN - index)).afterByte 10⟩ := by
             simp only [borrowedLexeme, hcontent]
             obtain ⟨h1, h2, h3⟩ := hloc
-            cases location
-            simp only [afterColumns, Span.Location.afterByte, Lexeme.mk.injEq,
-              Span.Location.mk.injEq, true_and,
-                  Lexer.Internal.WRustPort.LexerCore.offsetAt] at h1 h2 h3 ⊢
-            refine ⟨⟨by omega, h2.symm, by omega⟩, ?_⟩
             have hlf : ((10 : UInt8) == '\n'.toUInt8) = true := rfl
-            simp only [hlf, ite_true, Span.Location.mk.injEq]
-            refine ⟨by omega, by omega, by omega⟩
+            simp only [afterColumns, Span.Location.afterByte, Lexeme.mk.injEq, true_and, hlf,
+              ite_true, Lexer.Internal.WRustPort.LexerCore.offsetAt] at h1 h2 h3 ⊢
+            constructor <;> apply Span.Location.ext <;>
+              simp only [Span.Location.Internal.offset_new, Span.Location.Internal.line_new,
+                Span.Location.Internal.column_new] at h1 h2 h3 ⊢ <;>
+              omega
           unfold Lexer.Internal.WRustPort.markLineFeedAt
           apply WP.wp_bind; apply WP.wp_modifyCore
           apply WP.wp_bind
@@ -268,7 +269,8 @@ theorem normalSpec_comment (v : Token.Version) (input : ByteSlice) (offset base 
           · rw [locAt_eq hloc]; rfl
           · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
           · fits_tac
-        · dsimp only [LocAt, afterColumns, Past.from]
+        · simp only [LocAt, afterColumns, Past.from, Span.Location.Internal.offset_new,
+            Span.Location.Internal.line_new, Span.Location.Internal.column_new]
           refine ⟨?_, ?_, ?_⟩ <;> omega
         · rw [hA]; rfl
     have hcon' : C.concrete = false := by simpa using hcon
@@ -370,7 +372,8 @@ theorem normalSpec_comment (v : Token.Version) (input : ByteSlice) (offset base 
         refine ⟨⟨?_, rfl, fun h => nomatch h.symm.trans hcon'⟩, ?_⟩
         rw [locAt_eq hloc]; rfl
         · fits_tac
-      · dsimp only [LocAt, afterColumns, Past.from]
+      · simp only [LocAt, afterColumns, Past.from, Span.Location.Internal.offset_new,
+          Span.Location.Internal.line_new, Span.Location.Internal.column_new]
         refine ⟨?_, ?_, ?_⟩ <;> omega
       · rw [hA]; rfl
 

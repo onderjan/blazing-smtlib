@@ -42,10 +42,13 @@ import BSmtLib
 import BSmtLib.Lexer.Internal.VNaive
 
 open BSmtLib
-open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Token
 open BSmtLib.Lexer.Error (LexError)
 
+/- The loops over a cursor's tokens end as each step consumes a token: they descend by the
+producer's consumption, which is well-founded. -/
+local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
+  ⟨Produce.Consumed, Produce.consumed_wf⟩
 
 /-- Default timed runs per file; additional warm-up runs are discarded. -/
 def defaultIterations : Nat := 5
@@ -115,12 +118,12 @@ where
       m { c : BatchCursor batch // c.Consumed cursor } := do
     if h : current.HasNext then
       let (_, ⟨next, taken⟩) := current.next h
-      have : remaining next < remaining current := taken.remaining_lt
       step
       go next (taken.trans consumed)
     else
       return ⟨current, consumed⟩
-  termination_by remaining current
+  termination_by current
+  decreasing_by exact taken
 
 instance : Consume DiscardTokens Unit Empty where
   isConcrete := false
@@ -129,81 +132,6 @@ instance {batch : BatchTag} : ConsumeFrom DiscardTokens (BatchCursor batch) Id w
   consume cursor h := do
     let step := modify fun (handler : DiscardTokens) => { tokens := handler.tokens + 1 }
     return (.ok .continue, ← takeEach step cursor h)
-
-/- LEAN: the Rust benchmark parses with the library's `SmtSyntaxChecker`, which the Lean port does
-not have; this handler is its counterpart. Every handled value is `Unit`, every call succeeds,
-and a non-standard command is its error. -/
-/-- Command handler that accepts every standard command and keeps nothing. -/
-structure SyntaxChecker where
-
-instance : Handler SyntaxChecker Id where
-  Error := Nodes.Symbol
-  SExpr := Unit
-  Attribute := Unit
-  «Sort» := Unit
-  Term := Unit
-  Scope := Unit
-  setVersion _ := pure ()
-  handleSort _ _ := pure ()
-  handleTerm _ := pure ()
-  handleSExpr _ := pure ()
-  handleAttribute _ _ := pure ()
-  annotateTerm _ _ := pure ()
-  startLet _ := pure ()
-  endLet _ _ := pure ()
-  startQuantifier _ _ := pure ()
-  endQuantifier _ _ _ := pure ()
-  startLambda _ := pure ()
-  endLambda _ _ := pure ()
-  startMatch _ := pure ()
-  startMatchCase _ _ := pure ()
-  endMatchCase _ _ _ := pure ()
-  endMatch _ _ := pure ()
-
-instance : CommandHandler SyntaxChecker Id where
-  nonstandardCommand name := name
-  commandAssert _ := pure ()
-  commandCheckSat := pure ()
-  commandCheckSatAssuming _ := pure ()
-  commandDeclareConst _ _ := pure ()
-  startDeclareDatatype _ _ := pure ()
-  endDeclareDatatype _ := pure ()
-  startDeclareDatatypes _ := pure ()
-  startDatatypeDeclaration _ := pure ()
-  endDatatypeDeclaration _ := pure ()
-  endDeclareDatatypes := pure ()
-  commandDeclareFun _ _ _ := pure ()
-  commandDeclareSort _ _ := pure ()
-  commandDeclareSortParameter _ := pure ()
-  commandDefineConst _ _ _ := pure ()
-  startDefineFun _ := pure ()
-  endDefineFun _ := pure ()
-  startDefineFunRec _ := pure ()
-  endDefineFunRec _ := pure ()
-  startDefineFunsRec _ := pure ()
-  startRecursiveBody _ := pure ()
-  endRecursiveBody _ := pure ()
-  endDefineFunsRec := pure ()
-  startDefineSort _ _ := pure ()
-  endDefineSort _ := pure ()
-  commandEcho _ := pure ()
-  commandExit := pure ()
-  commandGetAssertions := pure ()
-  commandGetAssignment := pure ()
-  commandGetInfo _ := pure ()
-  commandGetModel := pure ()
-  commandGetOption _ := pure ()
-  commandGetProof := pure ()
-  commandGetUnsatAssumptions := pure ()
-  commandGetUnsatCore := pure ()
-  commandGetValue _ := pure ()
-  commandPop _ := pure ()
-  commandPush _ := pure ()
-  commandReset := pure ()
-  commandResetAssertions := pure ()
-  commandSetInfo _ := pure ()
-  commandSetLogic _ := pure ()
-  commandSetOption _ := pure ()
 
 /-- The script reader of the Rust benchmark's `read_smt`: a script parser under the default
 posture, over the syntax checker, lexing from the default version. -/
@@ -216,22 +144,28 @@ def parseFromMemory (data : ByteArray) (path : String) : IO Unit := do
     Parser.Adapter.ParseAdapter.new {} (Parser.Script.ScriptParser.new Token.VersionPosture.default)
   match Id.run ((Lexer.new adapter default).lexAll data.toByteSlice) with
   | .ok _ => pure ()
-  | .error ({ cause := .lexical kind, span, .. }, _) =>
-    throw <| IO.userError s!"benchmark file {path} must parse, got lexer error \
-      {repr kind} at {repr span}"
-  | .error ({ cause := .consumer (.syntax kind), .. }, _) =>
-    throw <| IO.userError s!"benchmark file {path} must parse, got parser error {repr kind}"
-  | .error ({ cause := .consumer (.handler name), .. }, _) =>
-    throw <| IO.userError s!"benchmark file {path} must parse, got nonstandard command \
-      {(String.fromUTF8? name.content.asSlice.toByteArray).getD "(not UTF-8)"}"
+  | .error (err, _) =>
+    match err.cause with
+    | .lexical kind =>
+      throw <| IO.userError s!"benchmark file {path} must parse, got lexer error \
+        {repr kind} at {repr err.span}"
+    | .consumer error =>
+      match error.cause with
+      | .syntax kind =>
+        throw <| IO.userError s!"benchmark file {path} must parse, got parser error {repr kind}"
+      | .handler nonstandard =>
+        throw <| IO.userError s!"benchmark file {path} must parse, got nonstandard command \
+          {(String.fromUTF8? nonstandard.name.asSlice.toByteArray).getD "(not UTF-8)"}"
 
 /-- Fails unless the file lexed without an error. -/
 def checkLexed (result : Except (LexError Empty × β) α) (path : String) : IO Unit :=
   match result with
   | .ok _ => pure ()
-  | .error ({ cause := .lexical kind, span, .. }, _) =>
-    throw <| IO.userError s!"benchmark file {path} must lex, got {repr kind} at {repr span}"
-  | .error ({ cause := .consumer never, .. }, _) => nomatch never
+  | .error (err, _) =>
+    match err.cause with
+    | .lexical kind =>
+      throw <| IO.userError s!"benchmark file {path} must lex, got {repr kind} at {repr err.span}"
+    | .consumer never => nomatch never
 
 /-- A lexer of the chain from the specification to the library's lexer. -/
 inductive LexerChoice where

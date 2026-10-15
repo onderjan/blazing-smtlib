@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Reader.Param.UnaryNormal
 import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 

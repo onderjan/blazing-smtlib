@@ -128,7 +128,7 @@ def arrivalCalls (parser : ScriptParser (List Event))
   match token with
   | .parenClose => []
   | _ =>
-    match parser.command with
+    match ScriptParser.Internal.command parser with
     | .payload (.defineFunsRecBodies signatures state) =>
       if state.opened && state.outside then
         match signatures[state.items.size]? with
@@ -193,8 +193,8 @@ theorem arrive_run (parser : ScriptParser (List Event)) (token : Parser.Internal
   show ((ScriptParser.Internal.arrive ⟨posture, command, declarations⟩ token : Quiet.RPM
       Unit).run.run
       events) = _
-  unfold ScriptParser.Internal.arrive arrivalCalls
-  rcases command with _ | _ | payload
+  unfold ScriptParser.Internal.arrive arrivalCalls ScriptParser.Internal.command
+  rcases command with _ | _ | payload | parser
   · cases token <;> rfl
   · cases token <;> rfl
   · cases payload <;> try (cases token <;> rfl)
@@ -204,6 +204,7 @@ theorem arrive_run (parser : ScriptParser (List Event)) (token : Parser.Internal
         Parser.Command.Internal.Function.bodiesArrive]
     cases (state.opened && state.outside) <;> cases token <;>
       cases signatures[state.items.size]? <;> rfl
+  · exact Empty.elim parser
 
 /--
 An item in the recording run: its arrival, the calls due at it, its processing, then silent

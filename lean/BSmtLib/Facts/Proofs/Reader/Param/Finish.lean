@@ -82,7 +82,7 @@ theorem eofStepG_sim :
         (Recovery.LexRecovery.abandon Recovery.FailFast)
             (Recovery.LexRecovery.recover Recovery.FailFast))
       (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-          (E := Parser.ParseErrorCause Unit)
+          (E := Parser.ParseError Unit)
         (Recovery.LexRecovery.abandon Recovery.FailFast)
             (Recovery.LexRecovery.recover Recovery.FailFast)) :=
   lexEofStep_sim (link_consumersG version) _ _ _ _ link_abandonG link_recoverG
@@ -207,7 +207,7 @@ theorem eof_stepG (a : FLexer version) (p : PLexer) (taken : List Handed)
     (Recovery.LexRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := Parser.ParseErrorCause Unit)
+    (E := Parser.ParseError Unit)
     (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢

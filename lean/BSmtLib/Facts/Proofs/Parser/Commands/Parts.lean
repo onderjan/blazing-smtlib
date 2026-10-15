@@ -63,7 +63,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handle
 variable {points : Points (StateT H m)} {version : Token.Version}
 variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
 
-theorem specPairs_toArray {S : Type} (l : List (Nodes.Symbol × S)) :
+theorem specPairs_toArray {S : Type} (l : List (Plain.SymbolView × S)) :
     Bridge.pairs l.toArray = Bridge.specPairs l := by
   simp [Bridge.pairs, Bridge.specPairs]
 
@@ -216,7 +216,7 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
     (hvalid : constructor.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (.symbol constructor.symbol ::
       (constructor.selectors.flatMap Tree.SelectorDec.tokens ++ [.parenClose]))) :
-    ∃ program : PM H (Nodes.Constructor (Traits.Handler.«Sort» H)),
+    ∃ program : PM H (Plain.SymbolView × Multiple.SortedVarsView (Traits.Handler.«Sort» H)),
       Bridge.constructor <$> program = adaptRun (constructorAfterOpen points h constructor) ∧
       Runs points (constructorStep version) .opened tokens program fun r => pure (.done r) := by
   obtain ⟨symbolToken, rest, rfl, hsymbolToken, hrest⟩ := Stands.split_cons hs
@@ -244,7 +244,7 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
         (by simp [ListState.step, ListState.between])
   have hembed := Runs.embed (outer := constructorStep version)
     (fun state => ConstructorState.selectors symbol state)
-    (fun selectors => pure (.done ⟨symbol, selectors⟩))
+    (fun selectors => pure (.done (symbol, (Multiple.NamedView.Internal.new selectors))))
     (fun state token => by
       simp only [constructorStep]
       congr 1
@@ -254,7 +254,7 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
       tick points (.symbol symbol)
       let handled ← program
       tick points .parenClose
-      pure ⟨symbol, handled.toArray⟩, ?_, ?_⟩
+      pure (symbol, (Multiple.NamedView.Internal.new handled.toArray)), ?_, ?_⟩
   · simp only [constructorAfterOpen, adaptRun_bind, ← hsymbol,
       adaptRun_take (token := .symbol symbol) rfl, adaptRun_take (token := .parenClose) rfl,
       selectors_eq, ← hprogram]
@@ -263,8 +263,9 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
       (middle := fun _ => ConstructorState.selectors symbol (ListState.closed .start))
       (Runs.token_more (state := ConstructorState.opened)
         (by simp [constructorStep, Parser.Category.Token.Internal.expectSymbol])) fun _ =>
-      Runs.map_program (f := fun handled => (⟨symbol, (#[] ++ handled.toArray)⟩ :
-          Nodes.Constructor _))
+      Runs.map_program (f := fun handled => ((symbol, (Multiple.NamedView.Internal.new
+        (#[] ++ handled.toArray))) :
+          Plain.SymbolView × Multiple.SortedVarsView _))
         (hembed.congr rfl (by funext; simp [Parser.Internal.Step.wrap]))).congr ?_ rfl
     simp
 

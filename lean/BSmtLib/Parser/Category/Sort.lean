@@ -52,7 +52,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 def sortComplete (levels : List (SortLevel (Handler.«Sort» H))) (head : Identifier)
     (arguments : Array (Handler.«Sort» H)) :
     PM H (Internal.Step (SortState (Handler.«Sort» H)) (Handler.«Sort» H)) := do
-  let sort ← call (Handler.handleSort head arguments)
+  let sort ← call (Handler.handleSort head (.new arguments))
   match levels with
   | [] => return .done sort
   | level :: outer =>
@@ -114,7 +114,8 @@ def SortParser.new : SortParser H := ⟨.init⟩
 instance : Inhabited (SortParser H) := ⟨.new⟩
 
 @[no_expose]
-instance : Internal.ParseByToken (SortParser H) H m (Handler.Error H) (Handler.«Sort» H) where
+instance Internal.instParseByTokenSortParser :
+    Internal.ParseByToken (SortParser H) H m (Handler.Error H) (Handler.«Sort» H) where
   arrive _ _ := pure ()
   step version parser token := do
     match ← Internal.sortStep version parser.state token with

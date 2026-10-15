@@ -90,7 +90,7 @@ structure Constructor (S : Type) where
 /-! ## Views replaced by contents -/
 
 /-- The symbol's content. -/
-def ofSymbol (s : Nodes.Symbol) : Symbol := ⟨contentOf s.content.asSlice, s.quoted⟩
+def ofSymbol (s : Plain.SymbolView) : Symbol := ⟨contentOf s.asSlice, s.isQuoted⟩
 
 /-- The index's content. -/
 def ofIndex : Nodes.Index → Index
@@ -123,7 +123,7 @@ def ofPattern : Nodes.Pattern → Pattern
 def ofTermNode {S T : Type} : Nodes.TermNode S T → TermNode S T
   | .constant c => .constant (ofConstant c)
   | .identifier i s => .identifier (ofIdentifier i) s
-  | .application i s args => .application (ofIdentifier i) s args.toList
+  | .application i s args => .application (ofIdentifier i) s args.asSlice.toList
 
 /-- The s-expression node's content. -/
 def ofSExprNode {X : Type} : Nodes.SExprNode X → SExprNode X
@@ -131,25 +131,25 @@ def ofSExprNode {X : Type} : Nodes.SExprNode X → SExprNode X
   | .symbol s => .symbol (ofSymbol s)
   | .reserved w => .reserved w
   | .keyword k => .keyword (contentOf k.asSlice)
-  | .list items => .list items.toList
+  | .list items => .list items.asSlice.toList
 
 /-- The attribute value node's content. -/
 def ofAttributeValueNode {X : Type} : Nodes.AttributeValueNode X → AttributeValueNode X
   | .constant c => .constant (ofConstant c)
   | .symbol s => .symbol (ofSymbol s)
-  | .list items => .list items.toList
+  | .list items => .list items.asSlice.toList
 
 /-- The pairs with their symbols' contents. -/
-def ofPairs {α : Type} (items : Array (Nodes.Symbol × α)) : List (Symbol × α) :=
+def ofPairs {α : Type} (items : Array (Plain.SymbolView × α)) : List (Symbol × α) :=
   items.toList.map fun (s, a) => (ofSymbol s, a)
 
 /-- The signature's content. -/
 def ofSignature {S : Type} (sig : Nodes.Signature S) : Signature S :=
-  ⟨ofSymbol sig.symbol, ofPairs sig.parameters, sig.result⟩
+  ⟨ofSymbol sig.name, ofPairs sig.params, sig.resultSort⟩
 
 /-- The constructor's content. -/
-def ofConstructor {S : Type} (c : Nodes.Constructor S) : Constructor S :=
-  ⟨ofSymbol c.symbol, ofPairs c.selectors⟩
+def ofConstructor {S : Type} (c : Plain.SymbolView × Multiple.SortedVarsView S) : Constructor S :=
+  ⟨ofSymbol c.1, ofPairs c.2.toArray⟩
 
 open Content
 
@@ -241,38 +241,39 @@ instance instHandler : Traits.Handler C Id where
   Term := Term C
   Scope := Scope C
   setVersion v := setVersion v
-  handleSort i args := handleSort (ofIdentifier i) args.toList
+  handleSort i args := handleSort (ofIdentifier i) args.asSlice.toList
   handleTerm node := handleTerm (ofTermNode node)
   handleSExpr node := handleSExpr (ofSExprNode node)
   handleAttribute k v := handleAttribute (contentOf k.asSlice) (v.map ofAttributeValueNode)
-  annotateTerm t attrs := annotateTerm t attrs.toList
-  startLet bs := startLet (ofPairs bs)
+  annotateTerm t attrs := annotateTerm t attrs.asSlice.toList
+  startLet bs := startLet (ofPairs bs.toArray)
   endLet s t := endLet s t
-  startQuantifier q vs := startQuantifier q (ofPairs vs)
+  startQuantifier q vs := startQuantifier q (ofPairs vs.toArray)
   endQuantifier q s t := endQuantifier q s t
-  startLambda vs := startLambda (ofPairs vs)
+  startLambda vs := startLambda (ofPairs vs.toArray)
   endLambda s t := endLambda s t
   startMatch t := startMatch t
   startMatchCase t p := startMatchCase t (ofPattern p)
   endMatchCase s t b := endMatchCase s t b
-  endMatch t cs := endMatch t (cs.toList.map fun (p, b) => (ofPattern p, b))
+  endMatch t cs := endMatch t (cs.toArray.toList.map fun (p, b) => (ofPattern p, b))
 
 /-- A content handler as a library handler of commands: each call is the content handler's,
 told the contents of the views. -/
 instance instCommandHandler : Traits.CommandHandler C Id where
-  nonstandardCommand s := nonstandardCommand (ofSymbol s)
+  NonstandardParser := Empty
+  nonstandardCommand s := throw (nonstandardCommand (ofSymbol s))
   commandAssert t := commandAssert t
   commandCheckSat := commandCheckSat
-  commandCheckSatAssuming ts := commandCheckSatAssuming ts.toList
+  commandCheckSatAssuming ts := commandCheckSatAssuming ts.asSlice.toList
   commandDeclareConst s t := commandDeclareConst (ofSymbol s) t
-  startDeclareDatatype s ps := startDeclareDatatype (ofSymbol s) (ps.toList.map ofSymbol)
-  endDeclareDatatype cs := endDeclareDatatype (cs.toList.map ofConstructor)
+  startDeclareDatatype s ps := startDeclareDatatype (ofSymbol s) (ps.toArray.toList.map ofSymbol)
+  endDeclareDatatype cs := endDeclareDatatype (cs.toArray.toList.map ofConstructor)
   startDeclareDatatypes ss :=
-    startDeclareDatatypes (ss.toList.map fun (s, n) => (ofSymbol s, contentOf n.asSlice))
-  startDatatypeDeclaration ps := startDatatypeDeclaration (ps.toList.map ofSymbol)
-  endDatatypeDeclaration cs := endDatatypeDeclaration (cs.toList.map ofConstructor)
+    startDeclareDatatypes (ss.toArray.toList.map fun (s, n) => (ofSymbol s, contentOf n.asSlice))
+  startDatatypeDeclaration ps := startDatatypeDeclaration (ps.toArray.toList.map ofSymbol)
+  endDatatypeDeclaration cs := endDatatypeDeclaration (cs.toArray.toList.map ofConstructor)
   endDeclareDatatypes := endDeclareDatatypes
-  commandDeclareFun s ps r := commandDeclareFun (ofSymbol s) ps.toList r
+  commandDeclareFun s ps r := commandDeclareFun (ofSymbol s) ps.asSlice.toList r
   commandDeclareSort s n := commandDeclareSort (ofSymbol s) (contentOf n.asSlice)
   commandDeclareSortParameter s := commandDeclareSortParameter (ofSymbol s)
   commandDefineConst s t b := commandDefineConst (ofSymbol s) t b
@@ -280,11 +281,11 @@ instance instCommandHandler : Traits.CommandHandler C Id where
   endDefineFun b := endDefineFun b
   startDefineFunRec sig := startDefineFunRec (ofSignature sig)
   endDefineFunRec b := endDefineFunRec b
-  startDefineFunsRec sigs := startDefineFunsRec (sigs.toList.map ofSignature)
+  startDefineFunsRec sigs := startDefineFunsRec (sigs.toArray.toList.map ofSignature)
   startRecursiveBody sig := startRecursiveBody (ofSignature sig)
   endRecursiveBody b := endRecursiveBody b
   endDefineFunsRec := endDefineFunsRec
-  startDefineSort s ps := startDefineSort (ofSymbol s) (ps.toList.map ofSymbol)
+  startDefineSort s ps := startDefineSort (ofSymbol s) (ps.toArray.toList.map ofSymbol)
   endDefineSort t := endDefineSort t
   commandEcho c := commandEcho (contentOf c.asSlice)
   commandExit := commandExit
@@ -296,7 +297,7 @@ instance instCommandHandler : Traits.CommandHandler C Id where
   commandGetProof := commandGetProof
   commandGetUnsatAssumptions := commandGetUnsatAssumptions
   commandGetUnsatCore := commandGetUnsatCore
-  commandGetValue ts := commandGetValue ts.toList
+  commandGetValue ts := commandGetValue ts.asSlice.toList
   commandPop n := commandPop (contentOf n.asSlice)
   commandPush n := commandPush (contentOf n.asSlice)
   commandReset := commandReset

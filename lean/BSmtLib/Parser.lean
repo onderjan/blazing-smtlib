@@ -24,7 +24,7 @@ that finishes starts its next value from its initial state.
 namespace BSmtLib.Parser
 
 open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Plain (KeywordView)
+open BSmtLib.Plain (KeywordView SymbolView)
 open BSmtLib.Token (TokenCategory Version SyntaxToken)
 open BSmtLib.Token.Reserved (GeneralReserved)
 
@@ -77,6 +77,43 @@ location: it is at the last token the parser consumed, which its driver knows.
 inductive ParseErrorCause (ε : Type) where
   | syntax (kind : SyntaxErrorKind)
   | handler (error : ε)
+  deriving Repr
+
+/- LEAN: Rust's `SmtParseError`, which boxes its cause so that parser results stay small. A
+structure of one field is represented by the field, so no box is needed. The constructor is
+private, as Rust's field is, and the library builds an error with `ParseError.Internal.new`. The
+cause is readable as `error.cause`, replacing the getters `cause` and `into_cause`. -/
+/-- Error emitted by a parser. -/
+structure ParseError (E : Type) where
+  private mk ::
+  /-- Why the parse failed. -/
+  cause : ParseErrorCause E
+  deriving Repr
+
+/-- The error with the given cause. -/
+@[inline]
+def ParseError.Internal.new {E : Type} (cause : ParseErrorCause E) : ParseError E :=
+  { cause }
+
+@[simp]
+theorem ParseError.Internal.cause_new {E : Type} (cause : ParseErrorCause E) :
+    (ParseError.Internal.new cause).cause = cause :=
+  (rfl)
+
+/-- An error is the one built from its cause. -/
+@[simp]
+theorem ParseError.Internal.new_eta {E : Type} (error : ParseError E) :
+    ParseError.Internal.new error.cause = error :=
+  (rfl)
+
+/-- Two errors built from the same cause are equal. -/
+theorem ParseError.Internal.new_inj {E : Type} {cause cause' : ParseErrorCause E} :
+    ParseError.Internal.new cause = ParseError.Internal.new cause' ↔ cause = cause' := by
+  constructor
+  · intro h
+    exact congrArg ParseError.cause h
+  · rintro rfl
+    rfl
 
 /- LEAN: Rust's `SmtParseState` holds the arena and the slots that the standard parsers share,
 all crate-private. The parsers of the port keep their state in themselves, so this one holds
@@ -126,8 +163,14 @@ class Parse (P : Type) (H : Type) (m : outParam (Type → Type)) (E R : outParam
   the parser.
   -/
   parse {Z : Type} [Token.Produce Z] : P → ParseState H → (cursor : Z) →
-    StateT H m (Except (ParseErrorCause E) (ControlFlow R) × P × ParseState H ×
+    StateT H m (Except (ParseError E) (ControlFlow R) × P × ParseState H ×
       { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor })
+
+/- LEAN: Rust's `impl<H: SmtCommandHandler> SmtParse<H> for Infallible`: `Empty` is Lean's type
+without values. It asks only for a `Handler`, so that a `CommandHandler` instance can name it as
+its non-standard parser while it is being declared. -/
+instance {H : Type} {m : Type → Type} [Handler H m] : Parse Empty H m (Handler.Error H) Unit where
+  parse parser := nomatch parser
 
 namespace Internal
 
@@ -175,7 +218,7 @@ inductive Input where
   | parenOpen
   | parenClose
   | constant (constant : SpecConstant)
-  | symbol (symbol : Symbol)
+  | symbol (symbol : SymbolView)
   | keyword (name : KeywordView)
   | reserved (word : Token.Reserved)
   /-- The end of the input. -/
@@ -205,10 +248,64 @@ def Input.ofSyntax : SyntaxToken → Input
   | .binary value => .constant (.binary value)
   | .string value => .constant (.string value)
   | .keyword value => .keyword value
-  | .symbol value quoted => .symbol ⟨value, quoted⟩
+  | .symbol value => .symbol value
   | .reserved word => .reserved word
   | .whitespace _ | .comment _ => .layout
   | .endOfFile => .endOfInput
+
+/-- The syntax token the token was made from (`Input.ofSyntax`), with whitespace and comments as
+empty whitespace. -/
+def Input.toSyntax : Input → SyntaxToken
+  | .parenOpen => .parenOpen
+  | .parenClose => .parenClose
+  | .constant (.numeral value) => .numeral value
+  | .constant (.decimal value) => .decimal value
+  | .constant (.hexadecimal value) => .hexadecimal value
+  | .constant (.binary value) => .binary value
+  | .constant (.string value) => .string value
+  | .keyword value => .keyword value
+  | .symbol value => .symbol value
+  | .reserved word => .reserved word
+  | .layout => .whitespace (Plain.WhitespaceView.Internal.newUnchecked ByteArray.empty.toByteSlice)
+  | .endOfInput => .endOfFile
+
+/-- A token made into a syntax token and back is the token. -/
+theorem Input.ofSyntax_toSyntax (token : Input) : Input.ofSyntax token.toSyntax = token := by
+  rcases token with _ | _ | (_ | _ | _ | _ | _) | _ | _ | _ | _ | _ <;> rfl
+
+/- LEAN: Rust's `SingleTokenProducer`, with which a parser hands a token it took on to a parser
+it holds. A parser stepped by single tokens has the token as an `Input`, so this producer gives
+one; as Rust's, it refuses every switch of the version, and its consumer does not call
+`discardRest` on it (Rust's panics), which here drops the token. -/
+/-- A producer of one token, in a version. -/
+structure InputProducer where
+  /-- The version in force. -/
+  version : Version
+  /-- The token, if it was not consumed yet. -/
+  token : Option Input
+
+instance : Token.Produce InputProducer where
+  Token := Input
+  «syntax» _ token := token.toSyntax
+  HasNext producer := producer.token.isSome
+  decideHasNext _ := inferInstance
+  Consumed next producer := producer.token.isSome ∧ next.token = none
+  peek? producer := producer.token
+  next?
+    | ⟨version, some token⟩ => some (token, ⟨⟨version, none⟩, ⟨rfl, rfl⟩⟩)
+    | ⟨_, none⟩ => none
+  version producer := producer.version
+  setVersion _ _ := .error ⟨⟩
+  discardRest producer := { producer with token := none }
+  next?_isSome {producer} h := by
+    rcases producer with ⟨_, _ | _⟩
+    · exact absurd h (by simp)
+    · rfl
+  consumed_trans hab hbc := ⟨hbc.1, hab.2⟩
+  consumed_wf :=
+    ⟨fun b => .intro b fun a hab => .intro a fun _ hca => absurd hca.1 (by simp [hab.2])⟩
+  setVersion_consumed _ h := nomatch h
+  discardRest_consumed h := ⟨h.1, rfl⟩
 
 /-- What a step of a parser gives: a new state to go on from, or its result. -/
 inductive Step (σ ρ : Type) where
@@ -249,7 +346,7 @@ inductive After (P R E : Type) where
   /-- It goes on: take the next token. -/
   | goOn (parser : P)
   /-- It stops with the answer, and the parser to go on from after. -/
-  | stop (answer : Except (ParseErrorCause E) (ControlFlow R)) (parser : P)
+  | stop (answer : Except (ParseError E) (ControlFlow R)) (parser : P)
 
 /-- What the parser's step asks after the cursor did what the step asked. A parser that
 finished goes on from `fresh`, its reset. -/
@@ -283,22 +380,28 @@ def takeOne (parser : P) (cursor : Z) (token : Token.Produce.Token Z) (next : Z)
   match ← (do
       ParseByToken.arrive parser input
       ParseByToken.step (Token.Produce.version next) parser input).run with
-  | .error error => return (.stop (.error error) fresh, ⟨next, consumed⟩)
+  | .error error =>
+    return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨next, consumed⟩)
   | .ok (.more parser) => return (.goOn parser, ⟨next, consumed⟩)
   | .ok (.done result) =>
     return (.stop (.ok (.break result)) fresh, ⟨next, consumed⟩)
   | .ok (.switchVersion declared resume) =>
     match switch : Token.Produce.setVersion next declared with
-    | .error _ => return (.stop (.error (.syntax .unsupportedVersion)) fresh, ⟨next, consumed⟩)
+    | .error _ =>
+      return (.stop (.error (ParseError.Internal.new (.syntax .unsupportedVersion))) fresh,
+        ⟨next, consumed⟩)
     | .ok switched =>
       let after := Token.Produce.setVersion_consumed consumed switch
       match ← resume.run with
-      | .error error => return (.stop (.error error) fresh, ⟨switched, after⟩)
+      | .error error =>
+        return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨switched, after⟩)
       | .ok step => return (resumed fresh step, ⟨switched, after⟩)
   | .ok (.discardRest resume) =>
     let after := Token.Produce.discardRest_consumed consumed
     match ← resume.run with
-    | .error error => return (.stop (.error error) fresh, ⟨Token.Produce.discardRest next, after⟩)
+    | .error error =>
+      return (.stop (.error (ParseError.Internal.new error)) fresh,
+        ⟨Token.Produce.discardRest next, after⟩)
     | .ok step => return (resumed fresh step, ⟨Token.Produce.discardRest next, after⟩)
 
 /- LEAN: the loop is the recursion, which ends as every token taken is consumed, by the
@@ -315,7 +418,7 @@ Has the parser take the tokens of `cursor`, which comes from `origin` with token
 by one, until there are none or the parser stops.
 -/
 def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin) :
-    StateT H m (Except (ParseErrorCause E) (ControlFlow R) × P ×
+    StateT H m (Except (ParseError E) (ControlFlow R) × P ×
       { z : Z // Token.Produce.Consumed z origin }) :=
   match Token.Produce.next? cursor with
   | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
@@ -339,7 +442,7 @@ Parses the cursor one token at a time with the parser's steps, until the cursor 
 parser stops: the `parse` of a parser that steps by single tokens.
 -/
 def parseByToken (parser : P) (state : ParseState H) (cursor : Z) :
-    StateT H m (Except (ParseErrorCause E) (ControlFlow R) × P × ParseState H ×
+    StateT H m (Except (ParseError E) (ControlFlow R) × P × ParseState H ×
       { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor }) :=
   match h : Token.Produce.next? cursor with
   | none => return (.ok .continue, parser, state, ⟨cursor, fun hn => absurd hn (not_hasNext h)⟩)

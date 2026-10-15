@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.NormalStep
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
+import all BSmtLib.Span
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 
@@ -181,7 +183,7 @@ theorem stepLocation_eq {c : WP.WCore} {low base start pos : Nat} {location : Sp
     stepLocation c low base pos = afterColumns location (pos - start) := by
   obtain ⟨h1, h2, h3⟩ := hloc
   cases location
-  simp only [stepLocation, afterColumns, Span.Location.mk.injEq] at h1 h2 h3 ⊢
+  simp only [stepLocation, afterColumns, Span.Location.Internal.new_inj] at h1 h2 h3 ⊢
   subst hbase hlow
   refine ⟨?_, h2.symm, ?_⟩ <;> omega
 
@@ -193,7 +195,7 @@ theorem stepLocation_eq' {c : WP.WCore} {low base j pos : Nat} {location : Span.
     stepLocation c low base pos = afterColumns location (pos - j) := by
   obtain ⟨h1, h2, h3⟩ := hloc
   cases location
-  simp only [stepLocation, afterColumns, Span.Location.mk.injEq] at h1 h2 h3 ⊢
+  simp only [stepLocation, afterColumns, Span.Location.Internal.new_inj] at h1 h2 h3 ⊢
   subst hbase hlow
   refine ⟨?_, h2.symm, ?_⟩ <;> omega
 

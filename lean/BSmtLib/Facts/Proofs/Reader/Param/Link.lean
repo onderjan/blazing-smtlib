@@ -131,7 +131,8 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (t
     | none =>
       simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, Bridge.received, rcv, Option.getD_some,
-        Bridge.symbol, SymbolView.asSlice, SymbolView.Internal.newUnchecked, hc]
+        Bridge.symbol, SymbolView.asSlice, SymbolView.isQuoted, SymbolView.Internal.newUnchecked,
+        hc]
     | some word =>
       simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, fromBytes_decode hw, Bridge.received, rcv,
@@ -143,7 +144,8 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (t
         HexDigitsView.asSlice,
     HexDigitsView.Internal.newUnchecked, BinDigitsView.asSlice, BinDigitsView.Internal.newUnchecked,
     StringContentView.asSlice, StringContentView.Internal.newUnchecked, KeywordView.asSlice,
-    KeywordView.Internal.newUnchecked, SymbolView.asSlice, SymbolView.Internal.newUnchecked, hc]
+    KeywordView.Internal.newUnchecked, SymbolView.asSlice, SymbolView.isQuoted,
+    SymbolView.Internal.newUnchecked, hc]
 
 /-! ## The recording run over the adapter's items -/
 

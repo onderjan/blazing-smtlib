@@ -22,7 +22,8 @@ inductive CommandOutcome where
   | setVersion (version : Version)
   /-- `exit` ended. -/
   | exit
-  /-- The input ended between commands. -/
-  | endOfInput
+  /-- The end of the input was reached before a command. -/
+  | endOfFile
+  deriving BEq, Repr
 
 end BSmtLib.Parser.Command

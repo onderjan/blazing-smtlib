@@ -26,9 +26,13 @@ import Protocol
 import Parse
 
 open BSmtLib
-open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Token
 open BSmtLib.Lexer.Error (LexError LexicalErrorKind)
+
+/- The loops over a cursor's tokens end as each step consumes a token: they descend by the
+producer's consumption, which is well-founded. -/
+local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
+  ⟨Produce.Consumed, Produce.consumed_wf⟩
 
 /-- The response line of a token of the cursor, under the version. -/
 def tokenLine {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)
@@ -167,11 +171,11 @@ def describeAll {batch : BatchTag} (cursor : BatchCursor batch) (version : Versi
     String × Nat :=
   match cursor.next? with
   | none => ("", 0)
-  | some (token, ⟨next, consumed⟩) =>
-    have : remaining next < remaining cursor := consumed.remaining_lt
+  | some (token, ⟨next, _⟩) =>
     let (lines, count) := describeAll next version
     (tokenLine cursor token version ++ lines, count + 1)
-termination_by remaining cursor
+termination_by cursor
+decreasing_by assumption
 
 /-- Takes every token remaining in the cursor, which has one, writing a line for each. -/
 def takeAll {batch : BatchTag} (out : IO.Ref String) (version : Version)
@@ -180,12 +184,12 @@ def takeAll {batch : BatchTag} (out : IO.Ref String) (version : Version)
   let (token, ⟨next, consumed⟩) := cursor.next h
   out.modify (· ++ tokenLine cursor token version)
   if h : next.HasNext then
-    have : remaining next < remaining cursor := consumed.remaining_lt
     let ⟨last, taken⟩ ← takeAll out version next h
     return ⟨last, taken.trans consumed⟩
   else
     return ⟨next, consumed⟩
-termination_by remaining cursor
+termination_by cursor
+decreasing_by exact consumed
 
 /-- Takes the next token, which there is, and then up to `more` further ones. -/
 def takeSome {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext) (more : Nat) :
@@ -239,12 +243,12 @@ def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
       next := switchVersion next .v2_0
   | _ => pure ()
   if h : next.1.HasNext then
-    have : remaining next.1 < remaining cursor := next.2.remaining_lt
     let (result, ⟨last, taken⟩) ← takeByRules refuseEnd version next.1 h
     return (result, ⟨last, taken.trans next.2⟩)
   else
     return (.ok .continue, next)
-termination_by remaining cursor
+termination_by cursor
+decreasing_by exact next.2
 
 /- LEAN: the Rust error type is `&'static str`, the name of what made the consumer fail. The
 result says whether the consumer finished by its script (`true`) or only because it was handed
@@ -326,7 +330,7 @@ def errorLine (err : LexError String) (recover : Bool) : Except String String :=
 consumer finished by its script. -/
 def resultLine (result : Option (Located Bool)) : String :=
   match result with
-  | some { value := true, location := place } => s!"fin {location place}\n"
+  | some located => if located.value then s!"fin {location located.location}\n" else ""
   | _ => ""
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
@@ -352,7 +356,7 @@ def drive (request : Request) (lines : IO.Ref String) :
     | .ok (line, lexer) =>
       lines.modify (· ++ line ++ feedLines request lexer)
       drive request lines feeds lexer
-    | .error (err, ()) =>
+    | .error (err, _) =>
       lines.modify (· ++ (← errorLine err false))
       -- the lexer has stopped for good, and the response with it
       return false
@@ -437,7 +441,7 @@ def drive (request : Request) (lines : IO.Ref String) :
     | .ok (line, lexer) =>
       lines.modify (· ++ line ++ feedLines request lexer)
       drive request lines feeds lexer
-    | .error (err, ()) =>
+    | .error (err, _) =>
       lines.modify (· ++ (← errorLine err false))
       -- the lexer has stopped for good, and the response with it
       return false
@@ -509,8 +513,9 @@ structure Ops (whitespace : Bool) where
   new : Scripted whitespace → Version → Lexer
   newRecovering : Scripted whitespace → Version → Recovering
   lexSlice : Lexer → ByteSlice →
-    IO (Except (LexError String × Unit) Lexer)
-  lexEof : Lexer → IO (Except (LexError String × Unit) (Option (Located Bool) × Lexer))
+    IO (Except (LexError String × Scripted whitespace) Lexer)
+  lexEof : Lexer →
+    IO (Except (LexError String × Scripted whitespace) (Option (Located Bool) × Lexer))
   currentLocation : Lexer → Location
   version : Lexer → Version
   recoveringLexSlice : Recovering → ByteSlice →
@@ -545,7 +550,7 @@ def drive (ops : Ops whitespace) (request : Request) (lines : IO.Ref String) :
       lines.modify (· ++ line ++
         feedLines request (ops.currentLocation lexer) (ops.version lexer))
       drive ops request lines feeds lexer
-    | .error (err, ()) =>
+    | .error (err, _) =>
       lines.modify (· ++ (← errorLine err false))
       -- the lexer has stopped for good, and the response with it
       return false

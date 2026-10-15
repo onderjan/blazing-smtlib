@@ -79,7 +79,7 @@ instance [Monad m] : LexRecovery FailFast H m where
   abandon _ := pure ()
   recover _ := pure ()
 
-instance [Token.Recover H m] : LexRecovery Recovering H m where
+instance {R E : Type} [Token.Consume H R E] [Token.Recover H m] : LexRecovery Recovering H m where
   abandon := Token.Recover.abandon
   recover := Token.Recover.recover
 

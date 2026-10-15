@@ -22,7 +22,7 @@ it that the fused steps read from the category alone.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Run
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
@@ -62,6 +62,11 @@ abbrev inputOf {batch : BatchTag} (version : Token.Version) (next : BatchCursor 
     (token : Token batch) : Parser.Internal.Input :=
   Parser.Internal.Input.ofSyntax (Token.SyntaxToken.Internal.fromParts (next.category token)
       (next.content token) version)
+
+theorem run_call {α : Type} (x : ExceptT (Handler.Error H) (StateT H m) α) (h : H) :
+    (call x).run.run h = (fun p => (p.1.mapError .handler, p.2)) <$> x.run.run h := by
+  simp only [call, ExceptT.adapt, ExceptT.run_mk, StateT.run_map]
+  rfl
 
 theorem run_call_bind {α γ : Type} (x : ExceptT (Handler.Error H) (StateT H m) α)
     (f : α → PM H γ) (h : H) :

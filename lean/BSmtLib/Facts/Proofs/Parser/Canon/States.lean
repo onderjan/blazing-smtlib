@@ -202,15 +202,13 @@ def canonSortDecState : SortDecState → SortDecState
 
 instance : Canon SortDecState := ⟨canonSortDecState⟩
 
-def canonConstructor : Constructor S → Constructor S
-  | ⟨symbol, selectors⟩ => ⟨canon symbol, canon selectors⟩
-
-instance : Canon (Constructor S) := ⟨canonConstructor⟩
-
 def canonSignature : Signature S → Signature S
   | ⟨symbol, parameters, result⟩ => ⟨canon symbol, canon parameters, canon result⟩
 
 instance : Canon (Signature S) := ⟨canonSignature⟩
+
+instance : Canon (Multiple.FunctionSignaturesView S) :=
+  ⟨fun v => Multiple.FunctionSignaturesView.Internal.new (canon v.toArray)⟩
 
 def canonConstructorState : ConstructorState S → ConstructorState S
   | .start => .start
@@ -327,21 +325,23 @@ def canonPayload : Payload SE A S T Sc → Payload SE A S T Sc
 
 instance : Canon (Payload SE A S T Sc) := ⟨canonPayload⟩
 
-def canonCommandState : CommandState SE A S T Sc → CommandState SE A S T Sc
+def canonCommandState {N : Type} : CommandState SE A S T Sc N → CommandState SE A S T Sc N
   | .awaiting => .awaiting
   | .opened => .opened
   | .payload state => .payload (canon state)
+  | .nonstandard parser => .nonstandard parser
 
-instance : Canon (CommandState SE A S T Sc) := ⟨canonCommandState⟩
+instance {N : Type} : Canon (CommandState SE A S T Sc N) := ⟨canonCommandState⟩
 
 instance : Canon CommandOutcome := ⟨id⟩
 
 instance : Canon (CommandStateOf (List Event)) :=
-  inferInstanceAs (Canon (CommandState Nat Nat Nat Nat Nat))
+  inferInstanceAs (Canon (CommandState Nat Nat Nat Nat Nat Empty))
 
 /-- The script parser over the recording handler, with the views in its state replaced. -/
 def canonScriptParser (parser : ScriptParser (List Event)) : ScriptParser (List Event) :=
-  { parser with command := canon parser.command }
+  ScriptParser.Internal.mk (ScriptParser.Internal.posture parser)
+    (canon (ScriptParser.Internal.command parser)) (ScriptParser.Internal.declarations parser)
 
 instance : Canon (ScriptParser (List Event)) := ⟨canonScriptParser⟩
 

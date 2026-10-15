@@ -31,7 +31,7 @@ lexers recover. -/
 def AfterRelOf {H R E : Type} [Token.Consume H R E] (recovery : Type) : (recovers : Bool) →
     Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers →
     Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers → Prop
-  | false, _, _ => True
+  | false, a, b => a = b
   | true, a, b => LexRel a b
 
 /-- What the two lexers give back after a failed call on a slice corresponds. -/
@@ -44,7 +44,7 @@ whether the lexers recover. -/
 def AfterEofRelOf {H R E : Type} [Token.Consume H R E] (recovery : Type) : (recovers : Bool) →
     Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers →
     Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers → Prop
-  | false, _, _ => True
+  | false, a, b => a = b
   | true, a, b =>
     match (a : Lexer.Internal.WRustPort.Lexer.AfterEof H recovery),
         (b : Lexer.Internal.WRustPort.Lexer.AfterEof H recovery) with
@@ -76,7 +76,7 @@ theorem afterErrorOf_rel {H R E : Type} [Token.Consume H R E] (recovery : Type)
     AfterRelOf recovery recovers (Lexer.Internal.WRustPort.Lexer.afterErrorOf recovers a)
       (Lexer.Internal.WRustPort.Lexer.afterErrorOf recovers b) := by
   cases recovers
-  · trivial
+  · exact h.1
   · exact h
 
 theorem afterError_rel {H R E : Type} [Token.Consume H R E] (recovery : Type) [Recovers recovery]
@@ -92,7 +92,7 @@ theorem afterEofErrorOf_rel {H R E : Type} [Token.Consume H R E] (recovery : Typ
       (Lexer.Internal.WRustPort.Lexer.afterEofErrorOf recovers a continues)
       (Lexer.Internal.WRustPort.Lexer.afterEofErrorOf recovers b continues) := by
   cases recovers
-  · trivial
+  · exact h.1
   · cases continues
     · exact h
     · exact h

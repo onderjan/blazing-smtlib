@@ -5,6 +5,9 @@ public import BSmtLib.Facts.Proofs.Parser.Canon.Simp
 import all BSmtLib.Parser
 import all BSmtLib.Facts.Parser.Adapters.Handler
 import all BSmtLib.Facts.Parser.Adapters.Bridge
+import all BSmtLib.Multiple
+import all BSmtLib.Multiple.MatchCases
+import all BSmtLib.Multiple.FunctionSignaturesView
 
 @[expose] public section
 
@@ -26,8 +29,9 @@ open BSmtLib.Facts.Parser.Adapters.Bridge.Bridge
 @[canon_simps] theorem chars_canonSlice (s : ByteSlice) : chars (canonSlice s) = chars s := by
   simp only [chars, toByteArray_canonSlice]
 
-@[canon_simps] theorem symbol_canonSymbol (s : Symbol) : symbol (canonSymbol s) = symbol s := by
-  cases s; simp only [symbol, canon_simps, Canon.canon]
+@[canon_simps] theorem symbol_canonSymbol (s : Plain.SymbolView) :
+    symbol (canonSymbol s) = symbol s := by
+  simp only [symbol, canon_simps]
 
 @[canon_simps] theorem index_canonIndex (i : Index) : index (canonIndex i) = index i := by
   cases i <;> simp only [index, canon_simps, Canon.canon]
@@ -78,7 +82,7 @@ instance : CanonId BSmtLibSpec.Parser.Properties.Recorded.sExpr := inferInstance
 instance : CanonId BSmtLibSpec.Parser.Properties.Recorded.sort := inferInstanceAs (CanonId Nat)
 instance : CanonId BSmtLibSpec.Parser.Properties.Recorded.term := inferInstanceAs (CanonId Nat)
 
-@[canon_simps] theorem pairs_canon {α : Type} (items : Array (Symbol × α)) :
+@[canon_simps] theorem pairs_canon {α : Type} (items : Array (Plain.SymbolView × α)) :
     pairs (items.map fun p => (canonSymbol p.1, p.2)) = pairs items := by
   simp only [pairs, Array.toList_map, List.map_map]
   apply List.map_congr_left
@@ -91,7 +95,7 @@ instance : CanonId BSmtLibSpec.Parser.Properties.Recorded.term := inferInstanceA
       keyword k := by
   simp only [keyword, canon_simps]
 
-theorem symbols_canon (items : Array Symbol) :
+theorem symbols_canon (items : Array Plain.SymbolView) :
     (items.map canonSymbol).toList.map symbol = items.toList.map symbol := by
   simp only [Array.toList_map, List.map_map, Function.comp_def, symbol_canonSymbol]
 
@@ -107,9 +111,9 @@ open BSmtLib.Facts.Parser.Adapters.Handler BSmtLibSpec.Parser.Properties
 open BSmtLib.Plain (KeywordView NumeralView StringContentView)
 open Traits.Handler Traits.CommandHandler
 
-variable {s : Symbol} {i : Identifier} {k : KeywordView} {n : NumeralView}
+variable {s : Plain.SymbolView} {i : Identifier} {k : KeywordView} {n : NumeralView}
 
-theorem handleSort_canon {args : Array (Traits.Handler.«Sort» (List Event))} :
+theorem handleSort_canon {args : Multiple (Traits.Handler.«Sort» (List Event))} :
     handleSort (H := List Event) (canonIdentifier i) args = handleSort i args := by
   show recordingCall (.handleSort (identifier (canonIdentifier i)) _) =
     recordingCall (.handleSort (identifier i) _)
@@ -139,81 +143,85 @@ theorem handleAttribute_canon
     exact congrArg (fun x => recordingCall (.handleAttribute (keyword k) (some x)))
       (attributeValueOf_canonAttributeValueNode (values := Recorded) val)
 
-theorem startLet_canon {bs : Array (Symbol × Traits.Handler.Term (List Event))} :
-    startLet (H := List Event) (bs.map fun p => (canonSymbol p.1, p.2)) = startLet bs :=
-  congrArg (fun x => recordingCall (.startLet x)) (pairs_canon bs)
+theorem startLet_canon {bs : Multiple.BindingsView (Traits.Handler.Term (List Event))} :
+    startLet (H := List Event) (canon bs) = startLet bs :=
+  congrArg (fun x => recordingCall (.startLet x)) (pairs_canon bs.toArray)
 
 theorem startQuantifier_canon {q : Quantifier}
-    {vs : Array (Symbol × Traits.Handler.«Sort» (List Event))} :
-    startQuantifier (H := List Event) q (vs.map fun p => (canonSymbol p.1, p.2)) =
-      startQuantifier q vs :=
-  congrArg (fun x => recordingCall (.startQuantifier _ x)) (pairs_canon vs)
+    {vs : Multiple.SortedVarsView (Traits.Handler.«Sort» (List Event))} :
+    startQuantifier (H := List Event) q (canon vs) = startQuantifier q vs :=
+  congrArg (fun x => recordingCall (.startQuantifier _ x)) (pairs_canon vs.toArray)
 
-theorem startLambda_canon {vs : Array (Symbol × Traits.Handler.«Sort» (List Event))} :
-    startLambda (H := List Event) (vs.map fun p => (canonSymbol p.1, p.2)) = startLambda vs :=
-  congrArg (fun x => recordingCall (.startLambda x)) (pairs_canon vs)
+theorem startLambda_canon {vs : Multiple.SortedVarsView (Traits.Handler.«Sort» (List Event))} :
+    startLambda (H := List Event) (canon vs) = startLambda vs :=
+  congrArg (fun x => recordingCall (.startLambda x)) (pairs_canon vs.toArray)
 
 theorem startMatchCase_canon {t : Traits.Handler.Term (List Event)} {p : Pattern} :
     startMatchCase (H := List Event) t (canonPattern p) = startMatchCase t p :=
   congrArg (fun x => recordingCall (.startMatchCase t x)) (pattern_canonPattern p)
 
 theorem endMatch_canon {t : Traits.Handler.Term (List Event)}
-    {cs : Array (Pattern × Traits.Handler.Term (List Event))} :
-    endMatch (H := List Event) t (cs.map fun p => (canonPattern p.1, p.2)) = endMatch t cs := by
-  show recordingCall (.endMatch t _) = recordingCall (.endMatch t _)
+    {cs : Multiple.MatchCases (Traits.Handler.Term (List Event))} :
+    endMatch (H := List Event) t (canon cs) = endMatch t cs := by
+  show recordingCall (.endMatch t (((cs.toArray.map fun p => (canonPattern p.1, p.2))).toList.map
+      fun (p, b) => (pattern p, b))) =
+    recordingCall (.endMatch t (cs.toArray.toList.map fun (p, b) => (pattern p, b)))
   congr 2
   simp only [Array.toList_map, List.map_map, Function.comp_def, pattern_canonPattern]
-  rfl
 
 theorem commandDeclareConst_canon {t : Traits.Handler.«Sort» (List Event)} :
     commandDeclareConst (H := List Event) (canonSymbol s) t = commandDeclareConst s t :=
   congrArg (fun x => recordingCall (.commandDeclareConst x t)) (symbol_canonSymbol s)
 
-theorem startDeclareDatatype_canon {ps : Array Symbol} :
-    startDeclareDatatype (H := List Event) (canonSymbol s) (ps.map canonSymbol) =
+theorem startDeclareDatatype_canon {ps : Multiple.SymbolsView} :
+    startDeclareDatatype (H := List Event) (canonSymbol s) (canon ps) =
       startDeclareDatatype s ps := by
-  show recordingCall (.startDeclareDatatype _ _) = recordingCall (.startDeclareDatatype _ _)
+  show recordingCall (.startDeclareDatatype (symbol (canonSymbol s))
+      ((ps.toArray.map canonSymbol).toList.map symbol)) =
+    recordingCall (.startDeclareDatatype (symbol s) (ps.toArray.toList.map symbol))
   rw [symbol_canonSymbol, symbols_canon]
 
-theorem constructors_canon (cs : Array (Constructor (Traits.Handler.«Sort» (List Event)))) :
-    (cs.map canonConstructor).toList.map
+theorem constructors_canon
+    (cs : Multiple.ConstructorsView (Traits.Handler.«Sort» (List Event))) :
+    (canon cs).toArray.toList.map
         (BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.constructor (H := List Event)) =
-      cs.toList.map
+      cs.toArray.toList.map
         (BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.constructor (H := List Event)) := by
+  show (cs.toArray.map canon).toList.map _ = _
   simp only [Array.toList_map, List.map_map]
   apply List.map_congr_left
   intro c _
   obtain ⟨sym, sel⟩ := c
-  show BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.constructor ⟨canonSymbol sym, _⟩ =
-    BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.constructor ⟨sym, sel⟩
+  show BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.constructor (canonSymbol sym, canon sel) =
+    BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.constructor (sym, sel)
   simp only [BSmtLib.Facts.Parser.Adapters.Bridge.Bridge.constructor, symbol_canonSymbol]
-  exact congrArg _ (pairs_canon sel)
+  exact congrArg _ (pairs_canon sel.toArray)
 
-theorem endDeclareDatatype_canon {cs : Array (Constructor (Traits.Handler.«Sort» (List Event)))} :
-    endDeclareDatatype (H := List Event) (cs.map canonConstructor) = endDeclareDatatype cs :=
+theorem endDeclareDatatype_canon
+    {cs : Multiple.ConstructorsView (Traits.Handler.«Sort» (List Event))} :
+    endDeclareDatatype (H := List Event) (canon cs) = endDeclareDatatype cs :=
   congrArg (fun x => recordingCall (.endDeclareDatatype x)) (constructors_canon cs)
 
 theorem endDatatypeDeclaration_canon
-    {cs : Array (Constructor (Traits.Handler.«Sort» (List Event)))} :
-    endDatatypeDeclaration (H := List Event) (cs.map canonConstructor) =
-      endDatatypeDeclaration cs :=
+    {cs : Multiple.ConstructorsView (Traits.Handler.«Sort» (List Event))} :
+    endDatatypeDeclaration (H := List Event) (canon cs) = endDatatypeDeclaration cs :=
   congrArg (fun x => recordingCall (.endDatatypeDeclaration x)) (constructors_canon cs)
 
-theorem startDeclareDatatypes_canon {ss : Array (Symbol × NumeralView)} :
-    startDeclareDatatypes (H := List Event)
-        (ss.map fun p =>
-          (canonSymbol p.1, NumeralView.Internal.newUnchecked (canonSlice p.2.asSlice))) =
-      startDeclareDatatypes ss := by
-  show recordingCall (.startDeclareDatatypes _) = recordingCall (.startDeclareDatatypes _)
+theorem startDeclareDatatypes_canon {ss : Multiple.SortAritiesView} :
+    startDeclareDatatypes (H := List Event) (canon ss) = startDeclareDatatypes ss := by
+  show recordingCall (.startDeclareDatatypes ((ss.toArray.map fun p =>
+      (canonSymbol p.1, NumeralView.Internal.newUnchecked (canonSlice p.2.asSlice))).toList.map
+        fun (s, n) => (symbol s, chars n.asSlice))) =
+    recordingCall (.startDeclareDatatypes
+      (ss.toArray.toList.map fun (s, n) => (symbol s, chars n.asSlice)))
   congr 2
   simp only [Array.toList_map, List.map_map, Function.comp_def, symbol_canonSymbol, canon_simps]
 
-theorem startDatatypeDeclaration_canon {ps : Array Symbol} :
-    startDatatypeDeclaration (H := List Event) (ps.map canonSymbol) =
-      startDatatypeDeclaration ps :=
-  congrArg (fun x => recordingCall (.startDatatypeDeclaration x)) (symbols_canon ps)
+theorem startDatatypeDeclaration_canon {ps : Multiple.SymbolsView} :
+    startDatatypeDeclaration (H := List Event) (canon ps) = startDatatypeDeclaration ps :=
+  congrArg (fun x => recordingCall (.startDatatypeDeclaration x)) (symbols_canon ps.toArray)
 
-theorem commandDeclareFun_canon {ps : Array (Traits.Handler.«Sort» (List Event))}
+theorem commandDeclareFun_canon {ps : Multiple (Traits.Handler.«Sort» (List Event))}
     {r : Traits.Handler.«Sort» (List Event)} :
     commandDeclareFun (H := List Event) (canonSymbol s) ps r = commandDeclareFun s ps r :=
   congrArg (fun x => recordingCall (.commandDeclareFun x _ r)) (symbol_canonSymbol s)
@@ -255,12 +263,14 @@ theorem startRecursiveBody_canon {sig : Signature (Traits.Handler.«Sort» (List
     startRecursiveBody (H := List Event) (canonSignature sig) = startRecursiveBody sig :=
   congrArg (fun x => recordingCall (.startRecursiveBody x)) (signature_canon sig)
 
-theorem startDefineFunsRec_canon {sigs : Array (Signature (Traits.Handler.«Sort» (List Event)))} :
-    startDefineFunsRec (H := List Event) (sigs.map canonSignature) = startDefineFunsRec sigs := by
-  show recordingCall (.startDefineFunsRec _) = recordingCall (.startDefineFunsRec _)
+theorem startDefineFunsRec_canon
+    {sigs : Multiple.FunctionSignaturesView (Traits.Handler.«Sort» (List Event))} :
+    startDefineFunsRec (H := List Event) (canon sigs) = startDefineFunsRec sigs := by
+  show recordingCall (.startDefineFunsRec ((sigs.toArray.map canonSignature).toList.map _)) =
+    recordingCall (.startDefineFunsRec _)
   congr 2
   rw [Array.toList_map]
-  generalize sigs.toList = l
+  generalize sigs.toArray.toList = l
   induction l with
   | nil => rfl
   | cons sig rest ih =>
@@ -268,10 +278,12 @@ theorem startDefineFunsRec_canon {sigs : Array (Signature (Traits.Handler.«Sort
     rw [signature_canon]
     exact congrArg (List.cons _) ih
 
-theorem startDefineSort_canon {ps : Array Symbol} :
-    startDefineSort (H := List Event) (canonSymbol s) (ps.map canonSymbol) =
+theorem startDefineSort_canon {ps : Multiple.SymbolsView} :
+    startDefineSort (H := List Event) (canonSymbol s) (canon ps) =
       startDefineSort s ps := by
-  show recordingCall (.startDefineSort _ _) = recordingCall (.startDefineSort _ _)
+  show recordingCall (.startDefineSort (symbol (canonSymbol s))
+      ((ps.toArray.map canonSymbol).toList.map symbol)) =
+    recordingCall (.startDefineSort (symbol s) (ps.toArray.toList.map symbol))
   rw [symbol_canonSymbol, symbols_canon]
 
 theorem commandEcho_canon {c : StringContentView} :

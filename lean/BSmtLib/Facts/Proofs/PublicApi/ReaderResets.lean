@@ -40,7 +40,7 @@ def ReadLex :
     Except (Reader.ReadFailure (List BSmtLibSpec.Parser.Properties.Event)
         (ScriptParser (List BSmtLibSpec.Parser.Properties.Event)))
       (Option (Span.Located Unit) × RecReader × RecReader) →
-    Except (LexError (ParseErrorCause Unit)) (Option (Span.Located Unit) × PLexer × PLexer) →
+    Except (LexError (ParseError Unit)) (Option (Span.Located Unit) × PLexer × PLexer) →
       Prop
   | .error f, .error e => f.error = Reader.ReadError.ofLex e
   | .ok (r, b, a), .ok (r', b', a') =>
@@ -49,13 +49,13 @@ def ReadLex :
 
 theorem readThrough_lex : ∀ (slices : List ByteList) (l : PLexer),
     ReadLex (readThrough (Reader.Internal.ofLexer l : RecReader) slices)
-      (lexThrough (R := Unit) (E := ParseErrorCause Unit) l slices)
+      (lexThrough (R := Unit) (E := ParseError Unit) l slices)
   | [], l => by
     unfold readThrough lexThrough
     rw [feed]
-    simp only [lexFeed, Reader.readEof]
+    simp only [lexFeed, Reader.readEof, BSmtLib.Lexer.lexEof]
     rw [show (Reader.Internal.ofLexer l : RecReader).lexer = l from rfl]
-    generalize Internal.run l (Internal.lexEofStep (R := Unit) (E := ParseErrorCause Unit)
+    generalize Internal.run l (Internal.lexEofStep (R := Unit) (E := ParseError Unit)
       (Recovery.LexRecovery.abandon Recovery.FailFast)
       (Recovery.LexRecovery.recover Recovery.FailFast)) = Q
     obtain ⟨r, l'⟩ := Q
@@ -63,15 +63,15 @@ theorem readThrough_lex : ∀ (slices : List ByteList) (l : PLexer),
     | ok flow =>
       rw [BSmtLib.Facts.Proofs.Reader.Param.Adapter.id_bind_eq]
       dsimp only
-      cases flow <;> rcases hh : Internal.held l' with _ | x <;>
-        exact ⟨rfl, rfl, rfl⟩
+      cases flow <;> refine ⟨?_, rfl, rfl⟩ <;> cases hh : Internal.held l' <;>
+        (simp only [Internal.held] at hh; simp only [hh]; rfl)
     | error e => exact (rfl : Reader.ReadError.ofLex e = _)
   | slice :: slices, l => by
     rw [Reader.Lexes.Through.readThrough_cons]
     unfold lexThrough
-    simp only [lexFeed, Reader.readSlice]
+    simp only [lexFeed, Reader.readSlice, BSmtLib.Lexer.lexSlice]
     rw [show (Reader.Internal.ofLexer l : RecReader).lexer = l from rfl]
-    generalize Internal.run l (Internal.lexSliceStep (R := Unit) (E := ParseErrorCause Unit)
+    generalize Internal.run l (Internal.lexSliceStep (R := Unit) (E := ParseError Unit)
       (Recovery.LexRecovery.abandon Recovery.FailFast)
       (Recovery.LexRecovery.recover Recovery.FailFast) slice.toByteArray.toByteSlice) = Q
     obtain ⟨r, l'⟩ := Q
@@ -166,12 +166,12 @@ theorem resets_recording (version : Token.Version) (first next : List ByteList)
   generalize readThrough (Reader.Internal.ofLexer La : RecReader) next = X1 at R1 ⊢
   generalize readThrough (Reader.Internal.ofLexer (BSmtLib.Lexer.new A version) : RecReader)
     next = X2 at R2 ⊢
-  generalize lexThrough (R := Unit) (E := ParseErrorCause Unit) La next = Y1 at R1 T1
-  generalize lexThrough (R := Unit) (E := ParseErrorCause Unit) (BSmtLib.Lexer.new A version)
+  generalize lexThrough (R := Unit) (E := ParseError Unit) La next = Y1 at R1 T1
+  generalize lexThrough (R := Unit) (E := ParseError Unit) (BSmtLib.Lexer.new A version)
     next = Y2 at R2 T3
-  generalize lexThrough (R := Unit) (E := ParseErrorCause Unit) (canonLexer La) next = Z1
+  generalize lexThrough (R := Unit) (E := ParseError Unit) (canonLexer La) next = Z1
     at T1 T2
-  generalize lexThrough (R := Unit) (E := ParseErrorCause Unit)
+  generalize lexThrough (R := Unit) (E := ParseError Unit)
     (BSmtLib.Lexer.new (⟨canonA A⟩ : CanonAdapter) version) next = Z2 at T2 T3
   rcases X1 with f1 | ⟨r1, b1, a1⟩ <;> rcases Y1 with e1 | ⟨s1, c1, d1⟩ <;>
     simp only [ReadLex] at R1 <;>

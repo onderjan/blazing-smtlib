@@ -68,20 +68,19 @@ def EofLoc (c : WP.WCore) (location : Span.Location) : Prop :=
   location.offset = c.offset ∧ location.line = c.line ∧
     c.lineStart + location.column = location.offset
 
-/-- The failure is trailing input that starts at the location. -/
-def IsTrailingFailure (location : Span.Location)
-    (failure : Lexer.Internal.Failure (Option C.Error)) : Prop
-    :=
-  failure.cause = .lexical .unexpectedTrailingToken ∧ failure.span.start = location
+/-- The failure is trailing input at the lexeme, with its span. -/
+def IsTrailingFailure (l : Lexeme) (failure : Lexer.Internal.Failure (Option C.Error)) : Prop :=
+  failure.cause = .lexical .unexpectedTrailingToken ∧ failure.span = Cursor.lexSpan l
 
 /-- How the loop over a slice ends where the consumer stopped. -/
 def ExitMatches : Model.Stop C → Lexer.Internal.WRustPort.SliceExit C.Result
     (Option C.Error) floor → Prop
-  | .trailing l, x => ∃ g, x = .done (.error g) ∧ IsTrailingFailure l.start g
-  | .fail e _ _, x => ∃ g, x = .done (.error g) ∧ g.cause = .consumer (some e)
-  | .layout _, x => ∃ g, x = .done (.error g) ∧ g.cause = .consumer none
+  | .trailing l, x => ∃ g, x = .done (.error g) ∧ IsTrailingFailure l g
+  | .fail e _ l, x => ∃ g, x = .done (.error g) ∧ g.cause = .consumer (some e) ∧
+      g.span = Cursor.lexSpan l
+  | .layout l, x => ∃ g, x = .done (.error g) ∧ g.cause = .consumer none ∧ g.span = Cursor.lexSpan l
   | .brk r l nx, x => (∃ a, x = .stopped (.finished r) l.end a) ∨
-      ∃ l2 g, nx = some l2 ∧ x = .done (.error g) ∧ IsTrailingFailure l2.start g
+      ∃ l2 g, nx = some l2 ∧ x = .done (.error g) ∧ IsTrailingFailure l2 g
   | .brkX r l, x => ∃ a, x = .stopped (.finished r) l.end a
   | .discard r l, x => ∃ a, x = .stopped (.discarded r) l.end a
   | .relex l, x => ∃ a, x = .stopped .relex l.end a
@@ -118,13 +117,15 @@ theorem exitMatches_of {s : Model.Stop C} {e : WP.Intr C floor} (h : Matches s e
     subst h1
     exact ⟨_, rfl, rfl, h2⟩
   | fail err d l =>
-    simp only [Matches] at h
+    obtain ⟨h, hs⟩ := h
+    simp only at h
     subst h
-    exact ⟨_, rfl, rfl⟩
+    exact ⟨_, rfl, rfl, hs⟩
   | layout l =>
-    simp only [Matches] at h
+    obtain ⟨h, hs⟩ := h
+    simp only at h
     subst h
-    exact ⟨_, rfl, rfl⟩
+    exact ⟨_, rfl, rfl, hs⟩
   | brk r l nx =>
     rcases h with ⟨h1, h2⟩ | ⟨l2, h1, h2, h3⟩
     · simp only at h1 h2

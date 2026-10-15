@@ -9,8 +9,14 @@ import BSmtLib.ControlFlow
 import BSmtLib.Bytes
 import BSmtLib.Plain
 import BSmtLib.Span
+import BSmtLib.Multiple
+import BSmtLib.Multiple.MatchCases
+import BSmtLib.Multiple.FunctionSignaturesView
+import BSmtLib.Multiple.FunctionSignatures
 import BSmtLib.Nodes
 import BSmtLib.Traits
+import BSmtLib.Traits.CommandHandler
+import BSmtLib.Traits.SyntaxChecker
 import BSmtLib.Token
 import BSmtLib.Token.Reserved
 import BSmtLib.Token.SyntaxToken

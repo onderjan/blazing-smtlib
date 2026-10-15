@@ -196,13 +196,14 @@ theorem defineSort_payload (name : Tree.Symbol) (parameters : List Tree.Symbol) 
     simp [ticks_append]
   have hlistPayload := Runs.bind_next
     (following := fun _ => Parser.Internal.call (Traits.CommandHandler.startDefineSort (H := H) symbol
-      (#[] ++ symbols.toArray)))
+      (Multiple.SymbolsView.Internal.new (#[] ++ symbols.toArray))))
     (next := fun _ => pure (.more (Payload.defineSortBody .init)))
     ((Runs.embedA (outer := payloadStep version)
         (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
             (Payload.defineSortParameters symbol)
       (fun parameters => do
-        Parser.Internal.call (Traits.CommandHandler.startDefineSort (H := H) symbol parameters)
+        Parser.Internal.call (Traits.CommandHandler.startDefineSort (H := H) symbol
+          (Multiple.SymbolsView.Internal.new parameters))
         pure (.more (.defineSortBody .init)))
       (by payload_step) hlistRuns).congr rfl (by funext; simp [Parser.Internal.Step.wrap]))
   rw [show Parser.Internal.Input.symbol symbol :: (Parser.Internal.Input.parenOpen ::

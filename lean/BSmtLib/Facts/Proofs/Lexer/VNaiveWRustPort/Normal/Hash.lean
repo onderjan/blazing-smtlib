@@ -168,7 +168,8 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
         · refine ⟨hstate _ _ _ rfl (locAt_eq hloc) ?_, ?_⟩
           · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
           · fits_tac
-        · dsimp only [LocAt, afterColumns, Past.from]
+        · simp only [LocAt, afterColumns, Past.from, Span.Location.Internal.offset_new,
+            Span.Location.Internal.line_new, Span.Location.Internal.column_new]
           refine ⟨?_, ?_, ?_⟩ <;> omega
         · rw [hB]; rfl
       · intro hsz

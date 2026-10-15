@@ -49,8 +49,7 @@ def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
 whose proofs are still to come. Shrink-only. -/
 def sorryAllowed : List Name := [
   `BSmtLib.Facts.PublicApi.builds_commands,
-  `BSmtLib.Facts.PublicApi.construct_spans,
-  `BSmtLib.Facts.PublicApi.reading_slicing]
+  `BSmtLib.Facts.PublicApi.construct_spans]
 
 /-- The definitions that may be `partial`: the reader's loop over a whole input, and two
 functions of the naming check. Shrink-only. -/
@@ -59,13 +58,9 @@ def partialAllowed : List Name := [
   `BSmtLib.Facts.Naming.belowInstance,
   `BSmtLib.Facts.Naming.longestModule]
 
-/-- The declarations of the library whose compiled code may reach a panic: the `Repr` instances
-that render to a string with `Std.Format.pretty`, which holds a `panic` on a branch that its own
-invariant rules out. Shrink-only. -/
-def panicAllowed : List Name := [
-  `BSmtLib.Lexer.Error.instReprLexError,
-  `BSmtLib.Lexer.Error.instReprLexError.repr,
-  `BSmtLib.Span.instRepr]
+/-- The declarations of the library whose compiled code may reach a panic. Shrink-only: none
+is left. -/
+def panicAllowed : List Name := []
 
 /-- The axioms through which a proof trusts the compiler, as `native_decide` does. -/
 def compilerAxioms : List Name := [``Lean.ofReduceBool, ``Lean.ofReduceNat, ``Lean.trustCompiler]

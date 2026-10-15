@@ -8,6 +8,8 @@ import all BSmtLib.Parser.Script
 import all BSmtLib.Token
 
 @[expose] public section
+open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser, posture → postureOf,
+  command → commandOf, declarations → declarationsOf
 open BSmtLib.Parser.Script.Internal
 open BSmtLib.Token.BatchCursor.Internal (remaining)
 
@@ -120,7 +122,7 @@ end
 handler only versions the posture allows and leaves the cursor in such a version, unless it
 fails. -/
 theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (List Event))
-    (hp : parser.posture = strict) {b : Token.BatchTag} (cursor next : Token.BatchCursor b)
+    (hp : postureOf parser = strict) {b : Token.BatchTag} (cursor next : Token.BatchCursor b)
     (token : Token b)
     (consumed : next.Consumed cursor) (hv : strict.allowed.contains next.version = true)
     (handler : List Event) (hh : ToldAllowed strict handler) :
@@ -133,7 +135,7 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
   simp only [Param.Stop.takeOne, StateT.run_bind]
   rw [run_bind_ok (arrive_run _ _ _), step_eq, run_bind_split]
   obtain ⟨added, hlog, hadded, -⟩ := (commandStep_silent (bad := isSwitch)
-    (Token.Produce.version next) parser.command
+    (Token.Produce.version next) (commandOf parser)
     (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).holds
       (arrivalCalls parser (Parser.Internal.Input.ofSyntax
           (Token.Produce.«syntax» next token)) ++ handler)
@@ -142,7 +144,7 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
           (Token.Produce.«syntax» next token)) ++
           handler)) :=
     toldAllowed_append hadded (toldAllowed_append (arrivalCalls_switchless _ _) hh)
-  generalize (commandStep (Token.Produce.version next) parser.command
+  generalize (commandStep (Token.Produce.version next) (commandOf parser)
     (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).run.run
       (arrivalCalls parser (Parser.Internal.Input.ofSyntax
           (Token.Produce.«syntax» next token)) ++ handler) =
@@ -156,7 +158,7 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
     rcases outcome with command | (_ | declared | _ | _)
     · exact .inr ⟨hh', hv⟩
     · exact .inr ⟨hh', hv⟩
-    · cases hc : (check parser.posture) parser.declarations declared with
+    · cases hc : (check (postureOf parser)) (declarationsOf parser) declared with
       | some kind =>
         have hs : (scriptAfter parser (.done (.setVersion declared))).run.run
             (added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
@@ -178,7 +180,7 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
             (.ok (.switchVersion declared (do
               ExceptT.lift (Handler.setVersion (H := List Event) declared)
               return .more
-                { parser with command := .awaiting, declarations := parser.declarations + 1 })),
+                (scriptParser (postureOf parser) .awaiting (declarationsOf parser + 1)))),
               added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
                   (Token.Produce.«syntax» next token)) ++
                 handler)) := by
@@ -210,7 +212,7 @@ handler only versions the posture allows and leaves the cursor in such a version
 fails. -/
 theorem paLoop_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
     ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
-      (handler : List Event), remaining cursor < n → parser.posture = strict →
+      (handler : List Event), remaining cursor < n → postureOf parser = strict →
       strict.allowed.contains cursor.version = true → ToldAllowed strict handler →
       (∃ e, ((paLoop parser cursor).run handler).1.1 = .error e) ∨
         (ToldAllowed strict ((paLoop parser cursor).run handler).2 ∧
@@ -241,7 +243,7 @@ theorem paLoop_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
         · simp only [IsFailure] at hf
       · dsimp only at hh₁ hv₁
         rcases after₁ with p₁ | ⟨answer, p₁⟩
-        · have hp₁ : p₁.posture = strict := by
+        · have hp₁ : postureOf p₁ = strict := by
             rcases hl with hf | ⟨ha, -, -⟩
             · simp only [IsFailure] at hf
             · obtain ⟨⟨_, _⟩ | _, _⟩ := t₂
@@ -264,7 +266,7 @@ allows, from a handler told only such versions, tells its handler only such vers
 the cursor in such a version, unless it fails. -/
 theorem consume_allowedS {strict : Token.VersionPosture} {b : Token.BatchTag}
     (cursor : Token.BatchCursor b) (h : cursor.HasNext) (A : RecAdapter)
-    (hp : A.parser.posture = strict) (hv : strict.allowed.contains cursor.version = true)
+    (hp : postureOf A.parser = strict) (hv : strict.allowed.contains cursor.version = true)
     (hh : ToldAllowed strict (startLog A cursor.version)) :
     (∃ e, ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A).1.1 =
         .error e) ∨
@@ -298,7 +300,7 @@ cursor in such a version, unless it fails: from the call of the adapter that sto
 (`consume_allowedS`), and the call from where that stopped. -/
 theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : Token.BatchCursor b) (h : cursor.HasNext) (A : RecAdapter),
-      (remaining cursor) < n → A.parser.posture = strict →
+      (remaining cursor) < n → postureOf A.parser = strict →
       strict.allowed.contains cursor.version = true →
       ToldAllowed strict (startLog A cursor.version) →
       (∃ e, (outN cursor h A).1.1 = .error e) ∨
@@ -322,8 +324,9 @@ theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
           (P := ScriptParser (List Event)) cursor h).run A).1.2.val.version = true) at hs
     change (∃ e, ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
         h).run A).1.1 = .error e) ∨
-      (_ ∧ ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
-          A).2.parser.posture = strict) at hl
+      (_ ∧ postureOf
+          ((Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor h).run
+            A).2.parser = strict) at hl
     have hvs₀ := Param.Stop.versionSet_consume (H := List Event) (P := ScriptParser (List Event))
       cursor h A
     generalize (Param.Stop.consume (H := List Event) (P := ScriptParser (List Event)) cursor
@@ -336,11 +339,11 @@ theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
       exact ⟨e, by rw [resumeOut_of_not (fun hc => by cases hc.1)]⟩
     · by_cases hc : a = .ok .continue ∧ d.HasNext
       · obtain ⟨rfl, hdn⟩ := hc
-        have hp' : A'.parser.posture = strict := by
+        have hp' : postureOf A'.parser = strict := by
           rcases hl with ⟨e, he⟩ | ⟨-, hp'⟩
           · cases he
           · exact hp'
-        have hvs : A'.versionSet = true := hvs₀
+        have hvs : (ParseAdapter.Internal.versionSet A') = true := hvs₀
         simp only [resumeOut, hdn, ↓reduceDIte]
         refine outN_allowed n d hdn A'
           (Nat.lt_of_lt_of_le hd.remaining_lt (Nat.le_of_lt_succ hn)) hp' hv' ?_

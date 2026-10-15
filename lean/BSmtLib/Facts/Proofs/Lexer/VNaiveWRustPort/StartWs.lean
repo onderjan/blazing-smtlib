@@ -4,6 +4,8 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Push
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Span
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 
@@ -254,11 +256,10 @@ theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : 
         obtain ⟨h1, h2, h3⟩ := hLI
         simp only [borrowedLexeme, Lexeme.mk.injEq, true_and]
         refine ⟨rfl, hsl, ?_⟩
-        cases hl : afterColumns locE (Lexer.Internal.WRustPort.Slice.runEnd input e
-            CharClass.RUN_NON_LF_WHITESPACE - e)
-        rw [hl] at h1 h2 h3
-        simp only [Span.Location.mk.injEq] at h1 h2 h3 ⊢
-        refine ⟨by omega, h2.symm, by omega⟩
+        apply Span.Location.ext <;>
+          simp only [afterColumns, Span.Location.Internal.offset_new,
+            Span.Location.Internal.line_new, Span.Location.Internal.column_new] at h1 h2 h3 ⊢ <;>
+          omega
       apply WP.wp_bind
       refine pushBorrowed_wp input batch offset base _ _ _ _ _ _ _ _ _ held hheld hbytes.symm
         ?_ ?_ _ coll ?_ ?_ ?_
@@ -374,11 +375,12 @@ theorem startWhitespace_wp (v : Token.Version) (input : ByteSlice) (offset base 
   apply WP.wp_pure
   apply wp_state
   intro s2 hs2
-  have hsl : (⟨offset + (index - base), s.val.line, offset + (index - base) - s.val.lineStart⟩ :
-      Span.Location) = location := by
-    cases location
-    simp only [Span.Location.mk.injEq] at h1 h2 h3 ⊢
-    exact ⟨h1.symm, h2.symm, by omega⟩
+  have hsl : Span.Location.Internal.new (offset + (index - base)) s.val.line
+      (offset + (index - base) - s.val.lineStart) = location := by
+    apply Span.Location.ext <;>
+      simp only [Span.Location.Internal.offset_new, Span.Location.Internal.line_new,
+        Span.Location.Internal.column_new] <;>
+      omega
   refine wsStart_lt v input offset base index _ batch hframe _ hbatch s2 coll held location
     (by subst hs2; exact ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩)
         (by subst hs2; exact hoff)

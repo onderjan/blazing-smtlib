@@ -55,6 +55,17 @@ private def reprBytes (bytes : ByteSlice) : String := Id.run do
   out.push '"'
 
 
+/- LEAN: Rust's derived `Hash` hashes the bytes, so that an owned string and a view of the same
+bytes hash alike. `ByteArray`'s hash cannot be computed on a part of an array, so the owned
+strings and the views all hash their bytes with this function. -/
+/-- The hash of the bytes. -/
+@[inline]
+def Internal.hashSlice (slice : ByteSlice) : UInt64 := Id.run do
+  let mut h : UInt64 := 7
+  for hi : i in [0:slice.size] do
+    h := mixHash h (slice[i]'hi.upper).toUInt64
+  return h
+
 @[inline]
 def new : Bytes := ⟨ByteArray.empty⟩
 
@@ -93,9 +104,18 @@ def Internal.push (self : Bytes) (byte : UInt8) : Bytes := ⟨self.bytes.push by
 
 @[no_expose] instance : BEq Bytes := ⟨fun a b => a.bytes == b.bytes⟩
 
-@[no_expose] instance : Hashable Bytes := ⟨fun s => hash s.bytes⟩
+@[no_expose] instance : Hashable Bytes := ⟨fun s => Internal.hashSlice s.asSlice⟩
 
 @[no_expose] instance : Repr Bytes := ⟨fun s _ => reprBytes s.asSlice⟩
+
+/- LEAN: Rust's `impl PartialEq<[u8]> for SmtBytesBuf`. `BEq` compares values of one type, so
+the comparisons with other types are functions. -/
+/-- Whether the bytes are those of the slice. -/
+def eqSlice (self : Bytes) (other : ByteSlice) : Bool := self.asSlice == other
+
+/- LEAN: Rust's `impl PartialEq<SmtBytes<'_>> for SmtBytesBuf`, as `eqSlice`. -/
+/-- Whether the bytes are those of the view. -/
+def eqView (self : Bytes) (other : BytesView) : Bool := self.asSlice == other.slice
 
 namespace BytesView
 
@@ -116,6 +136,17 @@ def intoOwned (self : BytesView) : Bytes := ⟨self.slice.toByteArray⟩
 @[no_expose] instance : BEq BytesView := ⟨fun a b => a.slice == b.slice⟩
 
 @[no_expose] instance : Repr BytesView := ⟨fun s _ => reprBytes s.slice⟩
+
+@[no_expose] instance : Hashable BytesView := ⟨fun s => Internal.hashSlice s.slice⟩
+
+/- LEAN: Rust's `impl PartialEq<[u8]> for SmtBytes<'_>`. `BEq` compares values of one type, so
+the comparisons with other types are functions. -/
+/-- Whether the bytes are those of the slice. -/
+def eqSlice (self : BytesView) (other : ByteSlice) : Bool := self.slice == other
+
+/- LEAN: Rust's `impl PartialEq<SmtBytesBuf> for SmtBytes<'_>`, as `eqSlice`. -/
+/-- Whether the bytes are those of the owned string. -/
+def eqOwned (self : BytesView) (other : Bytes) : Bool := self.slice == other.asSlice
 
 end BytesView
 

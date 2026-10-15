@@ -140,6 +140,7 @@ theorem fractionChecks_run (input : ByteSlice) (content : ByteArray) {j e : Nat}
     rw [bytesOf_self input _ he, ByteArray.append_empty]
     simp
 
+set_option maxHeartbeats 400000 in
 /-- The fraction's digits from `j`, in a step that started at `start0`, where the naive lexer
 was at the fraction `q` at `locq`. -/
 theorem fractionFrom_wp (v : Token.Version) (input : ByteSlice) (j : Nat) (hj : j ≤ input.size)

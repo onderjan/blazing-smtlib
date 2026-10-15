@@ -1,6 +1,8 @@
 module
 
 public import BSmtLib.Nodes
+public import BSmtLib.Multiple.MatchCases
+public import BSmtLib.Multiple.FunctionSignatures
 
 public section
 
@@ -29,7 +31,7 @@ the monad `m` is an `outParam`, determined by the handler's type, as the monad o
 
 namespace BSmtLib.Traits
 
-open BSmtLib.Nodes BSmtLib.Plain
+open BSmtLib.Nodes BSmtLib.Plain BSmtLib.Multiple
 
 /--
 The handler of the categories that terms are built from (`SmtHandler`).
@@ -60,7 +62,10 @@ class Handler (H : Type) (m : outParam (Type → Type)) where
   /-- The version in force, at the start of every input and after a version declaration. -/
   setVersion : Token.Version → StateT H m Unit
   /-- A sort: its identifier and its argument sorts, none if it is not applied. -/
-  handleSort : Identifier → Array «Sort» → ExceptT Error (StateT H m) «Sort»
+  /- LEAN: Rust's `handle_sort(SmtSort { ident, applied })`; the fields of `SmtSort` are the
+  arguments, as Lean does not unbox a structure of several fields, so a nested structure would
+  be allocated for every sort handed over. -/
+  handleSort : Identifier → Sorts «Sort» → ExceptT Error (StateT H m) «Sort»
   /-- A term that binds nothing: a constant, a qualified identifier or an application. -/
   handleTerm : TermNode «Sort» Term → ExceptT Error (StateT H m) Term
   /-- An s-expression. -/
@@ -69,17 +74,17 @@ class Handler (H : Type) (m : outParam (Type → Type)) where
   handleAttribute : KeywordView → Option (AttributeValueNode SExpr) →
     ExceptT Error (StateT H m) Attribute
   /-- An annotated term, `(` `!` term attribute+ `)`, at its `)`. -/
-  annotateTerm : Term → Array Attribute → ExceptT Error (StateT H m) Term
+  annotateTerm : Term → Attributes Attribute → ExceptT Error (StateT H m) Term
   /-- The bindings of a `let`, at the `)` after them, before its body. -/
-  startLet : Array (Nodes.Symbol × Term) → ExceptT Error (StateT H m) Scope
+  startLet : BindingsView Term → ExceptT Error (StateT H m) Scope
   /-- The end of a `let`, with its body, at its `)`. -/
   endLet : Scope → Term → ExceptT Error (StateT H m) Term
   /-- The variables of a quantifier, at the `)` after them, before its body. -/
-  startQuantifier : Quantifier → Array (Nodes.Symbol × «Sort») → ExceptT Error (StateT H m) Scope
+  startQuantifier : Quantifier → SortedVarsView «Sort» → ExceptT Error (StateT H m) Scope
   /-- The end of a quantifier, with its body, at its `)`. -/
   endQuantifier : Quantifier → Scope → Term → ExceptT Error (StateT H m) Term
   /-- The variables of a `lambda`, at the `)` after them, before its body. -/
-  startLambda : Array (Nodes.Symbol × «Sort») → ExceptT Error (StateT H m) Scope
+  startLambda : SortedVarsView «Sort» → ExceptT Error (StateT H m) Scope
   /-- The end of a `lambda`, with its body, at its `)`. -/
   endLambda : Scope → Term → ExceptT Error (StateT H m) Term
   /-- The scrutinee of a `match`, at its last token, before the first case. -/
@@ -89,77 +94,14 @@ class Handler (H : Type) (m : outParam (Type → Type)) where
   /-- The end of a case of a `match`, with the scrutinee and its body, at the case's `)`. -/
   endMatchCase : Scope → Term → Term → ExceptT Error (StateT H m) Term
   /-- The end of a `match`: its scrutinee and its cases, at its `)`. -/
-  endMatch : Term → Array (Pattern × Term) → ExceptT Error (StateT H m) Term
+  endMatch : Term → MatchCases Term → ExceptT Error (StateT H m) Term
 
-/--
-The handler of commands and scripts (`SmtCommandHandler`). Commands bring no scope values.
-
-Every command has calls of its own, `declare-const`, `define-const`, `check-sat`,
-`define-fun-rec` and `declare-datatype` among them, although they mean what other commands
-mean: the parser never makes the calls of one command for another. Every command's last call
-comes at its `)`.
-
-`startRecursiveBody` comes when the first token of a body of `define-funs-rec` arrives, before
-the parser looks at it, and is the only call made at a token's arrival; a `)` gets no such call.
--/
-class CommandHandler (H : Type) (m : outParam (Type → Type)) extends Handler H m where
-  /- LEAN: provisional. Rust hands a non-standard command to a parser that the handler
-  supplies; here the handler only names the error, and the parse fails at the command's
-  name. -/
-  /-- The error of a command named by a symbol, which no standard command is. -/
-  nonstandardCommand : Nodes.Symbol → Error
-  commandAssert : Term → ExceptT Error (StateT H m) Unit
-  commandCheckSat : ExceptT Error (StateT H m) Unit
-  commandCheckSatAssuming : Array Term → ExceptT Error (StateT H m) Unit
-  commandDeclareConst : Nodes.Symbol → «Sort» → ExceptT Error (StateT H m) Unit
-  /-- The start of `declare-datatype`, when its sort parameters are known. -/
-  startDeclareDatatype : Nodes.Symbol → Array Nodes.Symbol → ExceptT Error (StateT H m) Unit
-  endDeclareDatatype : Array (Constructor «Sort») → ExceptT Error (StateT H m) Unit
-  /-- The sorts that `declare-datatypes` declares, with their arities, at the `)` after them. -/
-  startDeclareDatatypes : Array (Nodes.Symbol × NumeralView) → ExceptT Error (StateT H m) Unit
-  /-- The start of a datatype declaration of `declare-datatypes`, when its sort parameters
-  are known. -/
-  startDatatypeDeclaration : Array Nodes.Symbol → ExceptT Error (StateT H m) Unit
-  endDatatypeDeclaration : Array (Constructor «Sort») → ExceptT Error (StateT H m) Unit
-  endDeclareDatatypes : ExceptT Error (StateT H m) Unit
-  commandDeclareFun : Nodes.Symbol → Array «Sort» → «Sort» → ExceptT Error (StateT H m) Unit
-  commandDeclareSort : Nodes.Symbol → NumeralView → ExceptT Error (StateT H m) Unit
-  commandDeclareSortParameter : Nodes.Symbol → ExceptT Error (StateT H m) Unit
-  commandDefineConst : Nodes.Symbol → «Sort» → Term → ExceptT Error (StateT H m) Unit
-  /-- The signature of `define-fun`, after its result sort, before the body. -/
-  startDefineFun : Signature «Sort» → ExceptT Error (StateT H m) Unit
-  endDefineFun : Term → ExceptT Error (StateT H m) Unit
-  /-- The signature of `define-fun-rec`, after its result sort, before the body. -/
-  startDefineFunRec : Signature «Sort» → ExceptT Error (StateT H m) Unit
-  endDefineFunRec : Term → ExceptT Error (StateT H m) Unit
-  /-- The signatures of `define-funs-rec`, at the `)` after them. -/
-  startDefineFunsRec : Array (Signature «Sort») → ExceptT Error (StateT H m) Unit
-  /-- The start of a body of `define-funs-rec`, with the signature of its function: when the
-  body's first token arrives. -/
-  startRecursiveBody : Signature «Sort» → ExceptT Error (StateT H m) Unit
-  /-- The end of a body of `define-funs-rec`, at the body's last token. -/
-  endRecursiveBody : Term → ExceptT Error (StateT H m) Unit
-  endDefineFunsRec : ExceptT Error (StateT H m) Unit
-  /-- The name and parameters of `define-sort`, at the `)` after the parameters. -/
-  startDefineSort : Nodes.Symbol → Array Nodes.Symbol → ExceptT Error (StateT H m) Unit
-  endDefineSort : «Sort» → ExceptT Error (StateT H m) Unit
-  commandEcho : StringContentView → ExceptT Error (StateT H m) Unit
-  commandExit : ExceptT Error (StateT H m) Unit
-  commandGetAssertions : ExceptT Error (StateT H m) Unit
-  commandGetAssignment : ExceptT Error (StateT H m) Unit
-  commandGetInfo : KeywordView → ExceptT Error (StateT H m) Unit
-  commandGetModel : ExceptT Error (StateT H m) Unit
-  commandGetOption : KeywordView → ExceptT Error (StateT H m) Unit
-  commandGetProof : ExceptT Error (StateT H m) Unit
-  commandGetUnsatAssumptions : ExceptT Error (StateT H m) Unit
-  commandGetUnsatCore : ExceptT Error (StateT H m) Unit
-  commandGetValue : Array Term → ExceptT Error (StateT H m) Unit
-  commandPop : NumeralView → ExceptT Error (StateT H m) Unit
-  commandPush : NumeralView → ExceptT Error (StateT H m) Unit
-  commandReset : ExceptT Error (StateT H m) Unit
-  commandResetAssertions : ExceptT Error (StateT H m) Unit
-  commandSetInfo : Attribute → ExceptT Error (StateT H m) Unit
-  commandSetLogic : Nodes.Symbol → ExceptT Error (StateT H m) Unit
-  commandSetOption : Attribute → ExceptT Error (StateT H m) Unit
+/- LEAN: Rust's `NonstandardCommandError(pub SmtSymbolBuf)`, a tuple struct, whose one field is
+named here. Rust derives `Debug` and `Clone`; a Lean value is copied freely. -/
+/-- The error of `SyntaxChecker`: the name of the non-standard command it rejected. -/
+structure NonstandardCommandError where
+  /-- The command's name. -/
+  name : Symbol
+  deriving Repr
 
 end BSmtLib.Traits

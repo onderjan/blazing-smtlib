@@ -9,6 +9,7 @@ import all BSmtLib.Plain
 import all BSmtLib.Token
 import all BSmtLib.Token.SyntaxToken
 import all BSmtLib.Token.Produce
+import all BSmtLib.Parser.Script
 
 @[expose] public section
 
@@ -168,9 +169,11 @@ def AfterRel : Internal.After (ScriptParser (List Event)) Unit Unit →
 
 theorem reset_eq {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ = canon p₂) :
     Internal.ParseByToken.reset p₁ = Internal.ParseByToken.reset p₂ := by
-  have h : (canon p₁).posture = (canon p₂).posture := congrArg ScriptParser.posture hp
-  show ScriptParser.new p₁.posture = ScriptParser.new p₂.posture
-  rw [show p₁.posture = p₂.posture from h]
+  have h : ScriptParser.Internal.posture (canon p₁) = ScriptParser.Internal.posture (canon p₂) :=
+    congrArg ScriptParser.Internal.posture hp
+  show (ScriptParser.new (ScriptParser.Internal.posture p₁) : type_of% p₁) =
+    ScriptParser.new (ScriptParser.Internal.posture p₂)
+  rw [show ScriptParser.Internal.posture p₁ = ScriptParser.Internal.posture p₂ from h]
 
 theorem resumed_rel {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ = canon p₂)
     {s₁ s₂ : Internal.Step (ScriptParser (List Event)) Unit} (hs : canon s₁ = canon s₂) :
@@ -318,9 +321,9 @@ theorem takeOne_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ =
 answer and log, canonically equal parsers and cursors that agree. -/
 def LoopRel (Rel : Token.BatchCursor g → Token.BatchCursor g' → Prop)
     {o₁ : Token.BatchCursor g} {o₂ : Token.BatchCursor g'}
-    (r₁ : (Except (ParseErrorCause Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
+    (r₁ : (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
       { z : Token.BatchCursor g // Token.Produce.Consumed z o₁ }) × List Event)
-    (r₂ : (Except (ParseErrorCause Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
+    (r₂ : (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
       { z : Token.BatchCursor g' // Token.Produce.Consumed z o₂ }) × List Event) : Prop :=
   r₁.1.1 = r₂.1.1 ∧ canon r₁.1.2.1 = canon r₂.1.2.1 ∧ Rel r₁.1.2.2.val r₂.1.2.2.val ∧
     r₁.2 = r₂.2

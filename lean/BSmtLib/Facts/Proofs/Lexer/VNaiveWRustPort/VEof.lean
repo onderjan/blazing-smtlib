@@ -38,7 +38,7 @@ def eofAfter (r : Except (Failure (Option C.Error)) (Option (Span.Located C.Resu
   match r with
   | .ok none => ((.ok .continue, core3.reset), taken3)
   | .ok (some located) => ((.ok (.break located), core3.reset), taken3)
-  | .error f => ((.error ⟨f.cause, f.span, none⟩, core3), taken3)
+  | .error f => ((.error (LexError.Internal.new f.cause f.span none), core3), taken3)
 
 /-- The lexer state after the end of the input that did not fail is reset. -/
 def ResetOk (iv : Token.Version)
@@ -46,14 +46,15 @@ def ResetOk (iv : Token.Version)
   r.1.1.isOk = true → r.1.2 = Core.initial iv
 
 theorem failureOf_trailing (l : Lexeme) :
-    failureOf (ε := C.Error) ⟨.lexical .unexpectedTrailingToken, trailingSpan l, none⟩ =
+    failureOf (ε := C.Error)
+      (LexError.Internal.new (.lexical .unexpectedTrailingToken) (trailingSpan l) none) =
       .trailing (toLocation l.start) :=
   (rfl)
 
 theorem failureOf_lexical {k : LexicalErrorKind} {span : Span}
     (h : k ≠ .unexpectedTrailingToken) :
-    failureOf (ε := C.Error) ⟨.lexical k, span, none⟩ = .lexical := by
-  simp only [failureOf]
+    failureOf (ε := C.Error) (LexError.Internal.new (.lexical k) span none) = .lexical := by
+  simp only [failureOf, LexError.Internal.cause_new]
   have : (k == .unexpectedTrailingToken) = false := by
     cases k <;> first | rfl | exact absurd rfl h
   rw [this]

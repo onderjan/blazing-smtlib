@@ -3,6 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.VNaive.Run
 public import BSmtLibSpec.Facts.Proofs.Lexicon.Unique
 import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
 
 @[expose] public section
 

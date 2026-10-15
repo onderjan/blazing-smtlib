@@ -43,11 +43,12 @@ theorem ticks_noPoints (tokens : List Parser.Internal.Input) :
   | cons token tokens ih => simp [ih]
 
 private theorem ident_sim (version : Token.Version) :
-    @Simulates H IdentParser Nodes.Identifier IdentState m _ _ (Internal.identByToken H) version
-      IdentParser.mk (IdentState.step version) IdentParser.new := by
+    @Simulates H IdentParser Nodes.IdentifierBuf IdentState m _ _ (Internal.identByToken H)
+      version IdentParser.mk (mapSteps Nodes.Identifier.intoOwned (IdentState.step version))
+      IdentParser.new := by
   letI := Internal.identByToken (m := m) H
   refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
-  rw [map_eq_pure_bind]
+  rw [mapSteps, Functor.map_map, map_eq_pure_bind]
   refine bind_congr fun step => ?_
   cases step <;> rfl
 
@@ -55,8 +56,8 @@ omit [LawfulMonad m] in
 private theorem ident_hparse {Z : Type} [Produce Z] (parser : IdentParser)
     (state : ParseState H) (cursor : Z) :
     Parse.parse (m := m) parser state cursor =
-      @Parser.Internal.parseByToken H IdentParser Nodes.Identifier _ m _ (Internal.identByToken H)
-        Z _ parser state cursor := rfl
+      @Parser.Internal.parseByToken H IdentParser Nodes.IdentifierBuf _ m _
+        (Internal.identByToken H) Z _ parser state cursor := rfl
 
 /-- The identifier parser's steps from the start over the tokens of a valid identifier: no call,
 and it ends with the identifier, through the bridge. -/
@@ -89,19 +90,25 @@ theorem ident_runs {version : Token.Version} (ident : Tree.Identifier)
           (RunsS.token_more (by simp [IdentState.step])) fun _ => hruns).congr ?_ rfl
     simp [ticks_noPoints]
 
-/-- The identifier parser from its start on the tokens of a valid identifier. -/
+/-- The identifier parser from its start on the tokens of a valid identifier: it gives the owned
+identifier of a view that is the identifier through the bridge. -/
 theorem ident_parses {version : Token.Version} (ident : Tree.Identifier)
     (hvalid : ident.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens ident.tokens) :
     ∃ result : Nodes.Identifier, Bridge.identifier result = ident ∧
-      Finishes version IdentParser.new tokens (pure result : PM H Nodes.Identifier)
+      Finishes version IdentParser.new tokens (pure result.intoOwned : PM H Nodes.IdentifierBuf)
         IdentParser.new := by
   letI := Internal.identByToken (m := m) H
   obtain ⟨result, hresult, hruns⟩ := ident_runs (H := H) ident hvalid hs
-  have := parses_of_runsS (H := H) (P := IdentParser) (R := Nodes.Identifier) (σ := IdentState)
-    (m := m) (version := version) (mk := IdentParser.mk) (step := IdentState.step version)
-    (state := .start) (program := pure result) (@ident_hparse H m _ _) (ident_sim version)
-    (RunsS.map_program (f := fun _ => result) hruns |>.congr (by simp) rfl)
+  have hruns' := (RunsS.mapSteps Nodes.Identifier.intoOwned hruns).congr rfl
+    (show (fun _ => mapDone Nodes.Identifier.intoOwned <$> pure (.done result)) =
+      fun _ => (pure (.done result.intoOwned) : PM H _) by funext; simp [mapDone])
+  have := parses_of_runsS (H := H) (P := IdentParser) (R := Nodes.IdentifierBuf)
+    (σ := IdentState) (m := m) (version := version) (mk := IdentParser.mk)
+    (step := mapSteps Nodes.Identifier.intoOwned (IdentState.step version))
+    (state := .start) (program := pure result.intoOwned) (@ident_hparse H m _ _)
+    (ident_sim version)
+    (RunsS.map_program (f := fun _ => result.intoOwned) hruns' |>.congr (by simp) rfl)
   exact ⟨result, hresult, this⟩
 
 private theorem ident_rejects {version : Token.Version} {state last : IdentState}
@@ -110,9 +117,11 @@ private theorem ident_rejects {version : Token.Version} {state last : IdentState
     (hfail : IdentState.step (H := H) version last token = throw (.syntax kind)) :
     Rejects version (IdentParser.mk state) (tokens ++ [token]) (pure () : PM H Unit) kind := by
   letI := Internal.identByToken (m := m) H
-  exact rejects_of_movesS (H := H) (P := IdentParser) (R := Nodes.Identifier) (σ := IdentState)
-    (m := m) (version := version) (mk := IdentParser.mk) (step := IdentState.step version)
-    (@ident_hparse H m _ _) (ident_sim version) hmoves hfail
+  exact rejects_of_movesS (H := H) (P := IdentParser) (R := Nodes.IdentifierBuf)
+    (σ := IdentState) (m := m) (version := version) (mk := IdentParser.mk)
+    (step := mapSteps Nodes.Identifier.intoOwned (IdentState.step version))
+    (@ident_hparse H m _ _) (ident_sim version) (Moves.mapSteps _ hmoves)
+    (by simp [mapSteps, hfail])
 
 /-- The identifier parser on a first token that is neither a symbol nor `(`. -/
 theorem ident_rejects_first {version : Token.Version} {token : Parser.Internal.Input}
@@ -149,7 +158,7 @@ theorem ident_rejects_symbol {version : Token.Version} {token : Parser.Internal.
       cases token <;> first | exact absurd rfl (htoken _) | rfl)
 
 /-- The identifier parser on `(` `_`, a symbol and `)`, an identifier without indices. -/
-theorem ident_rejects_empty {version : Token.Version} (symbol : Nodes.Symbol) :
+theorem ident_rejects_empty {version : Token.Version} (symbol : Plain.SymbolView) :
     Rejects version IdentParser.new
       [.parenOpen, .reserved (.general .underscore), .symbol symbol, .parenClose]
       (pure () : PM H Unit) .emptyIdentIndices :=
@@ -165,7 +174,7 @@ def IsIndex (version : Token.Version) (token : Parser.Internal.Input) : Prop :=
     ((∃ symbol, token = .symbol symbol) ∧ version ≥ .v2_5)
 
 omit [LawfulMonad m] in
-private theorem indices_move {version : Token.Version} (symbol : Nodes.Symbol) :
+private theorem indices_move {version : Token.Version} (symbol : Plain.SymbolView) :
     (indices : List Parser.Internal.Input) → (∀ index ∈ indices, IsIndex version index) →
     (found : Array Nodes.Index) →
     ∃ found', Moves (IdentState.step (H := H) version) (.indices symbol found) indices
@@ -182,7 +191,7 @@ private theorem indices_move {version : Token.Version} (symbol : Nodes.Symbol) :
 
 /-- The identifier parser on `(` `_`, a symbol, indices of the version and a token that is
 neither an index of the version nor `)`. -/
-theorem ident_rejects_index {version : Token.Version} (symbol : Nodes.Symbol)
+theorem ident_rejects_index {version : Token.Version} (symbol : Plain.SymbolView)
     {indices : List Parser.Internal.Input} (hindices : ∀ index ∈ indices, IsIndex version index)
     {token : Parser.Internal.Input} (htoken : ¬ IsIndex version token)
     (hclose : token ≠ .parenClose) :

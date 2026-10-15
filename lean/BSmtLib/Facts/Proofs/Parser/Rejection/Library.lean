@@ -495,7 +495,7 @@ theorem driveScript_settled : ∀ (items : List Parser.Internal.Input), NoLayout
 theorem arrivalCalls_ne_nil {parser : ScriptParser (List Event)} {token : Parser.Internal.Input}
     (h : arrivalCalls parser token ≠ []) :
     ∃ signatures state signature,
-      parser.command = .payload (.defineFunsRecBodies signatures state) ∧
+      ScriptParser.Internal.command parser = .payload (.defineFunsRecBodies signatures state) ∧
       state.opened = true ∧ state.outside = true ∧
       signatures[state.items.size]? = some signature := by
   revert h
@@ -529,7 +529,7 @@ theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Parse
     · rw [Array.getElem?_eq_none hge] at hsignature
       cases hsignature
   obtain ⟨posture, phase, declarations⟩ := parser
-  simp only at hphase
+  simp only [ScriptParser.Internal.command] at hphase
   subst hphase
   refine ⟨.syntax .expectedFunctionBody,
     .process (.token .parenClose) :: .arrive (.token .parenClose) :: events, ?_, trivial⟩
@@ -549,6 +549,8 @@ theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Parse
   unfold afterToken
   rw [run_bind_ok h₁, run_bind_ok h₂, run_bind_ok h₃]
   simp [afterProcessing, Parser.Internal.ParseByToken.step, ScriptParser.Internal.step,
+      ScriptParser.Internal.posture, ScriptParser.Internal.command,
+      ScriptParser.Internal.declarations,
       Parser.Command.Internal.commandStep,
     Parser.Command.Internal.Standard.payloadStep, Parser.Command.Internal.Function.bodiesStep,
         Parser.Category.Combinator.Internal.ListState.step, hopened, houtside,
@@ -822,7 +824,8 @@ def inputOf : Received → Option Parser.Internal.Input
     some (.constant (.hexadecimal (HexDigitsView.Internal.newUnchecked (bytesOf d))))
   | .token (.binary d) => some (.constant (.binary (BinDigitsView.Internal.newUnchecked (bytesOf d))))
   | .token (.string c) => some (.constant (.string (StringContentView.Internal.newUnchecked (bytesOf c))))
-  | .token (.symbol s) => some (.symbol ⟨SymbolView.Internal.newUnchecked (bytesOf s.name), s.quoted⟩)
+  | .token (.symbol s) =>
+    some (.symbol (SymbolView.Internal.newUnchecked s.quoted (bytesOf s.name)))
   | .token (.keyword k) => some (.keyword (KeywordView.Internal.newUnchecked (bytesOf k)))
   | .token (.reserved w) => (decodeReserved w).map .reserved
 

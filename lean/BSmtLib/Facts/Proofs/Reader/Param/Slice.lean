@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Reader.Param.Steps
 import all BSmtLib.Lexer
+import all BSmtLib.Span
 
 @[expose] public section
 

@@ -4,6 +4,7 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Token
+import all BSmtLib.Span
 
 @[expose] public section
 

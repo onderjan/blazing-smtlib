@@ -91,7 +91,7 @@ def attributeStep (single : Bool) (version : Version)
   | .inside keyword items sExpr outside =>
     if outside then
       if let .parenClose := token then
-        let handled ← call (Handler.handleAttribute keyword (some (.list items)))
+        let handled ← call (Handler.handleAttribute keyword (some (.list (.new items))))
         return .more { mode := .start, attributes := self.attributes.push handled }
     match ← sExprStep version sExpr token with
     | .more sExpr => return .more { self with mode := .inside keyword items sExpr false }
@@ -126,7 +126,8 @@ instance : Inhabited (ClosedAttributeParser H) := ⟨.new⟩
 instance : Inhabited (ClosedMultipleAttributeParser H) := ⟨.new⟩
 
 @[no_expose]
-instance : Internal.ParseByToken (ClosedAttributeParser H) H m (Handler.Error H)
+instance Internal.instParseByTokenClosedAttributeParser :
+    Internal.ParseByToken (ClosedAttributeParser H) H m (Handler.Error H)
     (Handler.Attribute H) where
   arrive _ _ := pure ()
   step version parser token := do
@@ -143,7 +144,8 @@ instance : Parse (ClosedAttributeParser H) H m (Handler.Error H) (Handler.Attrib
   parse := Internal.parseByToken
 
 @[no_expose]
-instance : Internal.ParseByToken (ClosedMultipleAttributeParser H) H m (Handler.Error H)
+instance Internal.instParseByTokenClosedMultipleAttributeParser :
+    Internal.ParseByToken (ClosedMultipleAttributeParser H) H m (Handler.Error H)
     (Array (Handler.Attribute H)) where
   arrive _ _ := pure ()
   step version parser token := do

@@ -7,6 +7,7 @@ import all BSmtLib.Lexer.Internal.Helpers
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -75,9 +76,10 @@ theorem eof_stepLocation' {c c' : WP.WCore} {location : Span.Location} (h : EofL
     (hl : c'.line = c.line) (hs : c'.lineStart = c.lineStart) :
     stepLocation c' c.offset 0 0 = location := by
   obtain ⟨h1, h2, h3⟩ := h
-  cases location
-  simp only [stepLocation, Span.Location.mk.injEq] at h1 h2 h3 ⊢
-  refine ⟨by omega, by rw [hl, h2], by rw [hs]; omega⟩
+  apply Span.Location.ext <;>
+    simp only [stepLocation, Span.Location.Internal.offset_new, Span.Location.Internal.line_new,
+      Span.Location.Internal.column_new] at h1 h2 h3 ⊢ <;>
+    omega
 
 /-- The fields of the lexer state that the end of the input keeps. -/
 structure EofSame (c c' : WP.WCore) : Prop where
@@ -97,8 +99,8 @@ def intrRes {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (location : Sp
   | .error cause => .error (preciseFailure cause e.span)
   | .ok .relex => .ok .continue
   | .ok (.discarded none) => .ok .continue
-  | .ok (.finished r) => .ok (.break ⟨r, location⟩)
-  | .ok (.discarded (some r)) => .ok (.break ⟨r, location⟩)
+  | .ok (.finished r) => .ok (.break (Span.Located.Internal.new r location))
+  | .ok (.discarded (some r)) => .ok (.break (Span.Located.Internal.new r location))
 
 /-- No hand-over of at most one lexeme stops at a break with a lexeme after it. -/
 theorem hand1_ne_brk {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {p p' : Prog} {l l0 : Lexeme}
@@ -137,6 +139,93 @@ def StopsH (h : HandOut C) (e : WP.Intr C none) (p : Prog) (d : Option Span.Loca
   | .wait r l p' => p = p' ∧ d = none ∧ Matches (.brk r l none) e
   | .stop st p' => p = p' ∧ d = st.discards ∧ Matches st e
 
+/-- The lexeme the consumer failed at, if it stopped failing. -/
+def hFailLex : HandOut C → Option Lexeme
+  | .stop (.fail _ _ l) _ => some l
+  | _ => none
+
+/-- The lexeme the consumer failed at at the end of the input, if it stopped failing there. -/
+def failLex (o : Option (HandOut C × Option Span.Location)) : Option Lexeme :=
+  o.bind fun x => hFailLex x.1
+
+/-- An error of the consumer at the end of the input has the span of the lexeme it failed at. -/
+def EofErrSpan {floor : Option Nat} (o : Option (HandOut C × Option Span.Location))
+    (e : WP.Intr C floor) : Prop :=
+  ∀ x, e.result = .error (.consumer (some x)) → ∃ l, failLex o = some l ∧ e.span = Cursor.lexSpan l
+
+theorem eofHand_failTaken (hd : Bool) (eof : Lexeme) {h : HandOut C} (hf : FailTaken C h) :
+    FailTaken C (eofHand C hd eof h).1 := by
+  have hc : ∀ p, FailTaken C (if hd then .cont p else hand1 C false (.cont p) eof) := by
+    intro p
+    cases hd
+    · exact hand1_failTaken C false (failTaken_cont C p) eof
+    · exact failTaken_cont C p
+  rcases h with p | ⟨r, l, p⟩ | ⟨s, p⟩
+  · exact hc p
+  · exact hf
+  · cases s with
+    | relex l => exact hc p
+    | discard r l => cases r with
+      | none => exact hc p
+      | some r => exact hf
+    | _ => exact hf
+
+/-- Where the consumer failed at the end of the input, the last token it took is that of the
+lexeme it failed at. -/
+theorem eofOut_failTaken {hd ws : Bool} {ver : Token.Version} {coll : List Handed} {st : St}
+    {location : Span.Location} {l : Lexeme}
+    (h : failLex (eofOut C hd ws ver coll st location) = some l) :
+    ∃ e b p d, eofOut C hd ws ver coll st location = some (.stop (.fail e b l) p, d) ∧
+      ∃ x, p.taken.getLast? = some x ∧ x.start = toLocation l.start ∧
+        x.end = toLocation l.end := by
+  unfold failLex at h
+  generalize ho : eofOut C hd ws ver coll st location = o at h ⊢
+  have hft : ∀ h' d', o = some (h', d') → FailTaken C h' := by
+    intro h' d' hh
+    rw [← ho] at hh
+    unfold eofOut at hh
+    cases hfin : finishLs ws st location with
+    | none => rw [hfin] at hh; cases hh
+    | some ls =>
+      rw [hfin] at hh
+      simp only [Option.map_some, Option.some.injEq] at hh
+      have := eofHand_failTaken (C := C) hd (eofLexeme location)
+        (handAll_failTaken C hd ls (failTaken_cont C ⟨coll, ver⟩))
+      have hh' : eofHand C hd (eofLexeme location) (handAll C hd (.cont ⟨coll, ver⟩) ls) =
+          (h', d') := hh
+      rw [hh'] at this
+      exact this
+  rcases o with _ | ⟨h', d'⟩
+  · cases h
+  · rcases h' with p | ⟨r, l0, p⟩ | ⟨s, p⟩
+    · cases h
+    · cases h
+    · cases s with
+      | fail e b l0 =>
+        simp only [Option.bind_some, hFailLex, Option.some.injEq] at h
+        subst h
+        exact ⟨e, b, p, d', rfl, hft _ _ rfl e b l0 p rfl⟩
+      | _ => cases h
+
+/-- A stop at an error of the consumer has the span of the lexeme it failed at. -/
+theorem stopsH_errSpan {h : HandOut C} {e : WP.Intr C none} {p : Prog} {d : Option Span.Location}
+    (hs : StopsH h e p d) (d' : Option Span.Location) : EofErrSpan (some (h, d')) e := by
+  intro x hx
+  rcases h with p' | ⟨r, l, p'⟩ | ⟨s, p'⟩
+  · exact hs.elim
+  · obtain ⟨-, -, hm⟩ := hs
+    rcases hm with ⟨h1, -⟩ | ⟨l2, -, h1, -⟩ <;> rw [hx] at h1 <;> cases h1
+  · obtain ⟨-, -, hm⟩ := hs
+    cases s with
+    | fail err b l => exact ⟨l, rfl, hm.2⟩
+    | trailing l => have := hm.1; rw [hx] at this; cases this
+    | layout l => have := hm.1; rw [hx] at this; cases this
+    | brk r l nx =>
+      rcases hm with ⟨h1, -⟩ | ⟨l2, -, h1, -⟩ <;> rw [hx] at h1 <;> cases h1
+    | brkX r l => have := hm.1; rw [hx] at this; cases this
+    | discard r l => have := hm.1; rw [hx] at this; cases this
+    | relex l => have := hm.1; rw [hx] at this; cases this
+
 theorem stops_eq {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls : List Lexeme}
     {e : WP.Intr C none} {p : Prog} {d : Option Span.Location} :
     Stops C hd ver coll ls e p d = StopsH (pending C hd ver coll ls) e p d := rfl
@@ -163,17 +252,19 @@ theorem tail_of_stops {h : HandOut C} {d d0 dd : Option Span.Location} {location
     cases s with
     | trailing l =>
       obtain ⟨h1, h2⟩ := hm
+      have h2s : espan.start = l.start := by simp only at h2; rw [h2, Cursor.lexSpan_start]
       simp only at h1
       subst h1
       refine ⟨?_, hv, hd, rfl⟩
-      simp only [intrRes, preciseFailure, lexicalKey, causeFailure, failureOf, stopFailure, h2]
+      simp only [intrRes, preciseFailure, lexicalKey, causeFailure, failureOf, stopFailure, h2s,
+        Lexer.Error.LexError.Internal.cause_new, Lexer.Error.LexError.Internal.span_new]
       rfl
     | fail err b l =>
-      simp only [Matches] at hm
+      obtain ⟨hm, -⟩ := hm
       subst hm
       exact ⟨rfl, hv, hd, rfl⟩
     | layout l =>
-      simp only [Matches] at hm
+      obtain ⟨hm, -⟩ := hm
       subst hm
       exact ⟨rfl, hv, hd, rfl⟩
     | brk r l nx => exact absurd rfl (hnobrk r l nx p)
@@ -211,7 +302,7 @@ def innerRes (location : Span.Location) :
     Except (Lexer.Internal.Failure (Option C.Error)) (ControlFlow C.Result) →
       Except (PFailure C.Error) (ControlFlow (Span.Located C.Result))
   | .ok .continue => .ok .continue
-  | .ok (.break r) => .ok (.break ⟨r, location⟩)
+  | .ok (.break r) => .ok (.break (Span.Located.Internal.new r location))
   | .error f => .error (preciseFailure f.cause f.span)
 
 /-- The fields of the lexer state that say where it is, kept, with the version it was created
@@ -297,7 +388,12 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         (R := C.Result) (E := Option C.Error)) c coll).2 ∧
     (C.concrete = false → ∀ f, (runIA (Lexer.Internal.WRustPort.lexEofInner (H := Answering C)
       (m := AnswerM) (R := C.Result) (E := Option C.Error)) c coll).1.1 = .error f →
-      f.cause ≠ .consumer none) := by
+      f.cause ≠ .consumer none) ∧
+    (∀ f, (runIA (Lexer.Internal.WRustPort.lexEofInner (H := Answering C)
+      (m := AnswerM) (R := C.Result) (E := Option C.Error)) c coll).1.1 = .error f →
+      ∀ x, f.cause = .consumer (some x) → ∃ l,
+        failLex (eofOut C c.holding C.concrete c.version coll st location) = some l ∧
+        f.span = Cursor.lexSpan l) := by
   unfold runIA Lexer.Internal.WRustPort.lexEofInner
   simp -zeta only [WP.rust_eofBatch, StateT.run]
   extract_lets c1 tokenStart offset pend step
@@ -529,7 +625,8 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
           Lexer.Internal.WRustPort.Ops.sinkEof __x.val) s' p.taken
         (fun _ s2 coll2 => EofFin C c coll st location (.ok .continue) s2.val coll2)
         (fun e s2 coll2 => EofFin C c coll st location (intrRes location e) s2.val coll2 ∧
-          (C.concrete = false → e.result ≠ .error (.consumer none))) := by
+          (C.concrete = false → e.result ≠ .error (.consumer none)) ∧
+          EofErrSpan (eofOut C c.holding C.concrete c.version coll st location) e) := by
     intro s' p d hv hh hr hd hkeep ho
     unfold Lexer.Internal.WRustPort.startToken Lexer.Internal.WRustPort.modifyContent
     apply WP.wp_bind
@@ -538,15 +635,16 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
     apply WP.wp_bind; apply WP.wp_modifyCore
     apply WP.wp_pure
     dsimp only
-    have hl : (⟨offset + (0 - 0), s'.val.line, offset + (0 - 0) - s'.val.lineStart⟩ :
-        Span.Location) = location := by
+    have hl : Span.Location.Internal.new (offset + (0 - 0)) s'.val.line
+        (offset + (0 - 0) - s'.val.lineStart) = location := by
       obtain ⟨h1, h2, h3⟩ := hloc
-      cases location
-      simp only [Span.Location.mk.injEq] at h1 h2 h3 ⊢
-      refine ⟨by show c.offset + 0 = _; omega, by rw [hkeep.line, h2], ?_⟩
-      show c.offset + 0 - s'.val.lineStart = _
-      rw [hkeep.lineStart]
-      omega
+      apply Span.Location.ext
+      · rw [Span.Location.Internal.offset_new]; show c.offset + 0 = _; omega
+      · rw [Span.Location.Internal.line_new, hkeep.line, h2]
+      · rw [Span.Location.Internal.column_new]
+        show c.offset + 0 - s'.val.lineStart = _
+        rw [hkeep.lineStart]
+        omega
     refine sinkEof_wp _ _ p.taken (by exact hr) ?_ ?_ ?_
     · intro hh'
       have hc : c.holding = true := hh.symm.trans hh'
@@ -578,7 +676,7 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         rw [← e1]
         exact hs
       refine ⟨⟨?_, ⟨hkeep.offset, hkeep.line, hkeep.lineStart, hkeep.initial, hkeep.recovers⟩⟩,
-        fun _ hnone => ?_⟩
+        fun _ hnone => ?_, ?_⟩
       · rw [ho]
         simp only [hc', Bool.false_eq_true, ite_false]
         exact tail_of_stops hs' (fun _ _ _ _ h => hand1_ne_brk h) rfl
@@ -600,10 +698,14 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         · obtain ⟨-, -, hm⟩ := hs'
           obtain ⟨l', rfl⟩ := matches_none hm hnone
           exact hone l' q rfl
+      · rw [ho]
+        simp only [hc', Bool.false_eq_true, ite_false]
+        exact stopsH_errSpan hs' _
   have hstep : ∀ s : WP.BS none offset, s.val = c1 →
       WP step s coll (fun _ s' coll' => EofFin C c coll st location (.ok .continue) s'.val coll')
         (fun e s' coll' => EofFin C c coll st location (intrRes location e) s'.val coll' ∧
-          (C.concrete = false → e.result ≠ .error (.consumer none))) := by
+          (C.concrete = false → e.result ≠ .error (.consumer none)) ∧
+          EofErrSpan (eofOut C c.holding C.concrete c.version coll st location) e) := by
     intro s hs
     unfold step
     apply WP.wp_bind
@@ -622,7 +724,7 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         subst he
         apply WP.wp_throw
         refine ⟨⟨?_, ⟨hsame.offset, hsame.line, hsame.lineStart, hsame.initial, hsame.recovers⟩⟩,
-          fun _ => nofun⟩
+          fun _ => nofun, fun x hx => by cases hx⟩
         simp only [EofRes, eofOut, hfin, Option.map_none]
         refine ⟨?_, hv, hsame.discardedFrom, trivial⟩
         rw [← hfl]
@@ -647,10 +749,10 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         -- an interruption the handler passes on
         have pass : (∀ l, h1 ≠ .stop (.relex l) p) → (∀ l, h1 ≠ .stop (.discard none l) p) →
             EofFin C c coll st location (intrRes location ⟨result, espan, eloc, stopAfter⟩) s'.val
-              p.taken := by
+              p.taken ∧
+            EofErrSpan (eofOut C c.holding C.concrete c.version coll st location)
+              ⟨result, espan, eloc, stopAfter⟩ := by
           intro hn1 hn2
-          refine ⟨?_, hkeep⟩
-          rw [ho]
           have he : eofHand C c.holding (eofLexeme location) h1 = (h1, none) := by
             rcases h1 with p' | ⟨r, l, p'⟩ | ⟨s, p'⟩
             · exact hs'.elim
@@ -663,8 +765,11 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
                 | none => exact absurd rfl (hn2 l)
                 | some r => rfl
               | _ => rfl
-          rw [he]
-          exact tail_of_stops hs' hnobrk hss.version (by rw [hss.discardedFrom]; rfl) rfl
+          refine ⟨⟨?_, hkeep⟩, ?_⟩
+          · rw [ho, he]
+            exact tail_of_stops hs' hnobrk hss.version (by rw [hss.discardedFrom]; rfl) rfl
+          · rw [ho, he]
+            exact stopsH_errSpan hs' _
         rcases h1 with p' | ⟨r, l, p'⟩ | ⟨s, p'⟩
         · exact hs'.elim
         · obtain ⟨rfl, -, hm⟩ := hs'
@@ -672,7 +777,7 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
           · simp only at h1
             subst h1
             apply WP.wp_throw
-            exact ⟨pass nofun nofun, fun _ => nofun⟩
+            exact ⟨(pass nofun nofun).1, fun _ => nofun, (pass nofun nofun).2⟩
           · cases h1
         · obtain ⟨rfl, hdd, hm⟩ := hs'
           cases s with
@@ -698,23 +803,23 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
               rfl
             | some r =>
               apply WP.wp_throw
-              exact ⟨pass nofun nofun, fun _ => nofun⟩
+              exact ⟨(pass nofun nofun).1, fun _ => nofun, (pass nofun nofun).2⟩
           | trailing l =>
             obtain ⟨h1, -⟩ := hm
             simp only at h1
             subst h1
             apply WP.wp_throw
-            exact ⟨pass nofun nofun, fun _ => nofun⟩
+            exact ⟨(pass nofun nofun).1, fun _ => nofun, (pass nofun nofun).2⟩
           | fail err b l =>
-            simp only [Matches] at hm
+            obtain ⟨hm, -⟩ := hm
             subst hm
             apply WP.wp_throw
-            exact ⟨pass nofun nofun, fun _ => nofun⟩
+            exact ⟨(pass nofun nofun).1, fun _ => nofun, (pass nofun nofun).2⟩
           | layout l =>
-            simp only [Matches] at hm
+            obtain ⟨hm, -⟩ := hm
             subst hm
             apply WP.wp_throw
-            refine ⟨pass nofun nofun, fun hc _ => ?_⟩
+            refine ⟨(pass nofun nofun).1, fun hc _ => ?_, (pass nofun nofun).2⟩
             have hst := st_taken (by rw [hc] at hagree; exact hagree)
             have hls := finishLs_taken hst (by rw [hc] at hfin; exact hfin)
             exact handAll_ne_layout c.holding ls hls (.cont ⟨coll, c.version⟩)
@@ -725,7 +830,7 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
             simp only at h1
             subst h1
             apply WP.wp_throw
-            exact ⟨pass nofun nofun, fun _ => nofun⟩
+            exact ⟨(pass nofun nofun).1, fun _ => nofun, (pass nofun nofun).2⟩
   have hw := hstep ⟨c1, ⟨Nat.le_refl _, fun _ h => nomatch h⟩⟩ rfl
   unfold WP at hw
   simp only [WP.runM, StateT.run] at hw
@@ -733,14 +838,17 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
   generalize ExceptT.run step ⟨c1, ⟨Nat.le_refl _, fun _ h => nomatch h⟩⟩ {} coll = r at hw ⊢
   obtain ⟨⟨⟨res, s'⟩, h'⟩, coll'⟩ := r
   cases res with
-  | ok u => exact ⟨hw, fun _ f hf => by cases hf⟩
+  | ok u => exact ⟨hw, fun _ f hf => (by cases hf), fun f hf => by cases hf⟩
   | error e =>
     obtain ⟨result, espan, eloc, stopAfter⟩ := e
     rcases result with cause | stp
-    · refine ⟨hw.1, fun hc f hf => ?_⟩
-      cases hf
-      exact fun h => hw.2 hc (by simp only at h ⊢; rw [h])
-    · rcases stp with _ | r | (_ | r) <;> exact ⟨hw.1, fun _ f hf => by cases hf⟩
+    · refine ⟨hw.1, fun hc f hf => ?_, fun f hf x hx => ?_⟩
+      · cases hf
+        exact fun h => hw.2.1 hc (by simp only at h ⊢; rw [h])
+      · cases hf
+        exact hw.2.2 x (by simp only at hx ⊢; rw [hx])
+    · rcases stp with _ | r | (_ | r) <;>
+        exact ⟨hw.1, fun _ f hf => (by cases hf), fun f hf => by cases hf⟩
 
 end
 

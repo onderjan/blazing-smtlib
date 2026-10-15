@@ -20,7 +20,7 @@ continuation when it goes on. Both the first turn and the later ones are read so
 namespace BSmtLib.Facts.Proofs.Parser.Category.Maximum
 
 open BSmtLib.Token (Produce)
-open BSmtLib.Parser (Parse ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Token.Internal
@@ -226,13 +226,13 @@ private theorem turn_value {version : Token.Version} {p : P} {maximum : Nat} {Z 
     bind_outcome_eq _ _ (.ok .continue, p, .new, ⟨last, fun _ => hc⟩) (by
       intro x
       obtain ⟨a, p', s, ⟨z, hz⟩⟩ := x
-      rcases a with (kind | error) | (_ | item)
-      · rw [show outcome (.error (.syntax kind), p', s, ⟨z, hz⟩) = .rejected kind z from rfl,
-          onOutcome_rejected _ _ _ hz]
+      answer_cases a
+      · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
+            .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
         rfl
       · rfl
       · rfl
-      · rw [show outcome (.ok (.break item), p', s, ⟨z, hz⟩) = .finished item p' z from rfl,
+      · rw [show outcome (.ok (.break result), p', s, ⟨z, hz⟩) = .finished result p' z from rfl,
           onOutcome_finished _ _ _ _ hz, parseState_eq s .new]),
     hp.2 state cursor last rest htakes hreads, hcalls, Functor.map_map, bind_map_left]
   rw [bind_map_left]
@@ -261,13 +261,13 @@ private theorem turn_rejects {version : Token.Version} {p : P} {maximum : Nat} {
     bind_outcome_eq _ _ (.ok .continue, p, .new, ⟨next, fun _ => hc⟩) (by
       intro x
       obtain ⟨a, p', s, ⟨z, hz⟩⟩ := x
-      rcases a with (kind | error) | (_ | item)
-      · rw [show outcome (.error (.syntax kind), p', s, ⟨z, hz⟩) = .rejected kind z from rfl,
-          onOutcome_rejected _ _ _ hz]
+      answer_cases a
+      · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
+            .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
         rfl
       · rfl
       · rfl
-      · rw [show outcome (.ok (.break item), p', s, ⟨z, hz⟩) = .finished item p' z from rfl,
+      · rw [show outcome (.ok (.break result), p', s, ⟨z, hz⟩) = .finished result p' z from rfl,
           onOutcome_finished _ _ _ _ hz, parseState_eq s .new]),
     hp.2 state cursor next rest htakes hreads, hcalls, Functor.map_map, bind_map_left]
   conv => rhs; rw [Functor.map_map, map_eq_pure_bind]
@@ -297,13 +297,13 @@ private theorem turn_waits {version : Token.Version} {p : P} {maximum : Nat} {Z 
     bind_outcome_eq _ _ (.ok .continue, p, .new, ⟨final, fun _ => hc⟩) (by
       intro x
       obtain ⟨a, p', s, ⟨z, hz⟩⟩ := x
-      rcases a with (kind | error) | (_ | item)
-      · rw [show outcome (.error (.syntax kind), p', s, ⟨z, hz⟩) = .rejected kind z from rfl,
-          onOutcome_rejected _ _ _ hz]
+      answer_cases a
+      · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
+            .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
         rfl
       · rfl
       · rfl
-      · rw [show outcome (.ok (.break item), p', s, ⟨z, hz⟩) = .finished item p' z from rfl,
+      · rw [show outcome (.ok (.break result), p', s, ⟨z, hz⟩) = .finished result p' z from rfl,
           onOutcome_finished _ _ _ _ hz, parseState_eq s .new]),
     hp.2 state cursor final htakes hnone, hcalls, Functor.map_map, bind_map_left]
   conv => rhs; rw [Functor.map_map, map_eq_pure_bind]
@@ -722,13 +722,13 @@ private theorem turn_resume_value {version : Token.Version} {p q : P} {maximum :
     bind_outcome_eq _ _ (.ok .continue, q, .new, ⟨last, hc⟩) (by
       intro x
       obtain ⟨a, p', s, ⟨z, hz⟩⟩ := x
-      rcases a with (kind | error) | (_ | item)
-      · rw [show outcome (.error (.syntax kind), p', s, ⟨z, hz⟩) = .rejected kind z from rfl,
-          onOutcome_rejected _ _ _ hz]
+      answer_cases a
+      · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
+            .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
         rfl
       · rfl
       · rfl
-      · rw [show outcome (.ok (.break item), p', s, ⟨z, hz⟩) = .finished item p' z from rfl,
+      · rw [show outcome (.ok (.break result), p', s, ⟨z, hz⟩) = .finished result p' z from rfl,
           onOutcome_finished _ _ _ _ hz, parseState_eq s .new]),
     hq.2 state cursor last rest htakes hreads, hcalls, Functor.map_map, bind_map_left]
   rw [bind_map_left]

@@ -237,7 +237,7 @@ theorem constructorStep_layout (version : Token.Version)
   unfold constructorStep
   cases self <;> dsimp only <;> (try simp only [expectOpen, expectSymbol]) <;> fails_tac
 
-theorem datatypeStep_layout (start : Array Nodes.Symbol → Parser.Quiet.RPM Unit)
+theorem datatypeStep_layout (start : Array Plain.SymbolView → Parser.Quiet.RPM Unit)
     (version : Token.Version)
     (self : DatatypeState (Handler.«Sort» LH)) :
     Fails (datatypeStep (H := LH) (m := Id) start version self .layout) := by
@@ -270,7 +270,10 @@ theorem payloadStep_layout (version : Token.Version) (self : PayloadOf LH) :
 theorem commandStep_layout (version : Token.Version) (self : CommandStateOf LH) :
     Fails (commandStep (H := LH) (m := Id) version self .layout) := by
   unfold commandStep
-  cases self <;> dsimp only <;> fails_tac
+  cases self
+  -- the recording handler has no non-standard parser
+  case nonstandard parser => exact Empty.elim parser
+  all_goals dsimp only <;> fails_tac
 
 theorem scriptStep_layout (version : Token.Version) (parser : ScriptParser LH) :
     Fails (ScriptParser.Internal.step (H := LH) (m := Id) version parser .layout) := by
@@ -298,7 +301,7 @@ theorem takeOne_layout {b : Token.BatchTag} (parser : ScriptParser LH)
   obtain ⟨e, events',
       hX⟩ := fails_bind_right (Parser.Internal.ParseByToken.arrive (H := LH) parser .layout)
     (fun _ => scriptStep_layout (Token.Produce.version next) parser) events
-  refine ⟨e, events', ?_⟩
+  refine ⟨⟨e⟩, events', ?_⟩
   simp only [Stop.takeOne, StateT.run_bind]
   rw [hitem', hl]
   erw [hX]

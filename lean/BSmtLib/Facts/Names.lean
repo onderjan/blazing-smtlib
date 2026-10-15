@@ -24,7 +24,7 @@ nor a `LEAN:` reason fails the build.
 declared where `SyntaxToken` is, which `Token.lean` cannot import. -/
 
 /--
-info: 7387 declarations in 418 modules; 87 add to a sibling's type:
+info: 7755 declarations in 432 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -137,30 +137,55 @@ BSmtLibSpec.Reader:
 `BSmtLib.Reexports` is what `BSmtLib.Facts.Reexports.render` makes now, and every second name
 resolves. -/
 
-/-- info: 95 items re-exported, with 438 members -/
+/-- info: 123 items re-exported, with 600 members -/
 #guard_msgs in
 #reexports
 
 /-! The names that users of the Rust crate write, without the prefix `Smt`, for the items that
-have a counterpart, and what they resolve to. The items without one: `SmtMultiple` and
-`SmtMultipleIntoIter` (`multiple.rs`); `lexer::SmtFailFast` and `lexer::SmtRecovering`,
+have a counterpart, and what they resolve to. The items without one: `SmtMultiple`, which is
+`BSmtLib.Multiple` itself, and the iterators of `multiple.rs` (`SmtMultipleIntoIter` and the
+others), whose counterparts are `ForIn` instances; `lexer::SmtFailFast` and `lexer::SmtRecovering`,
 whose counterparts are the constructors of `BSmtLib.Lexer.Recovery`; `parser::SmtCommandRule`,
 `parser::SmtCommandPayloadParser` and `parser::SmtParseState`. -/
 
 /--
 info: BSmtLib.BytesView ↦ BSmtLib.Bytes.BytesView
+BSmtLib.Bindings ↦ BSmtLib.Multiple.Bindings
+BSmtLib.BindingsView ↦ BSmtLib.Multiple.BindingsView
+BSmtLib.Constructors ↦ BSmtLib.Multiple.Constructors
+BSmtLib.ConstructorsView ↦ BSmtLib.Multiple.ConstructorsView
+BSmtLib.FunctionSignatures ↦ BSmtLib.Multiple.FunctionSignatures
+BSmtLib.FunctionSignaturesView ↦ BSmtLib.Multiple.FunctionSignaturesView
+BSmtLib.MatchCases ↦ BSmtLib.Multiple.MatchCases
+BSmtLib.Named ↦ BSmtLib.Multiple.Named
+BSmtLib.NamedView ↦ BSmtLib.Multiple.NamedView
+BSmtLib.SortArities ↦ BSmtLib.Multiple.SortArities
+BSmtLib.SortAritiesView ↦ BSmtLib.Multiple.SortAritiesView
+BSmtLib.SortedVars ↦ BSmtLib.Multiple.SortedVars
+BSmtLib.SortedVarsView ↦ BSmtLib.Multiple.SortedVarsView
+BSmtLib.Symbols ↦ BSmtLib.Multiple.Symbols
+BSmtLib.SymbolsView ↦ BSmtLib.Multiple.SymbolsView
 BSmtLib.AttributeValueNode ↦ BSmtLib.Nodes.AttributeValueNode
-BSmtLib.Constructor ↦ BSmtLib.Nodes.Constructor
+BSmtLib.Attributes ↦ BSmtLib.Nodes.Attributes
 BSmtLib.Identifier ↦ BSmtLib.Nodes.Identifier
+BSmtLib.IdentifierBuf ↦ BSmtLib.Nodes.IdentifierBuf
 BSmtLib.Index ↦ BSmtLib.Nodes.Index
+BSmtLib.IndexBuf ↦ BSmtLib.Nodes.IndexBuf
 BSmtLib.Pattern ↦ BSmtLib.Nodes.Pattern
+BSmtLib.PatternBuf ↦ BSmtLib.Nodes.PatternBuf
 BSmtLib.QualifiedIdent ↦ BSmtLib.Nodes.QualifiedIdent
+BSmtLib.QualifiedIdentBuf ↦ BSmtLib.Nodes.QualifiedIdentBuf
 BSmtLib.Quantifier ↦ BSmtLib.Nodes.Quantifier
 BSmtLib.SExprNode ↦ BSmtLib.Nodes.SExprNode
+BSmtLib.SExprs ↦ BSmtLib.Nodes.SExprs
 BSmtLib.Signature ↦ BSmtLib.Nodes.Signature
+BSmtLib.Sorts ↦ BSmtLib.Nodes.Sorts
 BSmtLib.SpecConstant ↦ BSmtLib.Nodes.SpecConstant
+BSmtLib.SpecConstantBuf ↦ BSmtLib.Nodes.SpecConstantBuf
 BSmtLib.SymbolOrWildcard ↦ BSmtLib.Nodes.SymbolOrWildcard
+BSmtLib.SymbolOrWildcardBuf ↦ BSmtLib.Nodes.SymbolOrWildcardBuf
 BSmtLib.TermNode ↦ BSmtLib.Nodes.TermNode
+BSmtLib.Terms ↦ BSmtLib.Nodes.Terms
 BSmtLib.BinDigits ↦ BSmtLib.Plain.BinDigits
 BSmtLib.BinDigitsView ↦ BSmtLib.Plain.BinDigitsView
 BSmtLib.Comment ↦ BSmtLib.Plain.Comment
@@ -246,18 +271,42 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
 #guard_msgs in
 #resolves
   BSmtLib.BytesView
+  BSmtLib.Bindings
+  BSmtLib.BindingsView
+  BSmtLib.Constructors
+  BSmtLib.ConstructorsView
+  BSmtLib.FunctionSignatures
+  BSmtLib.FunctionSignaturesView
+  BSmtLib.MatchCases
+  BSmtLib.Named
+  BSmtLib.NamedView
+  BSmtLib.SortArities
+  BSmtLib.SortAritiesView
+  BSmtLib.SortedVars
+  BSmtLib.SortedVarsView
+  BSmtLib.Symbols
+  BSmtLib.SymbolsView
   BSmtLib.AttributeValueNode
-  BSmtLib.Constructor
+  BSmtLib.Attributes
   BSmtLib.Identifier
+  BSmtLib.IdentifierBuf
   BSmtLib.Index
+  BSmtLib.IndexBuf
   BSmtLib.Pattern
+  BSmtLib.PatternBuf
   BSmtLib.QualifiedIdent
+  BSmtLib.QualifiedIdentBuf
   BSmtLib.Quantifier
   BSmtLib.SExprNode
+  BSmtLib.SExprs
   BSmtLib.Signature
+  BSmtLib.Sorts
   BSmtLib.SpecConstant
+  BSmtLib.SpecConstantBuf
   BSmtLib.SymbolOrWildcard
+  BSmtLib.SymbolOrWildcardBuf
   BSmtLib.TermNode
+  BSmtLib.Terms
   BSmtLib.BinDigits
   BSmtLib.BinDigitsView
   BSmtLib.Comment
@@ -342,10 +391,16 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
 
 /-! The Rust counterparts: every public name of the library has one among the public items of
 the Rust crate (`BSmtLib.Facts.RustItems`, generated from its documentation), or a `LEAN:` reason
-at its declaration; the names with a reason are listed. -/
+at its declaration; the names with a reason are listed. The other way round, every public item
+of the Rust crate, trait implementation and structure with private fields has its Lean
+counterpart, or a reason in `BSmtLib.Facts.RustOnly`; the items with a reason are listed. -/
 
 /--
-info: 293 public names with a Rust counterpart; 48 with a `LEAN:` reason instead:
+info: 383 public names with a Rust counterpart; 110 with a `LEAN:` reason instead:
+  BSmtLib.Bytes.BytesView.eqOwned
+  BSmtLib.Bytes.BytesView.eqSlice
+  BSmtLib.Bytes.eqSlice
+  BSmtLib.Bytes.eqView
   BSmtLib.ControlFlow
   BSmtLib.Lexer.AfterEof
   BSmtLib.Lexer.AfterEofError
@@ -353,32 +408,90 @@ info: 293 public names with a Rust counterpart; 48 with a `LEAN:` reason instead
   BSmtLib.Lexer.PendingEof
   BSmtLib.Lexer.PendingEof.lexEof
   BSmtLib.Lexer.Recovery.Recovers
-  BSmtLib.Lexer.modifyConsumer
   BSmtLib.Nodes.AttributeValueNode
-  BSmtLib.Nodes.Constructor
   BSmtLib.Nodes.Identifier
-  BSmtLib.Nodes.Identifier.newSimple
+  BSmtLib.Nodes.Identifier.intoOwned
+  BSmtLib.Nodes.IdentifierBuf
+  BSmtLib.Nodes.IdentifierBuf.newSimple
+  BSmtLib.Nodes.Index.intoOwned
+  BSmtLib.Nodes.IndexBuf
+  BSmtLib.Nodes.Pattern.intoOwned
+  BSmtLib.Nodes.PatternBuf
+  BSmtLib.Nodes.QualifiedIdent.intoOwned
+  BSmtLib.Nodes.QualifiedIdentBuf
+  BSmtLib.Nodes.QualifiedIdentBuf.newQualified
+  BSmtLib.Nodes.QualifiedIdentBuf.newSimple
+  BSmtLib.Nodes.QualifiedIdentBuf.newUnqualified
   BSmtLib.Nodes.Quantifier
   BSmtLib.Nodes.SExprNode
   BSmtLib.Nodes.Signature
   BSmtLib.Nodes.SpecConstant
-  BSmtLib.Nodes.Symbol
+  BSmtLib.Nodes.SpecConstant.intoOwned
+  BSmtLib.Nodes.SpecConstantBuf
   BSmtLib.Nodes.SymbolOrWildcard
+  BSmtLib.Nodes.SymbolOrWildcard.intoOwned
+  BSmtLib.Nodes.SymbolOrWildcardBuf
   BSmtLib.Nodes.TermNode
   BSmtLib.Parser.Category.Combinator.ParenMultipleParser.new
   BSmtLib.Parser.Category.Combinator.ParenParser.new
+  BSmtLib.Parser.Category.ParenSortedVarsParser.new
   BSmtLib.Parser.ParseState
   BSmtLib.Parser.ParseState.new
+  BSmtLib.Plain.BinDigits.eqSlice
+  BSmtLib.Plain.BinDigits.eqString
+  BSmtLib.Plain.BinDigits.eqView
+  BSmtLib.Plain.BinDigitsView.eqOwned
+  BSmtLib.Plain.BinDigitsView.eqSlice
+  BSmtLib.Plain.BinDigitsView.eqString
+  BSmtLib.Plain.Comment.eqSlice
+  BSmtLib.Plain.Comment.eqString
+  BSmtLib.Plain.Comment.eqView
+  BSmtLib.Plain.CommentView.eqOwned
+  BSmtLib.Plain.CommentView.eqSlice
+  BSmtLib.Plain.CommentView.eqString
+  BSmtLib.Plain.Decimal.eqSlice
+  BSmtLib.Plain.Decimal.eqString
+  BSmtLib.Plain.Decimal.eqView
+  BSmtLib.Plain.DecimalView.eqOwned
+  BSmtLib.Plain.DecimalView.eqSlice
+  BSmtLib.Plain.DecimalView.eqString
+  BSmtLib.Plain.HexDigits.eqSlice
+  BSmtLib.Plain.HexDigits.eqString
+  BSmtLib.Plain.HexDigits.eqView
+  BSmtLib.Plain.HexDigitsView.eqOwned
+  BSmtLib.Plain.HexDigitsView.eqSlice
+  BSmtLib.Plain.HexDigitsView.eqString
+  BSmtLib.Plain.Keyword.eqSlice
+  BSmtLib.Plain.Keyword.eqString
+  BSmtLib.Plain.Keyword.eqView
+  BSmtLib.Plain.KeywordView.eqOwned
+  BSmtLib.Plain.KeywordView.eqSlice
+  BSmtLib.Plain.KeywordView.eqString
+  BSmtLib.Plain.Numeral.eqSlice
+  BSmtLib.Plain.Numeral.eqString
+  BSmtLib.Plain.Numeral.eqView
   BSmtLib.Plain.Numeral.fromNat
-  BSmtLib.Plain.Symbol.isAllowed
-  BSmtLib.Plain.Symbol.new
+  BSmtLib.Plain.NumeralView.eqOwned
+  BSmtLib.Plain.NumeralView.eqSlice
+  BSmtLib.Plain.NumeralView.eqString
+  BSmtLib.Plain.StringContent.eqSlice
+  BSmtLib.Plain.StringContent.eqString
+  BSmtLib.Plain.StringContent.eqView
+  BSmtLib.Plain.StringContentView.eqOwned
+  BSmtLib.Plain.StringContentView.eqSlice
+  BSmtLib.Plain.StringContentView.eqString
+  BSmtLib.Plain.Whitespace.eqSlice
+  BSmtLib.Plain.Whitespace.eqString
+  BSmtLib.Plain.Whitespace.eqView
+  BSmtLib.Plain.WhitespaceView.eqOwned
+  BSmtLib.Plain.WhitespaceView.eqSlice
+  BSmtLib.Plain.WhitespaceView.eqString
   BSmtLib.Reader.BufRead
   BSmtLib.Reader.BufReader
   BSmtLib.Reader.BufReader.new
   BSmtLib.Reader.ReadError.ofLex
   BSmtLib.Reader.ReadError.ofParse
   BSmtLib.Reader.ReadFailure
-  BSmtLib.Reader.modifyHandler
   BSmtLib.Token.BatchCursor.Consumed
   BSmtLib.Token.BatchCursor.HasNext
   BSmtLib.Token.BatchCursor.TokenWindow
@@ -394,6 +507,122 @@ info: 293 public names with a Rust counterpart; 48 with a `LEAN:` reason instead
   BSmtLib.Token.BatchTag
   BSmtLib.Token.Reserved.CommandNameReserved.all
   BSmtLib.Token.Reserved.GeneralReserved.all
+---
+info: 572 Rust items, 196 trait implementations with a counterpart class and 76 structures with private fields; 114 without a counterpart, with a reason:
+  bytes::SmtBytes::iter
+  bytes::SmtBytesBuf::from_boxed_slice
+  bytes::SmtBytesBuf::into_boxed_slice
+  bytes::SmtBytesBuf::iter
+  impl core::default::Default for parser::state::SmtParseState
+  impl core::fmt::Debug for multiple::SmtFunctionSignature
+  impl core::fmt::Debug for nodes::SmtApplication
+  impl core::fmt::Debug for nodes::SmtAttributeValue
+  impl core::fmt::Debug for nodes::SmtIdent
+  impl core::fmt::Debug for nodes::SmtIdentBuf
+  impl core::fmt::Debug for nodes::SmtIndex
+  impl core::fmt::Debug for nodes::SmtIndices
+  impl core::fmt::Debug for nodes::SmtPattern
+  impl core::fmt::Debug for nodes::SmtQualifiedIdent
+  impl core::fmt::Debug for nodes::SmtQuantifierKind
+  impl core::fmt::Debug for nodes::SmtSExpr
+  impl core::fmt::Debug for nodes::SmtSimplePattern
+  impl core::fmt::Debug for nodes::SmtSimplePatternBuf
+  impl core::fmt::Debug for nodes::SmtSimplePatterns
+  impl core::fmt::Debug for nodes::SmtSort
+  impl core::fmt::Debug for nodes::SmtSpecialConstant
+  impl core::fmt::Debug for nodes::SmtSpecialConstantBuf
+  impl core::fmt::Debug for nodes::SmtTerm
+  impl core::fmt::Debug for token::SmtToken
+  impl token::SmtLookahead for token::SmtTokenWindow
+  multiple::SmtConstructors::iter_mut
+  multiple::SmtConstructorsIter
+  multiple::SmtFunctionSignature
+  multiple::SmtFunctionSignature::name
+  multiple::SmtFunctionSignature::params
+  multiple::SmtFunctionSignature::result_sort
+  multiple::SmtFunctionSignatures::iter
+  multiple::SmtFunctionSignaturesIter
+  multiple::SmtMatchCases::get_mut
+  multiple::SmtMatchCases::iter
+  multiple::SmtMatchCases::iter_mut
+  multiple::SmtMatchCasesIntoIter
+  multiple::SmtMultiple::as_mut_slice
+  multiple::SmtMultiple::get_mut
+  multiple::SmtMultiple::iter
+  multiple::SmtMultiple::iter_mut
+  multiple::SmtMultipleIntoIter
+  multiple::SmtNamed::get_mut
+  multiple::SmtNamed::iter
+  multiple::SmtNamed::iter_mut
+  multiple::SmtNamedIntoIter
+  multiple::SmtSortArities::iter
+  multiple::SmtSortAritiesIter
+  multiple::SmtSymbols::iter
+  multiple::SmtSymbolsIter
+  nodes::SmtApplication
+  nodes::SmtAttributeValue
+  nodes::SmtIdent
+  nodes::SmtIdent::into_owned
+  nodes::SmtIdentBuf
+  nodes::SmtIdentBuf::new_simple
+  nodes::SmtIndex
+  nodes::SmtIndex::into_owned
+  nodes::SmtIndices
+  nodes::SmtIndices::get
+  nodes::SmtIndices::is_empty
+  nodes::SmtIndices::iter
+  nodes::SmtIndices::len
+  nodes::SmtPattern
+  nodes::SmtPattern::into_owned
+  nodes::SmtQualifiedIdent
+  nodes::SmtQualifiedIdent::into_owned
+  nodes::SmtQualifiedIdentBuf::new_qualified
+  nodes::SmtQualifiedIdentBuf::new_simple
+  nodes::SmtQualifiedIdentBuf::new_unqualified
+  nodes::SmtQuantifierKind
+  nodes::SmtSExpr
+  nodes::SmtSimplePattern
+  nodes::SmtSimplePattern::into_owned
+  nodes::SmtSimplePatternBuf
+  nodes::SmtSimplePatterns
+  nodes::SmtSimplePatterns::get
+  nodes::SmtSimplePatterns::is_empty
+  nodes::SmtSimplePatterns::iter
+  nodes::SmtSimplePatterns::len
+  nodes::SmtSort
+  nodes::SmtSpecialConstant
+  nodes::SmtSpecialConstant::into_owned
+  nodes::SmtSpecialConstantBuf
+  nodes::SmtTerm
+  parser::SmtParse::Result
+  parser::state::SmtParseState
+  parser::state::SmtParseState::new
+  plain::SmtBinDigits::iter
+  plain::SmtBinDigitsBuf::iter
+  plain::SmtComment::iter
+  plain::SmtCommentBuf::iter
+  plain::SmtDecimal::iter
+  plain::SmtDecimalBuf::iter
+  plain::SmtHexDigits::iter
+  plain::SmtHexDigitsBuf::iter
+  plain::SmtKeyword::iter
+  plain::SmtKeywordBuf::iter
+  plain::SmtNumeral::iter
+  plain::SmtNumeralBuf::from_usize
+  plain::SmtNumeralBuf::iter
+  plain::SmtStringContent::iter
+  plain::SmtStringContentBuf::iter
+  plain::SmtSymbol::iter
+  plain::SmtSymbolBuf::iter
+  plain::SmtWhitespace::iter
+  plain::SmtWhitespaceBuf::iter
+  token::SmtConsume::Error
+  token::SmtConsume::IS_CONCRETE
+  token::SmtConsume::Result
+  token::SmtToken::category
+  token::SmtToken::content
+  token::SmtToken::span
+  token::SmtTokenWindow
 -/
 #guard_msgs in
 #counterparts

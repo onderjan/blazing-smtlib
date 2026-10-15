@@ -4,6 +4,7 @@ public import BSmtLib.Facts.Proofs.Reader.Lexes.Told
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Span
 
 @[expose] public section
 

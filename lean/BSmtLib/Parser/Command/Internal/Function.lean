@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Parser.Category.Term
+public import BSmtLib.Traits.CommandHandler
 
 public section
 
@@ -13,6 +14,7 @@ recursive bodies of `define-funs-rec`.
 
 namespace BSmtLib.Parser.Command.Internal.Function
 
+open BSmtLib.Plain (SymbolView)
 open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.Sort
 open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.Sort.Internal
@@ -26,9 +28,9 @@ open BSmtLib.Parser.Internal (PM call syntaxError)
 /-- The state of the parser of a function signature `⟨symbol⟩ (⟨sorted_var⟩∗) ⟨sort⟩`. -/
 inductive SignatureState (HandledSort : Type) where
   | start
-  | parameters (symbol : Symbol)
-      (state : ListState (SortedVarState HandledSort) (Symbol × HandledSort))
-  | result (symbol : Symbol) (parameters : Array (Symbol × HandledSort))
+  | parameters (symbol : SymbolView)
+      (state : ListState (SortedVarState HandledSort) (SymbolView × HandledSort))
+  | result (symbol : SymbolView) (parameters : Array (SymbolView × HandledSort))
       (state : SortState HandledSort)
 
 /-- The state of the parser of a function declaration `(` signature `)`. -/

@@ -360,10 +360,10 @@ open Adapters.Outcome (Finishes Waits Rejects)
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
 variable (version : Token.Version)
 
-/-- The symbol parser finishes at a symbol with it, making no call. -/
-theorem symbol_parser_parses (symbol : Nodes.Symbol) :
-    Finishes version SymbolParser.new [.symbol symbol] (pure symbol : PM H Nodes.Symbol)
-      SymbolParser.new := by
+/-- The symbol parser finishes at a symbol with its owned value, making no call. -/
+theorem symbol_parser_parses (symbol : Plain.SymbolView) :
+    Finishes version SymbolParser.new [.symbol symbol]
+      (pure symbol.intoOwned : PM H Plain.Symbol) SymbolParser.new := by
   apply Proofs.Parser.Category.Token.symbol_parses <;> assumption
 
 /--
@@ -432,10 +432,10 @@ info: 'BSmtLib.Facts.Parser.closeParen_parser_rejects' depends on axioms: [prope
 #guard_msgs in
 #print axioms closeParen_parser_rejects
 
-/-- The numeral parser finishes at a numeral with its digits, making no call. -/
+/-- The numeral parser finishes at a numeral with its digits, owned, making no call. -/
 theorem numeral_parser_parses (digits : NumeralView) :
     Finishes version NumeralParser.new [.constant (.numeral digits)]
-      (pure digits : PM H NumeralView) NumeralParser.new := by
+      (pure digits.intoOwned : PM H Plain.Numeral) NumeralParser.new := by
   apply Proofs.Parser.Category.Token.numeral_parses <;> assumption
 
 /--
@@ -458,10 +458,10 @@ info: 'BSmtLib.Facts.Parser.numeral_parser_rejects' depends on axioms: [propext,
 #guard_msgs in
 #print axioms numeral_parser_rejects
 
-/-- The keyword parser finishes at a keyword with its name, making no call. -/
+/-- The keyword parser finishes at a keyword with its name, owned, making no call. -/
 theorem keyword_parser_parses (name : KeywordView) :
-    Finishes version KeywordParser.new [.keyword name] (pure name : PM H KeywordView)
-      KeywordParser.new := by
+    Finishes version KeywordParser.new [.keyword name]
+      (pure name.intoOwned : PM H Plain.Keyword) KeywordParser.new := by
   apply Proofs.Parser.Category.Token.keyword_parses <;> assumption
 
 /--
@@ -483,10 +483,11 @@ info: 'BSmtLib.Facts.Parser.keyword_parser_rejects' depends on axioms: [propext,
 #guard_msgs in
 #print axioms keyword_parser_rejects
 
-/-- The string literal parser finishes at a string literal with its content, making no call. -/
+/-- The string literal parser finishes at a string literal with its content, owned, making no
+call. -/
 theorem string_parser_parses (content : StringContentView) :
     Finishes version StringParser.new [.constant (.string content)]
-      (pure content : PM H StringContentView) StringParser.new := by
+      (pure content.intoOwned : PM H Plain.StringContent) StringParser.new := by
   apply Proofs.Parser.Category.Token.string_parses <;> assumption
 
 /--
@@ -880,8 +881,9 @@ info: 'BSmtLib.Facts.Parser.opened_parser_waits_inner' depends on axioms: [prope
 theorem paren_parser_parses {version : Token.Version} {p b : P}
     {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Finishes version p tokens program b) (hne : tokens ≠ []) :
-    Finishes version (ParenParser.new (H := H) p) (.parenOpen :: (tokens ++ [.parenClose]))
-      program (ParenParser.new b) := by
+    Finishes version (ParenParser.new (ClosedParser.new (H := H) p))
+      (.parenOpen :: (tokens ++ [.parenClose]))
+      program (ParenParser.new (ClosedParser.new b)) := by
   apply Proofs.Parser.Category.Combinator.paren_parses <;> assumption
 
 /--
@@ -893,7 +895,7 @@ info: 'BSmtLib.Facts.Parser.paren_parser_parses' depends on axioms: [propext, Cl
 /-- The parenthesised parser on a first token that is not `(`. -/
 theorem paren_parser_rejects_open {version : Token.Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
-    Rejects version (ParenParser.new (H := H) p) [token] (pure () : PM H Unit)
+    Rejects version (ParenParser.new (ClosedParser.new (H := H) p)) [token] (pure () : PM H Unit)
       (.expectedToken #[.parenOpen]) := by
   apply Proofs.Parser.Category.Combinator.paren_rejects_open <;> assumption
 
@@ -907,7 +909,8 @@ info: 'BSmtLib.Facts.Parser.paren_parser_rejects_open' depends on axioms: [prope
 theorem paren_parser_rejects_inner {version : Token.Version} {p : P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Rejects version p tokens program kind) (hne : tokens ≠ []) :
-    Rejects version (ParenParser.new (H := H) p) (.parenOpen :: tokens) program kind := by
+    Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+      (.parenOpen :: tokens) program kind := by
   apply Proofs.Parser.Category.Combinator.paren_rejects_inner <;> assumption
 
 /--
@@ -921,7 +924,8 @@ theorem paren_parser_rejects_close {version : Token.Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R} {token : Parser.Internal.Input}
     (h : Finishes version p tokens program b) (hne : tokens ≠ [])
     (htoken : token ≠ .parenClose) :
-    Rejects version (ParenParser.new (H := H) p) (.parenOpen :: (tokens ++ [token]))
+    Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+      (.parenOpen :: (tokens ++ [token]))
       (do let _ ← program; pure ()) (.expectedToken #[.parenClose]) := by
   apply Proofs.Parser.Category.Combinator.paren_rejects_close <;> assumption
 
@@ -1039,10 +1043,10 @@ theorem parenMultiple_parser_parses {version : Token.Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
       ∃ token tokens, value.1 = token :: tokens ∧ token ≠ .parenClose) :
-    Finishes version (ParenMultipleParser.new (H := H) p)
+    Finishes version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
       (.parenOpen :: (values.flatMap (·.1) ++ [.parenClose]))
       ((fun results => results.toArray) <$> values.mapM fun value => value.2)
-      (ParenMultipleParser.new p) := by
+      (ParenMultipleParser.new (ClosedMultipleParser.new p)) := by
   apply Proofs.Parser.Category.Multiple.parenMultiple_parses <;> assumption
 
 /--
@@ -1054,7 +1058,8 @@ info: 'BSmtLib.Facts.Parser.parenMultiple_parser_parses' depends on axioms: [pro
 /-- The list parser enclosed in `(` and `)` on a first token that is not `(`. -/
 theorem parenMultiple_parser_rejects_open {version : Token.Version} {p : P}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
-    Rejects version (ParenMultipleParser.new (H := H) p) [token] (pure () : PM H Unit)
+    Rejects version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
+      [token] (pure () : PM H Unit)
       (.expectedToken #[.parenOpen]) := by
   apply Proofs.Parser.Category.Multiple.parenMultiple_rejects_open <;> assumption
 
@@ -1073,7 +1078,7 @@ theorem parenMultiple_parser_rejects_inner {version : Token.Version} {p : P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Rejects version p tokens program kind)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
-    Rejects version (ParenMultipleParser.new (H := H) p)
+    Rejects version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
       (.parenOpen :: (values.flatMap (·.1) ++ tokens))
       (do let _ ← values.mapM fun value => value.2; program) kind := by
   apply Proofs.Parser.Category.Multiple.parenMultiple_rejects_inner <;> assumption
@@ -1088,14 +1093,14 @@ info: 'BSmtLib.Facts.Parser.parenMultiple_parser_rejects_inner' depends on axiom
 that finishes on values and the `)`. -/
 theorem parenMultiple_parser_waits_open {version : Token.Version} {p : P} :
     ∃ after : Unit → ParenMultipleParser H P,
-      Waits version (ParenMultipleParser.new (H := H) p) [.parenOpen]
+      Waits version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p)) [.parenOpen]
         (pure () : PM H Unit) after ∧
       ∀ {values : List (List Parser.Internal.Input × PM H R)},
         (∀ value ∈ values, Finishes version p value.1 value.2 p ∧
           ∃ token tokens, value.1 = token :: tokens ∧ token ≠ .parenClose) →
         Finishes version (after ()) (values.flatMap (·.1) ++ [.parenClose])
           ((fun results => results.toArray) <$> values.mapM fun value => value.2)
-          (ParenMultipleParser.new p) := by
+          (ParenMultipleParser.new (ClosedMultipleParser.new p)) := by
   apply Proofs.Parser.Category.Multiple.parenMultiple_waits_open <;> assumption
 
 /--
@@ -1112,14 +1117,14 @@ theorem parenMultiple_parser_waits_between {version : Token.Version} {p : P}
       ∃ token tokens, value.1 = token :: tokens ∧ token ≠ .parenClose)
     (hne : values ≠ []) :
     ∃ after : List R → ParenMultipleParser H P,
-      Waits version (ParenMultipleParser.new (H := H) p)
+      Waits version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
         (.parenOpen :: values.flatMap (·.1)) (values.mapM fun value => value.2) after ∧
       ∀ found {values' : List (List Parser.Internal.Input × PM H R)},
         (∀ value ∈ values', Finishes version p value.1 value.2 p ∧
           ∃ token tokens, value.1 = token :: tokens ∧ token ≠ .parenClose) →
         Finishes version (after found) (values'.flatMap (·.1) ++ [.parenClose])
           ((fun results => (found ++ results).toArray) <$> values'.mapM fun value => value.2)
-          (ParenMultipleParser.new p) := by
+          (ParenMultipleParser.new (ClosedMultipleParser.new p)) := by
   apply Proofs.Parser.Category.Multiple.parenMultiple_waits_between <;> assumption
 
 /--
@@ -1538,7 +1543,7 @@ theorem ident_parser_parses {version : Token.Version} (ident : Tree.Identifier)
     (hvalid : ident.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens ident.tokens) :
     ∃ result : Nodes.Identifier, Bridge.identifier result = ident ∧
-      Finishes version IdentParser.new tokens (pure result : PM H Nodes.Identifier)
+      Finishes version IdentParser.new tokens (pure result.intoOwned : PM H Nodes.IdentifierBuf)
         IdentParser.new := by
   apply Proofs.Parser.Category.Ident.ident_parses <;> assumption
 
@@ -1587,7 +1592,7 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_symbol' depends on axioms: [pro
 #print axioms ident_parser_rejects_symbol
 
 /-- The identifier parser on `(` `_`, a symbol and `)`, an identifier without indices. -/
-theorem ident_parser_rejects_empty {version : Token.Version} (symbol : Nodes.Symbol) :
+theorem ident_parser_rejects_empty {version : Token.Version} (symbol : Plain.SymbolView) :
     Rejects version IdentParser.new
       [.parenOpen, .reserved (.general .underscore), .symbol symbol, .parenClose]
       (pure () : PM H Unit) .emptyIdentIndices := by
@@ -1601,7 +1606,7 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_empty' depends on axioms: [prop
 
 /-- The identifier parser on `(` `_`, a symbol, indices of the version and a token that is
 neither an index of the version nor `)`. -/
-theorem ident_parser_rejects_index {version : Token.Version} (symbol : Nodes.Symbol)
+theorem ident_parser_rejects_index {version : Token.Version} (symbol : Plain.SymbolView)
     {indices : List Parser.Internal.Input}
     (hindices : ∀ index ∈ indices, (∃ digits, index = .constant (.numeral digits)) ∨
       ((∃ symbol, index = .symbol symbol) ∧ version ≥ .v2_5))
@@ -1627,9 +1632,10 @@ theorem sortedVar_parser_parses {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (sortedVar : Tree.SortedVar) (hvalid : sortedVar.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens sortedVar.tokens) :
-    ∃ symbol : Nodes.Symbol, Bridge.symbol symbol = sortedVar.symbol ∧
+    ∃ symbol : Plain.SymbolView, Bridge.symbol symbol = sortedVar.symbol ∧
       Finishes version (SortedVarParser.new (H := H)) tokens
-        ((fun sort => (symbol, sort)) <$> adaptRun (Traversal.sort noPoints h sortedVar.sort))
+        ((fun sort => (symbol.intoOwned, sort)) <$>
+          adaptRun (Traversal.sort noPoints h sortedVar.sort))
         SortedVarParser.new := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_parses <;> assumption
 
@@ -1667,7 +1673,7 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_symbol' depends on axioms: 
 
 /-- The sorted variable parser on `(`, a symbol and a token that starts no sort: neither a
 symbol nor `(`. -/
-theorem sortedVar_parser_rejects_sort {version : Token.Version} (symbol : Nodes.Symbol)
+theorem sortedVar_parser_rejects_sort {version : Token.Version} (symbol : Plain.SymbolView)
     {token : Parser.Internal.Input} (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hopen : token ≠ .parenOpen) :
     Rejects version (SortedVarParser.new (H := H)) [.parenOpen, .symbol symbol, token]
@@ -1685,7 +1691,7 @@ not `)`: it rejects that token with `expectedToken [)]`, having made the travers
 the sort. -/
 theorem sortedVar_parser_rejects_close {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Nodes.Symbol) {sort : Tree.«Sort»} (hvalid : sort.Valid (Bridge.version version))
+    (symbol : Plain.SymbolView) {sort : Tree.«Sort»} (hvalid : sort.Valid (Bridge.version version))
     {sortTokens : List Parser.Internal.Input} (hs : Stands sortTokens sort.tokens)
     {token : Parser.Internal.Input} (htoken : token ≠ .parenClose) :
     Rejects version (SortedVarParser.new (H := H))
@@ -1702,7 +1708,7 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_close' depends on axioms: [
 
 /-- The sorted variable parser on `(`, a symbol, `(` and a token that starts no head of a
 sort. -/
-theorem sortedVar_parser_rejects_sortInner {version : Token.Version} (symbol : Nodes.Symbol)
+theorem sortedVar_parser_rejects_sortInner {version : Token.Version} (symbol : Plain.SymbolView)
     {token : Parser.Internal.Input} (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hopen : token ≠ .parenOpen) (hunderscore : token ≠ .reserved (.general .underscore)) :
     Rejects version (SortedVarParser.new (H := H))
@@ -1718,7 +1724,8 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortInner' depends on axiom
 
 /-- The sorted variable parser on `(`, a symbol, and `(`, a symbol and `)`: a sort application
 without arguments. -/
-theorem sortedVar_parser_rejects_sortEmpty {version : Token.Version} (symbol head : Nodes.Symbol) :
+theorem sortedVar_parser_rejects_sortEmpty {version : Token.Version}
+    (symbol head : Plain.SymbolView) :
     Rejects version (SortedVarParser.new (H := H))
       [.parenOpen, .symbol symbol, .parenOpen, .symbol head, .parenClose] (pure () : PM H Unit)
       .emptySortApplication := by
@@ -1735,7 +1742,8 @@ valid sorts and a token that neither starts another argument of the sort nor end
 that token with `expectedSort`, having made the traversal's calls for the sorts. -/
 theorem sortedVar_parser_rejects_sortArgument {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Nodes.Symbol) {head : Tree.Identifier} (hhead : head.Valid (Bridge.version version))
+    (symbol : Plain.SymbolView) {head : Tree.Identifier}
+    (hhead : head.Valid (Bridge.version version))
     {headTokens : List Parser.Internal.Input} (hsHead : Stands headTokens head.tokens)
     {sorts : List Tree.«Sort»} (hsorts : Tree.«Sort».ValidAll (Bridge.version version) sorts)
     {sortTokens : List Parser.Internal.Input}
@@ -1760,8 +1768,8 @@ theorem qualifiedIdent_parser_parses_plain {version : Token.Version} (identifier
     (hs : Stands tokens identifier.tokens) :
     ∃ result : Nodes.Identifier, Bridge.identifier result = identifier ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        (pure { identifier := result, sort := none } :
-          PM H (Nodes.QualifiedIdent (Traits.Handler.«Sort» H)))
+        (pure { identifier := result.intoOwned, sort := none } :
+          PM H (Nodes.QualifiedIdentBuf (Traits.Handler.«Sort» H)))
         QualifiedIdentParser.new := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_parses_plain <;> assumption
 
@@ -1782,7 +1790,8 @@ theorem qualifiedIdent_parser_parses_as {version : Token.Version}
     (hs : Stands tokens (Tree.QualIdentifier.as identifier sort).tokens) :
     ∃ result : Nodes.Identifier, Bridge.identifier result = identifier ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun handled => { identifier := result, sort := some handled }) <$>
+        ((fun handled => ({ identifier := result.intoOwned, sort := some handled } :
+            Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.sort noPoints h sort))
         QualifiedIdentParser.new := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_parses_as <;> assumption
@@ -1873,7 +1882,7 @@ theorem qualifiedIdent_parser_rejects_sortEmpty {version : Token.Version}
     {identifier : Tree.Identifier}
     (hvalid : identifier.Valid (Bridge.version version))
     {identTokens : List Parser.Internal.Input} (hident : Stands identTokens identifier.tokens)
-    (head : Nodes.Symbol) :
+    (head : Plain.SymbolView) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ [.parenOpen, .symbol head, .parenClose]))
@@ -1926,12 +1935,13 @@ theorem parenSortedVars_parser_parses (hA : TermAgrees h) (variables : List Tree
     (hvalid : ∀ variable_ ∈ variables, variable_.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (paren (variables.flatMap Tree.SortedVar.tokens))) :
-    ∃ symbols : List Nodes.Symbol, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
+    ∃ symbols : List Plain.SymbolView, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
       Finishes version
-        (ParenMultipleParser.new (SortedVarParser.new (H := H)) : ParenSortedVarsParser H) tokens
-        ((fun pairs => (symbols.zip (pairs.map (·.2))).toArray) <$>
+        (ParenSortedVarsParser.new (ClosedMultipleParser.new (SortedVarParser.new (H := H))) :
+          ParenSortedVarsParser H) tokens
+        ((fun pairs => ((symbols.map Plain.SymbolView.intoOwned).zip (pairs.map (·.2))).toArray) <$>
           adaptRun (Traversal.sortedVars noPoints h variables))
-        (ParenMultipleParser.new SortedVarParser.new) := by
+        (ParenSortedVarsParser.new (ClosedMultipleParser.new SortedVarParser.new)) := by
   apply Proofs.Parser.Category.SortedVars.parenSortedVars_parses <;> assumption
 
 /--
@@ -1946,7 +1956,8 @@ theorem pattern_parser_parses {version : Token.Version} (pattern : Tree.Pattern)
     (hvalid : pattern.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens pattern.tokens) :
     ∃ result : Nodes.Pattern, Bridge.pattern result = pattern ∧
-      Finishes version (PatternParser.new (H := H)) tokens (pure result : PM H Nodes.Pattern)
+      Finishes version (PatternParser.new (H := H)) tokens
+        (pure result.intoOwned : PM H Nodes.PatternBuf)
         PatternParser.new := by
   apply Proofs.Parser.Category.Pattern.pattern_parses <;> assumption
 
@@ -1987,7 +1998,7 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_constructor' depends on axiom
 
 /-- The pattern parser on `(`, a constructor and `)`, a constructor pattern without
 arguments. -/
-theorem pattern_parser_rejects_empty {version : Token.Version} (constructor : Nodes.Symbol) :
+theorem pattern_parser_rejects_empty {version : Token.Version} (constructor : Plain.SymbolView) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, .symbol constructor, .parenClose]
       (pure () : PM H Unit) .emptyPatternArguments := by
   apply Proofs.Parser.Category.Pattern.pattern_rejects_empty <;> assumption
@@ -2000,7 +2011,7 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_empty' depends on axioms: [pr
 
 /-- The pattern parser on `(`, a constructor, arguments of the version and a token that is
 neither an argument of the version nor `)`; the error names the wildcard from 2.7 on. -/
-theorem pattern_parser_rejects_argument {version : Token.Version} (constructor : Nodes.Symbol)
+theorem pattern_parser_rejects_argument {version : Token.Version} (constructor : Plain.SymbolView)
     {arguments : List Parser.Internal.Input}
     (harguments : ∀ argument ∈ arguments, (∃ symbol, argument = .symbol symbol) ∨
       (version ≥ .v2_7 ∧ argument = .reserved (.general .underscore)))
@@ -2213,7 +2224,7 @@ token that neither starts another argument nor ends an application: it rejects t
 `expectedSort`, having made the traversal's calls for the applications' argument sorts. -/
 theorem sortedVar_parser_rejects_sortDeepArgument {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Nodes.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
+    (symbol : Plain.SymbolView) {frames : List (Tree.Identifier × List Tree.«Sort»)}
     (hvalid : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frames.flatMap fun frame =>
@@ -2239,7 +2250,7 @@ a token that starts no head: it rejects that token with `expectedSortInner`, hav
 traversal's calls for the applications' argument sorts. -/
 theorem sortedVar_parser_rejects_sortDeepInner {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Nodes.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
+    (symbol : Plain.SymbolView) {frames : List (Tree.Identifier × List Tree.«Sort»)}
     (hvalid : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frames.flatMap fun frame =>
@@ -2263,12 +2274,12 @@ a symbol and `)`: it rejects the `)` with `emptySortApplication`, having made th
 calls for the applications' argument sorts. -/
 theorem sortedVar_parser_rejects_sortDeepEmpty {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Nodes.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
+    (symbol : Plain.SymbolView) {frames : List (Tree.Identifier × List Tree.«Sort»)}
     (hvalid : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frames.flatMap fun frame =>
       .parenOpen :: (frame.1.tokens ++ Tree.«Sort».tokensAll frame.2)))
-    (head : Nodes.Symbol) :
+    (head : Plain.SymbolView) :
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: (tokens ++ [.parenOpen, .symbol head, .parenClose]))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
@@ -2353,7 +2364,7 @@ theorem qualifiedIdent_parser_rejects_sortDeepEmpty {version : Token.Version}
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frames.flatMap fun frame =>
       .parenOpen :: (frame.1.tokens ++ Tree.«Sort».tokensAll frame.2)))
-    (head : Nodes.Symbol) :
+    (head : Plain.SymbolView) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ (tokens ++ [.parenOpen, .symbol head, .parenClose])))
@@ -2382,7 +2393,8 @@ theorem qualifiedIdent_parser_parses {version : Token.Version}
       (qualified = .plain (Bridge.identifier identifier) ∨
         ∃ sort, qualified = .as (Bridge.identifier identifier) sort) ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun result => { identifier, sort := result.2 }) <$>
+        ((fun result => ({ identifier := identifier.intoOwned, sort := result.2 } :
+            Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.qualIdentifier noPoints h qualified))
         QualifiedIdentParser.new := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_parses_any <;> assumption

@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Ready
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Span
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 
@@ -292,14 +294,14 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Token.Version} {l : Lexeme}
       consumer.discards (taken ++ [hd]) = false →
       sess = holdSession consumer sv
         (((consumer.switchTo (taken ++ [hd])).map toVersion).getD version) (taken ++ [hd])
-        ⟨r, l.end⟩
+        (Span.Located.Internal.new r l.end)
         (stream (((consumer.switchTo (taken ++ [hd])).map toVersion).getD version)
           consumer.concrete input ended o))
     (hbrkd : ∀ r, consumer.answer (taken ++ [hd]) = .break r →
       consumer.discards (taken ++ [hd]) = true →
       sess = discardSession consumer sv ended
         (((consumer.switchTo (taken ++ [hd])).map toVersion).getD version) l.end true
-        (some ⟨r, l.end⟩) (taken ++ [hd])) :
+        (some (Span.Located.Internal.new r l.end)) (taken ++ [hd])) :
     BSmtLibSpec.Lexer.Runs fedRun consumer sv input ended (fromVersion version)
       (hd :: (BSmtLibSpec.Lexer.readyFrom fedRun consumer.concrete (fromVersion version) input ended
         o).handed)
@@ -399,7 +401,7 @@ theorem event (hb : consumer.BreaksAtEnd) {version : Token.Version} {l : Lexeme}
       rw [hbrk r hans hdi]
       obtain ⟨outcome, hafter, hset⟩ := afterBreak_hold consumer sv input ended
         (((consumer.switchTo (taken ++ [hd])).map toVersion).getD version) o ho (taken ++ [hd])
-        ⟨r, l.end⟩ hend
+        (Span.Located.Internal.new r l.end) hend
       rw [hset, ← hv]
       refine BSmtLibSpec.Lexer.Runs.breaks hne' hans hdi ?_
       rw [hfol, hv, he, hend]

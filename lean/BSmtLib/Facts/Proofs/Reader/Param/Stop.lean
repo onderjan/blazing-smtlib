@@ -20,7 +20,7 @@ the lexer's handovers to the two are the same.
 namespace BSmtLib.Facts.Proofs.Reader.Param.Stop
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse ParseErrorCause ParseState)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Parser.Internal (After Consuming ParseByToken)
 
@@ -49,22 +49,28 @@ def takeOne (parser : P) (cursor : Z) (token : Token.Produce.Token Z) (next : Z)
   match ← (do
       ParseByToken.arrive parser input
       ParseByToken.step (Token.Produce.version next) parser input).run with
-  | .error error => return (.stop (.error error) fresh, ⟨next, consumed⟩)
+  | .error error =>
+    return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨next, consumed⟩)
   | .ok (.more parser) => return (.goOn parser, ⟨next, consumed⟩)
   | .ok (.done result) =>
     return (.stop (.ok (.break result)) fresh, ⟨next, consumed⟩)
   | .ok (.switchVersion declared resume) =>
     match switch : Token.Produce.setVersion next declared with
-    | .error _ => return (.stop (.error (.syntax .unsupportedVersion)) fresh, ⟨next, consumed⟩)
+    | .error _ =>
+      return (.stop (.error (ParseError.Internal.new (.syntax .unsupportedVersion))) fresh,
+        ⟨next, consumed⟩)
     | .ok switched =>
       let after := Token.Produce.setVersion_consumed consumed switch
       match ← resume.run with
-      | .error error => return (.stop (.error error) fresh, ⟨switched, after⟩)
+      | .error error =>
+        return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨switched, after⟩)
       | .ok step => return (resumed fresh step, ⟨switched, after⟩)
   | .ok (.discardRest resume) =>
     let after := Token.Produce.discardRest_consumed consumed
     match ← resume.run with
-    | .error error => return (.stop (.error error) fresh, ⟨Token.Produce.discardRest next, after⟩)
+    | .error error =>
+      return (.stop (.error (ParseError.Internal.new error)) fresh,
+        ⟨Token.Produce.discardRest next, after⟩)
     | .ok step => return (resumed fresh step, ⟨Token.Produce.discardRest next, after⟩)
 
 /--
@@ -72,7 +78,7 @@ Has the parser take the tokens of `cursor`, which comes from `origin` with token
 by one, until there are none or the handover stops.
 -/
 def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin) :
-    StateT H m (Except (ParseErrorCause E) (ControlFlow R) × P ×
+    StateT H m (Except (ParseError E) (ControlFlow R) × P ×
       { z : Z // Token.Produce.Consumed z origin }) :=
   match Token.Produce.next? cursor with
   | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
@@ -100,22 +106,23 @@ variable {H P R E : Type} [Handler H Id] [ParseByToken P H Id E R] [Parse P H Id
 /-- The handler told the version of the cursor, unless it was told the version of the input
 already. -/
 def told (adapter : ParseAdapter H P) (cursor : Token.BatchCursor b) : H :=
-  ((show StateT H Id Unit from if adapter.versionSet then pure ()
+  ((show StateT H Id Unit from if (ParseAdapter.Internal.versionSet adapter) then pure ()
     else Handler.setVersion (Token.Produce.version cursor)).run adapter.handler).2
 
 /-- What a call of the consumer gives after its first token: the answer and the cursor, and the
 adapter with the handler, the parser and the resources. -/
 def finish (cursor : Token.BatchCursor b) (parseState : ParseState H) :
     (After P R E × { z : Token.BatchCursor b // z.Consumed cursor }) × H →
-      (Except (ParseErrorCause E) (ControlFlow R) ×
+      (Except (ParseError E) (ControlFlow R) ×
         { next : Token.BatchCursor b // next.Consumed cursor }) × ParseAdapter H P
   | ((.stop answer parser, z), handler) =>
-    ((answer, z), ParseAdapter.mk handler parser (ParseAdapter.Internal.versionSetAfter answer)
+    ((answer, z),
+      ParseAdapter.Internal.mk handler parser (ParseAdapter.Internal.versionSetAfter answer)
         parseState)
   | ((.goOn parser, ⟨later, taken⟩), handler) =>
     let y := (rest cursor parser later taken).run handler
     ((y.1.1, y.1.2.2),
-      ParseAdapter.mk y.2 y.1.2.1 (ParseAdapter.Internal.versionSetAfter y.1.1) parseState)
+      ParseAdapter.Internal.mk y.2 y.1.2.1 (ParseAdapter.Internal.versionSetAfter y.1.1) parseState)
 
 /- LEAN: on the lexer's cursors and in the monad of the reader proofs only, so that a call's
 result is read off its definition. -/
@@ -124,9 +131,9 @@ of the input already; then the parser takes the tokens of the cursor until there
 the handover stops. -/
 def consume (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
     StateT (ParseAdapter H P) Id
-      (Except (ParseErrorCause E) (ControlFlow R) ×
+      (Except (ParseError E) (ControlFlow R) ×
         { next : Token.BatchCursor b // next.Consumed cursor }) := fun adapter =>
-  finish cursor adapter.parseState
+  finish cursor (ParseAdapter.Internal.parseState adapter)
     ((takeOne adapter.parser cursor (cursor.next h).1 (cursor.next h).2.val
       (cursor.next h).2.property).run (told adapter cursor))
 
@@ -134,15 +141,17 @@ omit [Parse P H Id E R] in
 /-- After a call, the handler is to be told the version again only if the parser broke. -/
 theorem versionSet_consume (cursor : Token.BatchCursor b) (h : cursor.HasNext)
     (adapter : ParseAdapter H P) :
-    ((consume (H := H) (P := P) cursor h).run adapter).2.versionSet =
+    ParseAdapter.Internal.versionSet ((consume (H := H) (P := P) cursor h).run adapter).2 =
       ParseAdapter.Internal.versionSetAfter
           ((consume (H := H) (P := P) cursor h).run adapter).1.1 := by
-  show (finish cursor adapter.parseState _).2.versionSet =
-    ParseAdapter.Internal.versionSetAfter (finish cursor adapter.parseState _).1.1
+  show ParseAdapter.Internal.versionSet
+      (finish cursor (ParseAdapter.Internal.parseState adapter) _).2 =
+    ParseAdapter.Internal.versionSetAfter
+      (finish cursor (ParseAdapter.Internal.parseState adapter) _).1.1
   generalize (takeOne adapter.parser cursor (cursor.next h).1 (cursor.next h).2.val
     (cursor.next h).2.property).run (told adapter cursor) = x
   obtain ⟨⟨after, ⟨later, taken⟩⟩, handler⟩ := x
-  cases after <;> rfl
+  cases after <;> simp only [finish, ParseAdapter.Internal.versionSet_mk]
 
 /-- The consumer that stops after an action on its cursor, on the parse adapter's type. -/
 @[reducible]

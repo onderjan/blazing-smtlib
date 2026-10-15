@@ -12,6 +12,7 @@ The parser of the pattern of a case of `match`.
 
 namespace BSmtLib.Parser.Category.Pattern
 
+open BSmtLib.Plain (SymbolView)
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Token (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
@@ -24,7 +25,7 @@ inductive PatternState where
   /-- After the `(` of a constructor pattern. -/
   | opened
   /-- After the constructor, reading its arguments up to the `)`. -/
-  | arguments (constructor : Symbol) (arguments : Array SymbolOrWildcard)
+  | arguments (constructor : SymbolView) (arguments : Array SymbolOrWildcard)
 
 namespace PatternState
 
@@ -91,15 +92,16 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 @[no_expose]
-instance : Internal.ParseByToken (PatternParser H) H m (Handler.Error H) Pattern where
+instance Internal.instParseByTokenPatternParser :
+    Internal.ParseByToken (PatternParser H) H m (Handler.Error H) PatternBuf where
   arrive _ _ := pure ()
   step version parser token := do
     match ← parser.state.step version token with
     | .more state => return .more ⟨state⟩
-    | .done result => return .done result
+    | .done result => return .done result.intoOwned
   reset _ := .new
 
-instance : Parse (PatternParser H) H m (Handler.Error H) Pattern where
+instance : Parse (PatternParser H) H m (Handler.Error H) PatternBuf where
   parse := Internal.parseByToken
 
 end

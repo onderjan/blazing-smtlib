@@ -17,6 +17,7 @@ started from (`step_posture`), so the recording run keeps the posture it starts 
 namespace BSmtLib.Facts.Proofs.Reader.Param.KeepsPosture
 
 open BSmtLib.Parser BSmtLib.Parser.Script
+open BSmtLib.Parser.Script.ScriptParser.Internal (posture)
 open BSmtLibSpec.Parser.Properties (Event)
 open BSmtLib.Facts.Proofs.Parser.Quiet (RPM)
 open BSmtLib.Facts.Proofs.Parser.Cut
@@ -52,14 +53,14 @@ theorem MPost.bind {α β : Type} {P : β → Prop} {x : RPM α} {k : α → RPM
 
 /-- A step of the parser that goes on, with the posture. -/
 def StepPost (q : Token.VersionPosture) : Internal.Step (ScriptParser (List Event)) Unit → Prop
-  | .more parser => parser.posture = q
+  | .more parser => (posture parser) = q
   | .done _ => True
 
 /-- What a step asks of its loop: every parser it goes on with, then or after the action on the
 cursor, has the posture. -/
 def FlowPost (q : Token.VersionPosture) :
     Internal.Flow RPM (ScriptParser (List Event)) Unit → Prop
-  | .more parser => parser.posture = q
+  | .more parser => (posture parser) = q
   | .done _ => True
   | .switchVersion _ resume => MPost (StepPost q) resume
   | .discardRest resume => MPost (StepPost q) resume
@@ -67,7 +68,7 @@ def FlowPost (q : Token.VersionPosture) :
 /-- The script parser's step goes on with parsers of its posture. -/
 theorem step_posture (version : Token.Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
-    MPost (FlowPost parser.posture) (ScriptParser.Internal.step version parser token) := by
+    MPost (FlowPost (posture parser)) (ScriptParser.Internal.step version parser token) := by
   unfold ScriptParser.Internal.step
   refine MPost.bind fun r => ?_
   rcases r with command | (_ | declared | _ | _)
@@ -96,7 +97,7 @@ theorem MPost.any {α : Type} (x : RPM α) : MPost (fun _ => True) x := fun _ _ 
 /-- What the driver does after an item's processing goes on with a parser of the posture. -/
 theorem afterProcessing_posture (version : Token.Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
-    MPost (fun r => ∀ v p, r = .inl (v, p) → p.posture = parser.posture)
+    MPost (fun r => ∀ v p, r = .inl (v, p) → (posture p) = (posture parser))
       (afterProcessing recordingProducer version parser token) := by
   unfold afterProcessing
   refine MPost.bind' (step_posture version parser token) fun f hf => ?_
@@ -122,7 +123,7 @@ theorem afterProcessing_posture (version : Token.Version) (parser : ScriptParser
 /-- The driver's run of one item goes on with a parser of the posture. -/
 theorem recAfter_posture (version : Token.Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
-    MPost (fun r => ∀ v p, r = .inl (v, p) → p.posture = parser.posture)
+    MPost (fun r => ∀ v p, r = .inl (v, p) → (posture p) = (posture parser))
       (recAfter version parser token) := by
   unfold recAfter afterToken
   exact MPost.bind' (MPost.any _) fun _ _ => MPost.bind' (MPost.any _) fun _ _ =>
@@ -147,7 +148,7 @@ theorem recRun_snoc_stop (version : BSmtLibSpec.Lexicon.Version) (items : List L
 theorem recRun_posture (version : BSmtLibSpec.Lexicon.Version) (items : List LibItem)
     {v : Token.Version} {parser : ScriptParser (List Event)} {log : List Event}
     (h : recRun version items = (.ok (.inl (v, parser)), log)) :
-    parser.posture = unrestrictedPosture := by
+    (posture parser) = unrestrictedPosture := by
   obtain ⟨rev, rfl⟩ : ∃ rev, items = rev.reverse := ⟨items.reverse, by simp⟩
   induction rev generalizing v parser log with
   | nil =>

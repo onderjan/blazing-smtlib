@@ -19,7 +19,7 @@ tokens `driveS` consumed. So every `RunsS` lemma about a parser's steps gives `F
 namespace BSmtLib.Facts.Proofs.Parser.Category.CursorS
 
 open BSmtLib.Token (Produce)
-open BSmtLib.Parser (Parse ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Internal (ParseByToken takeOne rest parseByToken After)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
@@ -92,13 +92,15 @@ variable {Z : Type} [Produce Z]
 
 /-- What the loop gave, read as `outcome` reads a parse. -/
 def outcomeRest {origin : Z} :
-    Except (ParseErrorCause (Traits.Handler.Error H)) (ControlFlow R) × P ×
+    Except (ParseError (Traits.Handler.Error H)) (ControlFlow R) × P ×
       { z : Z // Produce.Consumed z origin } →
     Outcome R P Z (Traits.Handler.Error H)
   | (.ok (.break result), parser, next) => .finished result parser next.val
   | (.ok .continue, parser, _) => .waits parser
-  | (.error (.syntax kind), _, next) => .rejected kind next.val
-  | (.error (.handler error), _, _) => .failed error
+  | (.error error, _, next) =>
+    match error.cause with
+    | .syntax kind => .rejected kind next.val
+    | .handler error => .failed error
 
 /-- What `driveS` gave back, as the loop on the cursor gives it. -/
 def convS (mk : σ → P) (fresh : P) (cursor : Z) (tokens : List Parser.Internal.Input) :
@@ -152,10 +154,12 @@ theorem step_afterS (state : σ) {cursor after : Z}
   rw [driveS_cons, tick_noPoints, pure_bind, bind_map_left, map_bind]
   refine bind_congr fun e => ?_
   rcases e with (kind | error) | (state' | result)
-  · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS, List.length_cons]
+  · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS, List.length_cons,
+      Parser.ParseError.Internal.cause_new]
     rw [show tokens.length + 1 - tokens.length = 0 + 1 by omega, advance_succ hnext]
     rfl
-  · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS]
+  · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS,
+      Parser.ParseError.Internal.cause_new]
   · simp only [afterOf, onStep]
     rw [hgo state' _ rfl, driveS_proj step tokens state', Functor.map_map, Functor.map_map]
     congr 1
@@ -333,6 +337,146 @@ theorem rejects_of_movesS [Parse P H m (Traits.Handler.Error H) R]
   have h := (RunsS.of_moves hmoves).append fun _ => h₂
   have := rejects_of_runsS @hparse sim h
   simpa [tick_noPoints] using this
+
+end
+
+/-! ## Steps whose results are mapped
+
+A parser that hands over its steps' results converted, as the parsers with owned results do,
+runs as its steps do, with the results converted. -/
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {σ ρ τ α : Type} {points : BSmtLibSpec.Parser.Traversal.Points (StateT H m)}
+
+/-- A step with its result converted by `f`. -/
+def mapDone (f : ρ → τ) : Parser.Internal.Step σ ρ → Parser.Internal.Step σ τ
+  | .more state => .more state
+  | .done result => .done (f result)
+
+/-- The steps with their results converted by `f`. -/
+def mapSteps (f : ρ → τ) (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)) :
+    σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ τ) :=
+  fun state token => mapDone f <$> step state token
+
+/-- Where the steps stopped, with the result converted by `f`. -/
+def Res.mapDone {E : Type} (f : ρ → τ) : Res σ ρ E → Res σ τ E
+  | .waits state => .waits state
+  | .done result rest => .done (f result) rest
+  | .rejected kind rest => .rejected kind rest
+  | .failed error => .failed error
+
+theorem onStep_mapDone (f : ρ → τ)
+    {k : σ → StateT H m (Res σ ρ (Traits.Handler.Error H))}
+    {k' : σ → StateT H m (Res σ τ (Traits.Handler.Error H))}
+    (hk : ∀ state, k' state = Res.mapDone f <$> k state) (rest : List Parser.Internal.Input)
+    (e : Except (ParseErrorCause (Traits.Handler.Error H)) (Parser.Internal.Step σ ρ)) :
+    onStep k' rest (mapDone f <$> e) = Res.mapDone f <$> onStep k rest e := by
+  rcases e with (kind | error) | (state | result)
+  · simp [onStep, Res.mapDone]; rfl
+  · simp [onStep, Res.mapDone]; rfl
+  · exact hk state
+  · simp [onStep, Res.mapDone]; rfl
+
+theorem driveS_mapSteps (f : ρ → τ)
+    (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)) :
+    (tokens : List Parser.Internal.Input) → (state : σ) →
+    driveS points (mapSteps f step) state tokens =
+      Res.mapDone f <$> driveS points step state tokens
+  | [], state => by simp [driveS_nil, Res.mapDone]
+  | token :: tokens, state => by
+    rw [driveS_cons, driveS_cons, map_bind]
+    simp only [mapSteps, ExceptT.run_bind, ExceptT.run_map, bind_assoc]
+    refine bind_congr fun e => ?_
+    rcases e with error | u
+    · rcases error with kind | error <;> simp [onStep, Res.mapDone]
+    · simp only [bind_map_left]
+      refine bind_congr fun e' => ?_
+      exact onStep_mapDone f (fun state => driveS_mapSteps f step tokens state) tokens e'
+
+theorem resumeS_mapSteps (f : ρ → τ)
+    (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ))
+    (next : PM H (Parser.Internal.Step σ ρ)) (rest : List Parser.Internal.Input) :
+    resumeS points (mapSteps f step) (mapDone f <$> next) rest =
+      Res.mapDone f <$> resumeS points step next rest := by
+  simp only [resumeS, ExceptT.run_map, bind_map_left, map_bind]
+  refine bind_congr fun e => ?_
+  exact onStep_mapDone f (fun state => driveS_mapSteps f step rest state) rest e
+
+/-- A run of the steps is a run of the steps with their results converted. -/
+theorem RunsS.mapSteps (f : ρ → τ)
+    {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)} {state : σ}
+    {tokens : List Parser.Internal.Input} {program : PM H α}
+    {next : α → PM H (Parser.Internal.Step σ ρ)}
+    (h : RunsS points step state tokens program next) :
+    RunsS points (CursorS.mapSteps f step) state tokens program
+      (fun a => mapDone f <$> next a) := by
+  refine ⟨h.1, fun rest => ?_⟩
+  rw [driveS_mapSteps, h.2, map_bind]
+  refine bind_congr fun e => ?_
+  rcases e with (kind | error) | a
+  · simp [afterProgram, Res.mapDone]
+  · simp [afterProgram, Res.mapDone]
+  · exact (resumeS_mapSteps f step (next a) rest).symm
+
+/-- Steps that only move the parser move it alike with their results converted. -/
+theorem Moves.mapSteps (f : ρ → τ)
+    {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)} :
+    {state last : σ} → {tokens : List Parser.Internal.Input} → Moves step state tokens last →
+    Moves (CursorS.mapSteps f step) state tokens last
+  | _, _, [], .nil _ => .nil _
+  | _, _, _ :: _, .cons h hrest =>
+    .cons (by simp [CursorS.mapSteps, h, mapDone]) (Moves.mapSteps f hrest)
+
+end
+
+section
+
+variable {H P R ρ σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable [ParseByToken P H m (Traits.Handler.Error H) R] [Parse P H m (Traits.Handler.Error H) R]
+variable {version : Token.Version} {mk : σ → P}
+  {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)} {fresh : P} {f : ρ → R}
+  {state : σ} {tokens : List Parser.Internal.Input}
+
+/-- `parses_of_runsS` for a parser whose steps' results it converts by `f`. -/
+theorem parses_of_runsS_map
+    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+      Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
+    (sim : Simulates version mk (mapSteps f step) fresh) {program : PM H ρ}
+    (h : RunsS noPoints step state tokens program fun r => pure (.done r)) :
+    Finishes version (mk state) tokens (f <$> program) fresh :=
+  parses_of_runsS @hparse sim (RunsS.map_program (f := f) (next := fun r => pure (.done r))
+    ((RunsS.mapSteps f h).congr rfl (by funext; simp [mapDone])))
+
+/-- `waits_of_runsS` for a parser whose steps' results it converts by `f`. -/
+theorem waits_of_runsS_map
+    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+      Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
+    (sim : Simulates version mk (mapSteps f step) fresh) {α : Type} {program : PM H α}
+    {after : α → σ} (h : RunsS noPoints step state tokens program fun a => pure (.more (after a))) :
+    Waits version (mk state) tokens program (fun a => mk (after a)) :=
+  waits_of_runsS @hparse sim ((RunsS.mapSteps f h).congr rfl (by funext; simp [mapDone]))
+
+/-- `rejects_of_runsS` for a parser whose steps' results it converts by `f`. -/
+theorem rejects_of_runsS_map
+    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+      Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
+    (sim : Simulates version mk (mapSteps f step) fresh) {α : Type} {program : PM H α}
+    {kind : SyntaxErrorKind}
+    (h : RunsS noPoints step state tokens program fun _ => throw (.syntax kind)) :
+    Rejects version (mk state) tokens ((fun _ => ()) <$> program) kind :=
+  rejects_of_runsS @hparse sim ((RunsS.mapSteps f h).congr rfl (by funext; simp))
+
+/-- `rejects_of_movesS` for a parser whose steps' results it converts by `f`. -/
+theorem rejects_of_movesS_map
+    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+      Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
+    (sim : Simulates version mk (mapSteps f step) fresh) {kind : SyntaxErrorKind}
+    {token : Parser.Internal.Input} {last : σ}
+    (hmoves : Moves step state tokens last) (hfail : step last token = throw (.syntax kind)) :
+    Rejects version (mk state) (tokens ++ [token]) (pure () : PM H Unit) kind :=
+  rejects_of_movesS @hparse sim (Moves.mapSteps f hmoves) (by simp [mapSteps, hfail])
 
 end
 

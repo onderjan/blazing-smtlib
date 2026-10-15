@@ -11,6 +11,8 @@ public import BSmtLib.Facts.Proofs.PublicApi.Slicing
 public import BSmtLib.Facts.Proofs.PublicApi.Lossless
 public import BSmtLib.Facts.Proofs.PublicApi.Agree
 public import BSmtLib.Facts.Proofs.PublicApi.ReaderResets
+public import BSmtLib.Facts.Proofs.PublicApi.SlicingC
+public import BSmtLib.Facts.Proofs.PublicApi.ReaderSlicing
 
 @[expose] public section
 
@@ -124,11 +126,12 @@ where it began to discard, however the input is cut into slices.
 theorem reading_slicing :
     ∃ r : Reprinter, r.Reprints ∧
       ∀ version slices, r.observe (readThrough (r.reader version) slices) =
-        r.observe (readThrough (r.reader version) [slices.flatten]) := by
-  sorry
+        r.observe (readThrough (r.reader version) [slices.flatten]) :=
+  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
+    Proofs.PublicApi.ReaderSlicing.recorder_slicing⟩
 
 /--
-info: 'BSmtLib.Facts.PublicApi.reading_slicing' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.PublicApi.reading_slicing' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms reading_slicing

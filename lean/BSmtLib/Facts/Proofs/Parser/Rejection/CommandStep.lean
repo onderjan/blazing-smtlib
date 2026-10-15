@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Parser.Rejection.Payload
+import all BSmtLib.Parser
 import all BSmtLib.Parser.Command
 import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Token.Reserved
@@ -334,15 +335,20 @@ theorem payloadInit_nonempty (name : Token.Reserved.CommandNameReserved) :
   all_goals exact hnext
 
 /-- What follows the command parser's last item, as the outcome says. -/
-def commandFin (state : CommandState Nat Nat Nat Nat Nat) (outcome : CommandOutcome)
+def commandFin (state : CommandState Nat Nat Nat Nat Nat Empty) (outcome : CommandOutcome)
     (u : List Received) : Prop :=
   ∀ w, follows (outcomeEnd (Bridge.version version) outcome) w →
     commandRem (Bridge.version version) follows state (u ++ w)
 
+/-- The recording handler rejects every non-standard command at its name. -/
+private theorem commandStep_symbol (version : Token.Version) (symbol : Plain.SymbolView) :
+    commandStep (H := List Event) version .opened (.symbol symbol) = throw (.handler ()) :=
+  rfl
+
 include hfollows in
 /-- Every step of the command parser advances. -/
 theorem commandStep_advances
-    (state : CommandState Nat Nat Nat Nat Nat) {token : Parser.Internal.Input}
+    (state : CommandState Nat Nat Nat Nat Nat Empty) {token : Parser.Internal.Input}
     {item : Received} (hitem : Bridge.received token = some item)
     (hlex : item.OfVersion (Bridge.version version)) :
     Sound (Advances (commandRem (Bridge.version version) follows) (commandFin version follows)
@@ -362,7 +368,11 @@ theorem commandStep_advances
       exact Sound.pure fun _ w hw => Or.inr (cat_tok hw)
     all_goals fail_step
   | opened =>
-    cases token <;> simp only [commandStep]
+    cases token
+    case symbol s =>
+      rw [commandStep_symbol]
+      exact Sound.throw (Or.inl trivial)
+    all_goals simp only [commandStep]
     case reserved r =>
       cases r with
       | commandName name =>
@@ -370,7 +380,6 @@ theorem commandStep_advances
         exact Sound.pure fun _ => ⟨fun u hu => payloadInit_command version follows name hlex hu,
           payloadInit_nonempty version follows hfollows name⟩
       | general => fail_step
-    case symbol s => exact Sound.throw (Or.inl trivial)
     all_goals fail_step
   | payload payload =>
     simp only [commandStep]
@@ -379,6 +388,7 @@ theorem commandStep_advances
     cases r with
     | more payload' => exact Sound.pure hr
     | done outcome => exact Sound.pure hr
+  | nonstandard parser => nomatch parser
 
 end
 

@@ -205,7 +205,7 @@ theorem matches_none {floor : Option Nat} {s : Stop C} {e : WP.Intr C floor} (hm
     rw [he] at h
     cases h
   | fail err d l =>
-    simp only [Matches] at hm
+    obtain ⟨hm, -⟩ := hm
     rw [he] at hm
     cases hm
   | layout l => exact ⟨l, rfl⟩

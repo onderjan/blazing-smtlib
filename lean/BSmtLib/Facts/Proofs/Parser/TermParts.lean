@@ -44,7 +44,8 @@ open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
 
 /-- The sorted variables as the spec hands them over, from the parser's. -/
-def Bridge.specPairs {S : Type} (variables : List (Nodes.Symbol × S)) : List (Tree.Symbol × S) :=
+def Bridge.specPairs {S : Type} (variables : List (Plain.SymbolView × S)) :
+    List (Tree.Symbol × S) :=
   variables.map fun (symbol, sort) => (Bridge.symbol symbol, sort)
 
 section
@@ -208,7 +209,7 @@ theorem patternArguments_runs : (arguments : List Tree.SymbolOrWildcard) →
     (∀ argument ∈ arguments, argument.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input},
         Stands tokens (arguments.map Tree.SymbolOrWildcard.token) →
-    ∀ (constructor : Nodes.Symbol) (found : Array Nodes.SymbolOrWildcard),
+    ∀ (constructor : Plain.SymbolView) (found : Array Nodes.SymbolOrWildcard),
     ∃ parsed : Array Nodes.SymbolOrWildcard,
       parsed.toList.map Bridge.symbolOrWildcard = arguments ∧
       Runs points (PatternState.step (H := H) version) (.arguments constructor found) tokens
@@ -285,7 +286,7 @@ variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf 
 theorem sortedVar_runs (hA : TermAgrees h) (var : Tree.SortedVar)
     (hvalid : var.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens var.tokens) :
-    ∃ (symbol : Nodes.Symbol) (sortTokens : List Parser.Internal.Input),
+    ∃ (symbol : Plain.SymbolView) (sortTokens : List Parser.Internal.Input),
       tokens = .parenOpen :: .symbol symbol :: (sortTokens ++ [.parenClose]) ∧
       Bridge.symbol symbol = var.symbol ∧ Stands sortTokens var.sort.tokens ∧
       Runs points (sortedVarStep version) .start tokens
@@ -338,9 +339,9 @@ theorem sortedVars_runs (hA : TermAgrees h) (variables : List Tree.SortedVar)
     (hvalid : ∀ var ∈ variables,
         var.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (variables.flatMap Tree.SortedVar.tokens)) :
-    ∃ program : PM H (List (Nodes.Symbol × Traits.Handler.«Sort» H)),
+    ∃ program : PM H (List (Plain.SymbolView × Traits.Handler.«Sort» H)),
       Bridge.specPairs <$> program = adaptRun (Traversal.sortedVars points h variables) ∧
-      ∀ found : Array (Nodes.Symbol × Traits.Handler.«Sort» H),
+      ∀ found : Array (Plain.SymbolView × Traits.Handler.«Sort» H),
       Runs points (ListState.step .start (sortedVarStep version) none)
         (ListState.between .start found) tokens program
         fun handled => pure (.more (ListState.between .start (found ++ handled.toArray))) := by

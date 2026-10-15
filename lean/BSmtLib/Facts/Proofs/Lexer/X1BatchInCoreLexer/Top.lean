@@ -43,7 +43,7 @@ def lexerZb (x : Lexer.Internal.WRustPort.Lexer H recovery) : Lexer.Internal.WRu
 lexer recovers. -/
 def afterErrorMapOf : (recovers : Bool) → BSmtLib.Lexer.Internal.AfterErrorOf H recovery recovers →
     Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers
-  | false, _ => ()
+  | false, h => h
   | true, l => lexerMap l
 
 /-- What a failed call of the library's lexer gives back, mapped by `lexerMap`. -/
@@ -56,7 +56,7 @@ lexer recovers. -/
 def afterErrorZbOf : (recovers : Bool) →
     Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers →
     Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers
-  | false, _ => ()
+  | false, h => h
   | true, x => lexerZb x
 
 /-- What a failed call of `X1BatchInCore` gives back, with the base
@@ -74,7 +74,7 @@ whether the lexer recovers. -/
 def afterEofMapOf : (recovers : Bool) →
     BSmtLib.Lexer.Internal.AfterEofErrorOf H recovery recovers →
     Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers
-  | false, _ => ()
+  | false, h => h
   | true, .lexer l => .lexer (lexerMap l)
   | true, .pending p => .pending ⟨lexerMap (pendingLexer p)⟩
 
@@ -88,7 +88,7 @@ whether the lexer recovers. -/
 def afterEofZbOf : (recovers : Bool) →
     Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers →
     Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers
-  | false, _ => ()
+  | false, h => h
   | true, .lexer x => .lexer (lexerZb x)
   | true, .pending p => .pending ⟨lexerZb p.lexer⟩
 
@@ -113,7 +113,7 @@ theorem afterErrorMapOf_zb (recovers : Bool) (l : BSmtLib.Lexer H recovery)
     afterErrorMapOf recovers (BSmtLib.Lexer.Internal.afterErrorOf recovers l) =
       afterErrorZbOf recovers (Lexer.Internal.WRustPort.Lexer.afterErrorOf recovers x) := by
   cases recovers
-  · rfl
+  · exact congrArg Lexer.Internal.WRustPort.Lexer.handler hlx
   · exact hlx
 
 /-- A failed end of the input gives back related lexers if the lexers it is made on are related,
@@ -125,7 +125,7 @@ theorem afterEofMapOf_zb (recovers : Bool) (l : BSmtLib.Lexer H recovery)
       afterEofZbOf recovers
         (Lexer.Internal.WRustPort.Lexer.afterEofErrorOf recovers x continues) := by
   cases recovers
-  · rfl
+  · exact congrArg Lexer.Internal.WRustPort.Lexer.handler hlx
   · cases continues
     · exact congrArg Lexer.Internal.WRustPort.Lexer.AfterEof.lexer hlx
     · exact congrArg (fun y => Lexer.Internal.WRustPort.Lexer.AfterEof.pending ⟨y⟩) hlx

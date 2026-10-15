@@ -45,7 +45,7 @@ def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token :
       match self with
       | [] => syntaxError .expectedSExpr
       | items :: outer => do
-        let list ← call (Handler.handleSExpr (.list items))
+        let list ← call (Handler.handleSExpr (.list (.new items)))
         return sExprComplete outer list
     | .constant constant => pure (SExprNode.constant constant)
     | .symbol symbol => pure (.symbol symbol)
@@ -75,7 +75,8 @@ def SExprParser.new : SExprParser H := ⟨[]⟩
 instance : Inhabited (SExprParser H) := ⟨.new⟩
 
 @[no_expose]
-instance : Internal.ParseByToken (SExprParser H) H m (Handler.Error H) (Handler.SExpr H) where
+instance Internal.instParseByTokenSExprParser :
+    Internal.ParseByToken (SExprParser H) H m (Handler.Error H) (Handler.SExpr H) where
   arrive _ _ := pure ()
   step version parser token := do
     match ← Internal.sExprStep version parser.state token with

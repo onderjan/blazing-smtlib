@@ -2,6 +2,8 @@ module
 
 public import BSmtLib.Facts.Proofs.Reader.Param.Slice
 import all BSmtLib.Lexer
+import all BSmtLib.Lexer.Error
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -155,7 +157,8 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
         | .error failure =>
           if core.recoveryState.isSome = true then do
             Internal.reset
-            pure (.error { cause := failure.cause, span := failure.span, continuesFrom := none })
+            pure (.error
+              (BSmtLib.Lexer.Error.LexError.Internal.new failure.cause failure.span none))
           else do
             pure (.error (← Internal.failCall abandon₁ failure true)))
       (do
@@ -164,7 +167,8 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
         | .error failure =>
           if core.recoveryState.isSome = true then do
             Internal.reset
-            pure (.error { cause := failure.cause, span := failure.span, continuesFrom := none })
+            pure (.error
+              (BSmtLib.Lexer.Error.LexError.Internal.new failure.cause failure.span none))
           else do
             pure (.error (← Internal.failCall abandon₂ failure true))) := by
     refine SSim.bind (executeStep_sim _ _ (lexEofInner_sim hc)) ?_

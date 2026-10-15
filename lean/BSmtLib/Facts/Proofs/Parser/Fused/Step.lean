@@ -18,7 +18,7 @@ batch cursor, the fused reader, is that loop (`parse_eq`).
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Step
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
@@ -40,11 +40,13 @@ theorem stepSimulates : StepSimulates H m := by
   | true =>
     simp only [step, ite_true]
     rw [termStep_eq, ← portStep_withTerm, takeOne_eq_portStep]
-    rfl
+    simp only [assemble, ite_true, ScriptParser.Internal.posture_mk,
+      ScriptParser.Internal.declarations_mk, ScriptParser.Internal.command_mk]
   | false =>
     simp only [step, Bool.false_eq_true, ite_false]
     rw [commandStep_eq, takeOne_eq_portStep]
-    rfl
+    simp only [assemble, Bool.false_eq_true, ite_false, ScriptParser.Internal.posture_mk,
+      ScriptParser.Internal.declarations_mk, ScriptParser.Internal.command_mk]
 
 /-! ## The parse -/
 

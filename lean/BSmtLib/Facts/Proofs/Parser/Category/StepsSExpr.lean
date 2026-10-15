@@ -90,7 +90,8 @@ theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bri
       RunsS.token (by simp [sExprStep])
     have hclose : ∀ items : Array (Traits.Handler.SExpr H),
         RunsS points (sExprStep version) (items :: levels) [.parenClose]
-          (do tick points .parenClose; Parser.Internal.call (Traits.Handler.handleSExpr (.list items)))
+          (do tick points .parenClose; Parser.Internal.call (Traits.Handler.handleSExpr (.list
+            (.new items))))
           fun r => pure (sExprComplete levels r) :=
       fun items => RunsS.token (by simp [sExprStep])
     refine (RunsS.append hopen fun _ =>

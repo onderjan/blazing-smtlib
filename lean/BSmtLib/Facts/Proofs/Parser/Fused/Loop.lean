@@ -4,6 +4,7 @@ public import BSmtLib.Parser.Internal.Fused
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Parser.Internal.Fused
+import all BSmtLib.Parser.Script
 import all BSmtLib.Token
 
 @[expose] public section
@@ -84,7 +85,7 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 
 /-- The adapter's result of a token, taken from `origin` on, with the handler after it. -/
-abbrev PortOut (H : Type) {m : Type → Type} [Handler H m] {batch : BatchTag}
+abbrev PortOut (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
     (origin : BatchCursor batch) :=
   (Parser.Internal.After (ScriptParser H) Unit (Handler.Error H) ×
     { z : BatchCursor batch // z.Consumed origin }) × H
@@ -94,7 +95,7 @@ that the outcome stands for, or stopping. -/
 def toPort (posture : VersionPosture) {batch : BatchTag} {origin next : BatchCursor batch}
     (consumed : next.Consumed origin) : OutcomeOf H next → PortOut H origin
   | .command h decl cmd =>
-    ((.goOn { posture, command := cmd, declarations := decl }, ⟨next, consumed⟩), h)
+    ((.goOn (ScriptParser.Internal.mk posture cmd decl), ⟨next, consumed⟩), h)
   | .term h decl ctx mode levels =>
     ((.goOn (assemble posture decl .awaiting true ctx mode levels), ⟨next, consumed⟩), h)
   | .resume h parser cursor follows =>
@@ -225,8 +226,10 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
       have : remaining after < remaining next := (taken.trans_follows follows).remaining_lt
       dsimp only
       obtain ⟨posture', command', declarations'⟩ := parser
-      dsimp only
-      split <;> rw [loop_eq hstep] <;> congr 1 <;> simp_all [assemble, withTerm]
+      dsimp only [ScriptParser.Internal.posture, ScriptParser.Internal.command,
+        ScriptParser.Internal.declarations]
+      split <;> rw [loop_eq hstep] <;> congr 1 <;>
+        simp_all [assemble, withTerm, ScriptParser.Internal.mk]
     · simp only [hn, ↓reduceDIte]
       rw [rest_none origin _ h' cursor (follows.trans_consumed consumed) hn]
   | stop answer parser cursor follows h' =>
@@ -238,7 +241,9 @@ theorem start_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
     (token : Token batch) (producer next : BatchCursor batch) (consumed : next.Consumed producer) :
     start parser h token producer next consumed = portGo producer parser h token next consumed := by
   unfold start
-  split <;> rw [loop_eq hstep] <;> congr 1 <;> cases parser <;> simp_all [assemble, withTerm]
+  split <;> rw [loop_eq hstep] <;> congr 1 <;> cases parser <;>
+    simp_all [assemble, withTerm, ScriptParser.Internal.mk, ScriptParser.Internal.posture,
+      ScriptParser.Internal.command, ScriptParser.Internal.declarations]
 
 /-- The fused reader parses a batch cursor as the script parser's loop over single tokens does:
 the same answer, parser, parse state, cursor and handler. -/

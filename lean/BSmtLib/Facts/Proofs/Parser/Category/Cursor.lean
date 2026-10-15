@@ -163,7 +163,7 @@ variable {version : Token.Version} {mk : σ → P}
 def afterOf (mk : σ → P) (fresh : P) :
     Except (ParseErrorCause (Traits.Handler.Error H)) (Parser.Internal.Step σ R) → After P R
       (Traits.Handler.Error H)
-  | .error error => .stop (.error error) fresh
+  | .error error => .stop (.error (Parser.ParseError.Internal.new error)) fresh
   | .ok (.more state) => .goOn (mk state)
   | .ok (.done result) => .stop (.ok (.break result)) fresh
 

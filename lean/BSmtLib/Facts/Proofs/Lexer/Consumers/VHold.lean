@@ -135,7 +135,7 @@ theorem finish_error_kind {ws : Bool} {p : Pending} {location : Span.Location} {
 
 theorem failureOf_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
     (h : (k == .unexpectedTrailingToken) = false) (continuesFrom : Option Span.Location) :
-    failureOf (ε := ε) ⟨.lexical k, span, continuesFrom⟩ = .lexical := by
+    failureOf (ε := ε) (LexError.Internal.new (.lexical k) span continuesFrom) = .lexical := by
   simp [failureOf, h]
 
 /-! ## The end of file -/
@@ -280,7 +280,7 @@ def holdSession (start : BSmtLibSpec.Lexicon.Version) (version : Token.Version)
 
 theorem trailing_failureOf (l : Lexeme) (continuesFrom : Option Span.Location) :
     failureOf (ε := consumer.Error)
-        ⟨.lexical .unexpectedTrailingToken, trailingSpan l, continuesFrom⟩ =
+        (LexError.Internal.new (.lexical .unexpectedTrailingToken) (trailingSpan l) continuesFrom) =
       .trailing (toLocation l.start) := by
   simp only [failureOf, trailingSpan]
   rfl
@@ -422,7 +422,8 @@ theorem vSession_step_error {core core' : Core} {b : UInt8} {taken taken' : List
     (held : Option (Span.Located consumer.Result)) (bs : List UInt8) (ended : Bool)
     (h : vByte consumer core b taken = ((.error f, core'), taken')) :
     vSession consumer core held (b :: bs) ended taken =
-      sessionOf consumer taken' (.failed (failureOf ⟨f.cause, f.span, none⟩)) core' := by
+      sessionOf consumer taken' (.failed (failureOf (LexError.Internal.new f.cause f.span none)))
+        core' := by
   unfold vSession
   simp only [vBytes, h]
 

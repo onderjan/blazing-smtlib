@@ -169,7 +169,7 @@ def recorderContent : ContentHandler (List Event) where
 open BSmtLib.Facts.Parser.Adapters.Bridge (Bridge.symbol Bridge.index Bridge.identifier
     Bridge.constant Bridge.symbolOrWildcard Bridge.pattern Bridge.pairs)
 
-theorem symbol_of (s : Nodes.Symbol) : ToSpec.symbol (Content.ofSymbol s) = Bridge.symbol s :=
+theorem symbol_of (s : Plain.SymbolView) : ToSpec.symbol (Content.ofSymbol s) = Bridge.symbol s :=
   rfl
 
 theorem index_of (i : Nodes.Index) : ToSpec.index (Content.ofIndex i) = Bridge.index i := by
@@ -193,7 +193,7 @@ theorem pattern_of (p : Nodes.Pattern) :
   cases p <;> simp [ToSpec.pattern, Content.ofPattern, Bridge.pattern, List.map_map,
     Function.comp_def, symbolOrWildcard_of, symbol_of]
 
-theorem pairs_of {α : Type} (items : Array (Nodes.Symbol × α)) :
+theorem pairs_of {α : Type} (items : Array (Plain.SymbolView × α)) :
     ToSpec.pairs (Content.ofPairs items) = Bridge.pairs items := by
   simp [ToSpec.pairs, Content.ofPairs, Bridge.pairs, List.map_map, Function.comp_def, symbol_of]
 
@@ -242,7 +242,7 @@ theorem signature_of (sig : Nodes.Signature Nat) :
   erw [pairs_of]
   rfl
 
-theorem constructor_of (c : Nodes.Constructor Nat) :
+theorem constructor_of (c : Plain.SymbolView × Multiple.SortedVarsView Nat) :
     ToSpec.constructor (Content.ofConstructor c) =
       Parser.Adapters.Bridge.Bridge.constructor (H := List Event) c := by
   simp only [ToSpec.constructor, Content.ofConstructor, Parser.Adapters.Bridge.Bridge.constructor]

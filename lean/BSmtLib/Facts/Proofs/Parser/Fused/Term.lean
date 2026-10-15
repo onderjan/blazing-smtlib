@@ -22,7 +22,7 @@ handler calls in the same order, the others by the port's step itself.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Term
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Category.Term.Internal (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Internal.Fused

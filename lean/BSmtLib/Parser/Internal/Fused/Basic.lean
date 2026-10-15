@@ -24,6 +24,8 @@ open BSmtLib.Parser.Category.Term BSmtLib.Parser.Command
 open BSmtLib.Parser.Category.Term.Internal
 open BSmtLib.Parser.Command.Internal
 open BSmtLib.Parser.Command.Internal.Definition BSmtLib.Parser.Script
+open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser,
+  command → commandOf, declarations → declarationsOf
 open BSmtLib.Plain (SymbolView NumeralView DecimalView HexDigitsView BinDigitsView
   StringContentView)
 open BSmtLib.Token (BatchTag BatchCursor TokenCategory Version VersionPosture)
@@ -54,15 +56,15 @@ abbrev TermModeOf (H : Type) {m : Type → Type} [Handler H m] :=
     (Handler.Scope H)
 
 /-- The loop's outcome of a step for the handler. -/
-abbrev OutcomeOf (H : Type) {m : Type → Type} [Handler H m] {batch : BatchTag}
+abbrev OutcomeOf (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
     (next : BatchCursor batch) :=
   Outcome H (CommandStateOf H) (TermContext (Handler.«Sort» H)) (TermModeOf H)
-    (List (TermLevelOf H)) (ScriptParser H) (Cause H) next
+    (List (TermLevelOf H)) (ScriptParser H) (ParseError (Handler.Error H)) next
 
 /-- The result of the loop over a hand-over from `origin`. -/
-abbrev LoopResult (H : Type) {m : Type → Type} [Handler H m] {batch : BatchTag}
+abbrev LoopResult (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
     (origin : BatchCursor batch) :=
-  Except (Cause H) (ControlFlow Unit) × ScriptParser H ×
+  Except (ParseError (Handler.Error H)) (ControlFlow Unit) × ScriptParser H ×
     { cursor : BatchCursor batch // cursor.Consumed origin } × H
 
 section
@@ -111,7 +113,7 @@ variable [CommandHandler H m]
 @[inline]
 def fail {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch) (h : H)
     (cause : Cause H) {β : Type} (k : OutcomeOf H next → m β) : m β :=
-  k <| .stop (.error cause) (ScriptParser.new posture) next (.refl _) h
+  k <| .stop (.error (ParseError.Internal.new cause)) (ScriptParser.new posture) next (.refl _) h
 
 /-- The step of the token through the port's script step, as the loop over single tokens takes
 it (`Parser.Internal.takeOne`). -/
@@ -119,30 +121,32 @@ it (`Parser.Internal.takeOne`). -/
 def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
     (command : CommandStateOf H) (token : Token batch) (next : BatchCursor batch) {β : Type}
     (k : OutcomeOf H next → m β) : m β := do
-  let parser : ScriptParser H := { posture, command, declarations }
+  let parser : ScriptParser H := scriptParser posture command declarations
   let fresh : ScriptParser H := ScriptParser.new posture
   let input := Internal.Input.ofSyntax (Token.Produce.«syntax» next token)
   let version := next.version
   match ← runParser
       (do ScriptParser.Internal.arrive parser input; ScriptParser.Internal.step version parser input)
       h with
-  | (.error e, h) => k <| .stop (.error e) fresh next (.refl _) h
-  | (.ok (.more p), h) => k <| .command h p.declarations p.command
+  | (.error e, h) => k <| .stop (.error (ParseError.Internal.new e)) fresh next (.refl _) h
+  | (.ok (.more p), h) => k <| .command h (declarationsOf p) (commandOf p)
   | (.ok (.done r), h) => k <| .stop (.ok (.break r)) fresh next (.refl _) h
   | (.ok (.switchVersion declared resume), h) =>
     match switch : next.setVersion declared with
-    | .error _ => k <| .stop (.error (.syntax .unsupportedVersion)) fresh next (.refl _) h
+    | .error _ =>
+      k <| .stop (.error (ParseError.Internal.new (.syntax .unsupportedVersion))) fresh next
+        (.refl _) h
     | .ok switched =>
       let follows := BatchCursor.setVersion_follows switch
       match ← runParser resume h with
-      | (.error e, h) => k <| .stop (.error e) fresh switched follows h
+      | (.error e, h) => k <| .stop (.error (ParseError.Internal.new e)) fresh switched follows h
       | (.ok (.more p), h) => k <| .resume h p switched follows
       | (.ok (.done r), h) => k <| .stop (.ok (.break r)) fresh switched follows h
   | (.ok (.discardRest resume), h) =>
     let discarded := next.discardRest
     let follows := BatchCursor.discardRest_follows next
     match ← runParser resume h with
-    | (.error e, h) => k <| .stop (.error e) fresh discarded follows h
+    | (.error e, h) => k <| .stop (.error (ParseError.Internal.new e)) fresh discarded follows h
     | (.ok (.more p), h) => k <| .resume h p discarded follows
     | (.ok (.done r), h) => k <| .stop (.ok (.break r)) fresh discarded follows h
 

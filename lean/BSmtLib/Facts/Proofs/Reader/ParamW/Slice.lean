@@ -3,6 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Reader.ParamW.Steps
 public import BSmtLib.Facts.Proofs.Reader.Param.Slice
 import all BSmtLib.Lexer.Internal.WRustPort
+import all BSmtLib.Span
 
 @[expose] public section
 

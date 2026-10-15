@@ -35,6 +35,8 @@ open BSmtLib.Parser.Command.Internal.Definition (DefinitionEnd)
 open BSmtLib.Parser.Command.Internal.Standard (FinalCall Payload)
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
+open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser, posture → postureOf,
+  command → commandOf, declarations → declarationsOf
 open BSmtLib.Plain (SymbolView NumeralView)
 open BSmtLib.Token (BatchTag BatchCursor VersionPosture)
 
@@ -134,18 +136,18 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
         if arguments.isEmpty then fail posture next h (.syntax .emptyTermApplication) k
         else
           handleTerm posture next h declarations context outer
-            (.application function sort arguments) k
+            (.application function sort (.new arguments)) k
       | _ => fail posture next h (.syntax .expectedTerm) k
     | .unquotedSymbol =>
       let content := contentOf next token
       match reservedAt? version next token with
       | none =>
         handleTerm posture next h declarations context levels
-          (.identifier ⟨⟨SymbolView.Internal.newUnchecked content, false⟩, #[]⟩ none) k
+          (.identifier ⟨SymbolView.Internal.newUnchecked false content, #[]⟩ none) k
       | some _ => fail posture next h (.syntax .expectedTerm) k
     | .quotedSymbol =>
       handleTerm posture next h declarations context levels
-        (.identifier ⟨⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩, #[]⟩ none) k
+        (.identifier ⟨SymbolView.Internal.newUnchecked true (contentOf next token), #[]⟩ none) k
     | .numeral | .decimal | .hexadecimal | .binary | .string =>
       handleTerm posture next h declarations context levels
         (.constant (constantOf category (contentOf next token))) k
@@ -157,7 +159,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       match reservedAt? version next token with
       | none =>
         let level :=
-          TermLevel.application ⟨⟨SymbolView.Internal.newUnchecked content, false⟩, #[]⟩ none #[]
+          TermLevel.application ⟨SymbolView.Internal.newUnchecked false content, #[]⟩ none #[]
         k <| .term h declarations context .start (level :: levels)
       | some (.general word) =>
         match word with
@@ -180,7 +182,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       | some (.commandName _) => fail posture next h (.syntax .expectedOperator) k
     | .quotedSymbol =>
       let level := TermLevel.application
-        ⟨⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩, #[]⟩ none #[]
+        ⟨SymbolView.Internal.newUnchecked true (contentOf next token), #[]⟩ none #[]
       k <| .term h declarations context .start (level :: levels)
     | .parenOpen => k <| .term h declarations context (.applicationHead .opened) levels
     | _ => fail posture next h (.syntax .expectedOperator) k
@@ -208,7 +210,7 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
     | .parenClose =>
       if bindings.isEmpty then fail posture next h (.syntax .emptyLetBindings) k
       else
-        match ← runHandler (Handler.startLet bindings) h with
+        match ← runHandler (Handler.startLet (Multiple.NamedView.Internal.new bindings)) h with
         | (.error e, h) => fail posture next h (.handler e) k
         | (.ok scope, h) =>
           k <| .term h declarations context .start (.binder .let scope :: levels)
@@ -232,8 +234,9 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
           | _ => .emptyQuantifierBindings)) k
       else
         let started := match binder with
-          | .quantifier quantifier => Handler.startQuantifier quantifier variables
-          | .lambda => Handler.startLambda variables
+          | .quantifier quantifier =>
+            Handler.startQuantifier quantifier (Multiple.NamedView.Internal.new variables)
+          | .lambda => Handler.startLambda (Multiple.NamedView.Internal.new variables)
         match ← runHandler started h with
         | (.error e, h) => fail posture next h (.handler e) k
         | (.ok scope, h) =>
@@ -266,10 +269,20 @@ def closingStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
       match final with
       | .exit =>
         -- the cursor discards the rest of the input, and the script goes on to its end
-        k <| .resume h { posture, command := .awaiting, declarations } next.discardRest
+        k <| .resume h (scriptParser posture .awaiting declarations) next.discardRest
           (BatchCursor.discardRest_follows next)
       | _ => k <| .command h declarations .awaiting
   | _ => fail posture next h (.syntax (.expectedToken #[.parenClose])) k
+
+/-- A command named by a symbol, a non-standard one: the handler gives its parser, which the
+port's step then hands the payload to. -/
+@[inline]
+def startNonstandard {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
+    (name : SymbolView) (next : BatchCursor batch) {β : Type} (k : OutcomeOf H next → m β) :
+    m β := do
+  match ← runHandler (CommandHandler.nonstandardCommand name) h with
+  | (.error e, h) => fail posture next h (.handler e) k
+  | (.ok parser, h) => k <| .command h declarations (.nonstandard parser)
 
 /-- The command around a term that starts. -/
 @[inline]
@@ -291,7 +304,6 @@ def commandStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
   | .opened =>
     match next.category token with
     | .unquotedSymbol =>
-      let content := contentOf next token
       match reservedAt? next.version next token with
       | some (.commandName name) =>
         match name with
@@ -299,13 +311,11 @@ def commandStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
         | name => k <| .command h declarations (.payload (Payload.init name next.version))
       | some (.general _) => fail posture next h (.syntax .expectedCommandName) k
       | none =>
-        fail posture next h
-          (.handler (CommandHandler.nonstandardCommand (H := H)
-            ⟨SymbolView.Internal.newUnchecked content, false⟩)) k
+        startNonstandard posture h declarations
+          (SymbolView.Internal.newUnchecked false (contentOf next token)) next k
     | .quotedSymbol =>
-      fail posture next h
-        (.handler (CommandHandler.nonstandardCommand (H := H)
-          ⟨SymbolView.Internal.newUnchecked (contentOf next token), true⟩)) k
+      startNonstandard posture h declarations
+        (SymbolView.Internal.newUnchecked true (contentOf next token)) next k
     | _ => fail posture next h (.syntax .expectedCommandName) k
   | .payload (.closing final) => closingStep posture h declarations final token next k
   | .payload (.named named) =>
@@ -388,8 +398,8 @@ around it with the term's state. -/
 def assemble (posture : VersionPosture) (declarations : Nat) (command : CommandStateOf H)
     (inTerm : Bool) (context : TermContext (Handler.«Sort» H)) (mode : TermModeOf H)
     (levels : List (TermLevelOf H)) : ScriptParser H :=
-  { posture, declarations,
-    command := if inTerm then withTerm context { mode, levels } else command }
+  scriptParser posture
+    (if inTerm then withTerm context { mode, levels } else command) declarations
 
 /--
 Has the parser take `token`, taken from a cursor that leaves `next`, which has consumed from
@@ -420,7 +430,7 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
         loop posture origin h declarations command false .assert .start [] token' after
           (taken.trans consumed)
     else
-      return (.ok .continue, { posture, command, declarations }, ⟨next, consumed⟩, h)
+      return (.ok .continue, scriptParser posture command declarations, ⟨next, consumed⟩, h)
   | .term h declarations context mode levels =>
     if hn : next.HasNext then
       let (token', ⟨after, taken⟩) := next.next hn
@@ -435,17 +445,17 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : BatchCursor bat
       let (token', ⟨after, taken⟩) := cursor.next hn
       have : remaining after < remaining next := (taken.trans_follows follows).remaining_lt
       -- a command state that reads a term goes on with the term in the loop's arguments
-      match parser.command with
+      match commandOf parser with
       | .payload (.assert term) =>
-        loop parser.posture origin h parser.declarations .awaiting true .assert term.mode
+        loop (postureOf parser) origin h (declarationsOf parser) .awaiting true .assert term.mode
           term.levels token' after ((taken.trans_follows follows).trans consumed)
       | .payload (.defineBody definition term) =>
-        loop parser.posture origin h parser.declarations .awaiting true
+        loop (postureOf parser) origin h (declarationsOf parser) .awaiting true
           (.definition definition) term.mode term.levels token' after
           ((taken.trans_follows follows).trans consumed)
       | command =>
-        loop parser.posture origin h parser.declarations command false .assert .start [] token'
-          after ((taken.trans_follows follows).trans consumed)
+        loop (postureOf parser) origin h (declarationsOf parser) command false .assert .start []
+          token' after ((taken.trans_follows follows).trans consumed)
     else
       return (.ok .continue, parser, ⟨cursor, follows.trans_consumed consumed⟩, h)
   | .stop answer parser cursor follows h =>
@@ -458,16 +468,16 @@ def start {batch : BatchTag} (parser : ScriptParser H) (h : H) (token : Token ba
     (producer next : BatchCursor batch) (consumed : next.Consumed producer) :
     m (LoopResult H producer) :=
   -- a command state that reads a term goes on with the term in the loop's arguments
-  match parser.command with
+  match commandOf parser with
   | .payload (.assert term) =>
-    loop parser.posture producer h parser.declarations .awaiting true .assert term.mode
+    loop (postureOf parser) producer h (declarationsOf parser) .awaiting true .assert term.mode
       term.levels token next consumed
   | .payload (.defineBody definition term) =>
-    loop parser.posture producer h parser.declarations .awaiting true (.definition definition)
-      term.mode term.levels token next consumed
+    loop (postureOf parser) producer h (declarationsOf parser) .awaiting true
+      (.definition definition) term.mode term.levels token next consumed
   | command =>
-    loop parser.posture producer h parser.declarations command false .assert .start [] token
-      next consumed
+    loop (postureOf parser) producer h (declarationsOf parser) command false .assert .start []
+      token next consumed
 
 /--
 Parses the cursor with the script parser: the fused loop if the cursor is a batch cursor of the
@@ -476,7 +486,8 @@ library's lexer, else the loop over single tokens.
 @[inline]
 def parse {Z : Type} [Token.Produce Z] (parser : ScriptParser H) (state : ParseState H)
     (cursor : Z) :
-    StateT H m (Except (Cause H) (ControlFlow Unit) × ScriptParser H × ParseState H ×
+    StateT H m (Except (ParseError (Handler.Error H)) (ControlFlow Unit) × ScriptParser H ×
+      ParseState H ×
       { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor }) :=
   match Token.Produce.asBatch? cursor with
   | none => Parser.Internal.parseByToken parser state cursor

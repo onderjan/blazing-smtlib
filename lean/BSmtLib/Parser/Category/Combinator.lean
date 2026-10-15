@@ -110,7 +110,7 @@ variable {H S R E : Type} {m : Type → Type} [Monad m] {Z : Type} [Produce Z]
 gives the combinator's answer if it stops, `none` if it goes on. -/
 abbrev Turn (H S R E Z : Type) (m : Type → Type) [Produce Z] :=
   S → ParseState H → (cursor : Z) → Produce.HasNext cursor →
-    StateT H m (Option (Except (ParseErrorCause E) (ControlFlow R)) × S × ParseState H ×
+    StateT H m (Option (Except (ParseError E) (ControlFlow R)) × S × ParseState H ×
       { next : Z // Produce.Consumed next cursor })
 
 /-- Has the combinator take turns on `cursor`, which comes from `origin` with tokens consumed,
@@ -118,7 +118,7 @@ while the cursor has a token and the combinator goes on. -/
 @[specialize turn]
 def repeatTurns (turn : Turn H S R E Z m) (origin : Z) (self : S) (state : ParseState H)
     (cursor : Z) (consumed : Produce.Consumed cursor origin) :
-    StateT H m (Except (ParseErrorCause E) (ControlFlow R) × S × ParseState H ×
+    StateT H m (Except (ParseError E) (ControlFlow R) × S × ParseState H ×
       { next : Z // Produce.Consumed next origin }) :=
   match Produce.decideHasNext cursor with
   | .isFalse _ => return (.ok .continue, self, state, ⟨cursor, consumed⟩)
@@ -135,7 +135,7 @@ decreasing_by exact taken
 the `parse` of a combinator that loops. -/
 @[inline]
 def parseByTurns (turn : Turn H S R E Z m) (self : S) (state : ParseState H) (cursor : Z) :
-    StateT H m (Except (ParseErrorCause E) (ControlFlow R) × S × ParseState H ×
+    StateT H m (Except (ParseError E) (ControlFlow R) × S × ParseState H ×
       { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }) :=
   match Produce.decideHasNext cursor with
   | .isFalse h => return (.ok .continue, self, state, ⟨cursor, fun hn => absurd hn h⟩)
@@ -185,7 +185,7 @@ variable {H P₁ P₂ R₁ R₂ : Type} {m : Type → Type} [Monad m] [Handler H
 /-- Has the second parser parse the cursor, the first having finished with `first`. -/
 private def PairParser.parseSecond (self : PairParser H P₁ P₂) (first : R₁)
     (state : ParseState H) (cursor : Z) :
-    StateT H m (Except (ParseErrorCause (Handler.Error H)) (ControlFlow (R₁ × R₂)) ×
+    StateT H m (Except (ParseError (Handler.Error H)) (ControlFlow (R₁ × R₂)) ×
       PairParser H P₁ P₂ × ParseState H ×
       { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }) := do
   let (answer, second, state, next) ← Parse.parse self.second state cursor
@@ -278,12 +278,12 @@ abbrev ParenParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m] {E R
     [Parse P H m E R] :=
   OpenedParser H (ClosedParser H P)
 
-/-- The parser before the `(`. -/
-/- LEAN: Rust's `SmtParenParser` is a type alias, made with `SmtOpenedParser::new` and
-`SmtClosedParser::new`; this does both. -/
+/-- The parser before the `(`, with the closed parser that parses after it. -/
+/- LEAN: Rust's `SmtParenParser` is a type alias, made with `SmtOpenedParser::new` from the closed
+parser; this is that function under the alias's name. -/
 def ParenParser.new {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
-    [Parse P H m E R] (inner : P) : ParenParser H P :=
-  OpenedParser.new (ClosedParser.new inner)
+    [Parse P H m E R] (closed : ClosedParser H P) : ParenParser H P :=
+  OpenedParser.new closed
 
 /--
 A parser of values of the inner parser up to a `)`, which finishes with their results
@@ -345,12 +345,12 @@ abbrev ParenMultipleParser (H P : Type) {m : Type → Type} [Monad m] [Handler H
     [Parse P H m E R] :=
   OpenedParser H (ClosedMultipleParser H P)
 
-/-- The parser before the `(`. -/
-/- LEAN: Rust's `SmtParenMultipleParser` is a type alias, made with `SmtOpenedParser::new` and
-`SmtClosedMultipleParser::new`; this does both. -/
+/-- The parser before the `(`, with the closed parser that parses after it. -/
+/- LEAN: Rust's `SmtParenMultipleParser` is a type alias, made with `SmtOpenedParser::new` from
+the closed parser; this is that function under the alias's name. -/
 def ParenMultipleParser.new {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
-    [Parse P H m E R] (inner : P) : ParenMultipleParser H P :=
-  OpenedParser.new (ClosedMultipleParser.new inner)
+    [Parse P H m E R] (closed : ClosedMultipleParser H P) : ParenMultipleParser H P :=
+  OpenedParser.new closed
 
 /--
 A parser of at most a maximum number of values of the inner parser up to a `)`, which finishes
@@ -407,8 +407,8 @@ private def ClosedMaximumParser.turn :
         return (some (.ok (.break self.results)), { self with results := #[] }, state,
           ⟨next, consumed⟩)
       if self.maximum ≤ self.results.size then
-        return (some (.error (.syntax (.expectedToken #[.parenClose]))), self, state,
-          ⟨next, consumed⟩)
+        return (some (.error (ParseError.Internal.new (.syntax (.expectedToken #[.parenClose])))),
+          self, state, ⟨next, consumed⟩)
     let (answer, inner, state, ⟨later, taken⟩) ← Parse.parse self.inner state cursor
     let self := { self with inner, outside := false }
     match answer with
@@ -465,7 +465,7 @@ variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- Has the list parse the cursor, the `(` taken. -/
 private def ParenMaximumParser.parseInner (self : ParenMaximumParser H P) (state : ParseState H)
     (cursor : Z) :
-    StateT H m (Except (ParseErrorCause (Handler.Error H)) (ControlFlow (Array R)) ×
+    StateT H m (Except (ParseError (Handler.Error H)) (ControlFlow (Array R)) ×
       ParenMaximumParser H P × ParseState H ×
       { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }) := do
   let (answer, inner, state, next) ← Parse.parse self.inner state cursor
@@ -491,8 +491,8 @@ private def ParenMaximumParser.parseInner (self : ParenMaximumParser H P) (state
             let (answer, self, state, ⟨later, taken⟩) ← self.parseInner state next
             return (answer, self, state,
               ⟨later, fun _ => Produce.consumed_trans (taken h) consumed⟩)
-        | _ => return (.error (.syntax (.expectedToken #[.parenOpen])), self, state,
-            ⟨next, fun _ => consumed⟩)
+        | _ => return (.error (ParseError.Internal.new (.syntax (.expectedToken #[.parenOpen]))),
+            self, state, ⟨next, fun _ => consumed⟩)
 
 end
 

@@ -111,15 +111,20 @@ variable (version : Token.Version)
 
 open BSmtLib.Plain (NumeralView KeywordView StringContentView)
 
-theorem symbol_parses (symbol : Nodes.Symbol) :
-    Outcome.Finishes version SymbolParser.new [.symbol symbol] (pure symbol : PM H Nodes.Symbol)
-      SymbolParser.new :=
-  single_parses expectSymbol SymbolParser.new (fun _ _ _ => rfl) version rfl
+theorem symbol_parses (symbol : Plain.SymbolView) :
+    Outcome.Finishes version SymbolParser.new [.symbol symbol]
+      (pure symbol.intoOwned : PM H Plain.Symbol) SymbolParser.new :=
+  single_parses (fun token => Plain.SymbolView.intoOwned <$> expectSymbol token)
+    SymbolParser.new (fun _ _ _ => rfl) version (by simp [expectSymbol])
 
 theorem symbol_rejects {token : Parser.Internal.Input} (h : ∀ symbol, token ≠ .symbol symbol) :
     Outcome.Rejects version SymbolParser.new [token] (pure () : PM H Unit) .expectedSymbol :=
-  single_rejects expectSymbol SymbolParser.new (fun _ _ _ => rfl) version
-    (by cases token <;> first | exact absurd rfl (h _) | rfl)
+  single_rejects (fun token => Plain.SymbolView.intoOwned <$> expectSymbol token)
+    SymbolParser.new (fun _ _ _ => rfl) version
+    (by
+      cases token <;> first
+        | exact absurd rfl (h _)
+        | simp [expectSymbol, Parser.Internal.syntaxError])
 
 theorem openParen_parses :
     Outcome.Finishes version OpenParenParser.new [.parenOpen] (pure () : PM H Unit)
@@ -145,49 +150,65 @@ theorem closeParen_rejects {token : Parser.Internal.Input} (h : token ≠ .paren
 
 theorem numeral_parses (digits : NumeralView) :
     Outcome.Finishes version NumeralParser.new [.constant (.numeral digits)]
-      (pure digits : PM H NumeralView) NumeralParser.new :=
-  single_parses expectNumeral NumeralParser.new (fun _ _ _ => rfl) version rfl
+      (pure digits.intoOwned : PM H Plain.Numeral) NumeralParser.new :=
+  single_parses (fun token => NumeralView.intoOwned <$> expectNumeral token)
+    NumeralParser.new (fun _ _ _ => rfl) version (by simp [expectNumeral])
 
 theorem numeral_rejects {token : Parser.Internal.Input}
     (h : ∀ digits, token ≠ .constant (.numeral digits)) :
     Outcome.Rejects version NumeralParser.new [token] (pure () : PM H Unit)
       (.expectedToken #[.numeral]) :=
-  single_rejects expectNumeral NumeralParser.new (fun _ _ _ => rfl) version
+  single_rejects (fun token => NumeralView.intoOwned <$> expectNumeral token)
+    NumeralParser.new (fun _ _ _ => rfl) version
     (by
       cases token with
-      | constant c => cases c <;> first | exact absurd rfl (h _) | rfl
-      | _ => rfl)
+      | constant c =>
+        cases c <;> first
+          | exact absurd rfl (h _)
+          | simp [expectNumeral, Parser.Internal.syntaxError]
+      | _ => simp [expectNumeral, Parser.Internal.syntaxError])
 
 theorem keyword_parses (name : KeywordView) :
-    Outcome.Finishes version KeywordParser.new [.keyword name] (pure name : PM H KeywordView)
-      KeywordParser.new :=
-  single_parses expectKeyword KeywordParser.new (fun _ _ _ => rfl) version rfl
+    Outcome.Finishes version KeywordParser.new [.keyword name]
+      (pure name.intoOwned : PM H Plain.Keyword) KeywordParser.new :=
+  single_parses (fun token => KeywordView.intoOwned <$> expectKeyword token)
+    KeywordParser.new (fun _ _ _ => rfl) version (by simp [expectKeyword])
 
 theorem keyword_rejects {token : Parser.Internal.Input} (h : ∀ name, token ≠ .keyword name) :
     Outcome.Rejects version KeywordParser.new [token] (pure () : PM H Unit)
       (.expectedToken #[.keyword]) :=
-  single_rejects expectKeyword KeywordParser.new (fun _ _ _ => rfl) version
-    (by cases token <;> first | exact absurd rfl (h _) | rfl)
+  single_rejects (fun token => KeywordView.intoOwned <$> expectKeyword token)
+    KeywordParser.new (fun _ _ _ => rfl) version
+    (by
+      cases token <;> first
+        | exact absurd rfl (h _)
+        | simp [expectKeyword, Parser.Internal.syntaxError])
 
 theorem string_parses (content : StringContentView) :
     Outcome.Finishes version StringParser.new [.constant (.string content)]
-      (pure content : PM H StringContentView) StringParser.new :=
-  single_parses expectString StringParser.new (fun _ _ _ => rfl) version rfl
+      (pure content.intoOwned : PM H Plain.StringContent) StringParser.new :=
+  single_parses (fun token => StringContentView.intoOwned <$> expectString token)
+    StringParser.new (fun _ _ _ => rfl) version (by simp [expectString])
 
 theorem string_rejects {token : Parser.Internal.Input}
     (h : ∀ content, token ≠ .constant (.string content)) :
     Outcome.Rejects version StringParser.new [token] (pure () : PM H Unit)
       (.expectedToken #[.string]) :=
-  single_rejects expectString StringParser.new (fun _ _ _ => rfl) version
+  single_rejects (fun token => StringContentView.intoOwned <$> expectString token)
+    StringParser.new (fun _ _ _ => rfl) version
     (by
       cases token with
-      | constant c => cases c <;> first | exact absurd rfl (h _) | rfl
-      | _ => rfl)
+      | constant c =>
+        cases c <;> first
+          | exact absurd rfl (h _)
+          | simp [expectString, Parser.Internal.syntaxError]
+      | _ => simp [expectString, Parser.Internal.syntaxError])
 
 
 theorem symbol_waits :
     Outcome.Waits version SymbolParser.new [] (pure () : PM H Unit) fun _ => SymbolParser.new :=
-  single_waits expectSymbol SymbolParser.new (fun _ _ _ => rfl) version
+  single_waits (fun token => Plain.SymbolView.intoOwned <$> expectSymbol token)
+    SymbolParser.new (fun _ _ _ => rfl) version
 
 theorem openParen_waits :
     Outcome.Waits version OpenParenParser.new [] (pure () : PM H Unit)
@@ -201,15 +222,18 @@ theorem closeParen_waits :
 
 theorem numeral_waits :
     Outcome.Waits version NumeralParser.new [] (pure () : PM H Unit) fun _ => NumeralParser.new :=
-  single_waits expectNumeral NumeralParser.new (fun _ _ _ => rfl) version
+  single_waits (fun token => NumeralView.intoOwned <$> expectNumeral token)
+    NumeralParser.new (fun _ _ _ => rfl) version
 
 theorem keyword_waits :
     Outcome.Waits version KeywordParser.new [] (pure () : PM H Unit) fun _ => KeywordParser.new :=
-  single_waits expectKeyword KeywordParser.new (fun _ _ _ => rfl) version
+  single_waits (fun token => KeywordView.intoOwned <$> expectKeyword token)
+    KeywordParser.new (fun _ _ _ => rfl) version
 
 theorem string_waits :
     Outcome.Waits version StringParser.new [] (pure () : PM H Unit) fun _ => StringParser.new :=
-  single_waits expectString StringParser.new (fun _ _ _ => rfl) version
+  single_waits (fun token => StringContentView.intoOwned <$> expectString token)
+    StringParser.new (fun _ _ _ => rfl) version
 
 end
 

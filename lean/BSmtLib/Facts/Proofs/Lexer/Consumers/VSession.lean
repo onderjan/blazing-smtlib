@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.VEnd
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Recovery
+import all BSmtLib.Span
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 
@@ -166,7 +168,8 @@ theorem lexSliceStep_vBytes (core : Core) (hp : (Core.Plain core)) (bytes : List
       (fun _ => pure ()) bytes.toByteArray.toByteSlice core) taken =
       match vBytes consumer core none bytes taken with
       | ((.ok held, core'), taken') => ((.ok held, core'), taken')
-      | ((.error f, core'), taken') => ((.error ⟨f.cause, f.span, none⟩, core'), taken') := by
+      | ((.error f, core'), taken') =>
+        ((.error (Lexer.Error.LexError.Internal.new f.cause f.span none), core'), taken') := by
   have hf := lexFrom_vBytes consumer bytes _ 0 rfl core none taken
   simp only [List.drop_zero] at hf
   unfold Core.Plain at hp
@@ -248,7 +251,8 @@ def vSession (core : Core) (held : Option (Span.Located consumer.Result)) (bytes
     :=
   match vBytes consumer core held bytes taken with
   | ((.error f, core'), taken') =>
-    sessionOf consumer taken' (.failed (failureOf ⟨f.cause, f.span, none⟩)) core'
+    sessionOf consumer taken'
+      (.failed (failureOf (Lexer.Error.LexError.Internal.new f.cause f.span none))) core'
   | ((.ok held', core'), taken') =>
     if ended then
       match vEnd consumer core' taken' with

@@ -3,6 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Token
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -51,8 +52,8 @@ theorem pushBorrowed_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (input : Byte
   rw [← h.1.1.line, ← h.1.1.lineStart]
   have hpush := hb.agree.pushLocated hb.bytes ty (input.start + contentStart)
     (input.start + contentStop) start
-    { offset := offset + (tokenEnd - base), line := s.val.line,
-      column := offset + (tokenEnd - base) - s.val.lineStart } hafter (.inl hend) hafter'
+    (Span.Location.Internal.new (offset + (tokenEnd - base)) s.val.line
+      (offset + (tokenEnd - base) - s.val.lineStart)) hafter (.inl hend) hafter'
       (.inl hend')
   refine SimR.ite (by simp only [beq_iff_eq, hpush.len]) (fun _ => ?_) fun hne => ?_
   · refine SimR.bind (ho.flushHeld l ls _ _ hpush hb.bytes _ _ _) fun x y => ?_

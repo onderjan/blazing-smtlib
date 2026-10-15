@@ -14,7 +14,8 @@ each as part of a larger construct.
 namespace BSmtLib.Parser.Category.Token
 
 open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Plain (NumeralView KeywordView StringContentView)
+open BSmtLib.Plain (Numeral NumeralView Keyword KeywordView StringContent StringContentView Symbol
+  SymbolView)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 namespace Internal
 
@@ -39,7 +40,7 @@ def expectClose (token : Internal.Input) : PM H Unit :=
 
 /-- Takes a symbol. -/
 @[inline]
-def expectSymbol (token : Internal.Input) : PM H Symbol :=
+def expectSymbol (token : Internal.Input) : PM H SymbolView :=
   match token with
   | .symbol symbol => pure symbol
   | _ => syntaxError .expectedSymbol
@@ -72,7 +73,7 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 /-- The parser of a single symbol, as an element of a list. -/
-def symbolStep (_ : Unit) (token : Internal.Input) : PM H (Internal.Step Unit Symbol) := do
+def symbolStep (_ : Unit) (token : Internal.Input) : PM H (Internal.Step Unit SymbolView) := do
   return .done (← expectSymbol token)
 
 end
@@ -152,7 +153,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 instance : Parse SymbolParser H m (Handler.Error H) Symbol where
   parse parser state cursor :=
-    letI := Internal.singleByToken (P := SymbolParser) H Internal.expectSymbol
+    letI := Internal.singleByToken (P := SymbolParser) H
+      fun token => SymbolView.intoOwned <$> Internal.expectSymbol token
     Parser.Internal.parseByToken parser state cursor
 
 instance : Parse OpenParenParser H m (Handler.Error H) Unit where
@@ -165,19 +167,22 @@ instance : Parse CloseParenParser H m (Handler.Error H) Unit where
     letI := Internal.singleByToken (P := CloseParenParser) H Internal.expectClose
     Parser.Internal.parseByToken parser state cursor
 
-instance : Parse NumeralParser H m (Handler.Error H) NumeralView where
+instance : Parse NumeralParser H m (Handler.Error H) Numeral where
   parse parser state cursor :=
-    letI := Internal.singleByToken (P := NumeralParser) H Internal.expectNumeral
+    letI := Internal.singleByToken (P := NumeralParser) H
+      fun token => NumeralView.intoOwned <$> Internal.expectNumeral token
     Parser.Internal.parseByToken parser state cursor
 
-instance : Parse KeywordParser H m (Handler.Error H) KeywordView where
+instance : Parse KeywordParser H m (Handler.Error H) Keyword where
   parse parser state cursor :=
-    letI := Internal.singleByToken (P := KeywordParser) H Internal.expectKeyword
+    letI := Internal.singleByToken (P := KeywordParser) H
+      fun token => KeywordView.intoOwned <$> Internal.expectKeyword token
     Parser.Internal.parseByToken parser state cursor
 
-instance : Parse StringParser H m (Handler.Error H) StringContentView where
+instance : Parse StringParser H m (Handler.Error H) StringContent where
   parse parser state cursor :=
-    letI := Internal.singleByToken (P := StringParser) H Internal.expectString
+    letI := Internal.singleByToken (P := StringParser) H
+      fun token => StringContentView.intoOwned <$> Internal.expectString token
     Parser.Internal.parseByToken parser state cursor
 
 end

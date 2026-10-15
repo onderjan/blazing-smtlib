@@ -144,7 +144,7 @@ theorem run_eq {H : Type} {R E α : Type} [Token.Consume H R E] (l : BSmtLib.Lex
         Internal.ofParts ((x.run (Internal.core l)).run (Internal.handler l)).2
           ((x.run (Internal.core l)).run (Internal.handler l)).1.2 (Internal.held l)) := (rfl)
 
-theorem lexErrRel_eq {e₁ e₂ : LexError (ParseErrorCause Unit)} (h : LexErrRel link.re e₁ e₂) :
+theorem lexErrRel_eq {e₁ e₂ : LexError (ParseError Unit)} (h : LexErrRel link.re e₁ e₂) :
     e₁ = e₂ := by
   obtain ⟨c₁, s₁, f₁⟩ := e₁
   obtain ⟨c₂, s₂, f₂⟩ := e₂
@@ -183,8 +183,8 @@ theorem hrecover (l : Span.Location) :
 
 theorem lexFeed_link : ∀ (slices : List ByteList) {l₁ : BSmtLib.Lexer RecAdapter}
     {l₂ : BSmtLib.Lexer CanonAdapter}, LinkRel l₁ l₂ →
-    ERel (· = ·) LinkRel (lexFeed (R := Unit) (E := ParseErrorCause Unit) l₁ slices)
-      (lexFeed (R := Unit) (E := ParseErrorCause Unit) l₂ slices)
+    ERel (· = ·) LinkRel (lexFeed (R := Unit) (E := ParseError Unit) l₁ slices)
+      (lexFeed (R := Unit) (E := ParseError Unit) l₂ slices)
   | [], l₁, l₂, h => h
   | slice :: slices, l₁, l₂, ⟨hc, hh, ha⟩ => by
     have hsim := lexSliceStep_sim consumers abandonI recoverI abandonI recoverI habandon
@@ -192,10 +192,10 @@ theorem lexFeed_link : ∀ (slices : List ByteList) {l₁ : BSmtLib.Lexer RecAda
       (Internal.handler l₂) ha
     simp only [lexFeed]
     rw [run_eq, run_eq, hc, hh]
-    generalize ((Internal.lexSliceStep (R := Unit) (E := ParseErrorCause Unit) abandonI recoverI
+    generalize ((Internal.lexSliceStep (R := Unit) (E := ParseError Unit) abandonI recoverI
       slice.toByteArray.toByteSlice).run (Internal.core l₂)).run (Internal.handler l₁) = A
       at hsim ⊢
-    generalize ((Internal.lexSliceStep (R := Unit) (E := ParseErrorCause Unit) abandonI recoverI
+    generalize ((Internal.lexSliceStep (R := Unit) (E := ParseError Unit) abandonI recoverI
       slice.toByteArray.toByteSlice).run (Internal.core l₂)).run (Internal.handler l₂) = B
       at hsim ⊢
     obtain ⟨⟨r₁, c₁⟩, h₁⟩ := A
@@ -211,9 +211,9 @@ theorem lexFeed_link : ∀ (slices : List ByteList) {l₁ : BSmtLib.Lexer RecAda
 /-- A read with the parse adapter and one with the canonical adapter that end alike: the same
 error, or the same result with lexers related before and after the end of the input. -/
 def ThroughLink :
-    Except (LexError (ParseErrorCause Unit))
+    Except (LexError (ParseError Unit))
         (Option (Span.Located Unit) × BSmtLib.Lexer RecAdapter × BSmtLib.Lexer RecAdapter) →
-      Except (LexError (ParseErrorCause Unit))
+      Except (LexError (ParseError Unit))
         (Option (Span.Located Unit) × BSmtLib.Lexer CanonAdapter ×
           BSmtLib.Lexer CanonAdapter) → Prop
   | .error e, .error e' => e = e'
@@ -222,12 +222,12 @@ def ThroughLink :
 
 theorem lexThrough_link (slices : List ByteList) {l₁ : BSmtLib.Lexer RecAdapter}
     {l₂ : BSmtLib.Lexer CanonAdapter} (h : LinkRel l₁ l₂) :
-    ThroughLink (lexThrough (R := Unit) (E := ParseErrorCause Unit) l₁ slices)
-      (lexThrough (R := Unit) (E := ParseErrorCause Unit) l₂ slices) := by
+    ThroughLink (lexThrough (R := Unit) (E := ParseError Unit) l₁ slices)
+      (lexThrough (R := Unit) (E := ParseError Unit) l₂ slices) := by
   have hf := lexFeed_link slices h
   unfold lexThrough
-  generalize lexFeed (R := Unit) (E := ParseErrorCause Unit) l₁ slices = F₁ at hf ⊢
-  generalize lexFeed (R := Unit) (E := ParseErrorCause Unit) l₂ slices = F₂ at hf ⊢
+  generalize lexFeed (R := Unit) (E := ParseError Unit) l₁ slices = F₁ at hf ⊢
+  generalize lexFeed (R := Unit) (E := ParseError Unit) l₂ slices = F₂ at hf ⊢
   rcases F₁ with e₁ | b₁ <;> rcases F₂ with e₂ | b₂ <;> simp only [ERel] at hf
   · subst hf; exact (rfl : e₁ = e₁)
   · obtain ⟨hc, hh, ha⟩ := hf
@@ -235,9 +235,9 @@ theorem lexThrough_link (slices : List ByteList) {l₁ : BSmtLib.Lexer RecAdapte
       hrecover (Internal.core b₂) (Internal.handler b₁) (Internal.handler b₂) ha
     dsimp only
     rw [run_eq, run_eq, hc]
-    generalize ((Internal.lexEofStep (R := Unit) (E := ParseErrorCause Unit) abandonI
+    generalize ((Internal.lexEofStep (R := Unit) (E := ParseError Unit) abandonI
       recoverI).run (Internal.core b₂)).run (Internal.handler b₁) = A at hsim ⊢
-    generalize ((Internal.lexEofStep (R := Unit) (E := ParseErrorCause Unit) abandonI
+    generalize ((Internal.lexEofStep (R := Unit) (E := ParseError Unit) abandonI
       recoverI).run (Internal.core b₂)).run (Internal.handler b₂) = B at hsim ⊢
     obtain ⟨⟨r₁, c₁⟩, h₁⟩ := A
     obtain ⟨⟨r₂, c₂⟩, h₂⟩ := B

@@ -5,8 +5,14 @@ public import BSmtLib.ControlFlow
 public import BSmtLib.Bytes
 public import BSmtLib.Plain
 public import BSmtLib.Span
+public import BSmtLib.Multiple
+public import BSmtLib.Multiple.MatchCases
+public import BSmtLib.Multiple.FunctionSignaturesView
+public import BSmtLib.Multiple.FunctionSignatures
 public import BSmtLib.Nodes
 public import BSmtLib.Traits
+public import BSmtLib.Traits.CommandHandler
+public import BSmtLib.Traits.SyntaxChecker
 public import BSmtLib.Token
 public import BSmtLib.Token.Reserved
 public import BSmtLib.Token.SyntaxToken
@@ -39,8 +45,4 @@ the `pub use` lines of those modules give items their names there, `BSmtLib.Lexe
 
 /- LEAN: the second names are given by `export` in the generated module `BSmtLib.Reexports`,
 for all `pub use` lines at once: `token.rs` and `parser.rs` re-export from submodules that
-import `Token` and `Parser` in Lean, so these cannot hold the lines. `lib.rs` re-exports all of
-`nodes`; the parser's symbol, `Nodes.Symbol`, has no re-export, as its name at the root would be
-that of `Plain.Symbol`. Rust's `SmtSymbol` is the symbol of `plain.rs`, which records whether it
-was quoted; the Lean parser pairs the plain view with that flag in `Nodes.Symbol`. `multiple.rs`
-has no counterpart. -/
+import `Token` and `Parser` in Lean, so these cannot hold the lines. -/

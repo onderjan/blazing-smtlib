@@ -12,6 +12,7 @@ The parser of an identifier: a symbol, or an indexed identifier `(` `_` ⟨symbo
 
 namespace BSmtLib.Parser.Category.Ident
 
+open BSmtLib.Plain (SymbolView)
 open BSmtLib.Nodes BSmtLib.Traits
 open BSmtLib.Token (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
@@ -27,7 +28,7 @@ inductive IdentState where
   /-- After `(` `_`, before its symbol. -/
   | afterUnderscore
   /-- After its symbol, reading its indices up to the `)`. -/
-  | indices (symbol : Symbol) (indices : Array Index)
+  | indices (symbol : SymbolView) (indices : Array Index)
 
 namespace IdentState
 
@@ -79,12 +80,12 @@ are a definition for each handler. -/
 /-- The steps of the identifier parser, with the handler `H`. -/
 @[instance_reducible]
 def identByToken (H : Type) {m : Type → Type} [Monad m] [Handler H m] :
-    Parser.Internal.ParseByToken IdentParser H m (Handler.Error H) Identifier where
+    Parser.Internal.ParseByToken IdentParser H m (Handler.Error H) IdentifierBuf where
   arrive _ _ := pure ()
   step version parser token := do
     match ← parser.state.step version token with
     | .more state => return .more ⟨state⟩
-    | .done result => return .done result
+    | .done result => return .done result.intoOwned
   reset _ := .new
 
 end Internal
@@ -93,7 +94,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-instance : Parse IdentParser H m (Handler.Error H) Identifier where
+instance : Parse IdentParser H m (Handler.Error H) IdentifierBuf where
   parse parser state cursor :=
     letI := Internal.identByToken H
     Parser.Internal.parseByToken parser state cursor

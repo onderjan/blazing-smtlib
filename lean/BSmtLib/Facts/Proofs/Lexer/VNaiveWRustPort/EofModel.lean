@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
 import all BSmtLib.Lexer.Error
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -71,16 +72,16 @@ end
 /-- The spec's failure for the cause of an error and its span. -/
 def causeFailure {ε : Type} (cause : LexErrorCause (Option ε)) (span : Span) :
     BSmtLibSpec.Lexer.Failure ε :=
-  failureOf { cause, span, continuesFrom := none }
+  failureOf (LexError.Internal.new cause span none)
 
 theorem failureOf_eq {ε : Type} (e : LexError (Option ε)) :
     failureOf e = causeFailure e.cause e.span :=
-  rfl
+  (rfl)
 
 theorem causeFailure_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
     (h : k ≠ .unexpectedTrailingToken) :
     causeFailure (ε := ε) (.lexical k) span = .lexical := by
-  simp only [causeFailure, failureOf]
+  simp only [causeFailure, failureOf, LexError.Internal.cause_new]
   have : (k == .unexpectedTrailingToken) = false := by
     cases k <;> first | rfl | exact absurd rfl h
   rw [this]
@@ -122,7 +123,7 @@ theorem preciseFailure_consumer {ε : Type} {o : Option ε} {span : Span} :
 
 /-- The precise failure gives the spec's failure. -/
 theorem preciseOf_fst {ε : Type} (e : LexError (Option ε)) : (preciseOf e).1 = failureOf e :=
-  rfl
+  (rfl)
 
 /-- The spec's failure at a stop of the consumer that fails the lexer. -/
 def stopFailure {C : BSmtLibSpec.Lexer.Consumer} : Stop C → BSmtLibSpec.Lexer.Failure C.Error
@@ -142,11 +143,12 @@ def EofTail (C : BSmtLibSpec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Span
     (d' : Option Span.Location) (coll' : List Handed) : Prop :=
   match h with
   | .cont p => res = .ok .continue ∧ coll' = p.taken
-  | .wait r _ p => res = .ok (.break ⟨r, location⟩) ∧ coll' = p.taken
+  | .wait r _ p => res = .ok (.break (Span.Located.Internal.new r location)) ∧ coll' = p.taken
   | .stop s p =>
     match s with
-    | .brkX r _ => res = .ok (.break ⟨r, location⟩) ∧ coll' = p.taken
-    | .discard (some r) _ => res = .ok (.break ⟨r, location⟩) ∧ coll' = p.taken
+    | .brkX r _ => res = .ok (.break (Span.Located.Internal.new r location)) ∧ coll' = p.taken
+    | .discard (some r) _ =>
+      res = .ok (.break (Span.Located.Internal.new r location)) ∧ coll' = p.taken
     | .discard none _ => res = .ok .continue ∧ coll' = p.taken
     | .relex _ => res = .ok .continue ∧ coll' = p.taken
     | .brk _ _ _ => False

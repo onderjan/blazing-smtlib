@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.VEvent
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Span
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 
@@ -128,7 +130,8 @@ theorem walk_eof (hb : consumer.BreaksAtEnd) (j : Nat) (v : Token.Version) (core
           (token := BSmtLibSpec.Lexer.endOfFile input) rfl
       hans
     rw [settle_finished] at this
-    simp only [eofResult, sessionOf, discardedOf_reset, Option.map_none]
+    simp only [eofResult, sessionOf, discardedOf_reset, Option.map_none,
+      Span.Located.Internal.value_new, Span.Located.Internal.location_new]
     rw [reset_version _ sv (by simp only [coreAfter]; split <;> exact hi)]
     have hend : toLocation (eofAt core.location).end =
         (BSmtLibSpec.Lexer.endOfFile input).«end» := by
@@ -152,10 +155,11 @@ theorem session_handOver {core X : Core} {b : UInt8} {bs : List UInt8} {l : Lexe
         vSession consumer (coreAfter X l version discards) held bs ended taken'
       | (.ok (.break value), version, discards, taken') =>
         vSession consumer { coreAfter X l version discards with holding := true }
-          (some ⟨value, l.end⟩) bs ended taken'
+          (some (Span.Located.Internal.new value l.end)) bs ended taken'
       | (.error err, version, discards, taken') =>
         sessionOf consumer taken'
-            (.failed (failureOf ⟨.consumer err, Span.Internal.newUnchecked l.end l.end, none⟩))
+            (.failed (failureOf (Lexer.Error.LexError.Internal.new (.consumer err)
+              (Span.Internal.newUnchecked l.end l.end) none)))
           (coreAfterError X l version discards) := by
   have hr := handOverAt_reply consumer X l hl hX taken
   rw [hr] at hbyte
@@ -319,7 +323,8 @@ theorem eventB (hb : consumer.BreaksAtEnd) {j : Nat} {v : Token.Version} {core :
     have h2 := hbyte hr
     simp only [haH] at h2
     have hsame : vSession consumer core none (b :: bs) ended taken =
-        vSession consumer H (some ⟨r, l.end⟩) (b :: bs) ended (taken ++ [hd]) := by
+        vSession consumer H (some (Span.Located.Internal.new r l.end)) (b :: bs) ended
+          (taken ++ [hd]) := by
       unfold vSession
       simp only [vBytes]
       rw [h2, lexByte_idle consumer H b _ haH]

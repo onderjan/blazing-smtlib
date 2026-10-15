@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Reader.Param.Basic
 public import BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Error
+import all BSmtLib.Span
 
 @[expose] public section
 

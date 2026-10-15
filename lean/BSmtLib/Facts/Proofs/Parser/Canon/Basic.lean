@@ -5,6 +5,9 @@ public import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
 public import BSmtLib.Facts.Proofs.Parser.Canon.Attr
 import all BSmtLib.Parser
 import all BSmtLib.Plain
+import all BSmtLib.Multiple
+import all BSmtLib.Multiple.MatchCases
+import all BSmtLib.Multiple.FunctionSignaturesView
 
 @[expose] public section
 
@@ -73,9 +76,14 @@ instance {α : Type} [Canon α] [CanonId α] : CanonId (Option α) :=
   ⟨fun a => by show a.map canon = a; cases a <;> simp [CanonId.canon_id]⟩
 instance {α β : Type} [Canon α] [Canon β] [CanonId α] [CanonId β] : CanonId (α × β) :=
   ⟨fun a => by show (canon a.1, canon a.2) = a; simp [CanonId.canon_id]⟩
+instance {α : Type} [Canon α] : Canon (Multiple α) := ⟨fun m => .new (canon m.asSlice)⟩
+instance {α : Type} [Canon α] [CanonId α] : CanonId (Multiple α) :=
+  ⟨fun m => by show Multiple.new (canon m.asSlice) = m; rw [CanonId.canon_id]; rfl⟩
 
-instance : Canon SymbolView :=
-  ⟨fun v => SymbolView.Internal.newUnchecked (canonSlice v.asSlice)⟩
+def canonSymbol (v : SymbolView) : SymbolView :=
+  SymbolView.Internal.newUnchecked v.isQuoted (canonSlice v.asSlice)
+
+instance : Canon SymbolView := ⟨canonSymbol⟩
 instance : Canon NumeralView :=
   ⟨fun v => NumeralView.Internal.newUnchecked (canonSlice v.asSlice)⟩
 instance : Canon DecimalView :=
@@ -89,6 +97,12 @@ instance : Canon StringContentView :=
 instance : Canon KeywordView :=
   ⟨fun v => KeywordView.Internal.newUnchecked (canonSlice v.asSlice)⟩
 
+@[canon_simps] theorem asSlice_canonSymbol (v : SymbolView) :
+    (canonSymbol v).asSlice = canonSlice v.asSlice := (rfl)
+@[canon_simps] theorem isQuoted_canonSymbol (v : SymbolView) :
+    (canonSymbol v).isQuoted = v.isQuoted := (rfl)
+@[canon_simps] theorem isQuoted_canon_symbolView (v : SymbolView) :
+    (canon v).isQuoted = v.isQuoted := (rfl)
 @[canon_simps] theorem asSlice_canon_symbolView (v : SymbolView) :
     (canon v).asSlice = canonSlice v.asSlice := (rfl)
 @[canon_simps] theorem asSlice_canon_numeralView (v : NumeralView) :
@@ -104,12 +118,15 @@ instance : Canon KeywordView :=
 @[canon_simps] theorem asSlice_canon_keywordView (v : KeywordView) :
     (canon v).asSlice = canonSlice v.asSlice := (rfl)
 
+instance {V : Type} [Canon V] : Canon (Multiple.NamedView V) :=
+  ⟨fun v => Multiple.NamedView.Internal.new (canon v.toArray)⟩
+
+attribute [canon_simps] Multiple.asSlice_new Multiple.NamedView.Internal.toArray_new
+  Multiple.SymbolsView.Internal.toArray_new Multiple.SortAritiesView.Internal.toArray_new
+  Multiple.ConstructorsView.Internal.toArray_new Multiple.MatchCases.Internal.toArray_new
+  Multiple.FunctionSignaturesView.Internal.toArray_new
+
 /-! ## Nodes and tokens -/
-
-def canonSymbol : Symbol → Symbol
-  | ⟨content, quoted⟩ => ⟨canon content, quoted⟩
-
-instance : Canon Symbol := ⟨canonSymbol⟩
 
 def canonIndex : Index → Index
   | .numeral digits => .numeral (canon digits)
@@ -142,6 +159,15 @@ def canonPattern : Pattern → Pattern
   | .constructor c args => .constructor (canon c) (canon args)
 
 instance : Canon Pattern := ⟨canonPattern⟩
+
+instance : Canon Multiple.SymbolsView :=
+  ⟨fun v => Multiple.SymbolsView.Internal.new (canon v.toArray)⟩
+instance : Canon Multiple.SortAritiesView :=
+  ⟨fun v => Multiple.SortAritiesView.Internal.new (canon v.toArray)⟩
+instance {S : Type} [Canon S] : Canon (Multiple.ConstructorsView S) :=
+  ⟨fun v => Multiple.ConstructorsView.Internal.new (canon v.toArray)⟩
+instance {T : Type} [Canon T] : Canon (Multiple.MatchCases T) :=
+  ⟨fun v => Multiple.MatchCases.Internal.new (canon v.toArray)⟩
 
 def canonTermNode {S T : Type} [Canon S] [Canon T] : TermNode S T → TermNode S T
   | .constant c => .constant (canon c)

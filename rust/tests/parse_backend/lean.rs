@@ -18,8 +18,8 @@ use blazing_smtlib::{
 };
 
 use super::nodes::{
-    Application, AttributeValue, CommandHandler, Constructors, Handler, QualifiedIdent, SExpr,
-    Signature, Sort, Term,
+    Application, AttributeValue, CommandHandler, Constructors, Handler, NonstandardTerm,
+    QualifiedIdent, SExpr, Signature, Sort, Term,
 };
 use super::{Category, Location, ParseFailure, ReadError, ReadErrorCause, Span, version_name};
 
@@ -684,6 +684,13 @@ fn command_call<H: CommandHandler>(
     fields: &mut Fields<'_>,
 ) -> Option<String> {
     let result = match method {
+        "nonstandard_command" => handler
+            .nonstandard_command(fields.symbol())
+            .map(|NonstandardTerm| ()),
+        "nonstandard_term" => {
+            let term = values.take_term(fields.id());
+            handler.nonstandard_term(term)
+        }
         "command_assert" => {
             let term = values.take_term(fields.id());
             handler.command_assert(term)
@@ -936,12 +943,7 @@ fn syntax_kind(fields: &mut Fields<'_>) -> SmtSyntaxErrorKind {
 }
 
 /// The error of an `error` line, whose fields after `error` are given.
-/// `nonstandard` gives the handler's error for a nonstandard command.
-fn read_error<H: Handler>(
-    fields: &mut Fields<'_>,
-    values: &mut Values<H>,
-    nonstandard: &mut dyn FnMut(SmtSymbolBuf) -> H::Error,
-) -> ReadError<H::Error> {
+fn read_error<H: Handler>(fields: &mut Fields<'_>, values: &mut Values<H>) -> ReadError<H::Error> {
     let start = fields.location();
     let end = fields.location();
     let line = fields.line;
@@ -949,7 +951,6 @@ fn read_error<H: Handler>(
         "lexical" => ReadErrorCause::Lexical(by_name(&ERROR_KINDS, fields.next(), line)),
         "syntax" => ReadErrorCause::Syntax(syntax_kind(fields)),
         "handler" => ReadErrorCause::Handler(values.take_error(fields.id())),
-        "nonstandard" => ReadErrorCause::Handler(nonstandard(fields.symbol())),
         "io" => {
             let message = unhex(fields.next(), line);
             ReadErrorCause::Io(String::from_utf8_lossy(&message).into_owned())
@@ -960,35 +961,19 @@ fn read_error<H: Handler>(
     ReadError::new(cause, Span::new(start, end))
 }
 
-/// The handler's error for a nonstandard command that the Lean parser
-/// rejected by its name.
-fn nonstandard_error<H: CommandHandler>(handler: &mut H, name: SmtSymbolBuf) -> H::Error {
-    match handler.nonstandard_command(name.clone()) {
-        Err(err) => err,
-        Ok(_) => panic!(
-            "the Lean parser rejected the nonstandard command {:?}, which the handler accepts: \
-             the Lean port hands no nonstandard command to a parser",
-            String::from_utf8_lossy(name.as_slice())
-        ),
-    }
-}
-
 // --- Readers ---
 
 /// The ending line of a response, or the error it reports.
 fn ending<H: CommandHandler>(
     lines: Vec<String>,
     request: &str,
-    handler: &mut H,
     values: &mut Values<H>,
 ) -> Result<String, ReadError<H::Error>> {
     let [line] = &lines[..] else {
         panic!("the Lean driver answered {request:?} with {lines:?}")
     };
     match line.strip_prefix("error ") {
-        Some(error) => Err(read_error(&mut Fields::new(error), values, &mut |name| {
-            nonstandard_error(handler, name)
-        })),
+        Some(error) => Err(read_error(&mut Fields::new(error), values)),
         None => Ok(line.clone()),
     }
 }
@@ -1011,7 +996,7 @@ fn read_request<H: CommandHandler>(
         }
         command_call(handler, values, method, fields).unwrap_or_else(|| unknown_call(method))
     });
-    ending(lines, request, handler, values)
+    ending(lines, request, values)
 }
 
 /// The result of a `done <result>` line, with its fields joined.
@@ -1199,12 +1184,7 @@ pub fn drive<H: Handler, P: Category<H>>(
                 return Ok((results, unconsumed));
             }
             "error" => {
-                let err = read_error(&mut fields, &mut values, &mut |name| {
-                    panic!(
-                        "the Lean driver reported a nonstandard command {name:?} \
-                         while driving a category parser"
-                    )
-                });
+                let err = read_error(&mut fields, &mut values);
                 let span = err.span();
                 return match err.into_cause() {
                     ReadErrorCause::Syntax(kind) => Err((kind, span)),

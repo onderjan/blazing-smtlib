@@ -4,6 +4,7 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Consume
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Token
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -41,8 +42,8 @@ the offset `end`. -/
 def onLine (ty : Token.TokenCategory) (content : ByteSlice)
     (line lineStart start «end» : Nat) : Lexeme :=
   { category := ty, content := content.toByteArray,
-    start := { offset := start, line, column := start - lineStart },
-    «end» := { offset := «end», line, column := «end» - lineStart } }
+    start := Span.Location.Internal.new start line (start - lineStart),
+    «end» := Span.Location.Internal.new «end» line («end» - lineStart) }
 
 /-- The bytes of the slice from `a` to `b`, as positions in its array. -/
 theorem extract_input (input : ByteSlice) {a b : Nat} (hab : a ≤ b) (hb : b ≤ input.size) :
@@ -59,7 +60,7 @@ def borrowedLexeme (ty : Token.TokenCategory) (content : ByteSlice) (start : Spa
     (line lineStart
     «end» : Nat) : Lexeme :=
   { category := ty, content := content.toByteArray, start,
-    «end» := { offset := «end», line, column := «end» - lineStart } }
+    «end» := Span.Location.Internal.new «end» line («end» - lineStart) }
 
 theorem holds_of_len_zero {T : Token.Internal.TokenBatch} (h : T.len = 0) : Holds T [] := by
   refine ⟨h, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
@@ -68,8 +69,8 @@ theorem holds_of_len_zero {T : Token.Internal.TokenBatch} (h : T.len = 0) : Hold
 /-- The location of the index `position` of the slice in a step whose offset `low` is that of
 the index `base`, on the lexer's line. -/
 def stepLocation (c : WP.WCore) (low base position : Nat) : Span.Location :=
-  { offset := low + (position - base), line := c.line,
-    column := low + (position - base) - c.lineStart }
+  Span.Location.Internal.new (low + (position - base)) c.line
+    (low + (position - base) - c.lineStart)
 
 /-! ## The hand-overs -/
 
@@ -77,18 +78,19 @@ section
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat}
 
-/-- The interruption is the error that the entry at the location is trailing input. -/
-def IsTrailingAt (location : Span.Location) (e : WP.Intr C floor) : Prop :=
-  e.result = .error (.lexical .unexpectedTrailingToken) ∧ e.span.start = location
+/-- The interruption is the error that the lexeme is trailing input, with the lexeme's span. -/
+def IsTrailingAt (l : Lexeme) (e : WP.Intr C floor) : Prop :=
+  e.result = .error (.lexical .unexpectedTrailingToken) ∧ e.span = lexSpan l
 
-/-- The interruption is the one the Rust port raises at the stop. -/
+/-- The interruption is the one the Rust port raises at the stop; an error has the span of the
+lexeme it is raised at. -/
 def Matches : Stop C → WP.Intr C floor → Prop
-  | .trailing l, e => IsTrailingAt l.start e
-  | .fail err _ _, e => e.result = .error (.consumer (some err))
-  | .layout _, e => e.result = .error (.consumer none)
+  | .trailing l, e => IsTrailingAt l e
+  | .fail err _ l, e => e.result = .error (.consumer (some err)) ∧ e.span = lexSpan l
+  | .layout l, e => e.result = .error (.consumer none) ∧ e.span = lexSpan l
   | .brk r l next, e =>
     (e.result = .ok (.finished r) ∧ e.location = l.end) ∨
-      ∃ l2, next = some l2 ∧ IsTrailingAt l2.start e
+      ∃ l2, next = some l2 ∧ IsTrailingAt l2 e
   | .brkX r l, e => e.result = .ok (.finished r) ∧ e.location = l.end
   | .discard r l, e => e.result = .ok (.discarded r) ∧ e.location = l.end
   | .relex l, e => e.result = .ok .relex ∧ e.location = l.end
@@ -227,7 +229,7 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
       simp only [hrec, Bool.false_eq_true, ite_false]
       apply WP.wp_throw
       rw [← hver] at hpost
-      exact q_of_val_eq rfl (hpost _ ⟨rfl, span_peek_start cursor h hb hj⟩)
+      exact q_of_val_eq rfl (hpost _ ⟨rfl, span_peek cursor h hb hj⟩)
     | false =>
       simp only [Bool.false_eq_true, ite_false]
       clear hpost
@@ -290,7 +292,7 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
           simp only [hand1, handAll_stop] at hpost0
           apply wp_stopWith _ _ (withVersion s cursor'.version) _ hrec
           rw [a3]
-          exact hpost0 _ (.inr ⟨_, rfl, ⟨rfl, span_peek_start cursor' h' hb' (by omega)⟩⟩)
+          exact hpost0 _ (.inr ⟨_, rfl, ⟨rfl, span_peek cursor' h' hb' (by omega)⟩⟩)
         · intro h'
           have hle := cNext_le_cStop cursor'
           have hge : cStop cursor ≤ cNext cursor' := by
@@ -325,7 +327,8 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
           | false =>
             simp only [Bool.false_eq_true, ite_false]
             apply wp_stopWith _ _ (withVersion s cursor'.version) _ hrec
-            exact hpost0 _ rfl
+            exact hpost0 _ ⟨rfl, (consumedSpanOf_at consumed hb' (by omega)).trans
+              (congrArg lexSpan hl.symm)⟩
           | true =>
             simp only [ite_true]
             apply WP.wp_bind
@@ -334,7 +337,8 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
             refine q_of_val_eq ?_ (hpost0 _ ?_)
             · simp only [withStop, withDiscards, Stop.discards, discardsAfter]
               rw [hend, ← congrArg Lexeme.«end» hl]; rfl
-            · rfl
+            · exact ⟨rfl, (consumedSpanOf_at consumed hb' (by omega)).trans
+                (congrArg lexSpan hl.symm)⟩
         | layout l =>
           dsimp only [withStop, withDiscards, Stop.discards, discardsAfter] at hpost0
           obtain ⟨b1, b2⟩ := a3
@@ -342,7 +346,8 @@ theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cur
           rw [hdis] at b2
           simp only [b2, Bool.false_eq_true, ite_false]
           apply wp_stopWith _ _ (withVersion s cursor'.version) _ hrec
-          exact hpost0 _ rfl
+          exact hpost0 _ ⟨rfl, (consumedSpanOf_at consumed hb' (by omega)).trans
+            (congrArg lexSpan hl.symm)⟩
         | brkX r l =>
           dsimp only [withStop, withDiscards, Stop.discards, discardsAfter] at hpost0
           obtain ⟨b1, b2, b3, b4⟩ := a3

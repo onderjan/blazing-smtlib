@@ -32,10 +32,12 @@ inductive LexErrorCause (E : Type) where
   | consumer (error : E)
   deriving BEq, Repr
 
-/- LEAN: the fields are readable as `error.cause`, `error.span` and `error.continuesFrom`,
-replacing the getters. -/
+/- LEAN: the constructor is private, as Rust's fields are, and the lexers build an error with
+`LexError.Internal.new`. The fields are readable as `error.cause`, `error.span` and
+`error.continuesFrom`, replacing the getters. -/
 /-- Error that caused lexing to stop. -/
 structure LexError (E : Type) where
+  private mk ::
   /-- The reason why the lexer call failed: a lexical error or a consumer error. -/
   cause : LexErrorCause E
   /-- Location where the error occurred. -/
@@ -54,5 +56,47 @@ structure LexError (E : Type) where
   -/
   continuesFrom : Option Span.Location
   deriving BEq, Repr
+
+@[inline]
+def LexError.Internal.new {E : Type} (cause : LexErrorCause E) (span : Span)
+    (continuesFrom : Option Span.Location) : LexError E :=
+  { cause, span, continuesFrom }
+
+@[simp]
+theorem LexError.Internal.cause_new {E : Type} (cause : LexErrorCause E) (span : Span)
+    (continuesFrom : Option Span.Location) :
+    (LexError.Internal.new cause span continuesFrom).cause = cause :=
+  (rfl)
+
+@[simp]
+theorem LexError.Internal.span_new {E : Type} (cause : LexErrorCause E) (span : Span)
+    (continuesFrom : Option Span.Location) :
+    (LexError.Internal.new cause span continuesFrom).span = span :=
+  (rfl)
+
+@[simp]
+theorem LexError.Internal.continuesFrom_new {E : Type} (cause : LexErrorCause E) (span : Span)
+    (continuesFrom : Option Span.Location) :
+    (LexError.Internal.new cause span continuesFrom).continuesFrom = continuesFrom :=
+  (rfl)
+
+/-- An error is the one built from its fields. -/
+@[simp]
+theorem LexError.Internal.new_eta {E : Type} (error : LexError E) :
+    LexError.Internal.new error.cause error.span error.continuesFrom = error :=
+  (rfl)
+
+/-- Two errors built from the same fields are equal. -/
+theorem LexError.Internal.new_inj {E : Type} {cause cause' : LexErrorCause E} {span span' : Span}
+    {continuesFrom continuesFrom' : Option Span.Location} :
+    LexError.Internal.new cause span continuesFrom =
+        LexError.Internal.new cause' span' continuesFrom' ↔
+      cause = cause' ∧ span = span' ∧ continuesFrom = continuesFrom' := by
+  constructor
+  · intro h
+    exact ⟨congrArg LexError.cause h, congrArg LexError.span h,
+      congrArg LexError.continuesFrom h⟩
+  · rintro ⟨rfl, rfl, rfl⟩
+    rfl
 
 end BSmtLib.Lexer.Error

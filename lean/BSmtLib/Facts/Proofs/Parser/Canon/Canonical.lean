@@ -28,13 +28,13 @@ open Basic States Loop Adapter Idem
 structure CanonAdapter where
   adapter : RecAdapter
 
-instance : Token.Consume CanonAdapter Unit (ParseErrorCause Unit) where
+instance : Token.Consume CanonAdapter Unit (ParseError Unit) where
   isConcrete := false
 
 /-- A call of the canonical adapter: the parse adapter's call, its state then canonicalised. -/
 def canonConsume {b : Token.BatchTag} (c : Token.BatchCursor b) (h : c.HasNext) :
     StateT CanonAdapter Id
-      (Except (ParseErrorCause Unit) (ControlFlow Unit) ×
+      (Except (ParseError Unit) (ControlFlow Unit) ×
         {c' // Token.BatchCursor.Consumed c' c}) :=
   fun s =>
     let q := (Token.ConsumeFrom.consume (m := Id) c h : StateT RecAdapter Id _).run s.adapter
@@ -49,7 +49,7 @@ theorem canonA_canonA (a : RecAdapter) : canonA (canonA a) = canonA a := by
   rfl
 
 /-- The canonical adapter reads the cursors only below the length of their batches. -/
-theorem canonAdapter_consumesAlike : ConsumesAlike CanonAdapter Id Unit (ParseErrorCause Unit) := by
+theorem canonAdapter_consumesAlike : ConsumesAlike CanonAdapter Id Unit (ParseError Unit) := by
   intro g g' c d hc hd hcd s
   obtain ⟨e1, e2, e3⟩ := consume_agree hc hd cursorRel_agree hcd (a₁ := s.adapter)
     (a₂ := s.adapter) rfl

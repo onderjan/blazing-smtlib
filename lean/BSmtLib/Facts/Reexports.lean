@@ -47,11 +47,10 @@ modules. -/
 def uses : List Use := [
   { rust := "`pub use crate::bytes::*` in `lib.rs`", target := `BSmtLib,
     path := "crate::bytes", modules := [`BSmtLib.Bytes] },
-  { rust := "`pub use crate::multiple::*` in `lib.rs`, which has no counterpart",
-    target := `BSmtLib },
-  { rust := "`pub use crate::nodes::*` in `lib.rs`; the parser's `Nodes.Symbol` would take the \
-      name of `Plain.Symbol`", target := `BSmtLib,
-    path := "crate::nodes", modules := [`BSmtLib.Nodes], excluded := [`BSmtLib.Nodes.Symbol] },
+  { rust := "`pub use crate::multiple::*` in `lib.rs`", target := `BSmtLib,
+    path := "crate::multiple", modules := [`BSmtLib.Multiple] },
+  { rust := "`pub use crate::nodes::*` in `lib.rs`", target := `BSmtLib,
+    path := "crate::nodes", modules := [`BSmtLib.Nodes] },
   { rust := "`pub use crate::plain::*` in `lib.rs`", target := `BSmtLib,
     path := "crate::plain", modules := [`BSmtLib.Plain] },
   { rust := "`pub use crate::span::*` in `lib.rs`", target := `BSmtLib,
@@ -137,6 +136,8 @@ def uses : List Use := [
   { rust := "`pub use command::*` in `parser.rs`, for the items that have a counterpart",
     target := `BSmtLib.Parser,
     items := [("command::*", `BSmtLib.Parser.Command.CommandParser),
+      ("command::*", `BSmtLib.Parser.Command.CommandRule),
+      ("command::*", `BSmtLib.Parser.Command.CommandPayloadParser),
       ("command::*", `BSmtLib.Parser.Command.CommandOutcome)] },
   { rust := "`pub use script::*` in `parser.rs`", target := `BSmtLib.Parser,
     items := [("script::*", `BSmtLib.Parser.Script.ScriptParser)] },
@@ -146,7 +147,8 @@ def uses : List Use := [
 /-- The modules the generated module imports: those the library's root imports but for it. -/
 def sources : List Name :=
   [`BSmtLib.ControlFlow, `BSmtLib.Bytes, `BSmtLib.Plain, `BSmtLib.Span, `BSmtLib.Nodes,
-    `BSmtLib.Traits, `BSmtLib.Token, `BSmtLib.Token.Reserved, `BSmtLib.Token.SyntaxToken,
+    `BSmtLib.Traits, `BSmtLib.Traits.CommandHandler, `BSmtLib.Traits.SyntaxChecker, `BSmtLib.Token,
+    `BSmtLib.Token.Reserved, `BSmtLib.Token.SyntaxToken,
     `BSmtLib.Token.Lookahead, `BSmtLib.Token.Produce, `BSmtLib.Token.ConsumeFrom,
     `BSmtLib.Lexer.Error, `BSmtLib.Lexer.Recovery, `BSmtLib.Lexer,
     `BSmtLib.Parser, `BSmtLib.Parser.Category, `BSmtLib.Parser.Command, `BSmtLib.Parser.Script,

@@ -248,7 +248,8 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
     Payload.defineFunsRecDeclarations
     (fun signatures => do
       if signatures.isEmpty then Parser.Internal.syntaxError .emptyFunctionSignatures
-      Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec signatures)
+      Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec
+        (Multiple.FunctionSignaturesView.Internal.new signatures))
       return .more (.defineFunsRecBodies signatures (ListState.paren .init)))
     (by
       intro state token
@@ -259,7 +260,8 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
       (HasLength.after (HasLength.bind_pure hsignaturesLength _) _)
       (next' := fun found =>
         (Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec
-          (found : List (Nodes.Signature (Traits.Handler.«Sort» H))).toArray) >>=
+          (Multiple.FunctionSignaturesView.Internal.new ((found : List (Nodes.Signature
+            (Traits.Handler.«Sort» H))).toArray))) >>=
             fun _ => pure found) >>=
         fun found => pure (.more (.defineFunsRecBodies found.toArray (ListState.paren .init))))
       (fun found hfound => by

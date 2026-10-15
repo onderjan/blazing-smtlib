@@ -326,7 +326,7 @@ theorem term_element (hA : TermAgrees h) :
 /-- The parser of a sort declaration reads one: its symbol's and its numeral's views. -/
 theorem sortDec_runs (sortDec : Tree.SortDec) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens sortDec.tokens) :
-    ∃ (symbol : Nodes.Symbol) (arity : NumeralView) (rest : List Parser.Internal.Input),
+    ∃ (symbol : Plain.SymbolView) (arity : NumeralView) (rest : List Parser.Internal.Input),
       tokens = .parenOpen :: rest ∧
       (Bridge.symbol symbol, Bridge.chars arity.asSlice) = (sortDec.symbol, sortDec.arity) ∧
       Runs (H := H) points Parser.Command.Internal.Datatype.SortDecState.step .start tokens

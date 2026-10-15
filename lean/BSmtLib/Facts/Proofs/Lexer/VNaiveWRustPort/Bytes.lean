@@ -6,6 +6,7 @@ import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
 import all BSmtLib.Token.Reserved
 import all BSmtLib.Lexer
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -158,9 +159,10 @@ theorem fits_clear_extendSlice (buf : Lexer.Internal.Helpers.ContentBuffer) (inp
 
 /-- The location `n` bytes after `location`, none of which is a line feed. -/
 def afterColumns (location : Span.Location) (n : Nat) : Span.Location :=
-  { offset := location.offset + n, line := location.line, column := location.column + n }
+  Span.Location.Internal.new (location.offset + n) location.line (location.column + n)
 
-theorem afterColumns_zero (location : Span.Location) : afterColumns location 0 = location := rfl
+theorem afterColumns_zero (location : Span.Location) : afterColumns location 0 = location :=
+  (rfl)
 
 theorem afterColumns_afterByte (location : Span.Location) (c : UInt8) (h : c ≠ 10) (n : Nat) :
     afterColumns (location.afterByte c) n = afterColumns location (n + 1) := by
@@ -168,7 +170,8 @@ theorem afterColumns_afterByte (location : Span.Location) (c : UInt8) (h : c ≠
   split
   · rename_i hc
     exact absurd (beq_iff_eq.mp hc) h
-  · simp only [afterColumns, Span.Location.afterColumn]
+  · simp only [afterColumns, Span.Location.afterColumn, Span.Location.Internal.offset_new,
+      Span.Location.Internal.line_new, Span.Location.Internal.column_new]
     rw [Nat.add_assoc, Nat.add_assoc, Nat.add_comm 1 n]
 
 /-! ## Byte classes of runs -/

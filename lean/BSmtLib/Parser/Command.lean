@@ -22,17 +22,20 @@ open BSmtLib.Parser.Internal (PM call syntaxError)
 namespace Internal
 
 /-- The state of the command parser. -/
-inductive CommandState (HandledSExpr HandledAttribute HandledSort HandledTerm Scope : Type) where
+inductive CommandState
+    (HandledSExpr HandledAttribute HandledSort HandledTerm Scope Nonstandard : Type) where
   /-- Before a command, or the end of the input. -/
   | awaiting
   /-- After the `(` of a command, before its name. -/
   | opened
   | payload (state : Payload HandledSExpr HandledAttribute HandledSort HandledTerm Scope)
+  /-- In the payload of a non-standard command, with the parser the handler gave for it. -/
+  | nonstandard (parser : Nonstandard)
 
 /-- The command parser state of the handler. -/
-abbrev CommandStateOf (H : Type) {m : Type → Type} [Handler H m] :=
+abbrev CommandStateOf (H : Type) {m : Type → Type} [CommandHandler H m] :=
   CommandState (Handler.SExpr H) (Handler.Attribute H) (Handler.«Sort» H) (Handler.Term H)
-    (Handler.Scope H)
+    (Handler.Scope H) (CommandHandler.NonstandardParser H)
 
 end Internal
 
@@ -43,21 +46,45 @@ end of the input while it awaits a command.
 A version declaration switches nothing: the version is a mode of a script. The parser reports
 the declaration in its outcome, and its caller decides; `exit` likewise.
 -/
-structure CommandParser (H : Type) {m : Type → Type} [Handler H m] where
-  state : Internal.CommandStateOf H
+structure CommandParser (H : Type) {m : Type → Type} [CommandHandler H m] where
+  private mk ::
+  private state : Internal.CommandStateOf H
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 
 /-- The command parser before a command. -/
 def CommandParser.new : CommandParser H := ⟨.awaiting⟩
+
+instance : Inhabited (CommandParser H) := ⟨.new⟩
 
 end
 
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
+
+/- LEAN: Rust's command parser hands its cursor to the non-standard parser. The port steps by
+single tokens, so it hands each token on in a producer of that one token
+(`Parser.Internal.InputProducer`), as Rust's standard command parsers hand a token they took
+to a parser they hold. The non-standard parser therefore cannot switch the version, and it is
+called once per token. The parse state holds nothing, so a fresh one is handed each time, as
+Rust clears it after the command. -/
+/--
+A step of a non-standard command's payload: the token goes to the handler's parser, and the
+command ends when that parser finishes, at the command's `)`.
+-/
+def Internal.nonstandardStep (version : Version) (parser : CommandHandler.NonstandardParser H)
+    (token : Internal.Input) :
+    PM H (Internal.Step (Internal.CommandStateOf H) CommandOutcome) := do
+  let (answer, parser, _) ← ExceptT.lift
+    (Parse.parse parser ParseState.new (Internal.InputProducer.mk version (some token)))
+  match answer with
+  | .error error => throw error.cause
+  | .ok .continue => return .more (.nonstandard parser)
+  -- a non-standard command cannot be the exit command
+  | .ok (.break ()) => return .done .command
 
 /--
 A step of the command parser: `(`, the command's name, its payload up to its `)`; or the end of
@@ -71,17 +98,19 @@ def Internal.commandStep (version : Version) (self : Internal.CommandStateOf H)
   | .awaiting =>
     match token with
     | .parenOpen => return .more .opened
-    | .endOfInput => return .done .endOfInput
+    | .endOfInput => return .done .endOfFile
     | _ => syntaxError .expectedCommand
   | .opened =>
     match token with
     | .reserved (.commandName name) => return .more (.payload (Payload.init name version))
-    | .symbol name => throw (.handler (CommandHandler.nonstandardCommand (H := H) name))
+    | .symbol name =>
+      return .more (.nonstandard (← call (CommandHandler.nonstandardCommand (H := H) name)))
     | _ => syntaxError .expectedCommandName
   | .payload payload =>
     match ← payloadStep version payload token with
     | .more payload => return .more (.payload payload)
     | .done outcome => return .done outcome
+  | .nonstandard parser => Internal.nonstandardStep version parser token
 
 /-- The calls due when a token arrives at the command parser: those of its payload parser. -/
 def Internal.commandArrive (self : Internal.CommandStateOf H) (token : Internal.Input) :
@@ -90,7 +119,9 @@ def Internal.commandArrive (self : Internal.CommandStateOf H) (token : Internal.
   | .payload payload => payloadArrive payload token
   | _ => pure ()
 
-instance : Internal.ParseByToken (CommandParser H) H m (Handler.Error H) CommandOutcome where
+@[no_expose]
+instance Internal.instParseByTokenCommandParser :
+    Internal.ParseByToken (CommandParser H) H m (Handler.Error H) CommandOutcome where
   arrive parser token := Internal.commandArrive parser.state token
   step version parser token := do
     match ← Internal.commandStep version parser.state token with
@@ -100,6 +131,67 @@ instance : Internal.ParseByToken (CommandParser H) H m (Handler.Error H) Command
 
 instance : Parse (CommandParser H) H m (Handler.Error H) CommandOutcome where
   parse := Internal.parseByToken
+
+end
+
+/- LEAN: Rust's trait `SmtCommandRule<H>`, implemented by a type `C` that names the rule. The
+parser's result type, which Rust reads from the parser's `SmtParse` impl, is a field here, so that
+`handle` can name it. Rust bounds `H` by `SmtCommandHandler`; here a `Handler` is enough, so
+that a handler's `CommandHandler` instance can name a payload parser of a rule for that same
+handler as its non-standard parser: Lean has no cycles between instances. -/
+/-- Determines how a single command should be handled by a command handler
+(`SmtCommandRule`). -/
+class CommandRule (C : Type) (H : Type) {m : outParam (Type → Type)} [Handler H m] where
+  /-- The parser of the command's payload. -/
+  Parser : Type
+  /-- What the parser finishes with. -/
+  Result : Type
+  /-- The parser's instance of `Parse`, filled in by instance search. -/
+  [parse : Parse Parser H m (Handler.Error H) Result]
+  /-- Handles the result of a command. -/
+  handle : Result → ExceptT (Handler.Error H) (StateT H m) Unit
+
+/- The rule's parser's `Parse` instance, found from the rule's. -/
+attribute [instance_reducible, instance] CommandRule.parse
+
+/--
+A parser that processes the payload of a single command (starting after its name)
+(`SmtCommandPayloadParser`).
+
+Preserves self-reset: if the inner parser is self-resetting, moves back into the default state
+before returning `ControlFlow.break`.
+-/
+structure CommandPayloadParser (H C : Type) {m : Type → Type} [Handler H m]
+    [CommandRule C H] where
+  private mk ::
+  private parser : CommandRule.Parser C H
+
+section
+
+variable {H C : Type} {m : Type → Type} [Handler H m] [CommandRule C H]
+
+/-- The payload parser over the rule's parser. -/
+def CommandPayloadParser.new (parser : CommandRule.Parser C H) : CommandPayloadParser H C :=
+  ⟨parser⟩
+
+/- LEAN: Rust's `Default`, where the rule's parser has one. -/
+@[no_expose]
+instance [Inhabited (CommandRule.Parser C H)] : Inhabited (CommandPayloadParser H C) :=
+  ⟨.new default⟩
+
+@[no_expose]
+instance [Monad m] : Parse (CommandPayloadParser H C) H m (Handler.Error H) Unit where
+  parse self state cursor := do
+    let (answer, parser, state, next) ← Parse.parse self.parser state cursor
+    match answer with
+    | .error cause => return (.error cause, ⟨parser⟩, state, next)
+    | .ok .continue => return (.ok .continue, ⟨parser⟩, state, next)
+    | .ok (.break result) =>
+      -- the command ends at the last consumed token
+      match ← (CommandRule.handle (C := C) result).run with
+      | .error error =>
+        return (.error (ParseError.Internal.new (.handler error)), ⟨parser⟩, state, next)
+      | .ok () => return (.ok (.break ()), ⟨parser⟩, state, next)
 
 end
 

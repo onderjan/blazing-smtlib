@@ -7,6 +7,7 @@ public import BSmtLib.Facts.Proofs.Reader.Param.KeepsPosture
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
 import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Parser.Script
 
 @[expose] public section
 
@@ -52,11 +53,11 @@ def AdapterAtG (version : Lexicon.Version) (items : List LibItem) (v : Token.Ver
   match recRun version items with
   | (.ok (.inl (v', parser)), log) =>
     v' = v ∧ adapter.parser = parser ∧ startLog adapter v = calls log ∧
-      adapter.versionSet = !items.isEmpty
+      (ParseAdapter.Internal.versionSet adapter) = !items.isEmpty
   | (.ok (.inr _), log) =>
     adapter.handler = calls log ∧
       adapter.parser = ScriptParser.new Parser.Adapters.Run.unrestrictedPosture ∧
-      adapter.versionSet = false
+      (ParseAdapter.Internal.versionSet adapter) = false
   | (.error _, log) => adapter.handler = calls log
 
 theorem map_libItem (taken : List Handed) :
@@ -131,11 +132,15 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
         ∃ items' : List LibItem,
           items'.map (rcv ∘ Subtype.val) = (ansRest version cursor taken).2.map (rcv ∘ itemOf) ∧
           AdapterAtG version items' (ansRest version cursor taken).1.2.version
-            { handler := ((paLoop parser cursor).run (calls log)).2,
-              parser := ((paLoop parser cursor).run (calls log)).1.2.1,
-              versionSet :=
-                ParseAdapter.Internal.versionSetAfter
-                    ((paLoop parser cursor).run (calls log)).1.1 })
+            (ParseAdapter.Internal.mk ((paLoop parser cursor).run (calls log)).2
+              ((paLoop parser cursor).run (calls log)).1.2.1
+              (ParseAdapter.Internal.versionSetAfter ((paLoop parser cursor).run (calls log)).1.1)
+              .new)) ∧
+      (∀ ae, ((paLoop parser cursor).run (calls log)).1.1 = .error ae →
+        Flagged.isLayoutAnswer (ansRest version cursor taken).1.1 = true ∨
+        ∃ items' : List LibItem,
+          items'.map (rcv ∘ Subtype.val) = (ansRest version cursor taken).2.map (rcv ∘ itemOf) ∧
+          ∃ log', recRun version items' = (.error ae.cause, log'))
   | 0, _, _, _, _, _, hn, _, _, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, taken, items, parser, log, hn, hst, hrun, hne, hgood => by
     by_cases h : cursor.HasNext
@@ -147,7 +152,8 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
         -- whitespace or a comment: both fail at it
         obtain ⟨e, he, hc⟩ := paLoop_layout h parser (calls log) (ofSyntax_layout cursor _ hh)
         rw [he, hc]
-        exact ⟨trivial, rfl, fun herr => by simp [Flagged.isLayoutAnswer] at herr⟩
+        exact ⟨trivial, rfl, fun herr => (by simp [Flagged.isLayoutAnswer] at herr),
+          fun _ _ => .inl rfl⟩
       | some handed =>
         rw [paLoop_step h]
         simp only [hh] at hgood ⊢
@@ -246,9 +252,13 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
           simp only [paOf] at htake
           simp only [Prod.mk.injEq] at htake
           obtain ⟨⟨rfl, rfl⟩, rfl⟩ := htake
-          refine ⟨trivial, by rw [← hsw', ← hdi'], fun _ => ⟨items ++ [item], hst', ?_⟩⟩
+          refine ⟨trivial, by rw [← hsw', ← hdi'], fun _ => ⟨items ++ [item], hst', ?_⟩,
+            fun ae hae => .inr ⟨items ++ [item], hst', _, by
+              cases hae; rw [recRun_snoc version items item hrun, hR]
+              simp only [Parser.ParseError.Internal.cause_new]; rfl⟩⟩
           unfold AdapterAtG
           rw [recRun_snoc version items item hrun, hR]
+          rfl
         | «break» r =>
           simp only [hcase] at hgood ⊢
           have hres : ∃ u, res = .ok (.inr u) := by
@@ -271,11 +281,14 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
           simp only [paOf] at htake
           simp only [Prod.mk.injEq] at htake
           obtain ⟨⟨rfl, rfl⟩, rfl⟩ := htake
-          refine ⟨trivial, by rw [← hsw', ← hdi'], fun _ => ⟨items ++ [item], hst', ?_⟩⟩
+          refine ⟨trivial, by rw [← hsw', ← hdi'], fun _ => ⟨items ++ [item], hst', ?_⟩,
+            fun ae hae => by simp only at hae; cases hae⟩
           unfold AdapterAtG
           rw [recRun_snoc version items item hrun, hR]
           refine ⟨rfl, ?_, rfl⟩
-          show ScriptParser.new parser.posture = _
+          rw [ParseAdapter.Internal.parser_mk]
+          show (ScriptParser.new (ScriptParser.Internal.posture parser) :
+            type_of% parser) = _
           rw [KeepsPosture.recRun_posture version items hrun]
         | «continue» =>
           simp only [hcase] at hgood ⊢
@@ -302,7 +315,8 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
           · rename_i hreq
             simp only [hreq, ite_true, Prod.mk.injEq] at htake
             obtain ⟨⟨rfl, rfl⟩, rfl⟩ := htake
-            refine ⟨trivial, rfl, fun _ => ⟨items ++ [item], hst', ?_⟩⟩
+            refine ⟨trivial, rfl, fun _ => ⟨items ++ [item], hst', ?_⟩,
+              fun ae hae => by simp only at hae; cases hae⟩
             unfold AdapterAtG
             rw [recRun_snoc version items item hrun, hR]
             refine ⟨?_, rfl, rfl, by simp [ParseAdapter.Internal.versionSetAfter]⟩
@@ -325,7 +339,8 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
               (.inl (by simp)) hgood
     · unfold ansRest
       rw [dite_eq_right_of_eq_false (eq_false h), paLoop, dite_eq_right_of_eq_false (eq_false h)]
-      refine ⟨trivial, rfl, fun _ => ⟨items, hst, ?_⟩⟩
+      refine ⟨trivial, rfl, fun _ => ⟨items, hst, ?_⟩,
+        fun ae hae => by cases hae⟩
       unfold AdapterAtG
       rw [hrun]
       have hne' : items ≠ [] := hne.resolve_right h

@@ -165,7 +165,7 @@ end
 def linkLinkG (version : Lexicon.Version) :
     Link (Flagged (scriptConsumer version)) AnswerM (scriptConsumer version).Result
       (Option (scriptConsumer version).Error) RecAdapter Id Unit
-      (Parser.ParseErrorCause Unit) :=
+      (Parser.ParseError Unit) :=
   { rc := linkRelatorG version, rr := fun _ _ => True, re := fun _ _ => True }
 
 /-! ## The calls of the two consumers -/
@@ -258,7 +258,7 @@ theorem link_callsG (version : Lexicon.Version) : Calls (linkLinkG version) wher
       rotate_left
       · -- the recording run goes on: the two loops agree
         obtain ⟨rfl, hparser, hlog, -⟩ := hat
-        obtain ⟨hshape, hcur, hadapt⟩ := loop_agreeG (remaining cursor + 1) cursor taken items
+        obtain ⟨hshape, hcur, hadapt, -⟩ := loop_agreeG (remaining cursor + 1) cursor taken items
           parser log (Nat.lt_succ_self _) hst (by rw [hR, hcv]) (.inr h) hgood'
         rw [hcv, hlog, hparser] at hq
         simp only [Prod.mk.injEq] at hq

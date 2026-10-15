@@ -44,27 +44,75 @@ inductive ReadErrorCause (E : Type) where
   /-- The handler rejected a command or a syntactic category. -/
   | handler (error : E)
 
-/- LEAN: the fields are readable as `error.cause` and `error.span`, replacing the getters
-`cause`, `span` and `into_cause`. -/
+/- LEAN: Rust's derived `Debug`. Lean's `IO.Error` has no `Repr`, so an I/O error is shown by its
+message. -/
+@[no_expose] instance {E : Type} [Repr E] : Repr (ReadErrorCause E) where
+  reprPrec cause prec :=
+    let app (name : String) (argument : Std.Format) : Std.Format :=
+      Repr.addAppParen (.group (.nest 2 (.text ("BSmtLib.Reader.ReadErrorCause." ++ name) ++
+        .line ++ argument))) prec
+    match cause with
+    | .io error => app "io" (reprArg (toString error))
+    | .lexical kind => app "lexical" (reprArg kind)
+    | .syntax kind => app "syntax" (reprArg kind)
+    | .handler error => app "handler" (reprArg error)
+
+/- LEAN: the constructor is private, as Rust's fields are, and the reader builds an error with
+`ReadError.Internal.new`. The fields are readable as `error.cause` and `error.span`, replacing
+the getters `cause`, `span` and `into_cause`. -/
 /-- An error that ended reading, including its span. -/
 structure ReadError (E : Type) where
+  private mk ::
   /-- Determines why reading has failed. -/
   cause : ReadErrorCause E
   /--
   Span where the error occurred.
 
-  For I/O errors, the span is empty, indicating the position where the reading failed.
+  For I/O errors, the returned span is empty,
+  indicating the position where the reading failed.
   -/
   span : Span
+  deriving Repr
+
+@[inline]
+def ReadError.Internal.new {E : Type} (cause : ReadErrorCause E) (span : Span) : ReadError E :=
+  { cause, span }
+
+@[simp]
+theorem ReadError.Internal.cause_new {E : Type} (cause : ReadErrorCause E) (span : Span) :
+    (ReadError.Internal.new cause span).cause = cause :=
+  (rfl)
+
+@[simp]
+theorem ReadError.Internal.span_new {E : Type} (cause : ReadErrorCause E) (span : Span) :
+    (ReadError.Internal.new cause span).span = span :=
+  (rfl)
+
+/-- A read error is the one built from its fields. -/
+@[simp]
+theorem ReadError.Internal.new_eta {E : Type} (error : ReadError E) :
+    ReadError.Internal.new error.cause error.span = error :=
+  (rfl)
+
+/-- Two read errors built from the same fields are equal. -/
+theorem ReadError.Internal.new_inj {E : Type} {cause cause' : ReadErrorCause E}
+    {span span' : Span} :
+    ReadError.Internal.new cause span = ReadError.Internal.new cause' span' ↔
+      cause = cause' ∧ span = span' := by
+  constructor
+  · intro h
+    exact ⟨congrArg ReadError.cause h, congrArg ReadError.span h⟩
+  · rintro ⟨rfl, rfl⟩
+    rfl
 
 instance {E : Type} : Inhabited (ReadError E) :=
-  ⟨{ cause := .io (IO.userError "reading failed"), span := Span.Internal.newZero }⟩
+  ⟨ReadError.Internal.new (.io (IO.userError "reading failed")) Span.Internal.newZero⟩
 
 /-- Converts the error of a parser, located at `span`, into a read error. -/
 /- LEAN: Rust's private `from_parse`. It is public here as the statements about the reader's
 errors in the facts of the public interface name it. -/
-def ReadError.ofParse {E : Type} (err : ParseErrorCause E) (span : Span) : ReadError E :=
-  let cause := match err with
+def ReadError.ofParse {E : Type} (err : ParseError E) (span : Span) : ReadError E :=
+  let cause := match err.cause with
     | .syntax err => ReadErrorCause.«syntax» err
     | .handler err => ReadErrorCause.handler err
   { cause, span }
@@ -72,7 +120,7 @@ def ReadError.ofParse {E : Type} (err : ParseErrorCause E) (span : Span) : ReadE
 /-- Converts the error of a lexer over a parser into a read error. -/
 /- LEAN: Rust's `impl From<SmtLexError<SmtParseError<E>>> for SmtReadError<E>`, which Lean's
 conversion by name stands for. -/
-def ReadError.ofLex {E : Type} (err : LexError (ParseErrorCause E)) : ReadError E :=
+def ReadError.ofLex {E : Type} (err : LexError (ParseError E)) : ReadError E :=
   let span := err.span
   match err.cause with
   | .lexical kind => { cause := .lexical kind, span }
@@ -173,8 +221,12 @@ failure carries.
 
 For whole inputs, consider `readSmtFile` and `readSmt`.
 -/
-structure _root_.BSmtLib.Reader (H P : Type) {m : Type → Type} [Monad m]
-    {E R : Type} [Parse P H m E R] where
+/- LEAN: Rust's bound `H: SmtHandler` is the instance argument `Handler H m`. Rust's default
+parser `SmtScriptParser<H>` has no counterpart: Lean checks a default against the bound when the
+type is named, and the script parser needs `CommandHandler H m`. A script reader is
+`Reader H (ScriptParser H)`. -/
+structure _root_.BSmtLib.Reader (H : Type) {m : Type → Type} [Monad m] [Handler H m]
+    (P : Type) {E R : Type} [Parse P H m E R] where
   private mk ::
   private lexer : Lexer (ParseAdapter H P)
 
@@ -197,7 +249,7 @@ end
 
 section
 
-variable {H P : Type} {m : Type → Type} [Monad m] {E R : Type} [Parse P H m E R]
+variable {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type} [Parse P H m E R]
 
 /--
 Creates a reader of the input `parser` accepts, over `handler`.
@@ -229,13 +281,11 @@ def discardedFrom (self : Reader H P) : Option Span.Location :=
 def handler (self : Reader H P) : H :=
   self.lexer.consumer.handler
 
-/- LEAN: Rust's `handler_mut`. The adapter is taken apart so that the handler is held once and
-changed in place, if the caller does not keep the old reader. -/
+/- LEAN: Rust's `handler_mut`. The lexer and the adapter are taken apart so that the handler is
+held once and changed in place, if the caller does not keep the old reader. -/
 /-- Returns the reader with its handler changed by `f`. -/
 def modifyHandler (self : Reader H P) (f : H → H) : Reader H P :=
-  { lexer := self.lexer.modifyConsumer fun adapter =>
-      let { handler, parser, versionSet, parseState } := adapter
-      { handler := f handler, parser, versionSet, parseState } }
+  { lexer := self.lexer.modifyConsumer fun adapter => adapter.modifyHandler f }
 
 namespace Internal
 
@@ -251,8 +301,6 @@ def ofLexer (lexer : Lexer (ParseAdapter H P)) : Reader H P :=
 
 end Internal
 
-variable [Handler H m]
-
 /--
 Processes a byte slice as one piece of the input.
 
@@ -263,25 +311,10 @@ If an error occurs, the reader is not given back; the failure carries the handle
 -/
 def readSlice (self : Reader H P) (slice : ByteSlice) :
     m (Except (ReadFailure H P) (Reader H P)) := do
-  -- parsing goes through lexing, so run the step of the lexer's `lexSlice`, which leaves the
-  -- lexer, and its handler, also where it fails
-  let step := Lexer.Internal.lexSliceStep
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice
-  let (result, lexer) ← Lexer.Internal.run self.lexer step
-  match result with
-  | .ok held => return .ok ⟨Lexer.Internal.withHeld lexer (held.or (Lexer.Internal.held lexer))⟩
-  | .error err =>
-    return .error { error := ReadError.ofLex err, handler := lexer.consumer.handler }
-
-/-- The result to return at the end of the input: the one the lexer holds, else the one the
-consumer broke with at the end of the input, as the lexer's `lexEof` returns it. -/
-private def eofResult (held : Option (Span.Located R)) (flow : ControlFlow (Span.Located R)) :
-    Option (Span.Located R) :=
-  match held, flow with
-  | some held, _ => some held
-  | none, .break located => some located
-  | none, .continue => none
+  match ← self.lexer.lexSlice slice with
+  | .ok lexer => return .ok ⟨lexer⟩
+  | .error (err, adapter) =>
+    return .error { error := ReadError.ofLex err, handler := adapter.handler }
 
 /- LEAN: Rust's `read_eof` panics where the parser continues on the end of the input, a broken
 contract; here it is an obligation on the caller, answered by `none`, as `Lexer.lexEof` does. -/
@@ -297,17 +330,10 @@ If an error occurs, the reader is not given back; the failure carries the handle
 -/
 def readEof (self : Reader H P) :
     m (Except (ReadFailure H P) (Option (Span.Located R) × Reader H P)) := do
-  -- parsing goes through lexing, so run the step of the lexer's `lexEof`, which leaves the
-  -- lexer, and its handler, also where it fails
-  let step := Lexer.Internal.lexEofStep
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)
-  let (result, lexer) ← Lexer.Internal.run self.lexer step
-  match result with
-  | .ok flow =>
-    return .ok (eofResult (Lexer.Internal.held lexer) flow, ⟨Lexer.Internal.withHeld lexer none⟩)
-  | .error err =>
-    return .error { error := ReadError.ofLex err, handler := lexer.consumer.handler }
+  match ← self.lexer.lexEof with
+  | .ok (result, lexer) => return .ok (result, ⟨lexer⟩)
+  | .error (err, adapter) =>
+    return .error { error := ReadError.ofLex err, handler := adapter.handler }
 
 /- LEAN: Rust's `read_all` takes `&mut self` and the buffered reader; this takes the reader and
 the buffered reader and gives both back, the buffered reader also after an error. The loop is the

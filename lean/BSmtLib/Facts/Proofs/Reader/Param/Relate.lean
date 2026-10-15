@@ -148,14 +148,14 @@ theorem flagged_run (consumer : BSmtLibSpec.Lexer.Consumer) {b : Token.BatchTag}
 def linkLink (version : Lexicon.Version) (commands : List Tree.Command) :
     Link (Flagged (scriptConsumer version)) AnswerM (scriptConsumer version).Result
       (Option (scriptConsumer version).Error) RecAdapter Id Unit
-      (Parser.ParseErrorCause Unit) :=
+      (Parser.ParseError Unit) :=
   { rc := linkRelator version commands, rr := fun _ _ => True, re := fun _ _ => True }
 
 /-- A value of the adapter's side that stands for one of the first side's, as the link relates
 them. -/
 def partnerOf {ε α : Type} :
-    Except ε (ControlFlow α) → Except (Parser.ParseErrorCause Unit) (ControlFlow α)
-  | .error _ => .error (.handler ())
+    Except ε (ControlFlow α) → Except (Parser.ParseError Unit) (ControlFlow α)
+  | .error _ => .error (Parser.ParseError.Internal.new (.handler ()))
   | .ok flow => .ok flow
 
 section

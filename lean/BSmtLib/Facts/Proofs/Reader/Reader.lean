@@ -51,7 +51,7 @@ def slicedP (p : PLexer) (slice : ByteSlice) : PLexer :=
 fails. -/
 def eofedP (p : PLexer) : PLexer :=
   (Lexer.Internal.run p (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := Parser.ParseErrorCause Unit)
+    (E := Parser.ParseError Unit)
     (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
     (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) : Id _).2
 
@@ -61,7 +61,7 @@ theorem readSlice_ofLexer (lexer : PLexer) (slice : ByteSlice) :
     ((Reader.Internal.ofLexer lexer : RecReader).readSlice slice : Id _) =
       match (Lexer.lexSlice lexer slice : Id _) with
       | .ok lexer' => .ok (Reader.Internal.ofLexer lexer')
-      | .error (error, ()) => .error ⟨Reader.ReadError.ofLex error,
+      | .error (error, _) => .error ⟨Reader.ReadError.ofLex error,
           (Lexer.Internal.handler (slicedP lexer slice)).handler⟩ := by
   simp only [Reader.readSlice, Reader.Internal.ofLexer, Lexer.lexSlice, slicedP]
   generalize (Lexer.Internal.run lexer (Lexer.Internal.lexSliceStep (H := RecAdapter) (m := Id)
@@ -75,11 +75,11 @@ theorem readEof_ofLexer (lexer : PLexer) :
     ((Reader.Internal.ofLexer lexer : RecReader).readEof : Id _) =
       match (Lexer.lexEof lexer : Id _) with
       | .ok (result, lexer') => .ok (result, Reader.Internal.ofLexer lexer')
-      | .error (error, ()) => .error ⟨Reader.ReadError.ofLex error,
+      | .error (error, _) => .error ⟨Reader.ReadError.ofLex error,
           (Lexer.Internal.handler (eofedP lexer)).handler⟩ := by
   simp only [Reader.readEof, Reader.Internal.ofLexer, Lexer.lexEof, eofedP]
   generalize (Lexer.Internal.run lexer (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id)
-    (R := Unit) (E := Parser.ParseErrorCause Unit)
+    (R := Unit) (E := Parser.ParseError Unit)
     (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
     (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) : Id _) = r
   rcases r with ⟨e | flow, l⟩ <;> rfl
@@ -102,7 +102,7 @@ theorem readerRun_paFeed : ∀ (slices : List Regex.Chars) (lexer : PLexer)
     simp only [paFeed] at h
     simp only [readerRun, readEof_ofLexer]
     revert h
-    rcases (Lexer.lexEof lexer : Id _) with ⟨e, ⟨⟩⟩ | ⟨res, l⟩
+    rcases (Lexer.lexEof lexer : Id _) with ⟨e, _⟩ | ⟨res, l⟩
     · intro h; cases h
     · intro h
       cases h
@@ -111,7 +111,7 @@ theorem readerRun_paFeed : ∀ (slices : List Regex.Chars) (lexer : PLexer)
     simp only [paFeed] at h
     simp only [readerRun, readSlice_ofLexer]
     revert h
-    rcases (Lexer.lexSlice lexer slice.toByteArray.toByteSlice : Id _) with ⟨e, ⟨⟩⟩ | l
+    rcases (Lexer.lexSlice lexer slice.toByteArray.toByteSlice : Id _) with ⟨e, _⟩ | l
     · intro h; cases h
     · intro h
       exact readerRun_paFeed slices l h
@@ -138,7 +138,7 @@ theorem paFeed_of_readerRun : ∀ (slices : List Regex.Chars) (lexer : PLexer),
     simp only [readerRun, readEof_ofLexer] at h
     simp only [paFeed]
     revert h
-    rcases (Lexer.lexEof lexer : Id _) with ⟨e, ⟨⟩⟩ | ⟨res, l⟩
+    rcases (Lexer.lexEof lexer : Id _) with ⟨e, _⟩ | ⟨res, l⟩
     · intro h; cases h
     · intro h
       rcases res with _ | r
@@ -148,7 +148,7 @@ theorem paFeed_of_readerRun : ∀ (slices : List Regex.Chars) (lexer : PLexer),
     simp only [readerRun, readSlice_ofLexer] at h
     simp only [paFeed]
     revert h
-    rcases (Lexer.lexSlice lexer slice.toByteArray.toByteSlice : Id _) with ⟨e, ⟨⟩⟩ | l
+    rcases (Lexer.lexSlice lexer slice.toByteArray.toByteSlice : Id _) with ⟨e, _⟩ | l
     · intro h; cases h
     · intro h
       exact paFeed_of_readerRun slices l h

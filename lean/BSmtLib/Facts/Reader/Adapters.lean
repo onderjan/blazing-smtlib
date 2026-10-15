@@ -52,7 +52,7 @@ def recordingAdapter : RecAdapter :=
 its public calls: the result at the end of the input and the lexer, or the first error. -/
 def paFeed (lexer : PLexer) :
     List Regex.Chars →
-      Except (LexError (Parser.ParseErrorCause Unit)) (Option (Span.Located Unit) × PLexer)
+      Except (LexError (Parser.ParseError Unit)) (Option (Span.Located Unit) × PLexer)
   | [] =>
     match (Lexer.lexEof lexer : Id _) with
     | .ok result => .ok result
@@ -88,12 +88,13 @@ def itemOf (handed : Handed) : Parser.Internal.Input :=
   | .unquotedSymbol =>
     match handed.reserved, decodeReserved handed.content with
     | some _, some word => .reserved word
-    | _, _ => .symbol ⟨SymbolView.Internal.newUnchecked (bytesOf handed.content), false⟩
-  | .quotedSymbol => .symbol ⟨SymbolView.Internal.newUnchecked (bytesOf handed.content), true⟩
+    | _, _ => .symbol (SymbolView.Internal.newUnchecked false (bytesOf handed.content))
+  | .quotedSymbol => .symbol (SymbolView.Internal.newUnchecked true (bytesOf handed.content))
   -- whitespace and comments are handed over only to a concrete consumer, which the script
   -- consumer is not; they stand for nothing the parser reads, and are given a symbol of their
   -- content only so that every entry has an item
-  | .whitespace | .comment => .symbol ⟨SymbolView.Internal.newUnchecked (bytesOf handed.content), false⟩
+  | .whitespace | .comment =>
+    .symbol (SymbolView.Internal.newUnchecked false (bytesOf handed.content))
   | .endOfFile => .endOfInput
 
 /-- The parser's item for a handed token. -/

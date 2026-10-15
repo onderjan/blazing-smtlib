@@ -26,7 +26,7 @@ open BSmtLib
 open BSmtLib.Token (Version VersionPosture VersionPostureBuilder Consume ConsumeFrom Produce
   SyntaxToken BatchCursor)
 open BSmtLib.Lexer (LexError)
-open BSmtLib.Parser (Parse ParseState ParseAdapter ParseErrorCause SyntaxErrorKind ScriptParser
+open BSmtLib.Parser (Parse ParseState ParseAdapter ParseError SyntaxErrorKind ScriptParser
   CommandParser SortParser TermParser SExprParser CommandOutcome SymbolParser KeywordParser
   StringParser NumeralParser OpenParenParser CloseParenParser IdentParser QualifiedIdentParser
   ClosedAttributeParser ClosedMultipleAttributeParser PatternParser SortedVarParser PairParser
@@ -64,11 +64,9 @@ def Remote.ask (remote : Remote) (call : String) : IO String := do
 def badAnswer {α : Type} (call answer : String) : IO α :=
   failRequest s!"unexpected answer {repr answer} to call {call}"
 
-/-- The handler's error: one the Rust side answered a call with, by its number, or that of a
-command of a non-standard name, which the Lean handler names without asking. -/
+/-- The handler's error: one the Rust side answered a call with, by its number. -/
 inductive RemoteError where
   | rust (id : Nat)
-  | nonstandard (symbol : Nodes.Symbol)
 
 /-- The monad of the handler's calls. -/
 abbrev HandlerM := ExceptT RemoteError (StateT Remote IO)
@@ -97,8 +95,8 @@ def callUnit (call : String) : HandlerM Unit := do
 
 /-! ## The fields of the calls -/
 
-def symbolField (symbol : Nodes.Symbol) : String :=
-  (if symbol.quoted then "q" else "u") ++ hex symbol.content.asSlice
+def symbolField (symbol : Plain.SymbolView) : String :=
+  (if symbol.isQuoted then "q" else "u") ++ hex symbol.asSlice
 
 def constantField : SpecConstant → String
   | .numeral digits => "N" ++ hex digits.asSlice
@@ -129,10 +127,10 @@ def idsField (ids : Array Nat) : String :=
   listField toString ids
 
 /-- Symbols, each with the number of a value. -/
-def boundField (pairs : Array (Nodes.Symbol × Nat)) : String :=
+def boundField (pairs : Array (Plain.SymbolView × Nat)) : String :=
   listField (fun (symbol, id) => s!"{symbolField symbol} {id}") pairs
 
-def symbolsField (symbols : Array Nodes.Symbol) : String :=
+def symbolsField (symbols : Array Plain.SymbolView) : String :=
   listField symbolField symbols
 
 def sowField : SymbolOrWildcard → String
@@ -144,16 +142,37 @@ def patternField : Pattern → String
   | .constructor constructor arguments =>
     s!"c {symbolField constructor} {listField sowField arguments}"
 
+/-! The owned values that the category parsers give, written as their views are. -/
+
+def symbolBufField (symbol : Plain.Symbol) : String :=
+  symbolField symbol.asView
+
+def indexBufField : Nodes.IndexBuf → String
+  | .numeral digits => "n" ++ hex digits.asSlice
+  | .symbol symbol => symbolBufField symbol
+
+def identBufField (identifier : Nodes.IdentifierBuf) : String :=
+  s!"{symbolBufField identifier.symbol} {listField indexBufField identifier.indices}"
+
+def sowBufField : Nodes.SymbolOrWildcardBuf → String
+  | .symbol symbol => symbolBufField symbol
+  | .wildcard => "_"
+
+def patternBufField : Nodes.PatternBuf → String
+  | .single symbol => s!"p {sowBufField symbol}"
+  | .constructor constructor arguments =>
+    s!"c {symbolBufField constructor} {listField sowBufField arguments}"
+
 def quantifierField : Quantifier → String
   | .«forall» => "forall"
   | .«exists» => "exists"
 
 def signatureField (signature : Signature Nat) : String :=
-  s!"{symbolField signature.symbol} {boundField signature.parameters} {signature.result}"
+  s!"{symbolField signature.name} {boundField signature.params} {signature.resultSort}"
 
-def constructorsField (constructors : Array (Constructor Nat)) : String :=
-  listField (fun constructor =>
-    s!"{symbolField constructor.symbol} {boundField constructor.selectors}") constructors
+def constructorsField (constructors : ConstructorsView Nat) : String :=
+  listField (fun (constructor, selectors) =>
+    s!"{symbolField constructor} {boundField selectors.toArray}") constructors.toArray
 
 /-! ## The handler -/
 
@@ -169,34 +188,36 @@ instance : Handler Remote IO where
     let answer ← (← get).ask call
     unless answer == "ok" do
       badAnswer call answer
-  handleSort identifier sorts := callValue s!"handle_sort {identField identifier} {idsField sorts}"
+  handleSort identifier sorts :=
+    callValue s!"handle_sort {identField identifier} {idsField sorts.asSlice}"
   handleTerm
     | .constant constant => callValue s!"handle_term c {constantField constant}"
     | .identifier identifier sort =>
       callValue s!"handle_term i {identField identifier} {optIdField sort}"
     | .application function sort arguments =>
-      callValue s!"handle_term a {identField function} {optIdField sort} {idsField arguments}"
+      callValue s!"handle_term a {identField function} {optIdField sort} \
+        {idsField arguments.asSlice}"
   handleSExpr
     | .constant constant => callValue s!"handle_s_expr c {constantField constant}"
     | .symbol symbol => callValue s!"handle_s_expr s {symbolField symbol}"
     | .reserved word => callValue s!"handle_s_expr r {word.asStr}"
     | .keyword name => callValue s!"handle_s_expr k x{hex name.asSlice}"
-    | .list items => callValue s!"handle_s_expr l {idsField items}"
+    | .list items => callValue s!"handle_s_expr l {idsField items.asSlice}"
   handleAttribute name value :=
     let value := match value with
       | none => "-"
       | some (.constant constant) => s!"c {constantField constant}"
       | some (.symbol symbol) => s!"s {symbolField symbol}"
-      | some (.list items) => s!"l {idsField items}"
+      | some (.list items) => s!"l {idsField items.asSlice}"
     callValue s!"handle_attribute x{hex name.asSlice} {value}"
-  annotateTerm term attributes := callValue s!"annotate_term {term} {idsField attributes}"
-  startLet bindings := callValue s!"start_let {boundField bindings}"
+  annotateTerm term attributes := callValue s!"annotate_term {term} {idsField attributes.asSlice}"
+  startLet bindings := callValue s!"start_let {boundField bindings.toArray}"
   endLet scope body := callValue s!"end_let {scope} {body}"
   startQuantifier quantifier variables :=
-    callValue s!"start_quantifier {quantifierField quantifier} {boundField variables}"
+    callValue s!"start_quantifier {quantifierField quantifier} {boundField variables.toArray}"
   endQuantifier quantifier scope body :=
     callValue s!"end_quantifier {quantifierField quantifier} {scope} {body}"
-  startLambda variables := callValue s!"start_lambda {boundField variables}"
+  startLambda variables := callValue s!"start_lambda {boundField variables.toArray}"
   endLambda scope body := callValue s!"end_lambda {scope} {body}"
   startMatch scrutinee := callUnit s!"start_match {scrutinee}"
   startMatchCase scrutinee pattern :=
@@ -204,29 +225,43 @@ instance : Handler Remote IO where
   endMatchCase scope scrutinee body := callValue s!"end_match_case {scope} {scrutinee} {body}"
   endMatch scrutinee cases :=
     callValue s!"end_match {scrutinee} \
-      {listField (fun (pattern, body) => s!"{patternField pattern} {body}") cases}"
+      {listField (fun (pattern, body) => s!"{patternField pattern} {body}") cases.toArray}"
+
+/-- The rule of a non-standard command that the handler accepts: one term, then the closing
+parenthesis, as the Rust tests' handler accepts (`parse_backend::rust::NonstandardRule`). -/
+structure NonstandardRule where
+
+instance : Parser.CommandRule NonstandardRule Remote where
+  Parser := ClosedParser Remote (TermParser Remote)
+  Result := Nat
+  handle term := callUnit s!"nonstandard_term {idField term}"
 
 instance : CommandHandler Remote IO where
-  nonstandardCommand symbol := .nonstandard symbol
+  NonstandardParser := Parser.CommandPayloadParser Remote NonstandardRule
+  nonstandardCommand symbol := do
+    callUnit s!"nonstandard_command {symbolField symbol}"
+    return .new (.new .new)
   commandAssert term := callUnit s!"command_assert {idField term}"
   commandCheckSat := callUnit "command_check_sat"
-  commandCheckSatAssuming terms := callUnit s!"command_check_sat_assuming {idsField terms}"
+  commandCheckSatAssuming terms := callUnit s!"command_check_sat_assuming {idsField terms.asSlice}"
   commandDeclareConst symbol sort :=
     callUnit s!"command_declare_const {symbolField symbol} {idField sort}"
   startDeclareDatatype symbol parameters :=
-    callUnit s!"start_declare_datatype {symbolField symbol} {symbolsField parameters}"
+    callUnit s!"start_declare_datatype {symbolField symbol} {symbolsField parameters.toArray}"
   endDeclareDatatype constructors :=
     callUnit s!"end_declare_datatype {constructorsField constructors}"
   startDeclareDatatypes sorts :=
     callUnit s!"start_declare_datatypes \
-      {listField (fun (symbol, arity) => s!"{symbolField symbol} x{hex arity.asSlice}") sorts}"
+      {listField (fun (symbol, arity) => s!"{symbolField symbol} x{hex arity.asSlice}")
+        sorts.toArray}"
   startDatatypeDeclaration parameters :=
-    callUnit s!"start_datatype_declaration {symbolsField parameters}"
+    callUnit s!"start_datatype_declaration {symbolsField parameters.toArray}"
   endDatatypeDeclaration constructors :=
     callUnit s!"end_datatype_declaration {constructorsField constructors}"
   endDeclareDatatypes := callUnit "end_declare_datatypes"
   commandDeclareFun symbol parameters result :=
-    callUnit s!"command_declare_fun {symbolField symbol} {idsField parameters} {idField result}"
+    callUnit s!"command_declare_fun {symbolField symbol} {idsField parameters.asSlice} \
+      {idField result}"
   commandDeclareSort symbol arity :=
     callUnit s!"command_declare_sort {symbolField symbol} x{hex arity.asSlice}"
   commandDeclareSortParameter symbol :=
@@ -238,13 +273,13 @@ instance : CommandHandler Remote IO where
   startDefineFunRec signature := callUnit s!"start_define_fun_rec {signatureField signature}"
   endDefineFunRec body := callUnit s!"end_define_fun_rec {idField body}"
   startDefineFunsRec signatures :=
-    callUnit s!"start_define_funs_rec {listField signatureField signatures}"
+    callUnit s!"start_define_funs_rec {listField signatureField signatures.toArray}"
   startRecursiveBody signature :=
     callUnit s!"start_recursive_body {signatureField signature}"
   endRecursiveBody body := callUnit s!"end_recursive_body {idField body}"
   endDefineFunsRec := callUnit "end_define_funs_rec"
   startDefineSort symbol parameters :=
-    callUnit s!"start_define_sort {symbolField symbol} {symbolsField parameters}"
+    callUnit s!"start_define_sort {symbolField symbol} {symbolsField parameters.toArray}"
   endDefineSort sort := callUnit s!"end_define_sort {idField sort}"
   commandEcho text := callUnit s!"command_echo x{hex text.asSlice}"
   commandExit := callUnit "command_exit"
@@ -256,7 +291,7 @@ instance : CommandHandler Remote IO where
   commandGetProof := callUnit "command_get_proof"
   commandGetUnsatAssumptions := callUnit "command_get_unsat_assumptions"
   commandGetUnsatCore := callUnit "command_get_unsat_core"
-  commandGetValue terms := callUnit s!"command_get_value {idsField terms}"
+  commandGetValue terms := callUnit s!"command_get_value {idsField terms.asSlice}"
   commandPop count := callUnit s!"command_pop x{hex count.asSlice}"
   commandPush count := callUnit s!"command_push x{hex count.asSlice}"
   commandReset := callUnit "command_reset"
@@ -364,14 +399,13 @@ def errorLine (err : ReadError RemoteError) : String :=
     | .lexical kind => s!"lexical {errorKindName kind}"
     | .syntax kind => s!"syntax {syntaxKindName kind}"
     | .handler (.rust id) => s!"handler {id}"
-    | .handler (.nonstandard symbol) => s!"nonstandard {symbolField symbol}"
   s!"error {location err.span.start} {location err.span.end} {cause}"
 
 /-- The field of what the command parser finished with. -/
 def commandResult : CommandOutcome → String
   | .command => "command"
   | .exit => "exit"
-  | .endOfInput => "end"
+  | .endOfFile => "end"
   | .setVersion version => s!"set-version {versionName version}"
 
 /-! ## The lexers -/
@@ -443,7 +477,7 @@ structure ReaderOps (S : Type) where
 
 /-- The rendered result at its location. -/
 def renderLocated {R : Type} (render : R → String) (result : Located R) : Located String :=
-  { value := render result.value, location := result.location }
+  BSmtLib.Span.Located.Internal.new (render result.value) result.location
 
 /-- The operations of the library's reader. -/
 def ReaderOps.library {P R : Type} [Parse P Remote IO RemoteError R] (render : R → String) :
@@ -467,7 +501,7 @@ def ReaderOps.library {P R : Type} [Parse P Remote IO RemoteError R] (render : R
 
 namespace Emulated
 
-variable {C R E : Type} [Consume C R (ParseErrorCause E)] (ops : LexOps C)
+variable {C R E : Type} [Consume C R (ParseError E)] (ops : LexOps C)
 
 /-- `Reader.readSlice`. -/
 def readSlice (lexer : ops.Lexer) (slice : ByteSlice) :
@@ -491,7 +525,7 @@ partial def readAll {B : Type} [BufRead B IO] (lexer : ops.Lexer) (buf : B) :
   | .error err =>
     -- an empty span at the current location
     let span := Span.Internal.newEmpty (ops.currentLocation lexer)
-    return (.error { cause := .io err, span }, buf)
+    return (.error (ReadError.Internal.new (.io err) span), buf)
   | .ok (buffer, buf) =>
     if buffer.size == 0 then
       -- the end of the input
@@ -508,7 +542,7 @@ partial def readAll {B : Type} [BufRead B IO] (lexer : ops.Lexer) (buf : B) :
 def readFile (lexer : ops.Lexer) (path : System.FilePath) :
     IO (Except (ReadError E) (Option R × ops.Lexer)) := do
   match ← (IO.FS.Handle.mk path .read).toBaseIO with
-  | .error err => return .error { cause := .io err, span := Span.Internal.newZero }
+  | .error err => return .error (ReadError.Internal.new (.io err) Span.Internal.newZero)
   | .ok file =>
     let buf := BufReader.new (IO.FS.Stream.ofHandle file) Reader.Internal.BUF_READER_CAPACITY
     let (result, _) ← readAll ops lexer buf
@@ -639,7 +673,7 @@ structure Drive (P R : Type) where
   /-- The number of tokens after the last wanted result, the end-of-file token aside. -/
   unconsumed : IO.Ref Nat
 
-instance {P R E : Type} [Parse P Remote IO E R] : Consume (Drive P R) Unit (ParseErrorCause E) where
+instance {P R E : Type} [Parse P Remote IO E R] : Consume (Drive P R) Unit (ParseError E) where
   isConcrete := false
 
 namespace Drive
@@ -657,7 +691,7 @@ def first (producer : Z) (h : Produce.HasNext producer) :
 parser parse the cursor. Gives the answer to the producer if the consumer stops, `none` if it goes
 on. A parser that finished has its result written. -/
 def take (drive : Drive P R) (cursor : Z) (h : Produce.HasNext cursor) :
-    IO (Option (Except (ParseErrorCause E) (ControlFlow Unit)) × Drive P R ×
+    IO (Option (Except (ParseError E) (ControlFlow Unit)) × Drive P R ×
       { next : Z // Produce.Consumed next cursor }) := do
   if drive.remaining == 0 then
     -- count the tokens left after the wanted results, and break at the end of the input, as
@@ -687,7 +721,7 @@ instance : WellFoundedRelation (Consuming Z) :=
 /-- Takes the tokens of `cursor`, which comes from `origin` with tokens consumed, while there are
 any and the consumer goes on. -/
 def rest (origin : Z) (drive : Drive P R) (cursor : Z) (consumed : Produce.Consumed cursor origin) :
-    IO (Except (ParseErrorCause E) (ControlFlow Unit) × Drive P R ×
+    IO (Except (ParseError E) (ControlFlow Unit) × Drive P R ×
       { z : Z // Produce.Consumed z origin }) :=
   match Produce.decideHasNext cursor with
   | .isFalse _ => return (.ok .continue, drive, ⟨cursor, consumed⟩)
@@ -756,7 +790,7 @@ def withSimple (k : WithParser) : String → IO Unit
   | "sort" => k (SortParser.new : SortParser Remote) idField
   | "s-expr" => k (SExprParser.new : SExprParser Remote) idField
   | "term" => k (TermParser.new : TermParser Remote) idField
-  | "symbol" => k SymbolParser.new symbolField
+  | "symbol" => k SymbolParser.new symbolBufField
   | "keyword" => k KeywordParser.new fun name =>
       "x" ++ hex name.asSlice
   | "string" => k StringParser.new fun content =>
@@ -765,15 +799,15 @@ def withSimple (k : WithParser) : String → IO Unit
       "x" ++ hex digits.asSlice
   | "open-paren" => k OpenParenParser.new fun () => "-"
   | "close-paren" => k CloseParenParser.new fun () => "-"
-  | "ident" => k IdentParser.new identField
+  | "ident" => k IdentParser.new identBufField
   | "qualified-ident" => k (QualifiedIdentParser.new : QualifiedIdentParser Remote)
-      fun qualified => s!"{identField qualified.identifier} {optIdField qualified.sort}"
+      fun qualified => s!"{identBufField qualified.identifier} {optIdField qualified.sort}"
   | "closed-attribute" => k (ClosedAttributeParser.new : ClosedAttributeParser Remote) idField
   | "closed-multiple-attribute" =>
     k (ClosedMultipleAttributeParser.new : ClosedMultipleAttributeParser Remote) idsField
-  | "pattern" => k (PatternParser.new : PatternParser Remote) patternField
+  | "pattern" => k (PatternParser.new : PatternParser Remote) patternBufField
   | "sorted-var" => k (SortedVarParser.new : SortedVarParser Remote) fun (name, sort) =>
-      s!"{symbolField name} {idField sort}"
+      s!"{symbolBufField name} {idField sort}"
   | name => failRequest s!"unsupported parser {name}"
 
 /-- The names of the parsers that take no inner parser. -/
@@ -803,9 +837,11 @@ def Driven.with (k : WithParser) : Driven → IO Unit
     inner.with fun parser render =>
       match name with
       | "closed" => k (ClosedParser.new (H := Remote) parser) render
-      | "paren" => k (ParenParser.new (H := Remote) parser) render
+      | "paren" => k (ParenParser.new (ClosedParser.new (H := Remote) parser)) render
       | "closed-multiple" => k (ClosedMultipleParser.new (H := Remote) parser) (listField render)
-      | "paren-multiple" => k (ParenMultipleParser.new (H := Remote) parser) (listField render)
+      | "paren-multiple" =>
+        k (ParenMultipleParser.new (ClosedMultipleParser.new (H := Remote) parser))
+          (listField render)
       | name => failRequest s!"unsupported parser {name}"
 
 /-- The characters of a name of a parser up to the first `(`, `,` or `)`, and the rest. -/

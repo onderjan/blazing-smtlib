@@ -106,7 +106,7 @@ variable (posture : VersionPosture)
 /-- The script parser under the posture, with the state of its command parser. -/
 abbrev scriptAt (command : Parser.Command.Internal.CommandStateOf H) (declarations : Nat) :
     ScriptParser H :=
-  { posture, command, declarations }
+  ScriptParser.Internal.mk posture command declarations
 
 /--
 What the script parser does after a command read in the version, over the tokens after it:
@@ -131,7 +131,7 @@ def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Pars
   | .exit => do
     ExceptT.lift producer.discardRest
     driveParse points producer version (scriptAt (H := H) posture .awaiting declarations) rest
-  | .endOfInput => pure (some ((), rest))
+  | .endOfFile => pure (some ((), rest))
 
 variable {points producer posture}
 
@@ -146,7 +146,7 @@ theorem step_commands (version : Token.Version) (command : Parser.Command.Intern
     (declarations : Nat) (token : Parser.Internal.Input) :
     Parser.Internal.ParseByToken.step version (scriptAt posture command declarations) token =
       ScriptParser.Internal.step version (scriptAt posture command declarations)
-        token := rfl
+        token := (rfl)
 
 /--
 The script parser runs as the command parser, with the command
@@ -168,7 +168,8 @@ theorem script_embed (version : Token.Version) (command : Parser.Command.Interna
     congr 1; funext _
     congr 1; funext _
     congr 1; funext _
-    simp only [ScriptParser.Internal.step, bind_assoc]
+    simp only [ScriptParser.Internal.step, bind_assoc, ScriptParser.Internal.posture_mk,
+      ScriptParser.Internal.command_mk, ScriptParser.Internal.declarations_mk]
     congr 1; funext step
     cases step with
     | more state =>
@@ -181,7 +182,7 @@ theorem script_embed (version : Token.Version) (command : Parser.Command.Interna
         cases hck : (check posture) declarations declared <;>
           simp [scriptAfter, hck, Parser.Internal.syntaxError] <;> rfl
       | exit => simp [scriptAfter]
-      | endOfInput => simp [scriptAfter]
+      | endOfFile => simp [scriptAfter]
 
 end
 

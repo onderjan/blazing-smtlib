@@ -48,7 +48,7 @@ and appends them to those found so far.
 theorem indices_runs : (indices : List Tree.Index) →
     (∀ index ∈ indices, index.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (indices.flatMap Tree.Index.tokens) →
-    ∀ (symbol : Nodes.Symbol) (found : Array Nodes.Index),
+    ∀ (symbol : Plain.SymbolView) (found : Array Nodes.Index),
     ∃ parsed : Array Nodes.Index, parsed.toList.map Bridge.index = indices ∧
       Runs points (IdentState.step (H := H) version) (.indices symbol found) tokens
         (ticks points tokens) fun _ => pure (.more (.indices symbol (found ++ parsed)))
@@ -133,7 +133,7 @@ def sortPush {S : Type} (levels : List (SortLevel S)) (sort : S) : Parser.Intern
 theorem sortComplete_eq (levels : List (SortLevel (Traits.Handler.«Sort» H)))
     (head : Nodes.Identifier) (arguments : Array (Traits.Handler.«Sort» H)) :
     sortComplete levels head arguments =
-      Parser.Internal.call (Traits.Handler.handleSort head arguments) >>=
+      Parser.Internal.call (Traits.Handler.handleSort head (.new arguments)) >>=
         fun r => pure (sortPush levels r) := by
   cases levels <;> simp [sortComplete, sortPush]
 
@@ -223,7 +223,7 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine (Runs.token (step := sortStep version) (state := { mode := .start, levels })
       (token := .symbol symbol)
-      (program := Parser.Internal.call (Traits.Handler.handleSort ⟨symbol, #[]⟩ #[]))
+      (program := Parser.Internal.call (Traits.Handler.handleSort ⟨symbol, #[]⟩ (.new #[])))
       (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def, sortComplete_eq])).congr ?_ rfl
     simp [sort_nil, Tree.Identifier.tokens, adaptRun_takeAll (Stands.cons htoken nil),
       hA.handleSort,
@@ -242,7 +242,7 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
         cases step <;> rfl)
       hruns
     have hident := Runs.bind_next
-      (following := fun _ => Parser.Internal.call (Traits.Handler.handleSort head #[]))
+      (following := fun _ => Parser.Internal.call (Traits.Handler.handleSort head (.new #[])))
       (next := fun r => pure (sortPush levels r)) (hembed.congr rfl (by
         funext
         simp [Parser.Internal.Step.wrap, sortComplete_eq]))
@@ -268,7 +268,8 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
           { mode := .start, levels := ⟨head, #[].push r ++ handled.toArray⟩ :: levels }
           [.parenClose]
           (do tick points .parenClose
-              Parser.Internal.call (Traits.Handler.handleSort head (#[].push r ++ handled.toArray)))
+              Parser.Internal.call (Traits.Handler.handleSort
+                head (.new (#[].push r ++ handled.toArray))))
           fun r => pure (sortPush levels r) :=
       fun r handled => Runs.token (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def,
           sortComplete_eq])

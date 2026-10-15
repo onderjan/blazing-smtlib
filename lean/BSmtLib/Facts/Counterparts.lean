@@ -3,6 +3,7 @@ module
 public meta import Lean
 public meta import BSmtLib.Facts.Naming
 public meta import BSmtLib.Facts.RustItems
+public meta import BSmtLib.Facts.RustOnly
 
 @[expose] public meta section
 
@@ -34,6 +35,17 @@ has the macro's use as its header.
 
 `#counterparts` lists the public names that have a reason and no counterpart, and fails with an
 error for each public name that has neither.
+
+It checks the other direction too. Every public item of the Rust crate has a public Lean
+counterpart, but a method of a trait implementation, which the trait's implementation stands
+for: a method `x_mut` may be the function `modifyX`, which returns the value with its part
+changed, and a method `into_x` the reader `x`, as Lean values are not moved out of. Every trait
+implementation of a public type has an instance of the trait's class for the type's counterpart,
+if the trait has a class (`stdClasses` for the traits of the standard library). The counterpart of
+a structure with private fields has private constructors only. An item that fails one of these
+checks has an entry with a reason in `BSmtLib.Facts.RustOnly.reasons`; `#counterparts` lists the
+entries, and fails with an error for each item that fails a check without one, and for each entry
+that no item needs.
 
 This module is a tool of the facts, not a part of any of them, and not trusted.
 -/
@@ -74,13 +86,23 @@ def isTypeName (s : String) : Bool :=
 /-- The Lean names of a function or method `s`. -/
 def memberNames (s : String) : List String :=
   if isConstant s then [s]
+  -- an associated type keeps its name
+  else if isTypeName s then [s]
   else
     -- the words of the Rust types: an owned buffer is the Lean type without `Buf`, and a
     -- vector of bytes is a `ByteArray`
     let ws := (words s).flatMap fun w => if w == "vec" then ["byte", "array"] else [w]
     let ws := if ws.getLast? == some "buf" then ws.dropLast else ws
     if ws.getLast? == some "opt" then [camel ("_".intercalate ws.dropLast) ++ "?"]
-    else let c := camel ("_".intercalate ws); [c, c ++ "?"]
+    else
+      let c := camel ("_".intercalate ws)
+      -- a method that lends a part mutably returns the value with the part changed by a
+      -- function, and one that moves a part out is the part's reader
+      let changed := if ws.getLast? == some "mut" then [camel ("_".intercalate ("modify" ::
+        ws.dropLast))] else []
+      let moved := if ws.head? == some "into" && ws.length > 1 then [camel ("_".intercalate
+        ws.tail)] else []
+      [c, c ++ "?"] ++ changed ++ moved
 
 /-- The Lean name of the Rust type `s` of the module `module`, given the Rust items `all`. -/
 def typeName (all : Std.HashSet String) (module : String) (s : String) : String :=
@@ -162,10 +184,62 @@ def hasReason (lines : Array String) (ranges : DeclarationRanges) : Bool :=
   let above := if first == 0 then [] else commentAbove lines (first - 1)
   (header ++ above).any fun l => (l.splitOn "/- LEAN:").length > 1
 
+/-- The classes that stand for the traits of the standard library: `Debug` is `Repr`,
+`PartialEq` is `BEq`, `Hash` is `Hashable`, `Default` is `Inhabited`, `Ord` is `Ord` and
+`Index` is `GetElem`. The other traits of the standard library have no counterpart: `Clone` and
+`Copy` (Lean values are copied freely), `Eq`, `StructuralPartialEq` and `PartialOrd` (with
+`BEq` and `Ord`), `IndexMut`, `Borrow` and `From` (a conversion is a named function, checked as
+the item it is), and the iterator traits (a container is iterated through its array). -/
+def stdClasses : List (String × Name) :=
+  [("core::fmt::Debug", `Repr), ("core::cmp::PartialEq", `BEq), ("core::hash::Hash", `Hashable),
+    ("core::default::Default", `Inhabited), ("core::cmp::Ord", `Ord),
+    ("core::ops::index::Index", `GetElem)]
+
+/-- The Lean classes that stand for the trait at `trait`, given the Rust items `all`: the class
+of a trait of the crate, the class of `stdClasses` for one of the standard library; none if the
+trait has no counterpart. -/
+def classNames (all : Std.HashSet String) (trait : String) : List Name :=
+  if all.contains trait then leanNames all trait
+  else ((stdClasses.lookup trait).map ([·])).getD []
+
+/-- The conclusion of a type: what is left of it after its binders. -/
+def conclusion : Expr → Expr
+  | .forallE _ _ body _ => conclusion body
+  | e => e
+
+/-- The pairs of a class and a constant that an argument of the class mentions, of every
+instance in `env`: `(Repr, BSmtLib.Span.Location)` for `instance : Repr Location`. -/
+def instancePairs (env : Environment) : Std.HashSet (Name × Name) := Id.run do
+  let mut out : Std.HashSet (Name × Name) := {}
+  for (name, _) in (Meta.instanceExtension.getState env).instanceNames.toList do
+    let some info := env.find? name | continue
+    let c := conclusion info.type
+    let .const cls _ := c.getAppFn | continue
+    for arg in c.getAppArgs do
+      for n in arg.getUsedConstants do
+        out := out.insert (cls, n)
+  return out
+
+/-- The keys of the reasons why a Rust item has no Lean counterpart (`RustOnly.reasons`): an
+item is named by its path, a trait implementation by `impl <trait> for <type>`, the private
+fields of a structure by `fields of <type>`. -/
+def implKey (type trait : String) : String := s!"impl {trait} for {type}"
+
+@[inherit_doc implKey]
+def fieldsKey (type : String) : String := s!"fields of {type}"
+
 /--
 `#counterparts` checks that every public name of the library has a Rust counterpart or a
 `LEAN:` reason: it lists how many have a counterpart, and the names that have a reason instead;
 and fails with an error for each name that has neither.
+
+It also checks the other direction: that every public item of the Rust crate but a method of a
+trait implementation has a Lean counterpart; that every trait implementation of a public type
+whose trait has a counterpart class has an instance of the class for the type's counterpart;
+and that the counterpart of every structure with private fields has private constructors only.
+What fails one of these checks needs an entry in `RustOnly.reasons`; the command lists the
+entries, and fails with an error for each item that fails a check without an entry, and for each
+entry that is not needed.
 -/
 syntax (name := counterpartsCmd) "#counterparts" : command
 
@@ -212,5 +286,49 @@ def elabCounterparts : CommandElab := fun _ => do
   logInfo (String.intercalate "\n" lines.toList)
   for (module, name) in neither.qsort (fun a b => a.2.toString < b.2.toString) do
     logError m!"{name}, declared in {module}, has no Rust counterpart and no `LEAN:` reason"
+  -- the other direction: from the Rust items to the Lean names
+  let all : Std.HashSet String := RustItems.items.foldl (·.insert ·) {}
+  let implOnly : Std.HashSet String := RustItems.implMembers.foldl (·.insert ·) {}
+  let present (n : Name) : Bool := isPublic n && (env.find? n).isSome
+  let mut failing : Array (String × String) := #[]
+  let mut items := 0
+  for path in RustItems.items do
+    if implOnly.contains path then continue
+    items := items + 1
+    unless (leanNames all path).any present do
+      failing := failing.push (path, "has no Lean counterpart")
+  let pairs := instancePairs env
+  let mut impls := 0
+  for (type, trait) in RustItems.impls do
+    let classes := classNames all trait
+    if classes.isEmpty then continue
+    impls := impls + 1
+    let types := leanNames all type
+    unless classes.any (fun c => types.any fun t => pairs.contains (c, t)) do
+      failing := failing.push (implKey type trait,
+        s!"has no instance of {classes} for {types}")
+  for type in RustItems.privateFields do
+    for n in leanNames all type do
+      let some (.inductInfo info) := env.find? n | continue
+      unless info.ctors.all isPrivateName do
+        failing := failing.push (fieldsKey type,
+          s!"are private, and {n} has a public constructor")
+  let reasons := RustOnly.reasons
+  let keys : Std.HashSet String := reasons.foldl (·.insert ·.1) {}
+  let failed : Std.HashSet String := failing.foldl (·.insert ·.1) {}
+  logInfo (String.intercalate "\n" (s!"{items} Rust items, {impls} trait implementations with \
+      a counterpart class and {RustItems.privateFields.size} structures with private fields; \
+      {reasons.size} without a counterpart, with a reason:" ::
+    ((reasons.toList.map (·.1)).mergeSort (· ≤ ·)).map (s!"  {·}")))
+  -- one error for each kind, listing the items, as there can be many
+  let unexplained := failing.filter (!keys.contains ·.1)
+  unless unexplained.isEmpty do
+    logError (String.intercalate "\n" ("Rust items that fail a check, with no reason in \
+        `RustOnly.reasons`:" :: unexplained.toList.map fun (key, message) =>
+      s!"  {key} {message}"))
+  let unneeded := reasons.filter (!failed.contains ·.1)
+  unless unneeded.isEmpty do
+    logError (String.intercalate "\n" ("Reasons in `RustOnly.reasons` that no item needs:" ::
+      unneeded.toList.map (s!"  {·.1}")))
 
 end BSmtLib.Facts.Counterparts

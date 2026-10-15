@@ -230,7 +230,8 @@ theorem feedFrom_mode (P : UInt8 → Bool) (hP10 : ∀ c, P c = true → c ≠ 1
 
 theorem afterColumns_add (location : Span.Location) (a b : Nat) :
     afterColumns (afterColumns location a) b = afterColumns location (a + b) := by
-  simp only [afterColumns, Nat.add_assoc]
+  simp only [afterColumns, Span.Location.Internal.offset_new, Span.Location.Internal.line_new,
+    Span.Location.Internal.column_new, Nat.add_assoc]
 
 /-- A byte that starts a token, and the run of bytes that its mode takes as they are. -/
 theorem feedFrom_startRun (P : UInt8 → Bool) (hP10 : ∀ c, P c = true → c ≠ 10) (mode : Mode)

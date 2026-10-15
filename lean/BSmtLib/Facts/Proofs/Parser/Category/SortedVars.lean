@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Proofs.Parser.Category.Multiple
 public import BSmtLib.Parser.Category
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.SortedVar
+import all BSmtLib.Parser.Category
+import all BSmtLib.Parser.Category.Combinator
 
 @[expose] public section
 
@@ -41,12 +43,12 @@ theorem sortedVars_values (hA : TermAgrees h) : (variables : List Tree.SortedVar
     (∀ variable_ ∈ variables, variable_.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input},
       Stands tokens (variables.flatMap Tree.SortedVar.tokens) →
-    ∃ (values : List (List Parser.Internal.Input × PM H (Nodes.Symbol × Traits.Handler.«Sort» H)))
-      (symbols : List Nodes.Symbol),
+    ∃ (values : List (List Parser.Internal.Input × PM H (Plain.Symbol × Traits.Handler.«Sort» H)))
+      (symbols : List Plain.SymbolView),
       ValuesParse version (SortedVarParser.new (H := H)) values ∧ valuesTokens values = tokens ∧
       symbols.map Bridge.symbol = variables.map (·.symbol) ∧
       (values.mapM fun value => value.2) =
-        (fun pairs => symbols.zip (pairs.map (·.2))) <$>
+        (fun pairs => (symbols.map Plain.SymbolView.intoOwned).zip (pairs.map (·.2))) <$>
           adaptRun (Traversal.sortedVars noPoints h variables)
   | [], _, _, hs => by
     have := Stands.eq_nil hs
@@ -63,7 +65,7 @@ theorem sortedVars_values (hA : TermAgrees h) : (variables : List Tree.SortedVar
     obtain ⟨name, sort⟩ := first
     obtain ⟨inner, rfl, _⟩ := Stands.split_paren hfirst
     refine ⟨(.parenOpen :: (inner ++ [.parenClose]),
-      (fun sort => (symbol, sort)) <$> adaptRun (Traversal.sort noPoints h sort)) ::
+      (fun sort => (symbol.intoOwned, sort)) <$> adaptRun (Traversal.sort noPoints h sort)) ::
       values, symbol :: symbols, ?_, ?_, ?_, ?_⟩
     · intro value hvalue
       rcases List.mem_cons.mp hvalue with rfl | hvalue
@@ -83,12 +85,13 @@ theorem parenSortedVars_parses (hA : TermAgrees h) (variables : List Tree.Sorted
     (hvalid : ∀ variable_ ∈ variables, variable_.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (paren (variables.flatMap Tree.SortedVar.tokens))) :
-    ∃ symbols : List Nodes.Symbol, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
+    ∃ symbols : List Plain.SymbolView, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
       Finishes version
-        (ParenMultipleParser.new (SortedVarParser.new (H := H)) : ParenSortedVarsParser H) tokens
-        ((fun pairs => (symbols.zip (pairs.map (·.2))).toArray) <$>
+        (ParenSortedVarsParser.new (ClosedMultipleParser.new (SortedVarParser.new (H := H))) :
+          ParenSortedVarsParser H) tokens
+        ((fun pairs => ((symbols.map Plain.SymbolView.intoOwned).zip (pairs.map (·.2))).toArray) <$>
           adaptRun (Traversal.sortedVars noPoints h variables))
-        (ParenMultipleParser.new SortedVarParser.new) := by
+        (ParenSortedVarsParser.new (ClosedMultipleParser.new SortedVarParser.new)) := by
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨values, symbols, hvalues, htokens, hsymbols, hprogram⟩ :=
     sortedVars_values hA variables hvalid hinner

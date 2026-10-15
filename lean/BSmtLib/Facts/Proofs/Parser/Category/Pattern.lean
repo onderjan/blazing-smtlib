@@ -36,14 +36,15 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
 
 private theorem pattern_sim (version : Token.Version) :
-    Simulates version (PatternParser.mk (H := H)) (PatternState.step (H := H) version)
+    Simulates version (PatternParser.mk (H := H))
+      (mapSteps Nodes.Pattern.intoOwned (PatternState.step (H := H) version))
       PatternParser.new := by
   refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
   show (do
       match ← state.step version token with
       | .more state => return Parser.Internal.Flow.more (PatternParser.mk state)
-      | .done result => return .done result) = _
-  rw [map_eq_pure_bind]
+      | .done result => return .done result.intoOwned) = _
+  rw [mapSteps, Functor.map_map, map_eq_pure_bind]
   refine bind_congr fun step => ?_
   cases step <;> rfl
 
@@ -51,20 +52,22 @@ omit [LawfulMonad m] in
 private theorem pattern_hparse {Z : Type} [Produce Z] (p : PatternParser H) (s : ParseState H)
     (c : Z) : Parse.parse (m := m) p s c = Parser.Internal.parseByToken p s c := rfl
 
-/-- The pattern parser from its start on the tokens of a valid pattern: it finishes with it,
-through the bridge, making no call. -/
+/-- The pattern parser from its start on the tokens of a valid pattern: it finishes with the
+owned pattern of a view that is the pattern through the bridge, making no call. -/
 theorem pattern_parses {version : Token.Version} (pattern : Tree.Pattern)
     (hvalid : pattern.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens pattern.tokens) :
     ∃ result : Nodes.Pattern, Bridge.pattern result = pattern ∧
-      Finishes version (PatternParser.new (H := H)) tokens (pure result : PM H Nodes.Pattern)
-        PatternParser.new := by
+      Finishes version (PatternParser.new (H := H)) tokens
+        (pure result.intoOwned : PM H Nodes.PatternBuf) PatternParser.new := by
   obtain ⟨result, hresult, hruns⟩ :=
     BSmtLib.Facts.Proofs.Parser.Category.StepsPattern.pattern_runs (H := H)
       (points := noPoints) hvalid hs
-  refine ⟨result, hresult, parses_of_runsS (state := PatternState.start)
-    (@pattern_hparse H m _ _) (pattern_sim version) ?_⟩
-  exact (RunsS.map_program (f := fun _ => result) hruns).congr (by simp [ticks_noPoints]) rfl
+  have := parses_of_runsS_map (state := PatternState.start) (program := pure result)
+    (@pattern_hparse H m _ _) (pattern_sim version)
+    ((RunsS.map_program (f := fun _ => result) hruns).congr (by simp [ticks_noPoints]) rfl)
+  rw [map_pure] at this
+  exact ⟨result, hresult, this⟩
 
 private theorem pattern_rejects {version : Token.Version} {state last : PatternState}
     {tokens : List Parser.Internal.Input} {token : Parser.Internal.Input} {kind : SyntaxErrorKind}
@@ -72,7 +75,7 @@ private theorem pattern_rejects {version : Token.Version} {state last : PatternS
     (hfail : PatternState.step (H := H) version last token = throw (.syntax kind)) :
     Rejects version (PatternParser.mk (H := H) state) (tokens ++ [token]) (pure () : PM H Unit)
       kind :=
-  rejects_of_movesS (@pattern_hparse H m _ _) (pattern_sim version) hmoves hfail
+  rejects_of_movesS_map (@pattern_hparse H m _ _) (pattern_sim version) hmoves hfail
 
 /-- The pattern parser on a first token that is neither `(` nor a symbol, nor the wildcard `_`
 from 2.7 on; the error names the wildcard from 2.7 on. -/
@@ -112,7 +115,7 @@ theorem pattern_rejects_constructor {version : Token.Version} {token : Parser.In
 
 /-- The pattern parser on `(`, a constructor and `)`, a constructor pattern without
 arguments. -/
-theorem pattern_rejects_empty {version : Token.Version} (constructor : Nodes.Symbol) :
+theorem pattern_rejects_empty {version : Token.Version} (constructor : Plain.SymbolView) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, .symbol constructor, .parenClose]
       (pure () : PM H Unit) .emptyPatternArguments :=
   pattern_rejects (tokens := [.parenOpen, .symbol constructor])
@@ -128,7 +131,7 @@ def IsArgument (version : Token.Version) (token : Parser.Internal.Input) : Prop 
     (version ≥ .v2_7 ∧ token = .reserved (.general .underscore))
 
 omit [LawfulMonad m] in
-private theorem arguments_move {version : Token.Version} (constructor : Nodes.Symbol) :
+private theorem arguments_move {version : Token.Version} (constructor : Plain.SymbolView) :
     (arguments : List Parser.Internal.Input) →
     (∀ argument ∈ arguments, IsArgument version argument) → (found : Array Nodes.SymbolOrWildcard) →
     ∃ found', Moves (PatternState.step (H := H) version) (.arguments constructor found) arguments
@@ -149,7 +152,7 @@ private theorem arguments_move {version : Token.Version} (constructor : Nodes.Sy
 
 /-- The pattern parser on `(`, a constructor, arguments of the version and a token that is
 neither an argument of the version nor `)`; the error names the wildcard from 2.7 on. -/
-theorem pattern_rejects_argument {version : Token.Version} (constructor : Nodes.Symbol)
+theorem pattern_rejects_argument {version : Token.Version} (constructor : Plain.SymbolView)
     {arguments : List Parser.Internal.Input}
     (harguments : ∀ argument ∈ arguments, IsArgument version argument)
     {token : Parser.Internal.Input} (htoken : ¬ IsArgument version token)

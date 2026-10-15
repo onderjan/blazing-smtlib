@@ -14,9 +14,6 @@ open BSmtLib.Plain
 
 namespace BSmtLib.Token.SyntaxToken
 
-/- LEAN: Rust's `SmtSyntaxToken::Symbol` carries the symbol's view only. Here a symbol also
-says whether it was written quoted (`|abc|`), which the handler contract hands on with the
-symbol. -/
 inductive _root_.BSmtLib.Token.SyntaxToken where
   | parenOpen
   | parenClose
@@ -26,7 +23,7 @@ inductive _root_.BSmtLib.Token.SyntaxToken where
   | binary (value : BinDigitsView)
   | string (value : StringContentView)
   | keyword (value : KeywordView)
-  | symbol (value : SymbolView) (quoted : Bool)
+  | symbol (value : SymbolView)
   | reserved (value : Reserved)
   | whitespace (value : WhitespaceView)
   | comment (value : CommentView)
@@ -51,8 +48,8 @@ def Internal.fromParts (category : TokenCategory) (content : ByteSlice)
     -- only the words reserved in the version are reserved words
     match Reserved.fromBytes? content version with
     | some word => .reserved word
-    | none => .symbol (SymbolView.Internal.newUnchecked content) false
-  | .quotedSymbol => .symbol (SymbolView.Internal.newUnchecked content) true
+    | none => .symbol (SymbolView.Internal.newUnchecked false content)
+  | .quotedSymbol => .symbol (SymbolView.Internal.newUnchecked true content)
   | .string => .string (StringContentView.Internal.newUnchecked content)
   | .keyword => .keyword (KeywordView.Internal.newUnchecked content)
   | .whitespace => .whitespace (WhitespaceView.Internal.newUnchecked content)

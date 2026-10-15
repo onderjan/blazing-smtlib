@@ -207,9 +207,8 @@ theorem lexBytesW_append (version : Token.Version) (ws : Bool) (st : St) (locati
 /-- The location, located from the start of what follows the location `base`, as located from
 the start of the input. -/
 def locShift (base location : Span.Location) : Span.Location :=
-  { offset := base.offset + location.offset
-    line := base.line + location.line
-    column := if location.line = 0 then base.column + location.column else location.column }
+  Span.Location.Internal.new (base.offset + location.offset) (base.line + location.line)
+    (if location.line = 0 then base.column + location.column else location.column)
 
 theorem locShift_initial (base : Span.Location) : locShift base Span.Location.initial = base := by
   simp [locShift, Span.Location.initial]
@@ -259,7 +258,8 @@ theorem toLocation_shift (before : List UInt8) (location : Span.Location) :
   have h2 := congrArg BSmtLibSpec.Lexer.Location.column h
   simp only [toLocation] at h1 h2
   simp only [toLocation, locShift, BSmtLibSpec.Lexer.Location.after, locAfter_offset',
-    BSmtLibSpec.Lexer.Location.mk.injEq]
+    BSmtLibSpec.Lexer.Location.mk.injEq, Span.Location.Internal.offset_new,
+    Span.Location.Internal.line_new, Span.Location.Internal.column_new]
   rw [← h1, ← h2]
   exact ⟨trivial, rfl, rfl⟩
 

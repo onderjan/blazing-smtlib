@@ -118,7 +118,7 @@ theorem annotation_runs
         let attributes ← adaptRun (do
           take points (.keyword first.keyword)
           attributesThen points h first.keyword first.value rest)
-        Parser.Internal.call (Traits.Handler.annotateTerm handled attributes.toArray))
+        Parser.Internal.call (Traits.Handler.annotateTerm handled (.new attributes.toArray)))
       fun r => termComplete levels r := by
   obtain ⟨name, value⟩ := first
   have hinner := attributes_runs_init (points := points) hA ⟨name, value⟩ rest hvalid hs
@@ -135,7 +135,8 @@ theorem annotation_runs
     simp
   have hembed := fun (term : Traits.Handler.Term H) => Runs.bind_next
     (following := fun (pair : Traits.Handler.Attribute H × List (Traits.Handler.Attribute H)) =>
-      Parser.Internal.call (Traits.Handler.annotateTerm term (pair.1 :: pair.2 : List _).toArray))
+      Parser.Internal.call
+        (Traits.Handler.annotateTerm term (.new (pair.1 :: pair.2 : List _).toArray)))
     (next := termComplete levels)
     (Runs.of_map_program
       (f := fun (pair : Traits.Handler.Attribute H × List (Traits.Handler.Attribute H)) =>
@@ -196,7 +197,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
           (do
             tick points .parenClose
             Parser.Internal.call (Traits.Handler.handleTerm
-              (.application head sort (#[].push r ++ handled.toArray))))
+              (.application head sort (.new (#[].push r ++ handled.toArray)))))
           fun r => termComplete levels r :=
       fun _ _ _ => Runs.token (by simp [termStep])
     have harguments' := fun sort => Runs.append (middle := fun r =>
@@ -234,14 +235,15 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨symbol, hsymbolName, rfl, hbinding⟩ := binding_runs (points := points) hsymbol
       (term_runs' hA bound hbound hsBound).plain
     obtain ⟨program, hprogram, hothersRuns⟩ := bindings_runs hA others hothers hs₂
-    have hstart : ∀ (b : Nodes.Symbol × Traits.Handler.Term H)
-        (handled : List (Nodes.Symbol × Traits.Handler.Term H)),
+    have hstart : ∀ (b : Plain.SymbolView × Traits.Handler.Term H)
+        (handled : List (Plain.SymbolView × Traits.Handler.Term H)),
         Runs points (termStep version)
           ({ mode := .letBindingOpen (#[].push b ++ handled.toArray), levels } : TermStateOf H)
           [.parenClose]
           (do
             tick points .parenClose
-            Parser.Internal.call (Traits.Handler.startLet (#[].push b ++ handled.toArray)))
+            Parser.Internal.call (Traits.Handler.startLet (Multiple.NamedView.Internal.new
+              (#[].push b ++ handled.toArray))))
           fun scope => pure (.more { mode := .start, levels := .binder .let scope :: levels }) :=
       fun _ _ => Runs.token (by simp [termStep])
     refine (RunsFirst.tokens_eq (RunsFirst.append
@@ -365,7 +367,8 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
             tick points .parenClose
             tick points .parenClose
             Parser.Internal.call
-                (Traits.Handler.endMatch scrutinee (#[].push c ++ handled.toArray)))
+                (Traits.Handler.endMatch scrutinee (Multiple.MatchCases.Internal.new
+                  (#[].push c ++ handled.toArray))))
           fun r => termComplete levels r := fun scrutinee c handled =>
       Runs.append (middle := fun _ =>
           ({ mode := .matchClose scrutinee (#[].push c ++ handled.toArray), levels } :
@@ -466,9 +469,9 @@ those found so far.
 theorem bindings_runs (hA : TermAgrees h) : (bindings : List (Tree.Symbol × Tree.Term)) →
     Tree.Term.ValidBindings (Bridge.version version) bindings →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.bindingTokens bindings) →
-    ∃ program : PM H (List (Nodes.Symbol × Traits.Handler.Term H)),
+    ∃ program : PM H (List (Plain.SymbolView × Traits.Handler.Term H)),
       Bridge.specPairs <$> program = adaptRun (Traversal.bindings points h bindings) ∧
-      ∀ (found : Array (Nodes.Symbol × Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
+      ∀ (found : Array (Plain.SymbolView × Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
       Runs points (termStep version) ({ mode := .letBindingOpen found, levels } : TermStateOf H)
         tokens program
         fun handled => pure (.more { mode := .letBindingOpen (found ++ handled.toArray), levels })

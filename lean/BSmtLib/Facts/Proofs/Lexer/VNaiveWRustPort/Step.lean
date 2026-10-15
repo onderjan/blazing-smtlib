@@ -95,7 +95,9 @@ macro "failure_eq" h:term : tactic => `(tactic| (
   | (congr 2; refine BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step.failure_congr ?_ ?_ ?_ ?_)
   all_goals first
     | (with_reducible rfl)
-    | ((try simp only [BSmtLib.Span.Location.mk.injEq, true_and, and_true]) <;> omega)
+    | ((try simp only [BSmtLib.Span.Location.Internal.new_inj,
+          BSmtLib.Span.Location.Internal.offset_new, BSmtLib.Span.Location.Internal.line_new,
+          BSmtLib.Span.Location.Internal.column_new, true_and, and_true]) <;> omega)
     | rfl))
 
 /-- The lexer state at the index `next` and the tokens taken are, after a step from the naive

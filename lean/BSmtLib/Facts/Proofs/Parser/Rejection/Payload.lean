@@ -209,13 +209,13 @@ macro "sort_then_close" hfollows:ident hitem:ident hlex:ident : tactic => `(tact
   | done sort => exact Sound.pure fun _ => ⟨fun u hu => cat_intro' hr hu rfl, hnext⟩))
 
 include hitem hlex hfollows in
-theorem payload_declareConst (symbol : Nodes.Symbol) (state : SortState Nat) :
+theorem payload_declareConst (symbol : Plain.SymbolView) (state : SortState Nat) :
     PayloadAdvance version follows (.declareConst symbol state) item
       (payloadStep (H := List Event) version (.declareConst symbol state) token) := by
   sort_then_close hfollows hitem hlex
 
 include hitem hlex hfollows in
-theorem payload_declareFunResult (symbol : Nodes.Symbol) (parameters : Array Nat)
+theorem payload_declareFunResult (symbol : Plain.SymbolView) (parameters : Array Nat)
     (state : SortState Nat) :
     PayloadAdvance version follows (.declareFunResult symbol parameters state) item
       (payloadStep (H := List Event) version (.declareFunResult symbol parameters state)
@@ -229,7 +229,7 @@ theorem payload_defineSortBody (state : SortState Nat) :
   sort_then_close hfollows hitem hlex
 
 include hitem hlex hfollows in
-theorem payload_declareFunParameters (symbol : Nodes.Symbol)
+theorem payload_declareFunParameters (symbol : Plain.SymbolView)
     (state : ListState (SortState Nat) Nat) :
     PayloadAdvance version follows (.declareFunParameters symbol state) item
       (payloadStep (H := List Event) version (.declareFunParameters symbol state) token) := by
@@ -252,7 +252,7 @@ theorem payload_declareFunParameters (symbol : Nodes.Symbol)
       cat_nonempty (sortRem_init_nonempty _) hnext⟩
 
 include hitem hfollows in
-theorem payload_declareSort (symbol : Nodes.Symbol) :
+theorem payload_declareSort (symbol : Plain.SymbolView) :
     PayloadAdvance version follows (.declareSort symbol) item
       (payloadStep (H := List Event) version (.declareSort symbol) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -328,7 +328,7 @@ theorem payload_push :
   all_goals fail_step
 
 include hitem hlex hfollows in
-theorem payload_declareDatatype (symbol : Nodes.Symbol) (state : DatatypeState Nat) :
+theorem payload_declareDatatype (symbol : Plain.SymbolView) (state : DatatypeState Nat) :
     PayloadAdvance version follows (.declareDatatype symbol state) item
       (payloadStep (H := List Event) version (.declareDatatype symbol state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -344,8 +344,8 @@ theorem payload_declareDatatype (symbol : Nodes.Symbol) (state : DatatypeState N
     exact Sound.pure fun hne => ⟨fun u hu => cat_intro' (hr (cat_nonempty_left hne)) hu rfl, hnext⟩
 
 include hitem hlex hfollows in
-theorem payload_defineSortParameters (symbol : Nodes.Symbol)
-    (state : ListState Unit Nodes.Symbol) :
+theorem payload_defineSortParameters (symbol : Plain.SymbolView)
+    (state : ListState Unit Plain.SymbolView) :
     PayloadAdvance version follows (.defineSortParameters symbol state) item
       (payloadStep (H := List Event) version (.defineSortParameters symbol state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -367,7 +367,7 @@ theorem payload_defineSortParameters (symbol : Nodes.Symbol)
       cat_nonempty (sortRem_init_nonempty _) hnext⟩
 
 include hitem hlex hfollows in
-theorem payload_defineConstSort (symbol : Nodes.Symbol) (state : SortState Nat) :
+theorem payload_defineConstSort (symbol : Plain.SymbolView) (state : SortState Nat) :
     PayloadAdvance version follows (.defineConstSort symbol state) item
       (payloadStep (H := List Event) version (.defineConstSort symbol state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -497,7 +497,7 @@ theorem payload_setOption (state : AttributeState Nat Nat) :
 
 include hitem hlex hfollows in
 theorem payload_declareDatatypesSorts
-    (state : ListState SortDecState (Nodes.Symbol × NumeralView)) :
+    (state : ListState SortDecState (Plain.SymbolView × NumeralView)) :
     PayloadAdvance version follows (.declareDatatypesSorts state) item
       (payloadStep (H := List Event) version (.declareDatatypesSorts state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)

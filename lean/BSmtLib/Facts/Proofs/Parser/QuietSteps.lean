@@ -179,7 +179,7 @@ theorem termComplete_silent (levels : List (TermLevel Nat Nat Nat)) (term : Nat)
   try dsimp only
   silent_step []
 
-theorem startBinder_silent (binder : SortedBinder) (variables : Array (Nodes.Symbol × Nat)) :
+theorem startBinder_silent (binder : SortedBinder) (variables : Array (Plain.SymbolView × Nat)) :
     Quiet.Avoids bad (startBinder (H := List Event) binder variables) := by
   unfold startBinder
   try dsimp only
@@ -254,7 +254,7 @@ theorem constructorStep_silent (version : Token.Version) (state : ConstructorSta
   try dsimp only
   silent_step [hvars]
 
-theorem datatypeStep_silent {start : Array Nodes.Symbol → Quiet.RPM Unit}
+theorem datatypeStep_silent {start : Array Plain.SymbolView → Quiet.RPM Unit}
     (hstart : ∀ parameters, Quiet.Avoids bad (start parameters)) (version : Token.Version)
     (state : DatatypeState Nat) (token : Parser.Internal.Input) :
     Quiet.Avoids bad (datatypeStep (H := List Event) start version state token) := by
@@ -305,28 +305,35 @@ theorem payloadStep_silent (version : Token.Version) (state : Payload Nat Nat Na
   have hsymbols := listStep_silent (bad := bad) () symbolStep_silent none
   have hfunctions := listStep_silent (bad := bad) (FunctionDecState.start (HandledSort := Nat))
     (functionDecStep_silent version) none
-  have hdatatypes : ∀ count (start : Array Nodes.Symbol → Quiet.RPM Unit),
+  have hdatatypes : ∀ count (start : Array Plain.SymbolView → Quiet.RPM Unit),
       (∀ parameters, Quiet.Avoids bad (start parameters)) →
       ∀ state token, Quiet.Avoids bad (ListState.step (DatatypeState.start (HandledSort := Nat))
         (fun state token => do
           match ← datatypeStep (H := List Event) start version state token with
           | .more state => return Parser.Internal.Step.more state
           | .done constructors =>
-            Parser.Internal.call (CommandHandler.endDatatypeDeclaration constructors)
+            Parser.Internal.call (CommandHandler.endDatatypeDeclaration
+              (Multiple.ConstructorsView.Internal.new constructors))
             return .done ()) (some count) state token) := by
     intro count start hstart state token
     apply listStep_silent
     intro state token
     silent_step [datatypeStep_silent hstart]
   have hdeclare : ∀ symbol state token, Quiet.Avoids bad (datatypeStep (H := List Event)
-      (fun parameters => Parser.Internal.call (CommandHandler.startDeclareDatatype symbol parameters))
+      (fun parameters =>
+        Parser.Internal.call (CommandHandler.startDeclareDatatype symbol
+          (Multiple.SymbolsView.Internal.new parameters)))
       version state token) := fun symbol =>
     datatypeStep_silent (fun _ => by apply Quiet.silent_call) version
   have hdeclarations := fun count => hdatatypes count
-    (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
+    (fun parameters =>
+      Parser.Internal.call (CommandHandler.startDatatypeDeclaration
+        (Multiple.SymbolsView.Internal.new parameters)))
     (fun _ => by apply Quiet.silent_call)
   have hdeclareEach : ∀ state token, Quiet.Avoids bad (datatypeStep (H := List Event)
-      (fun parameters => Parser.Internal.call (CommandHandler.startDatatypeDeclaration parameters))
+      (fun parameters =>
+        Parser.Internal.call (CommandHandler.startDatatypeDeclaration
+          (Multiple.SymbolsView.Internal.new parameters)))
       version state token) :=
     datatypeStep_silent (fun _ => by apply Quiet.silent_call) version
   have hbodies := fun count => listStep_silent (bad := bad) (TermState.init (HandledSExpr := Nat)
@@ -343,12 +350,15 @@ theorem payloadStep_silent (version : Token.Version) (state : Payload Nat Nat Na
     intro state token
     silent_step [hdeclareEach]
 
-theorem commandStep_silent (version : Token.Version) (state : CommandState Nat Nat Nat Nat Nat)
+theorem commandStep_silent (version : Token.Version)
+    (state : CommandState Nat Nat Nat Nat Nat Empty)
     (token : Parser.Internal.Input) : Quiet.Avoids bad (commandStep
         (H := List Event) version state token) := by
   unfold commandStep
   try dsimp only
   silent_step [payloadStep_silent]
+  -- the recording handler has no non-standard parser
+  all_goals exact Empty.elim ‹CommandHandler.NonstandardParser (List Event)›
 
 theorem bodiesArrive_silent (signatures : Array (Nodes.Signature Nat))
     (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) (token : Parser.Internal.Input) :
@@ -363,7 +373,7 @@ theorem payloadArrive_silent (state : Payload Nat Nat Nat Nat Nat) (token : Pars
   · exact bodiesArrive_silent _ _ _
   · exact Quiet.pure trivial
 
-theorem commandArrive_silent (state : CommandState Nat Nat Nat Nat Nat)
+theorem commandArrive_silent (state : CommandState Nat Nat Nat Nat Nat Empty)
     (token : Parser.Internal.Input) :
     Quiet.Avoids bad (commandArrive (H := List Event) state token) := by
   unfold commandArrive

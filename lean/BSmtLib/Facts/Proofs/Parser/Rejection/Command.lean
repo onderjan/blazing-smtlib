@@ -60,7 +60,7 @@ def outcomeEnd (version : BSmtLibSpec.Lexicon.Version) : CommandOutcome → CmdE
   | .command => .next version
   | .setVersion declared => .next (Bridge.version declared)
   | .exit => .exit
-  | .endOfInput => .endOfInput
+  | .endOfFile => .endOfInput
 
 /-- How a version declaration ends, from what follows its keyword: a supported version's number
 and the `)`, or anything else. -/
@@ -126,7 +126,7 @@ def setInfoRem (declaration : Declaration) (state : AttributeState Nat Nat) : La
     follows (setInfoEnd version declaration a) b ∧ u = a ++ b
 
 /-- Sort declarations, between `lo` and `hi` of them, then as many datatype declarations. -/
-def datatypesRem (state : ListState SortDecState (Nodes.Symbol × NumeralView)) : Lang :=
+def datatypesRem (state : ListState SortDecState (Plain.SymbolView × NumeralView)) : Lang :=
   fun u => ∃ n, 1 ≤ n ∧ cat (listRem sortDecRem SortDecLang .start n (some n) state)
     (cat (tok openItem) (cat (rep (DatatypeLang version) n (some n))
       (cat (tok closeItem) (closeNext version follows)))) u
@@ -191,10 +191,11 @@ def CommandLang : Lang := fun u => ∃ (cmd : Tree.Command) (w : List Received),
   follows (cmdEnd version cmd) w ∧ u = toks cmd.tokens ++ w
 
 /-- The remainders of the command parser's states. -/
-def commandRem : Parser.Command.Internal.CommandState Nat Nat Nat Nat Nat → Lang
+def commandRem : Parser.Command.Internal.CommandState Nat Nat Nat Nat Nat Empty → Lang
   | .awaiting => union (CommandLang version follows) (cat (tok .endOfInput) (follows .endOfInput))
   | .opened => fun u => CommandLang version follows (openItem :: u)
   | .payload payload => payloadRem version follows payload
+  | .nonstandard parser => nomatch parser
 
 end
 

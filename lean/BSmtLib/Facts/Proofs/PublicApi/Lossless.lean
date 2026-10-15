@@ -3,6 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.PublicApi.Slicing
 public import BSmtLib.Facts.Proofs.PublicApi.Tiling
 import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Lexer.Error
 import all BSmtLib.Span
 
 @[expose] public section

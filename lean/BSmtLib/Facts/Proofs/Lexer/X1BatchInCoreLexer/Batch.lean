@@ -5,6 +5,7 @@ import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.X1BatchInCore
 import all BSmtLib.Token
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -168,9 +169,9 @@ theorem pushBorrowed_sim (slice : ByteSlice) (batch : Token.Internal.TokenBatch)
   dsimp only
   have ee : offset + (te - base).toNat = offset + (ix slice.start te - ix slice.start base) := by
     rw [oke.sub]
-  have el : Span.Location.mk (offset + (te - base).toNat) c.line
+  have el : Span.Location.Internal.new (offset + (te - base).toNat) c.line
       (offset + (te - base).toNat - c.lineStart) =
-      Span.Location.mk (offset + (ix slice.start te - ix slice.start base)) c.line
+      Span.Location.Internal.new (offset + (ix slice.start te - ix slice.start base)) c.line
         (offset + (ix slice.start te - ix slice.start base) - c.lineStart) := by
     rw [ee]
   refine SimP.ite Iff.rfl (fun _ => ?_) fun _ => SimP.pure (fun _ h => h) ?_

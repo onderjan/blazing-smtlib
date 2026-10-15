@@ -28,24 +28,27 @@ open BSmtLib.Facts.Proofs.Reader.Param.Adapter (id_bind_eq)
 open Basic States Loop
 
 /-- The adapter with the views in its parser replaced by their contents. -/
-def canonA (a : RecAdapter) : RecAdapter := { a with parser := canon a.parser }
+def canonA (a : RecAdapter) : RecAdapter :=
+  ParseAdapter.Internal.mk a.handler (canon a.parser) (ParseAdapter.Internal.versionSet a)
+    (ParseAdapter.Internal.parseState a)
 
 variable {g g' : Token.BatchTag}
 
 /-- The handler's log when the adapter's parse of a cursor in the version begins. -/
 def startLog (a : RecAdapter) (version : Token.Version) : List Event :=
-  ((if a.versionSet then pure () else Traits.Handler.setVersion (H := List Event) version :
+  ((if ParseAdapter.Internal.versionSet a then pure ()
+    else Traits.Handler.setVersion (H := List Event) version :
     StateT (List Event) Id Unit).run a.handler).2
 
 /-- A call of the adapter: its parse from its parser and its log, the version told first unless
 it was. -/
 theorem consume_run (c : Token.BatchCursor g) (h : c.HasNext) (a : RecAdapter) :
-    let r := (Parse.parse a.parser a.parseState c).run (startLog a c.version)
+    let r := (Parse.parse a.parser (ParseAdapter.Internal.parseState a) c).run
+      (startLog a c.version)
     (Token.ConsumeFrom.consume (m := Id) c h : StateT RecAdapter Id _).run a =
       ((r.1.1, ⟨r.1.2.2.2.val, r.1.2.2.2.property h⟩),
-        { handler := r.2, parser := r.1.2.1,
-          versionSet := ParseAdapter.Internal.versionSetAfter r.1.1,
-          parseState := r.1.2.2.1 }) := by
+        ParseAdapter.Internal.mk r.2 r.1.2.1 (ParseAdapter.Internal.versionSetAfter r.1.1)
+          r.1.2.2.1) := by
   intro r
   rfl
 
@@ -60,12 +63,7 @@ theorem consume_agree {c₁ : Token.BatchCursor g} {c₂ : Token.BatchCursor g'}
         ((Token.ConsumeFrom.consume (m := Id) c₂ h₂ : StateT RecAdapter Id _).run a₂).1.2.val ∧
       canonA ((Token.ConsumeFrom.consume (m := Id) c₁ h₁ : StateT RecAdapter Id _).run a₁).2 =
         canonA ((Token.ConsumeFrom.consume (m := Id) c₂ h₂ : StateT RecAdapter Id _).run a₂).2 := by
-  have hp : canon a₁.parser = canon a₂.parser := congrArg ParseAdapter.parser ha
-  have hh : a₁.handler = a₂.handler := by have := congrArg ParseAdapter.handler ha; exact this
-  have hv : a₁.versionSet = a₂.versionSet := by
-    have := congrArg ParseAdapter.versionSet ha; exact this
-  have hs : a₁.parseState = a₂.parseState := by
-    have := congrArg ParseAdapter.parseState ha; exact this
+  obtain ⟨hh, hp, hv, hs⟩ := ParseAdapter.Internal.mk_inj.mp ha
   have hl : startLog a₁ c₁.version = startLog a₂ c₂.version := by
     unfold startLog
     rw [hh, hv, hR.version hc]
@@ -73,9 +71,11 @@ theorem consume_agree {c₁ : Token.BatchCursor g} {c₂ : Token.BatchCursor g'}
   dsimp only
   rw [BSmtLib.Facts.Parser.fused_parses_as_port, BSmtLib.Facts.Parser.fused_parses_as_port,
     hl, hs]
-  obtain ⟨r1, r2, r3, r4, r5⟩ := parseByToken_agree hp a₂.parseState hR hc (startLog a₂ c₂.version)
+  obtain ⟨r1, r2, r3, r4, r5⟩ := parseByToken_agree hp (ParseAdapter.Internal.parseState a₂) hR
+    hc (startLog a₂ c₂.version)
   refine ⟨r1, r4, ?_⟩
-  show ParseAdapter.mk _ (canon _) _ _ = ParseAdapter.mk _ (canon _) _ _
+  simp only [canonA, ParseAdapter.Internal.handler_mk, ParseAdapter.Internal.parser_mk,
+    ParseAdapter.Internal.versionSet_mk, ParseAdapter.Internal.parseState_mk]
   rw [r1, r2, r3, r5]
 
 end BSmtLib.Facts.Proofs.Parser.Canon.Adapter

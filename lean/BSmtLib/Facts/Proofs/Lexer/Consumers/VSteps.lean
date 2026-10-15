@@ -3,6 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Boundary
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -220,7 +221,8 @@ theorem handOverAt_reply (core : Core) (l : Lexeme) (hl : l.Valid) (hh : core.ho
       | (.ok .continue, version, discards, taken') =>
         ((.ok none, coreAfter core l version discards), taken')
       | (.ok (.break value), version, discards, taken') =>
-        ((.ok (some ⟨value, l.end⟩), { coreAfter core l version discards with holding := true }),
+        ((.ok (some (Span.Located.Internal.new value l.end)),
+          { coreAfter core l version discards with holding := true }),
           taken')
       | (.error err, version, discards, taken') =>
         ((.error ⟨.consumer err, Span.Internal.newUnchecked l.end l.end, l.end⟩,

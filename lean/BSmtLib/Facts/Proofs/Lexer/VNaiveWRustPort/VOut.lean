@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VHand
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.VHold
 import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
+import all BSmtLib.Lexer.Error
 
 @[expose] public section
 
@@ -97,11 +99,15 @@ def _root_.BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VOut (core : Core)
     | .layout _ => ∃ c' span loc, vBytes C core held bs taken =
         ((.error ⟨.consumer none, span, loc⟩, c'), p.taken) ∧ c'.version = p.ver ∧
         c'.initialVersion = core.initialVersion ∧ ∀ s, c'.activity ≠ .discarding s
-    | .brk v l nx => VOut.Restarts C core held bs taken l p.ver true (some ⟨v, l.end⟩) p.taken ∧
+    | .brk v l nx =>
+      VOut.Restarts C core held bs taken l p.ver true (some (Span.Located.Internal.new v l.end))
+        p.taken ∧
         ∀ l2, nx = some l2 → VOut.VTrailing C core held bs taken l2 p
-    | .brkX v l => VOut.Restarts C core held bs taken l p.ver true (some ⟨v, l.end⟩) p.taken
+    | .brkX v l =>
+      VOut.Restarts C core held bs taken l p.ver true (some (Span.Located.Internal.new v l.end))
+        p.taken
     | .discard v l => ∃ c', vBytes C core held bs taken =
-        ((.ok ((v.map (⟨·, l.end⟩)).or held), c'), p.taken) ∧
+        ((.ok ((v.map (Span.Located.Internal.new · l.end)).or held), c'), p.taken) ∧
         VOut.VEnd' core c' (.discarding l.end) p.ver (v.isSome || core.holding) ∧
         c'.location = l.end ∧
         ∃ k, l.end = advanceLoc core.location (bs.take k)

@@ -25,7 +25,7 @@ the same handler calls in the same order, the others by the port's step itself.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Command
 
 open BSmtLib.Traits
-open BSmtLib.Parser (Parse ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Command.Internal (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
@@ -36,6 +36,10 @@ open BSmtLib.Facts.Proofs.Parser.Fused.Loop
 open BSmtLib.Facts.Proofs.Parser.Fused.Run
 open BSmtLib.Facts.Proofs.Parser.Fused.Category
 
+/- The script parser's constructor and readers, which `simp` unfolds here. -/
+attribute [local simp] ScriptParser.Internal.mk ScriptParser.Internal.command
+  ScriptParser.Internal.posture ScriptParser.Internal.declarations
+
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandler H m]
 
 /-! ## Commands -/
@@ -44,17 +48,22 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandle
 def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor batch)
     {β : Type} (k : OutcomeOf H next → m β) :
     Except (Cause H) (Parser.Internal.Flow (PM H) (ScriptParser H) Unit) × H → m β
-  | (.error e, h) => k <| .stop (.error e) (ScriptParser.new posture) next (.refl _) h
-  | (.ok (.more p), h) => k <| .command h p.declarations p.command
+  | (.error e, h) =>
+    k <| .stop (.error (ParseError.Internal.new e)) (ScriptParser.new posture) next (.refl _) h
+  | (.ok (.more p), h) =>
+    k <| .command h (ScriptParser.Internal.declarations p) (ScriptParser.Internal.command p)
   | (.ok (.done r), h) => k <| .stop (.ok (.break r)) (ScriptParser.new posture) next (.refl _) h
   | (.ok (.switchVersion declared resume), h) =>
     match switch : next.setVersion declared with
     | .error _ =>
-      k <| .stop (.error (.syntax .unsupportedVersion)) (ScriptParser.new posture) next (.refl _) h
+      k <| .stop (.error (ParseError.Internal.new (.syntax .unsupportedVersion)))
+        (ScriptParser.new posture) next (.refl _) h
     | .ok switched => do
       let follows := Token.BatchCursor.setVersion_follows switch
       match ← runParser resume h with
-      | (.error e, h) => k <| .stop (.error e) (ScriptParser.new posture) switched follows h
+      | (.error e, h) =>
+        k <| .stop (.error (ParseError.Internal.new e)) (ScriptParser.new posture) switched
+          follows h
       | (.ok (.more p), h) => k <| .resume h p switched follows
       | (.ok (.done r), h) =>
         k <| .stop (.ok (.break r)) (ScriptParser.new posture) switched follows h
@@ -62,7 +71,8 @@ def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor
     let discarded := next.discardRest
     let follows := Token.BatchCursor.discardRest_follows next
     match ← runParser resume h with
-    | (.error e, h) => k <| .stop (.error e) (ScriptParser.new posture) discarded follows h
+    | (.error e, h) =>
+      k <| .stop (.error (ParseError.Internal.new e)) (ScriptParser.new posture) discarded follows h
     | (.ok (.more p), h) => k <| .resume h p discarded follows
     | (.ok (.done r), h) =>
       k <| .stop (.ok (.break r)) (ScriptParser.new posture) discarded follows h
@@ -72,9 +82,10 @@ theorem portStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     (command : CommandStateOf H) (token : Token batch) (next : BatchCursor batch) {β : Type}
     (k : OutcomeOf H next → m β) :
     portStep posture h declarations command token next k =
-      (ScriptParser.Internal.arrive { posture, command, declarations }
+      (ScriptParser.Internal.arrive (ScriptParser.Internal.mk posture command declarations)
           (inputOf next.version next token) >>=
-          fun _ => ScriptParser.Internal.step next.version { posture, command, declarations }
+          fun _ => ScriptParser.Internal.step next.version
+            (ScriptParser.Internal.mk posture command declarations)
             (inputOf next.version next token)).run.run h
         >>= scriptCont posture next k := by
   unfold portStep runParser
@@ -93,7 +104,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
   cases command with
   | awaiting =>
     rw [portStep_eq]
-    simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+    simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+        ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+        Parser.Command.Internal.commandArrive,
         ScriptParser.Internal.step,
       Parser.Command.Internal.commandStep, inputOf]
     cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
@@ -102,21 +115,32 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       simp [scriptCont, fail, syntaxError]
   | opened =>
     rw [portStep_eq]
-    simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+    simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+        ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+        Parser.Command.Internal.commandArrive,
         ScriptParser.Internal.step,
       Parser.Command.Internal.commandStep, inputOf, Reserved.contentOf_eq, Reserved.reservedAt_eq]
     cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [scriptCont, fail, syntaxError]
-    all_goals (cases w <;> simp [startTerm, toPort, assemble, withTerm,
-      Parser.Command.Internal.Standard.Payload.init, Parser.Category.Term.Internal.TermState.init])
+    all_goals first
+      | (simp only [startNonstandard, runHandler]
+         rw [run_call, bind_map_left]
+         congr 1
+         funext ⟨r, h'⟩
+         cases r <;> simp [toPort, fail, Except.mapError, Except.map])
+      | (cases w <;> simp [startTerm, toPort, assemble, withTerm,
+          Parser.Command.Internal.Standard.Payload.init,
+          Parser.Category.Term.Internal.TermState.init])
   | payload p =>
     cases p with
     | closing final =>
       simp only [closingStep]
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, inputOf]
@@ -130,7 +154,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         simp [scriptCont, toPort, runParser])
     | named named =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, inputOf, Category.symbolOf?,
@@ -145,7 +171,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       all_goals (cases named <;> simp [scriptCont, toPort, closing])
     | declareConst symbol state =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, run_bind_eq, bind_assoc,
@@ -158,7 +186,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       cases o <;> simp [HandledOutcome.toRun, scriptCont, toPort, fail, closing]
     | declareFunParameters symbol state =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, run_bind_eq, bind_assoc,
@@ -171,7 +201,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       cases o <;> simp [HandledOutcome.toRun, scriptCont, toPort, fail]
     | declareFunResult symbol parameters state =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, run_bind_eq, bind_assoc,
@@ -184,7 +216,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       cases o <;> simp [HandledOutcome.toRun, scriptCont, toPort, fail, closing]
     | defineConstSort symbol state =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, run_bind_eq, bind_assoc,
@@ -198,7 +232,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         withTerm, Parser.Category.Term.Internal.TermState.init]
     | defineSignature definition state =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, run_bind_eq, bind_assoc,
@@ -219,7 +255,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
             Parser.Category.Term.Internal.TermState.init]
     | push =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
@@ -231,7 +269,9 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
             closing]
     | pop =>
       rw [portStep_eq]
-      simp only [ScriptParser.Internal.arrive, Parser.Command.Internal.commandArrive,
+      simp only [ScriptParser.Internal.command_mk, ScriptParser.Internal.posture_mk,
+          ScriptParser.Internal.declarations_mk, ScriptParser.Internal.arrive,
+          Parser.Command.Internal.commandArrive,
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
@@ -242,5 +282,6 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.Internal.expectNumeral, toPort,
             closing]
     | _ => rfl
+  | nonstandard parser => rfl
 
 end BSmtLib.Facts.Proofs.Parser.Fused.Command

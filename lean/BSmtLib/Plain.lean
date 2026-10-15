@@ -50,25 +50,57 @@ def isAllowed (value : ByteSlice) : Bool :=
 end StringContent
 
 /--
-SMT-LIB symbol, quoted or unquoted.
+An owned SMT-LIB symbol, quoted or unquoted.
 
-May be empty.
-Must contain only SMT-LIB printable or whitespace bytes except for pipe (|) and backslash (\).
+The symbol carries its bytes and whether it is quoted.
+
+May be empty if quoted.
+Must contain only SMT-LIB printable or whitespace bytes
+except for pipe (|) and backslash (\), with an additional
+restriction for unquoted symbols: they must contain
+a nonempty sequence of simple-symbol bytes not starting
+with a digit.
 
 Equality and hash are intentionally not implemented:
 quoted and unquoted symbols refer to the same value semantically,
 so the value without the quoted flag should be compared in that case,
-obtained through `intoBytes`.
+obtained through `Symbol.bytes` or `Symbol.intoBytes`.
 -/
 structure Symbol where
-  private ofBytes ::
-  private bytes : Bytes
+  private ofParts ::
+  private quoted : Bool
+  private value : Bytes
+
+/--
+A view of an SMT-LIB symbol, quoted or unquoted.
+
+The symbol carries its bytes and whether it is quoted.
+
+May be empty if quoted.
+Must contain only SMT-LIB printable or whitespace bytes
+except for pipe (|) and backslash (\), with additional
+restrictions for unquoted symbols.
+
+Equality and hash are intentionally not implemented:
+quoted and unquoted symbols refer to the same value semantically,
+so the value without the quoted flag should be compared in that case,
+obtained through `SymbolView.bytes`.
+-/
+structure SymbolView where
+  private ofParts ::
+  private quoted : Bool
+  private slice : ByteSlice
 
 namespace Symbol
 
-/- LEAN: Rust's `is_quoted_allowed`: the owned symbol does not record whether it was quoted yet,
-and allows what a quoted symbol allows. -/
-def isAllowed (value : ByteSlice) : Bool :=
+def isUnquotedAllowed (value : ByteSlice) : Bool :=
+  if h : 0 < value.size then
+    !isAsciiDigit value[0] && allBytes value fun c =>
+      (CharClass.classify c).isAllowedInSimpleSymbol
+  else
+    false
+
+def isQuotedAllowed (value : ByteSlice) : Bool :=
   allBytes value fun c =>
     (CharClass.classify c).isPrintableOrWhitespace && c != byte! '|' && c != byte! '\\'
 
@@ -254,8 +286,8 @@ def intoByteArray (self : DisallowedByteVecError) : ByteArray :=
 end DisallowedByteVecError
 
 /- LEAN: the counterpart of the Rust macro `string8_newtype!`, which gives each type above its
-methods and its view. The methods follow `Bytes`: `into_vec` is `intoByteArray`, and the
-comparisons with other types, `Borrow` and `iter` are left out, as they are for `Bytes`.
+methods and its view. The methods follow `Bytes`: `into_vec` is `intoByteArray`, and `Borrow`
+and `iter` are left out, as they are for `Bytes`; the comparisons are made by `plain_newtype_eq`.
 Hygiene is off so that the generated code can name the private fields and constructors of
 the structures above. -/
 set_option hygiene false in
@@ -309,8 +341,11 @@ local macro "plain_newtype " name:ident view:ident : command => do
   return ⟨Lean.mkNullNode #[viewStructure, ownedMethods, viewMethods]⟩
 
 /- LEAN: the comparisons that Rust derives on the types of `string8_newtype!`: `BEq` is
-`PartialEq`, `Hashable` is `Hash`. The symbol is not among those types in Rust and has
-neither, so it is given none here. -/
+`PartialEq`, `Hashable` is `Hash`, with an owned value and a view of the same bytes hashing
+alike. Rust's comparisons with byte slices, strings and the other of the pair are functions, as
+`BEq` compares values of one type; Rust's `[u8]` and `&[u8]` are both `ByteSlice`, `str` and
+`&str` both `String`. The symbol is not among those types in Rust and has none of them, so it is
+given none here. -/
 set_option hygiene false in
 local macro "plain_newtype_eq " name:ident view:ident : command => `(
     namespace $name
@@ -319,19 +354,103 @@ local macro "plain_newtype_eq " name:ident view:ident : command => `(
 
     @[no_expose] instance : Hashable $name := ⟨fun s => hash s.bytes⟩
 
+    /-- Whether the bytes are those of the slice. -/
+    def eqSlice (self : $name) (other : ByteSlice) : Bool := self.bytes.asSlice == other
+
+    /-- Whether the bytes are those of the string's UTF-8 encoding. -/
+    def eqString (self : $name) (other : String) : Bool :=
+      self.bytes.asSlice == other.toUTF8.toByteSlice
+
+    /-- Whether the bytes are those of the view. -/
+    def eqView (self : $name) (other : $view) : Bool := self.bytes.asSlice == other.slice
+
     end $name
 
     namespace $view
 
     @[no_expose] instance : BEq $view := ⟨fun a b => a.slice == b.slice⟩
 
+    @[no_expose] instance : Hashable $view := ⟨fun s => Bytes.Internal.hashSlice s.slice⟩
+
+    /-- Whether the bytes are those of the slice. -/
+    def eqSlice (self : $view) (other : ByteSlice) : Bool := self.slice == other
+
+    /-- Whether the bytes are those of the string's UTF-8 encoding. -/
+    def eqString (self : $view) (other : String) : Bool :=
+      self.slice == other.toUTF8.toByteSlice
+
+    /-- Whether the bytes are those of the owned value. -/
+    def eqOwned (self : $view) (other : $name) : Bool := self.slice == other.bytes.asSlice
+
     end $view)
 
 plain_newtype StringContent StringContentView
 
-/- LEAN: the owned symbol does not record whether it was quoted yet: it is made with `new`, which
-allows what a quoted symbol allows, where Rust has `new_quoted` and `new_unquoted`. -/
-plain_newtype Symbol SymbolView
+/- LEAN: the symbol is not made by `string8_newtype!` in Rust, as it carries whether it is
+quoted; its methods are written out here, named as the macro's are. -/
+namespace Symbol
+
+/-- Whether this is a quoted symbol enclosed in pipes, e.g. `|x|`, or a simple symbol, e.g. `x`. -/
+def isQuoted (self : Symbol) : Bool := self.quoted
+
+def newUnquoted (value : ByteArray) : Except DisallowedByteVecError Symbol :=
+  let value := Bytes.fromByteArray value
+  if isUnquotedAllowed value.asSlice then .ok ⟨false, value⟩ else .error ⟨value⟩
+
+def newQuoted (value : ByteArray) : Except DisallowedByteVecError Symbol :=
+  let value := Bytes.fromByteArray value
+  if isQuotedAllowed value.asSlice then .ok ⟨true, value⟩ else .error ⟨value⟩
+
+def bytes (self : Symbol) : Bytes.BytesView := self.value.asView
+
+def asSlice (self : Symbol) : ByteSlice := self.value.asSlice
+
+def asView (self : Symbol) : SymbolView := ⟨self.quoted, self.value.asSlice⟩
+
+def intoBytes (self : Symbol) : Bytes := self.value
+
+def intoByteArray (self : Symbol) : ByteArray := self.value.intoByteArray
+
+def len (self : Symbol) : Nat := self.value.len
+
+def isEmpty (self : Symbol) : Bool := self.value.isEmpty
+
+end Symbol
+
+namespace SymbolView
+
+/- LEAN: crate-private in Rust, where it also checks the value in debug builds. -/
+@[inline]
+def Internal.newUnchecked (isQuoted : Bool) (value : ByteSlice) : SymbolView := ⟨isQuoted, value⟩
+
+@[inline]
+def isQuoted (self : SymbolView) : Bool := self.quoted
+
+def bytes (self : SymbolView) : Bytes.BytesView := Bytes.BytesView.Internal.new self.slice
+
+@[inline]
+def asSlice (self : SymbolView) : ByteSlice := self.slice
+
+def intoOwned (self : SymbolView) : Symbol :=
+  ⟨self.quoted, (Bytes.BytesView.Internal.new self.slice).intoOwned⟩
+
+def len (self : SymbolView) : Nat := self.slice.size
+
+def isEmpty (self : SymbolView) : Bool := self.len == 0
+
+/- LEAN: Rust's `Debug`, which writes a quoted symbol in bars around the bytes' `Debug`. -/
+@[no_expose] instance : Repr SymbolView where
+  reprPrec symbol prec :=
+    if symbol.quoted then .text "|" ++ reprPrec symbol.bytes prec ++ .text "|"
+    else reprPrec symbol.bytes prec
+
+end SymbolView
+
+namespace Symbol
+
+@[no_expose] instance : Repr Symbol := ⟨fun s p => reprPrec s.asView p⟩
+
+end Symbol
 
 plain_newtype Keyword KeywordView
 plain_newtype Numeral NumeralView
@@ -341,6 +460,8 @@ plain_newtype Decimal DecimalView
 plain_newtype Whitespace WhitespaceView
 plain_newtype Comment CommentView
 
+/- LEAN: `eqSlice`, `eqString`, `eqView` and `eqOwned` stand for Rust's implementations of
+`PartialEq` with other types, which have no names (see `plain_newtype_eq`). -/
 plain_newtype_eq StringContent StringContentView
 plain_newtype_eq Keyword KeywordView
 plain_newtype_eq Numeral NumeralView

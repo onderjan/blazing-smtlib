@@ -66,6 +66,10 @@ instance (a b : Version) : Decidable (a ≤ b) :=
 instance (a b : Version) : Decidable (a < b) :=
   inferInstanceAs (Decidable (Internal.rank a < Internal.rank b))
 
+/- LEAN: Rust's derived `Ord`, in the order of the variants, which is that of the ranks; `compare`
+agrees with `≤` and `<` as it compares the ranks too. -/
+instance : Ord Version := ⟨fun a b => compare (Internal.rank a) (Internal.rank b)⟩
+
 def fromDecimal? (decimal : ByteSlice) : Option Version :=
   if decimal == "2.0".toUTF8.toByteSlice then some .v2_0
   else if decimal == "2.5".toUTF8.toByteSlice then some .v2_5
@@ -1177,7 +1181,8 @@ theorem Consumed.lt_consumedEndOf {self origin : BatchCursor batch} (h : self.Co
     omega
   have h2 := Internal.TokenBatch.endsAfter_iff.mp hs.2 _ hlt
   rw [getElem!_pos self.batch.endOffsets _ (Nat.lt_of_lt_of_le hlt self.batch.ordered.2.2.1)] at h2
-  simpa only [Internal.consumedEndOf, Internal.TokenBatch.spanOf, Span.end_ofNumbers] using h2
+  simpa only [Internal.consumedEndOf, Internal.TokenBatch.spanOf, Span.end_ofNumbers,
+    Span.Location.Internal.offset_new] using h2
 
 /-- Consumes all tokens remaining in the cursor. -/
 @[inline]
@@ -1196,6 +1201,12 @@ theorem consumeAll_consumed {self : BatchCursor batch} (h : self.HasNext) :
 @[inline]
 def isEmpty (self : BatchCursor batch) : Bool :=
   self.nextIndex ≥ self.stop
+
+theorem isEmpty_iff (self : BatchCursor batch) : self.isEmpty = true ↔ ¬ self.HasNext := by
+  simp [isEmpty, HasNext]
+
+theorem not_hasNext_consumeAll (self : BatchCursor batch) : ¬ self.consumeAll.HasNext := by
+  simp [consumeAll, HasNext]
 
 /--
 Requests that the input is lexed again from the end of the last
@@ -1543,9 +1554,9 @@ class Consume (H : Type) (R E : outParam Type) where
   -/
   isConcrete : Bool
 
-/- LEAN: Rust's `SmtRecover: SmtConsume`. A recovering lexer requires both classes of its
-consumer. The calls cannot fail, and run in the consumer's monad with its state. The Rust
-blanket `impl SmtRecover for &mut T` has no counterpart, as Lean has no references. -/
+/- LEAN: Rust's `SmtRecover: SmtConsume`. The supertrait is the instance argument `Consume H R E`,
+as for `ConsumeFrom`. The calls cannot fail, and run in the consumer's monad with its state. The
+Rust blanket `impl SmtRecover for &mut T` has no counterpart, as Lean has no references. -/
 /--
 A token consumer that can recover after an error (EXPERIMENTAL).
 
@@ -1560,7 +1571,7 @@ Lexer recovery is implemented but experimental
 since the exact semantics have not yet been set in stone.
 It can change or be removed in any version and should not be used.
 -/
-class Recover (H : Type) (m : outParam (Type → Type)) where
+class Recover (H : Type) (m : outParam (Type → Type)) {R E : outParam Type} [Consume H R E] where
   /--
   Abandons everything the consumer has not finished.
 

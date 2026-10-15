@@ -307,7 +307,7 @@ theorem eof_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
     (Recovery.LexRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok halike
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := Parser.ParseErrorCause Unit)
+    (E := Parser.ParseError Unit)
     (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢

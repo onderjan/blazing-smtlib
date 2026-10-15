@@ -4,6 +4,7 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VOut
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.VWalk
 import all BSmtLib.Lexer.Error
 import all BSmtLib.Lexer.Internal.VNaive
+import all BSmtLib.Span
 
 @[expose] public section
 
@@ -191,9 +192,10 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
       | wait r0 l0 p' =>
         obtain ⟨rfl, c', hr, hs⟩ := hH
         have hvb : vBytes C core held (b :: rest) taken =
-            vBytes C c' (some ⟨r0, l0.end⟩) rest p'.taken := by
+            vBytes C c' (some (Span.Located.Internal.new r0 l0.end)) rest p'.taken := by
           simp only [vBytes, hr]
-        have hih := ih c' .idle (some ⟨r0, l0.end⟩) p'.taken (hs.activity.trans hXa)
+        have hih := ih c' .idle (some (Span.Located.Internal.new r0 l0.end)) p'.taken
+          (hs.activity.trans hXa)
           (by rw [hs.version, hand1_wait_legacy hho]; exact hver)
         rw [hs.holding, hs.version, hs.location, hXl] at hih
         obtain ⟨nx, hnx⟩ := outcome_wait (hd := core.holding) r0 l0 p' []
@@ -245,7 +247,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
             · rw [a4, hs.holding, hXh]
           | some r0 =>
             obtain ⟨c2, h2, a1, a2, a3, a4, a5⟩ := vBytes_discarding C rest c'
-              (some ⟨r0, l0.end⟩) p'.taken hs.activity
+              (some (Span.Located.Internal.new r0 l0.end)) p'.taken hs.activity
             refine ⟨c2, ?_, ⟨a2, a1.trans hs.version, ?_, a5.trans (hs.initial.trans hXi)⟩,
               a3.trans (hs.location.trans (hXl.trans hle.symm)), 1, hle⟩
             · simp only [vBytes, hr, Option.map_some]
@@ -364,7 +366,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
         refine ⟨⟨0, c', hle, hs.activity, hs.location.trans hle.symm, hs.version, hs.holding,
           hs.initial, hvb⟩, fun l2 hl2 => ?_⟩
         subst hl2
-        have hih := caseIdle c' (some ⟨r0, l0.end⟩) p'.taken hs.activity
+        have hih := caseIdle c' (some (Span.Located.Internal.new r0 l0.end)) p'.taken hs.activity
           (by rw [hs.version, hand1_wait_legacy hho]; exact hver)
         rw [hs.holding, hs.version, hs.location, show (idleAt core).location = core.location from
           rfl] at hih
@@ -427,7 +429,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
               exact hs.holding
           | some r0 =>
             obtain ⟨c2, h2, a1, a2, a3, a4, a5⟩ := vBytes_discarding C rest _
-              (some ⟨r0, l0.end⟩) p'.taken hda
+              (some (Span.Located.Internal.new r0 l0.end)) p'.taken hda
             refine ⟨c2, ?_, ⟨a2, a1.trans hs.version, ?_, a5.trans hs.initial⟩,
               a3.trans (hs.location.trans hle.symm), 0, hle⟩
             · simp only [vBytes, hv, Option.map_some]

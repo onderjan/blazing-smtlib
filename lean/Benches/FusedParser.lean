@@ -23,83 +23,15 @@ module
 import BSmtLib
 
 open BSmtLib
-open BSmtLib.Token.BatchCursor.Internal (remaining)
 open BSmtLib.Token
 open BSmtLib.Lexer.Error (LexError)
 
-/-! ## The syntax checker of the benchmark -/
+/- The loops over a cursor's tokens end as each step consumes a token: they descend by the
+producer's consumption, which is well-founded. -/
+local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
+  ⟨Produce.Consumed, Produce.consumed_wf⟩
 
-/-- Command handler that accepts every standard command and keeps nothing. -/
-structure SyntaxChecker where
-
-instance : Handler SyntaxChecker Id where
-  Error := Nodes.Symbol
-  SExpr := Unit
-  Attribute := Unit
-  «Sort» := Unit
-  Term := Unit
-  Scope := Unit
-  setVersion _ := pure ()
-  handleSort _ _ := pure ()
-  handleTerm _ := pure ()
-  handleSExpr _ := pure ()
-  handleAttribute _ _ := pure ()
-  annotateTerm _ _ := pure ()
-  startLet _ := pure ()
-  endLet _ _ := pure ()
-  startQuantifier _ _ := pure ()
-  endQuantifier _ _ _ := pure ()
-  startLambda _ := pure ()
-  endLambda _ _ := pure ()
-  startMatch _ := pure ()
-  startMatchCase _ _ := pure ()
-  endMatchCase _ _ _ := pure ()
-  endMatch _ _ := pure ()
-
-instance : CommandHandler SyntaxChecker Id where
-  nonstandardCommand name := name
-  commandAssert _ := pure ()
-  commandCheckSat := pure ()
-  commandCheckSatAssuming _ := pure ()
-  commandDeclareConst _ _ := pure ()
-  startDeclareDatatype _ _ := pure ()
-  endDeclareDatatype _ := pure ()
-  startDeclareDatatypes _ := pure ()
-  startDatatypeDeclaration _ := pure ()
-  endDatatypeDeclaration _ := pure ()
-  endDeclareDatatypes := pure ()
-  commandDeclareFun _ _ _ := pure ()
-  commandDeclareSort _ _ := pure ()
-  commandDeclareSortParameter _ := pure ()
-  commandDefineConst _ _ _ := pure ()
-  startDefineFun _ := pure ()
-  endDefineFun _ := pure ()
-  startDefineFunRec _ := pure ()
-  endDefineFunRec _ := pure ()
-  startDefineFunsRec _ := pure ()
-  startRecursiveBody _ := pure ()
-  endRecursiveBody _ := pure ()
-  endDefineFunsRec := pure ()
-  startDefineSort _ _ := pure ()
-  endDefineSort _ := pure ()
-  commandEcho _ := pure ()
-  commandExit := pure ()
-  commandGetAssertions := pure ()
-  commandGetAssignment := pure ()
-  commandGetInfo _ := pure ()
-  commandGetModel := pure ()
-  commandGetOption _ := pure ()
-  commandGetProof := pure ()
-  commandGetUnsatAssumptions := pure ()
-  commandGetUnsatCore := pure ()
-  commandGetValue _ := pure ()
-  commandPop _ := pure ()
-  commandPush _ := pure ()
-  commandReset := pure ()
-  commandResetAssertions := pure ()
-  commandSetInfo _ := pure ()
-  commandSetLogic _ := pure ()
-  commandSetOption _ := pure ()
+/-! ## The syntax checker of the benchmark: the library's `SyntaxChecker`, and one in `IO` -/
 
 /-- The syntax checker in `IO`, as a solver's handler would run: it counts the commands in a
 reference, so that the calls are not pure. -/
@@ -107,7 +39,7 @@ structure SyntaxCheckerIO where
   commands : IO.Ref Nat
 
 instance : Handler SyntaxCheckerIO IO where
-  Error := Nodes.Symbol
+  Error := Plain.SymbolView
   SExpr := Unit
   Attribute := Unit
   «Sort» := Unit
@@ -132,12 +64,13 @@ instance : Handler SyntaxCheckerIO IO where
 
 /-- A command counted. -/
 @[inline]
-def countCommand : ExceptT Nodes.Symbol (StateT SyntaxCheckerIO IO) Unit := do
+def countCommand : ExceptT Plain.SymbolView (StateT SyntaxCheckerIO IO) Unit := do
   let h ← get
   (h.commands.modify (· + 1) : IO Unit)
 
 instance : CommandHandler SyntaxCheckerIO IO where
-  nonstandardCommand name := name
+  NonstandardParser := Empty
+  nonstandardCommand name := throw name
   commandAssert _ := countCommand
   commandCheckSat := countCommand
   commandCheckSatAssuming _ := countCommand
@@ -184,18 +117,19 @@ instance : CommandHandler SyntaxCheckerIO IO where
 /-- A parser that takes every token and does nothing: the floor of the parse adapter. -/
 structure NullParser where
 
-instance : Parser.Internal.ParseByToken NullParser SyntaxChecker Id Nodes.Symbol Unit where
+instance :
+    Parser.Internal.ParseByToken NullParser SyntaxChecker Id NonstandardCommandError Unit where
   arrive _ _ := pure ()
   step _ p token := match token with
     | .endOfInput => pure (.done ())
     | _ => pure (.more p)
   reset p := p
 
-instance : Parser.Parse NullParser SyntaxChecker Id Nodes.Symbol Unit where
+instance : Parser.Parse NullParser SyntaxChecker Id NonstandardCommandError Unit where
   parse := Parser.Internal.parseByToken
 
 /-- The script parser parsing by its loop over single tokens, never by the fused reader. -/
-structure PortParser (H : Type) {m : Type → Type} [Handler H m] where
+structure PortParser (H : Type) {m : Type → Type} [CommandHandler H m] where
   inner : Parser.ScriptParser H
 
 /-- The script parser, parsing by its loop over single tokens. -/
@@ -221,10 +155,10 @@ def countRest {batch : BatchTag} (origin : BatchCursor batch) (n : Nat) (cursor 
     (consumed : cursor.Consumed origin) : Nat × { c : BatchCursor batch // c.Consumed origin } :=
   if h : cursor.HasNext then
     let (_, ⟨next, taken⟩) := cursor.next h
-    have : remaining next < remaining cursor := taken.remaining_lt
     countRest origin (n + 1) next (taken.trans consumed)
   else (n, ⟨cursor, consumed⟩)
-termination_by remaining cursor
+termination_by cursor
+decreasing_by exact taken
 
 instance {batch : BatchTag} : ConsumeFrom CountTokens (BatchCursor batch) Id where
   consume cursor h := do
@@ -305,8 +239,8 @@ structure Rec where
 def showBytes (slice : ByteSlice) : String :=
   slice.toByteArray.foldl (init := "") fun s b => s.push (Char.ofNat b.toNat)
 
-def showSym (s : Nodes.Symbol) : String :=
-  "|" ++ showBytes s.content.asSlice ++ (if s.quoted then "|q" else "|")
+def showSym (s : Plain.SymbolView) : String :=
+  "|" ++ showBytes s.asSlice ++ (if s.isQuoted then "|q" else "|")
 
 def showIndex : Index → String
   | .numeral d => "#" ++ showBytes d.asSlice
@@ -327,7 +261,7 @@ def showNats (xs : Array Nat) : String := toString xs.toList
 
 def nat (x : Nat) : String := toString x
 
-def showPairs (xs : Array (Nodes.Symbol × Nat)) : String :=
+def showPairs (xs : Array (Plain.SymbolView × Nat)) : String :=
   " ".intercalate (xs.toList.map fun (s, n) => showSym s ++ ":" ++ toString n)
 
 def showSoW : Nodes.SymbolOrWildcard → String
@@ -340,10 +274,10 @@ def showPattern : Pattern → String
     "(" ++ showSym c ++ " " ++ " ".intercalate (args.toList.map showSoW) ++ ")"
 
 def showSig (s : Signature Nat) : String :=
-  showSym s.symbol ++ " (" ++ showPairs s.parameters ++ ") " ++ toString s.result
+  showSym s.name ++ " (" ++ showPairs s.params ++ ") " ++ toString s.resultSort
 
-def showCons (c : Constructor Nat) : String :=
-  showSym c.symbol ++ " (" ++ showPairs c.selectors ++ ")"
+def showCons (c : Plain.SymbolView × Multiple.SortedVarsView Nat) : String :=
+  showSym c.1 ++ " (" ++ showPairs c.2.toArray ++ ")"
 
 /-- Writes the call down and returns its number, or fails if it is the one to fail at. -/
 @[inline]
@@ -366,56 +300,58 @@ instance : Handler Rec IO where
   setVersion v := do
     let r ← get
     (r.log.modify (·.push s!"setVersion {repr v}") : IO Unit)
-  handleSort i args := recCall s!"sort {showIdent i} {showNats args}"
+  handleSort i args := recCall s!"sort {showIdent i} {showNats args.asSlice}"
   handleTerm node := recCall (match node with
     | .constant c => "term " ++ showConst c
     | .identifier i s => s!"term id {showIdent i} {s.map fun x => nat x}"
-    | .application f s args => s!"term app {showIdent f} {s.map fun x => nat x} {showNats args}")
+    | .application f s args =>
+      s!"term app {showIdent f} {s.map fun x => nat x} {showNats args.asSlice}")
   handleSExpr node := recCall (match node with
     | .constant c => "sexpr " ++ showConst c
     | .symbol s => "sexpr " ++ showSym s
     | .reserved w => "sexpr reserved " ++ w.asStr
     | .keyword k => "sexpr :" ++ showBytes k.asSlice
-    | .list items => s!"sexpr list {showNats items}")
+    | .list items => s!"sexpr list {showNats items.asSlice}")
   handleAttribute k v := recCall (s!"attr :{showBytes k.asSlice} " ++ match v with
     | none => "none"
     | some (.constant c) => showConst c
     | some (.symbol s) => showSym s
-    | some (.list items) => showNats items)
-  annotateTerm t attrs := recCall s!"annotate {nat t} {showNats attrs}"
-  startLet bs := recCall s!"startLet {showPairs bs}"
+    | some (.list items) => showNats items.asSlice)
+  annotateTerm t attrs := recCall s!"annotate {nat t} {showNats attrs.asSlice}"
+  startLet bs := recCall s!"startLet {showPairs bs.toArray}"
   endLet s t := recCall s!"endLet {nat s} {nat t}"
-  startQuantifier q vs := recCall s!"startQuantifier {q == .forall} {showPairs vs}"
+  startQuantifier q vs := recCall s!"startQuantifier {q == .forall} {showPairs vs.toArray}"
   endQuantifier q s t := recCall s!"endQuantifier {q == .forall} {nat s} {nat t}"
-  startLambda vs := recCall s!"startLambda {showPairs vs}"
+  startLambda vs := recCall s!"startLambda {showPairs vs.toArray}"
   endLambda s t := recCall s!"endLambda {nat s} {nat t}"
   startMatch t := recUnit s!"startMatch {nat t}"
   startMatchCase t p := recCall s!"startMatchCase {nat t} {showPattern p}"
   endMatchCase s t b := recCall s!"endMatchCase {nat s} {nat t} {nat b}"
   endMatch t cs := recCall
-    s!"endMatch {nat t} {" ".intercalate (cs.toList.map fun (p, b) =>
+    s!"endMatch {nat t} {" ".intercalate (cs.toArray.toList.map fun (p, b) =>
       showPattern p ++ "->" ++ nat b)}"
 
 
 instance : CommandHandler Rec IO where
-  nonstandardCommand name := "nonstandard " ++ showSym name
+  NonstandardParser := Empty
+  nonstandardCommand name := throw ("nonstandard " ++ showSym name)
   commandAssert t := recUnit s!"assert {nat t}"
   commandCheckSat := recUnit "check-sat"
-  commandCheckSatAssuming ts := recUnit s!"check-sat-assuming {showNats ts}"
+  commandCheckSatAssuming ts := recUnit s!"check-sat-assuming {showNats ts.asSlice}"
   commandDeclareConst s t := recUnit s!"declare-const {showSym s} {nat t}"
   startDeclareDatatype s ps := recUnit
-    s!"startDeclareDatatype {showSym s} {" ".intercalate (ps.toList.map showSym)}"
+    s!"startDeclareDatatype {showSym s} {" ".intercalate (ps.toArray.toList.map showSym)}"
   endDeclareDatatype cs := recUnit
-    s!"endDeclareDatatype {" ".intercalate (cs.toList.map showCons)}"
+    s!"endDeclareDatatype {" ".intercalate (cs.toArray.toList.map showCons)}"
   startDeclareDatatypes ss := recUnit
-    s!"startDeclareDatatypes {" ".intercalate (ss.toList.map fun (s, n) =>
+    s!"startDeclareDatatypes {" ".intercalate (ss.toArray.toList.map fun (s, n) =>
       showSym s ++ showBytes n.asSlice)}"
   startDatatypeDeclaration ps := recUnit
-    s!"startDatatypeDeclaration {" ".intercalate (ps.toList.map showSym)}"
+    s!"startDatatypeDeclaration {" ".intercalate (ps.toArray.toList.map showSym)}"
   endDatatypeDeclaration cs := recUnit
-    s!"endDatatypeDeclaration {" ".intercalate (cs.toList.map showCons)}"
+    s!"endDatatypeDeclaration {" ".intercalate (cs.toArray.toList.map showCons)}"
   endDeclareDatatypes := recUnit "endDeclareDatatypes"
-  commandDeclareFun s ps r := recUnit s!"declare-fun {showSym s} {showNats ps} {nat r}"
+  commandDeclareFun s ps r := recUnit s!"declare-fun {showSym s} {showNats ps.asSlice} {nat r}"
   commandDeclareSort s n := recUnit s!"declare-sort {showSym s} {showBytes n.asSlice}"
   commandDeclareSortParameter s := recUnit s!"declare-sort-parameter {showSym s}"
   commandDefineConst s t b := recUnit s!"define-const {showSym s} {nat t} {nat b}"
@@ -424,12 +360,12 @@ instance : CommandHandler Rec IO where
   startDefineFunRec sig := recUnit s!"startDefineFunRec {showSig sig}"
   endDefineFunRec b := recUnit s!"endDefineFunRec {nat b}"
   startDefineFunsRec sigs := recUnit
-    s!"startDefineFunsRec {" ; ".intercalate (sigs.toList.map showSig)}"
+    s!"startDefineFunsRec {" ; ".intercalate (sigs.toArray.toList.map showSig)}"
   startRecursiveBody sig := recUnit s!"startRecursiveBody {showSig sig}"
   endRecursiveBody b := recUnit s!"endRecursiveBody {nat b}"
   endDefineFunsRec := recUnit "endDefineFunsRec"
   startDefineSort s ps := recUnit
-    s!"startDefineSort {showSym s} {" ".intercalate (ps.toList.map showSym)}"
+    s!"startDefineSort {showSym s} {" ".intercalate (ps.toArray.toList.map showSym)}"
   endDefineSort t := recUnit s!"endDefineSort {nat t}"
   commandEcho c := recUnit s!"echo {showBytes c.asSlice}"
   commandExit := recUnit "exit"
@@ -441,7 +377,7 @@ instance : CommandHandler Rec IO where
   commandGetProof := recUnit "get-proof"
   commandGetUnsatAssumptions := recUnit "get-unsat-assumptions"
   commandGetUnsatCore := recUnit "get-unsat-core"
-  commandGetValue ts := recUnit s!"get-value {showNats ts}"
+  commandGetValue ts := recUnit s!"get-value {showNats ts.asSlice}"
   commandPop n := recUnit s!"pop {showBytes n.asSlice}"
   commandPush n := recUnit s!"push {showBytes n.asSlice}"
   commandReset := recUnit "reset"
@@ -454,7 +390,7 @@ instance : CommandHandler Rec IO where
 
 /-- What a read gave: the calls, then the result. -/
 def showResult {E R L : Type} (showE : E → String)
-    (result : Except (LexError (Parser.ParseErrorCause E) × L)
+    (result : Except (LexError (Parser.ParseError E) × L)
       (Option (Located R) × α)) : String :=
   match result with
   | .ok (none, _) => "ok none"
@@ -462,8 +398,10 @@ def showResult {E R L : Type} (showE : E → String)
   | .error (err, _) =>
     let cause := match err.cause with
       | .lexical kind => s!"lexical {repr kind}"
-      | .consumer (.syntax kind) => s!"syntax {repr kind}"
-      | .consumer (.handler e) => s!"handler {showE e}"
+      | .consumer error =>
+        match error.cause with
+        | .syntax kind => s!"syntax {repr kind}"
+        | .handler e => s!"handler {showE e}"
     s!"error {cause} at {repr err.span}"
 
 /-- Feeds the data to the lexer in pieces of `piece` bytes (all at once for 0), then the end. -/
@@ -485,7 +423,7 @@ def feed {C R E : Type} [Consume C R E] [∀ batch, ConsumeFrom C (BatchCursor b
   | .error (e, _) => return .error (e, ())
 
 /-- What the read gave, as text. -/
-def showRead {C R : Type} [Consume C R (Parser.ParseErrorCause String)]
+def showRead {C R : Type} [Consume C R (Parser.ParseError String)]
     [∀ batch, ConsumeFrom C (BatchCursor batch) IO] (adapter : C) (data : ByteArray)
     (version : Version) (piece : Nat) : IO String := do
   return showResult id (← feed (Lexer.new adapter version) data piece)

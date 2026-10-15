@@ -5,6 +5,7 @@ public import BSmtLib.Facts.Proofs.Reader.Consumer
 public import BSmtLib.Facts.Proofs.Reader.Param.Stop
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
+import all BSmtLib.Parser
 
 @[expose] public section
 
@@ -56,7 +57,8 @@ def paOf {b : Token.BatchTag} (parser : ScriptParser (List Event)) (next : Token
       (Parser.Internal.After (ScriptParser
           (List Event)) Unit Unit × Token.BatchCursor b) × List Event
   | (.error e, log) =>
-    ((.stop (.error e) (Parser.Internal.ParseByToken.reset parser),
+    ((.stop (.error (Parser.ParseError.Internal.new e))
+        (Parser.Internal.ParseByToken.reset parser),
       applyRequests next (Parser.Adapters.Run.switchOf log.reverse)
           (Parser.Adapters.Run.discardOf log.reverse)),
       calls log)
@@ -493,7 +495,7 @@ turn, until the cursor has none or the handover stops. -/
 def paLoop {b : Token.BatchTag} (parser : ScriptParser (List Event))
     (cursor : Token.BatchCursor b) :
     StateT (List Event) Id
-      (Except (ParseErrorCause Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
+      (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
         Token.BatchCursor b) :=
   if h : cursor.HasNext then
     match cursor.next h with
@@ -560,7 +562,7 @@ theorem first_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor
 /-- The log the adapter's handler holds when its loop over a cursor in the version begins: the
 switch to the version first, unless the handler was told the version of the input already. -/
 def startLog (adapter : RecAdapter) (version : Token.Version) : List Event :=
-  if adapter.versionSet then adapter.handler
+  if (ParseAdapter.Internal.versionSet adapter) then adapter.handler
   else .handlerSwitch (Bridge.version version) :: adapter.handler
 
 /-- A call of the adapter is its loop over the cursor, from its parser and its handler's log with
@@ -571,14 +573,14 @@ theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : curs
     let q := (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run adapter
     let r := (paLoop adapter.parser cursor).run (startLog adapter cursor.version)
     (q.1.1, q.1.2.val, q.2) = (r.1.1, r.1.2.2,
-      { handler := r.2, parser := r.1.2.1,
-        versionSet := ParseAdapter.Internal.versionSetAfter r.1.1 }) := by
+      ParseAdapter.Internal.mk r.2 r.1.2.1
+        (ParseAdapter.Internal.versionSetAfter r.1.1) .new) := by
   intro q r
   simp only [q, r]
   rw [paLoop, dite_eq_left_of_eq_true (eq_true h)]
   have hstart : Stop.told adapter cursor = startLog adapter cursor.version := by
     unfold Stop.told startLog
-    cases adapter.versionSet <;> rfl
+    cases (ParseAdapter.Internal.versionSet adapter) <;> rfl
   show ((Stop.consume cursor h adapter).1.1, (Stop.consume cursor h adapter).1.2.val,
     (Stop.consume cursor h adapter).2) = _
   unfold Stop.consume
@@ -594,9 +596,9 @@ theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : curs
     simp only [Stop.finish]
     have := rest_eq cursor (remaining later + 1) parser' later taken handler' (Nat.lt_succ_self _)
     simp only at this
-    exact congrArg (fun x : (Except (ParseErrorCause Unit) (ControlFlow Unit) ×
+    exact congrArg (fun x : (Except (ParseError Unit) (ControlFlow Unit) ×
       ScriptParser (List Event) × Token.BatchCursor b) × List Event =>
-        (x.1.1, x.1.2.2, (ParseAdapter.mk x.2 x.1.2.1
+        (x.1.1, x.1.2.2, (ParseAdapter.Internal.mk x.2 x.1.2.1
           (ParseAdapter.Internal.versionSetAfter x.1.1) .new : RecAdapter))) this
 
 end BSmtLib.Facts.Proofs.Reader.Param.Adapter

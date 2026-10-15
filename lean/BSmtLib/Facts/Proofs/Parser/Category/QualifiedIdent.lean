@@ -75,18 +75,24 @@ def qualStep (version : Token.Version) (state : QualIdentState (Traits.Handler.�
   | .more state => return .more state
   | .done (identifier, sort) => return .done ({ identifier, sort } : Nodes.QualifiedIdent _)
 
+/-- The owned value of what `qualStep` gives. -/
+abbrev ownQualified (qualified : Nodes.QualifiedIdent (Traits.Handler.«Sort» H)) :
+    Nodes.QualifiedIdentBuf (Traits.Handler.«Sort» H) :=
+  { identifier := qualified.identifier.intoOwned, sort := qualified.sort }
+
 private theorem qualifiedIdent_sim (version : Token.Version) :
-    Simulates version (QualifiedIdentParser.mk (H := H)) (qualStep version)
+    Simulates version (QualifiedIdentParser.mk (H := H)) (mapSteps ownQualified (qualStep version))
       QualifiedIdentParser.new := by
   refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl⟩
   show (do
       match ← qualIdentStep version state token with
       | .more state => return Parser.Internal.Flow.more (QualifiedIdentParser.mk state)
       | .done (identifier, sort) =>
-        return .done ({ identifier, sort } : Nodes.QualifiedIdent _)) = _
-  simp only [qualStep, map_bind]
+        return .done ({ identifier := identifier.intoOwned, sort } : Nodes.QualifiedIdentBuf _))
+    = _
+  simp only [mapSteps, qualStep, map_bind]
   refine bind_congr fun step => ?_
-  rcases step with state | ⟨identifier, sort⟩ <;> simp [flowOf]
+  rcases step with state | ⟨identifier, sort⟩ <;> simp [flowOf, mapDone]
 
 /-- A run of `qualIdentStep` that ends the parser is one of `qualStep`, its result made a
 qualified identifier. -/
@@ -295,17 +301,20 @@ theorem qualifiedIdent_parses {version : Token.Version}
         | .plain identifier => identifier
         | .as identifier _ => identifier) ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun result => { identifier, sort := result.2 }) <$>
+        ((fun result => ({ identifier := identifier.intoOwned, sort := result.2 } :
+            Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.qualIdentifier noPoints h qualified))
         QualifiedIdentParser.new := by
   obtain ⟨identifier, hruns, hidentifier⟩ := qualifiedIdent_runs hA qualified hvalid hs
   refine ⟨identifier, hidentifier, ?_⟩
-  exact parses_of_runsS (state := QualIdentState.start) (@qualifiedIdent_hparse H m _ _)
+  have := parses_of_runsS_map (state := QualIdentState.start) (@qualifiedIdent_hparse H m _ _)
     (qualifiedIdent_sim version)
     (RunsS.map_program (f := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
       ({ identifier, sort := r.2 } : Nodes.QualifiedIdent _))
       (runs_qualStep (result := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
         (identifier, r.2)) hruns))
+  rw [Functor.map_map] at this
+  exact this
 
 /-- The qualified identifier parser on the tokens of a valid identifier, unqualified: it
 finishes with the identifier, through the bridge, and no sort, making no call. -/
@@ -314,18 +323,18 @@ theorem qualifiedIdent_parses_plain {version : Token.Version} (identifier : Tree
     (hs : Stands tokens identifier.tokens) :
     ∃ result : Nodes.Identifier, Bridge.identifier result = identifier ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        (pure { identifier := result, sort := none } :
-          PM H (Nodes.QualifiedIdent (Traits.Handler.«Sort» H)))
+        (pure { identifier := result.intoOwned, sort := none } :
+          PM H (Nodes.QualifiedIdentBuf (Traits.Handler.«Sort» H)))
         QualifiedIdentParser.new := by
   obtain ⟨result, hruns, hresult⟩ := qualifiedIdent_runs_plain (H := H) identifier hvalid hs
   refine ⟨result, hresult, ?_⟩
-  have hparses := parses_of_runsS (state := QualIdentState.start)
+  have hparses := parses_of_runsS_map (state := QualIdentState.start)
     (@qualifiedIdent_hparse H m _ _) (qualifiedIdent_sim version)
     (RunsS.map_program (f := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
       ({ identifier := result, sort := r.2 } : Nodes.QualifiedIdent _))
       (runs_qualStep (result := fun r : Tree.Identifier × Option (Traits.Handler.«Sort» H) =>
         (result, r.2)) hruns))
-  rw [map_pure] at hparses
+  simp only [map_pure] at hparses
   exact hparses
 
 /-- The qualified identifier parser on the tokens of a valid identifier qualified by `as` with a
@@ -339,7 +348,8 @@ theorem qualifiedIdent_parses_as {version : Token.Version}
     (hs : Stands tokens (Tree.QualIdentifier.as identifier sort).tokens) :
     ∃ result : Nodes.Identifier, Bridge.identifier result = identifier ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun handled => { identifier := result, sort := some handled }) <$>
+        ((fun handled => ({ identifier := result.intoOwned, sort := some handled } :
+            Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.sort noPoints h sort))
         QualifiedIdentParser.new := by
   obtain ⟨result, hresult, hparses⟩ := qualifiedIdent_parses hA (.as identifier sort) hvalid hs
@@ -354,7 +364,7 @@ private theorem qualifiedIdent_rejects {version : Token.Version}
     (hfail : qualStep (H := H) version last token = throw (.syntax kind)) :
     Rejects version (QualifiedIdentParser.mk state) (tokens ++ [token]) (pure () : PM H Unit)
       kind :=
-  rejects_of_movesS (@qualifiedIdent_hparse H m _ _) (qualifiedIdent_sim version) hmoves hfail
+  rejects_of_movesS_map (@qualifiedIdent_hparse H m _ _) (qualifiedIdent_sim version) hmoves hfail
 
 /-- The qualified identifier parser on a first token that is neither a symbol nor `(`. -/
 theorem qualifiedIdent_rejects_first {version : Token.Version} {token : Parser.Internal.Input}
@@ -474,7 +484,7 @@ theorem qualifiedIdent_rejects_sort_inner {version : Token.Version} {identifier 
       funext a
       apply ExceptT.ext
       simp [ExceptT.run_throw])
-  exact rejects_of_runsS (state := QualIdentState.start) (@qualifiedIdent_hparse H m _ _)
+  exact rejects_of_runsS_map (state := QualIdentState.start) (@qualifiedIdent_hparse H m _ _)
     (qualifiedIdent_sim version) (runs_qualStep_throw hruns')
 
 /--
@@ -507,7 +517,7 @@ theorem qualifiedIdent_rejects_close {version : Token.Version}
     (hruns.congr rfl (by
       funext
       simp [BSmtLib.Facts.Proofs.Parser.«Sort».sortPush, Parser.Internal.Step.wrap])) hfail
-  have := rejects_of_runsS (state := QualIdentState.start) (@qualifiedIdent_hparse H m _ _)
+  have := rejects_of_runsS_map (state := QualIdentState.start) (@qualifiedIdent_hparse H m _ _)
     (qualifiedIdent_sim version) (runs_qualStep_throw hall)
   simp only [tick_noPoints, pure_bind, List.cons_append, List.nil_append, List.append_assoc]
     at this
@@ -537,7 +547,7 @@ symbol and `)`: a sort application without arguments. -/
 theorem qualifiedIdent_rejects_sortEmpty {version : Token.Version} {identifier : Tree.Identifier}
     (hvalid : identifier.Valid (Bridge.version version))
     {identTokens : List Parser.Internal.Input} (hident : Stands identTokens identifier.tokens)
-    (head : Nodes.Symbol) :
+    (head : Plain.SymbolView) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ [.parenOpen, .symbol head, .parenClose]))
@@ -634,7 +644,7 @@ theorem qualifiedIdent_rejects_sortDeepEmpty {version : Token.Version}
     (hframes : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frameTokens frames))
-    (head : Nodes.Symbol) :
+    (head : Plain.SymbolView) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ (tokens ++ [.parenOpen, .symbol head, .parenClose])))
@@ -658,7 +668,8 @@ theorem qualifiedIdent_parses_any {version : Token.Version}
       (qualified = .plain (Bridge.identifier identifier) ∨
         ∃ sort, qualified = .as (Bridge.identifier identifier) sort) ∧
       Finishes version (QualifiedIdentParser.new (H := H)) tokens
-        ((fun result => { identifier, sort := result.2 }) <$>
+        ((fun result => ({ identifier := identifier.intoOwned, sort := result.2 } :
+            Nodes.QualifiedIdentBuf _)) <$>
           adaptRun (Traversal.qualIdentifier noPoints h qualified))
         QualifiedIdentParser.new := by
   obtain ⟨identifier, hidentifier, hparses⟩ := qualifiedIdent_parses hA qualified hvalid hs

@@ -89,7 +89,8 @@ def HoldsBackErrors (layer : SpanLayer r) : Prop :=
     (∀ io, failure.error.cause ≠ .io io) → (∀ kind, failure.error.cause ≠ .lexical kind) →
       ∃ error held, lexThrough (Lexer.new layer.wrap version) slices = .error error ∧
         error.cause = .consumer held ∧ error.span = failure.error.span ∧
-        Reader.ReadError.ofParse held.cause error.span = failure.error ∧
+        (∃ parseError : ParseError _, parseError.cause = held.cause ∧
+          Reader.ReadError.ofParse parseError error.span = failure.error) ∧
         held.opened ≠ [] ∧
         ∀ construct ∈ held.opened,
           construct.span.end = error.span.end ∧

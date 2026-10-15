@@ -94,17 +94,18 @@ def QualifiedIdentParser.new : QualifiedIdentParser H := ⟨.start⟩
 instance : Inhabited (QualifiedIdentParser H) := ⟨.new⟩
 
 @[no_expose]
-instance : Internal.ParseByToken (QualifiedIdentParser H) H m (Handler.Error H)
-    (QualifiedIdent (Handler.«Sort» H)) where
+instance Internal.instParseByTokenQualifiedIdentParser :
+    Internal.ParseByToken (QualifiedIdentParser H) H m (Handler.Error H)
+    (QualifiedIdentBuf (Handler.«Sort» H)) where
   arrive _ _ := pure ()
   step version parser token := do
     match ← Internal.qualIdentStep version parser.state token with
     | .more state => return .more ⟨state⟩
-    | .done (identifier, sort) => return .done { identifier, sort }
+    | .done (identifier, sort) => return .done { identifier := identifier.intoOwned, sort }
   reset _ := .new
 
 instance : Parse (QualifiedIdentParser H) H m (Handler.Error H)
-    (QualifiedIdent (Handler.«Sort» H)) where
+    (QualifiedIdentBuf (Handler.«Sort» H)) where
   parse := Internal.parseByToken
 
 end

@@ -173,7 +173,8 @@ theorem handedAll_tokens {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
 /-! ## The lexemes of tokens -/
 
 theorem locAfter_offset (bytes : List UInt8) : (locAfter bytes).offset = bytes.length := by
-  simp only [locAfter, advanceLoc_offset, Span.Location.initial, Nat.zero_add]
+  simp only [locAfter, advanceLoc_offset, Span.Location.initial,
+    Span.Location.Internal.offset_new, Nat.zero_add]
 
 theorem lexemeOf_start {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
     {token : BSmtLibSpec.Lexicon.Token} (h : token.offset ≤ input.length) :

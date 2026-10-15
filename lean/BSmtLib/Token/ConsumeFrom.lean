@@ -36,7 +36,8 @@ class _root_.BSmtLib.Token.ConsumeFrom (H Z : Type) (m : outParam (Type → Type
   If the consumer returns `ControlFlow.continue`, the consumer is
   not finished yet and is ready to consume more tokens. Tokens that
   remain unconsumed in the producer must be handed over again before
-  any new ones.
+  any new ones. The consumer must not return `ControlFlow.continue`
+  when an EOF token is encountered.
 
   If the consumer returns `ControlFlow.break`, it has finished
   consuming the current value, is returning a result, and is ready

@@ -2,6 +2,9 @@ module
 
 public import BSmtLib.Facts.Proofs.Parser.Canon.Loop
 import all BSmtLib.Plain
+import all BSmtLib.Multiple
+import all BSmtLib.Multiple.MatchCases
+import all BSmtLib.Multiple.FunctionSignaturesView
 
 @[expose] public section
 
@@ -58,6 +61,10 @@ instance {α : Type} [Canon α] [CanonIdem α] : CanonIdem (Option α) := ⟨fun
   show (o.map canon).map canon = o.map canon
   cases o <;> simp⟩
 
+instance {α : Type} [Canon α] [CanonIdem α] : CanonIdem (Multiple α) := ⟨fun m => by
+  show Multiple.new (canon (canon m.asSlice)) = Multiple.new (canon m.asSlice)
+  rw [CanonIdem.idem]⟩
+
 instance {α β : Type} [Canon α] [Canon β] [CanonIdem α] [CanonIdem β] : CanonIdem (α × β) :=
   ⟨fun p => by show (canon (canon p.1), canon (canon p.2)) = (canon p.1, canon p.2); simp⟩
 
@@ -65,7 +72,9 @@ instance {α β : Type} [Canon α] [Canon β] [CanonIdem α] [CanonIdem β] : Ca
 macro "view_idem" : tactic => `(tactic|
   (intro v; simp only [Canon.canon, canon_simps, canonSlice_canonSlice]))
 
-instance : CanonIdem SymbolView := ⟨by view_idem⟩
+instance : CanonIdem SymbolView := ⟨fun v => by
+  show canonSymbol (canonSymbol v) = canonSymbol v
+  simp only [canonSymbol, canon_simps, canonSlice_canonSlice]⟩
 instance : CanonIdem NumeralView := ⟨by view_idem⟩
 instance : CanonIdem DecimalView := ⟨by view_idem⟩
 instance : CanonIdem HexDigitsView := ⟨by view_idem⟩
@@ -79,7 +88,6 @@ instance : CanonIdem Quantifier := ⟨fun _ => rfl⟩
 macro "idem_by" f:ident : tactic => `(tactic|
   (intro x; show $f ($f x) = $f x; cases x <;> simp only [$f:ident, CanonIdem.idem]))
 
-instance : CanonIdem Symbol := ⟨by idem_by canonSymbol⟩
 instance : CanonIdem Index := ⟨by idem_by canonIndex⟩
 instance : CanonIdem Identifier := ⟨by idem_by canonIdentifier⟩
 instance : CanonIdem SpecConstant := ⟨by idem_by canonConstant⟩
@@ -111,8 +119,11 @@ instance {σ ρ : Type} [Canon σ] [Canon ρ] [CanonIdem σ] [CanonIdem ρ] :
 instance : CanonIdem (TermLevel S T Sc) := ⟨by idem_by canonTermLevel⟩
 instance : CanonIdem (TermMode SE A S T Sc) := ⟨by idem_by canonTermMode⟩
 instance : CanonIdem (TermState SE A S T Sc) := ⟨by idem_by canonTermState⟩
-instance : CanonIdem (Constructor S) := ⟨by idem_by canonConstructor⟩
 instance : CanonIdem (Signature S) := ⟨by idem_by canonSignature⟩
+instance {V : Type} [Canon V] [CanonIdem V] : CanonIdem (Multiple.NamedView V) := ⟨fun v => by
+  show Multiple.NamedView.Internal.new (canon (canon v.toArray)) =
+    Multiple.NamedView.Internal.new (canon v.toArray)
+  rw [CanonIdem.idem]⟩
 instance : CanonIdem (ConstructorState S) := ⟨by idem_by canonConstructorState⟩
 instance : CanonIdem (DatatypeState S) := ⟨by idem_by canonDatatypeState⟩
 instance : CanonIdem (DefinitionEnd S) := ⟨by idem_by canonDefinitionEnd⟩
@@ -121,15 +132,16 @@ instance : CanonIdem (FunctionDecState S) := ⟨by idem_by canonFunctionDecState
 instance : CanonIdem (LiteralState SE A S T Sc) := ⟨by idem_by canonLiteralState⟩
 instance : CanonIdem (FinalCall A S T) := ⟨by idem_by canonFinalCall⟩
 instance : CanonIdem (Payload SE A S T Sc) := ⟨by idem_by canonPayload⟩
-instance : CanonIdem (CommandState SE A S T Sc) := ⟨by idem_by canonCommandState⟩
+instance {N : Type} : CanonIdem (CommandState SE A S T Sc N) := ⟨by idem_by canonCommandState⟩
 
 end
 
 instance : CanonIdem (CommandStateOf (List Event)) :=
-  inferInstanceAs (CanonIdem (CommandState RSExpr RAttribute RSort RTerm RScope))
+  inferInstanceAs (CanonIdem (CommandState RSExpr RAttribute RSort RTerm RScope Empty))
 
 instance : CanonIdem (ScriptParser (List Event)) := ⟨fun p => by
   show canonScriptParser (canonScriptParser p) = canonScriptParser p
-  simp only [canonScriptParser, CanonIdem.idem]⟩
+  simp only [canonScriptParser, ScriptParser.Internal.posture_mk, ScriptParser.Internal.command_mk,
+    ScriptParser.Internal.declarations_mk, CanonIdem.idem]⟩
 
 end BSmtLib.Facts.Proofs.Parser.Canon.Idem

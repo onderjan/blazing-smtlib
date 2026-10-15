@@ -150,7 +150,8 @@ theorem termComplete_canon {levels levels' : List (TermLevel RSort RTerm RScope)
     CSim (termComplete (H := List Event) levels term) (termComplete levels' term) := by
   subst hl; unfold termComplete; canon_step []
 
-theorem startBinder_canon {binder : SortedBinder} {variables variables' : Array (Symbol × RSort)}
+theorem startBinder_canon {binder : SortedBinder}
+    {variables variables' : Array (Plain.SymbolView × RSort)}
     (hv : variables' = canon variables) :
     CSim (startBinder (H := List Event) binder variables) (startBinder binder variables') := by
   subst hv; unfold startBinder; canon_step []

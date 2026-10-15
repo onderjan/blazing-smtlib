@@ -19,7 +19,8 @@ open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Token
 open BSmtLib.Parser.Category.SortedVar.Internal
 open BSmtLib.Parser.Category.Token.Internal
-open BSmtLib.Plain (NumeralView)
+open BSmtLib.Plain (NumeralView SymbolView)
+open BSmtLib.Multiple (SortedVarsView)
 open BSmtLib.Token (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
@@ -31,12 +32,12 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 inductive SortDecState where
   | start
   | opened
-  | arity (symbol : Symbol)
-  | close (symbol : Symbol) (arity : NumeralView)
+  | arity (symbol : SymbolView)
+  | close (symbol : SymbolView) (arity : NumeralView)
 
 /-- A step of the parser of a sort declaration. -/
 def SortDecState.step (self : SortDecState) (token : Internal.Input) :
-    PM H (Internal.Step SortDecState (Symbol × NumeralView)) := do
+    PM H (Internal.Step SortDecState (SymbolView × NumeralView)) := do
   match self with
   | .start =>
     expectOpen token
@@ -53,8 +54,8 @@ end
 inductive ConstructorState (HandledSort : Type) where
   | start
   | opened
-  | selectors (symbol : Symbol)
-      (state : ListState (SortedVarState HandledSort) (Symbol × HandledSort))
+  | selectors (symbol : SymbolView)
+      (state : ListState (SortedVarState HandledSort) (SymbolView × HandledSort))
 
 /-- The state of the parser of a datatype declaration. -/
 inductive DatatypeState (HandledSort : Type) where
@@ -62,14 +63,14 @@ inductive DatatypeState (HandledSort : Type) where
   /-- After its `(`: `par` or the `(` of the first constructor follows. -/
   | kind
   /-- Reading the sort parameters of the form with `par`. -/
-  | parameters (state : ListState Unit Symbol)
+  | parameters (state : ListState Unit SymbolView)
   /-- After the parameters, before the `(` of the constructors. -/
   | constructorsOpen
   /-- Reading the constructors; in the form without `par`, their `)` ends the declaration. -/
   | constructors (parametric : Bool)
-      (state : ListState (ConstructorState HandledSort) (Constructor HandledSort))
+      (state : ListState (ConstructorState HandledSort) (SymbolView × SortedVarsView HandledSort))
   /-- After the constructors of the form with `par`, before the declaration's `)`. -/
-  | close (constructors : Array (Constructor HandledSort))
+  | close (constructors : Array (SymbolView × SortedVarsView HandledSort))
 
 section
 
@@ -78,8 +79,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- A step of the constructor parser; a selector is parsed as a sorted variable. -/
 def constructorStep (version : Version) (self : ConstructorState (Handler.«Sort» H))
     (token : Internal.Input) :
-    PM H (Internal.Step (ConstructorState (Handler.«Sort» H)) (Constructor
-        (Handler.«Sort» H))) := do
+    PM H (Internal.Step (ConstructorState (Handler.«Sort» H))
+      (SymbolView × SortedVarsView (Handler.«Sort» H))) := do
   match self with
   | .start =>
     expectOpen token
@@ -88,7 +89,7 @@ def constructorStep (version : Version) (self : ConstructorState (Handler.«Sort
   | .selectors symbol state =>
     match ← state.step .start (sortedVarStep version) none token with
     | .more state => return .more (.selectors symbol state)
-    | .done selectors => return .done ⟨symbol, selectors⟩
+    | .done selectors => return .done (symbol, Multiple.NamedView.Internal.new selectors)
 
 /--
 A step of the parser of a datatype declaration, `(` ⟨constructor_dec⟩+ `)` |
@@ -98,10 +99,10 @@ constructors at its `)`. The start comes when the tokens determine the sort para
 `par`.
 -/
 @[specialize start]
-def datatypeStep (start : Array Symbol → PM H Unit) (version : Version)
+def datatypeStep (start : Array SymbolView → PM H Unit) (version : Version)
     (self : DatatypeState (Handler.«Sort» H)) (token : Internal.Input) :
-    PM H (Internal.Step (DatatypeState (Handler.«Sort» H)) (Array (Constructor
-        (Handler.«Sort» H)))) := do
+    PM H (Internal.Step (DatatypeState (Handler.«Sort» H))
+      (Array (SymbolView × SortedVarsView (Handler.«Sort» H)))) := do
   match self with
   | .start =>
     expectOpen token

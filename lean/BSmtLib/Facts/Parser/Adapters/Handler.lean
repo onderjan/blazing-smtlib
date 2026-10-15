@@ -52,7 +52,7 @@ instance needs them before it exists, so they cannot be the bridge's functions t
 def termNodeOf : Nodes.TermNode values.sort values.term → TermNode values
   | .constant c => .constant (Bridge.constant c)
   | .identifier i s => .identifier (Bridge.identifier i) s
-  | .application i s args => .application (Bridge.identifier i) s args.toList
+  | .application i s args => .application (Bridge.identifier i) s args.asSlice.toList
 
 /-- The spec's S-expression node for one of the parser, with the values of `values`. -/
 def sExprNodeOf : Nodes.SExprNode values.sExpr → SExprNode values
@@ -60,13 +60,13 @@ def sExprNodeOf : Nodes.SExprNode values.sExpr → SExprNode values
   | .symbol s => .symbol (Bridge.symbol s)
   | .reserved w => .reserved (Bridge.reserved w)
   | .keyword k => .keyword (Bridge.keyword k)
-  | .list items => .list items.toList
+  | .list items => .list items.asSlice.toList
 
 /-- The spec's attribute value node for one of the parser, with the values of `values`. -/
 def attributeValueOf : Nodes.AttributeValueNode values.sExpr → AttributeValueNode values
   | .constant c => .constant (Bridge.constant c)
   | .symbol s => .symbol (Bridge.symbol s)
-  | .list items => .list items.toList
+  | .list items => .list items.asSlice.toList
 
 /-- The bridged handler's values are those of `h₀`; it answers each call of terms, and the
 version, by turning the values into the spec's and asking `h₀`. -/
@@ -78,46 +78,51 @@ instance : Traits.Handler (Bridged h₀ nonstandard) m where
   Term := values.term
   Scope := values.scope
   setVersion v := StateT.lift (h₀.setVersion (Bridge.version v))
-  handleSort i args := bridgedCall h₀ nonstandard (.handleSort (Bridge.identifier i) args.toList)
+  handleSort i args := bridgedCall h₀ nonstandard
+    (.handleSort (Bridge.identifier i) args.asSlice.toList)
   handleTerm node := bridgedCall h₀ nonstandard (.handleTerm (termNodeOf node))
   handleSExpr node := bridgedCall h₀ nonstandard (.handleSExpr (sExprNodeOf node))
   handleAttribute k v := bridgedCall h₀ nonstandard
     (.handleAttribute (Bridge.keyword k) (v.map attributeValueOf))
-  annotateTerm t attrs := bridgedCall h₀ nonstandard (.annotateTerm t attrs.toList)
-  startLet bs := bridgedCall h₀ nonstandard (.startLet (Bridge.pairs bs))
+  annotateTerm t attrs := bridgedCall h₀ nonstandard (.annotateTerm t attrs.asSlice.toList)
+  startLet bs := bridgedCall h₀ nonstandard (.startLet (Bridge.pairs bs.toArray))
   endLet s t := bridgedCall h₀ nonstandard (.endLet s t)
   startQuantifier q vs := bridgedCall h₀ nonstandard
-    (.startQuantifier (Bridge.quantifier q) (Bridge.pairs vs))
+    (.startQuantifier (Bridge.quantifier q) (Bridge.pairs vs.toArray))
   endQuantifier q s t := bridgedCall h₀ nonstandard (.endQuantifier (Bridge.quantifier q) s t)
-  startLambda vs := bridgedCall h₀ nonstandard (.startLambda (Bridge.pairs vs))
+  startLambda vs := bridgedCall h₀ nonstandard (.startLambda (Bridge.pairs vs.toArray))
   endLambda s t := bridgedCall h₀ nonstandard (.endLambda s t)
   startMatch t := bridgedCall h₀ nonstandard (.startMatch t)
   startMatchCase t p := bridgedCall h₀ nonstandard (.startMatchCase t (Bridge.pattern p))
   endMatchCase s t b := bridgedCall h₀ nonstandard (.endMatchCase s t b)
   endMatch t cs := bridgedCall h₀ nonstandard
-    (.endMatch t (cs.toList.map fun (p, b) => (Bridge.pattern p, b)))
+    (.endMatch t (cs.toArray.toList.map fun (p, b) => (Bridge.pattern p, b)))
 
 /-- The bridged handler answers each command by turning the values into the spec's and asking
 `h₀`; a non-standard command fails with `nonstandard`. -/
 instance : Traits.CommandHandler (Bridged h₀ nonstandard) m where
-  nonstandardCommand _ := nonstandard
+  NonstandardParser := Empty
+  nonstandardCommand _ := throw nonstandard
   commandAssert t := bridgedCall h₀ nonstandard (.commandAssert t)
   commandCheckSat := bridgedCall h₀ nonstandard .commandCheckSat
-  commandCheckSatAssuming ts := bridgedCall h₀ nonstandard (.commandCheckSatAssuming ts.toList)
+  commandCheckSatAssuming ts := bridgedCall h₀ nonstandard
+    (.commandCheckSatAssuming ts.asSlice.toList)
   commandDeclareConst s t := bridgedCall h₀ nonstandard (.commandDeclareConst (Bridge.symbol s) t)
   startDeclareDatatype s ps := bridgedCall h₀ nonstandard
-    (.startDeclareDatatype (Bridge.symbol s) (ps.toList.map Bridge.symbol))
+    (.startDeclareDatatype (Bridge.symbol s) (ps.toArray.toList.map Bridge.symbol))
   endDeclareDatatype cs := bridgedCall h₀ nonstandard
-    (.endDeclareDatatype (cs.toList.map (Bridge.constructor (H := Bridged h₀ nonstandard))))
+    (.endDeclareDatatype (cs.toArray.toList.map (Bridge.constructor (H := Bridged h₀ nonstandard))))
   startDeclareDatatypes ss := bridgedCall h₀ nonstandard
-    (.startDeclareDatatypes (ss.toList.map fun (s, n) => (Bridge.symbol s, Bridge.chars n.asSlice)))
+    (.startDeclareDatatypes
+      (ss.toArray.toList.map fun (s, n) => (Bridge.symbol s, Bridge.chars n.asSlice)))
   startDatatypeDeclaration ps := bridgedCall h₀ nonstandard
-    (.startDatatypeDeclaration (ps.toList.map Bridge.symbol))
+    (.startDatatypeDeclaration (ps.toArray.toList.map Bridge.symbol))
   endDatatypeDeclaration cs := bridgedCall h₀ nonstandard
-    (.endDatatypeDeclaration (cs.toList.map (Bridge.constructor (H := Bridged h₀ nonstandard))))
+    (.endDatatypeDeclaration
+      (cs.toArray.toList.map (Bridge.constructor (H := Bridged h₀ nonstandard))))
   endDeclareDatatypes := bridgedCall h₀ nonstandard .endDeclareDatatypes
   commandDeclareFun s ps r := bridgedCall h₀ nonstandard
-    (.commandDeclareFun (Bridge.symbol s) ps.toList r)
+    (.commandDeclareFun (Bridge.symbol s) ps.asSlice.toList r)
   commandDeclareSort s n := bridgedCall h₀ nonstandard
     (.commandDeclareSort (Bridge.symbol s) (Bridge.chars n.asSlice))
   commandDeclareSortParameter s := bridgedCall h₀ nonstandard
@@ -131,13 +136,13 @@ instance : Traits.CommandHandler (Bridged h₀ nonstandard) m where
     (.startDefineFunRec (Bridge.signature (H := Bridged h₀ nonstandard) sig))
   endDefineFunRec b := bridgedCall h₀ nonstandard (.endDefineFunRec b)
   startDefineFunsRec sigs := bridgedCall h₀ nonstandard
-    (.startDefineFunsRec (sigs.toList.map (Bridge.signature (H := Bridged h₀ nonstandard))))
+    (.startDefineFunsRec (sigs.toArray.toList.map (Bridge.signature (H := Bridged h₀ nonstandard))))
   startRecursiveBody sig := bridgedCall h₀ nonstandard
     (.startRecursiveBody (Bridge.signature (H := Bridged h₀ nonstandard) sig))
   endRecursiveBody b := bridgedCall h₀ nonstandard (.endRecursiveBody b)
   endDefineFunsRec := bridgedCall h₀ nonstandard .endDefineFunsRec
   startDefineSort s ps := bridgedCall h₀ nonstandard
-    (.startDefineSort (Bridge.symbol s) (ps.toList.map Bridge.symbol))
+    (.startDefineSort (Bridge.symbol s) (ps.toArray.toList.map Bridge.symbol))
   endDefineSort t := bridgedCall h₀ nonstandard (.endDefineSort t)
   commandEcho c := bridgedCall h₀ nonstandard (.commandEcho (Bridge.chars c.asSlice))
   commandExit := bridgedCall h₀ nonstandard .commandExit
@@ -149,7 +154,7 @@ instance : Traits.CommandHandler (Bridged h₀ nonstandard) m where
   commandGetProof := bridgedCall h₀ nonstandard .commandGetProof
   commandGetUnsatAssumptions := bridgedCall h₀ nonstandard .commandGetUnsatAssumptions
   commandGetUnsatCore := bridgedCall h₀ nonstandard .commandGetUnsatCore
-  commandGetValue ts := bridgedCall h₀ nonstandard (.commandGetValue ts.toList)
+  commandGetValue ts := bridgedCall h₀ nonstandard (.commandGetValue ts.asSlice.toList)
   commandPop n := bridgedCall h₀ nonstandard (.commandPop (Bridge.chars n.asSlice))
   commandPush n := bridgedCall h₀ nonstandard (.commandPush (Bridge.chars n.asSlice))
   commandReset := bridgedCall h₀ nonstandard .commandReset
@@ -184,47 +189,50 @@ instance recordingLibraryTerms : Traits.Handler (List Event) Id where
   Term := Nat
   Scope := Nat
   setVersion v := recordingHandler.setVersion (Bridge.version v)
-  handleSort i args := recordingCall (.handleSort (Bridge.identifier i) args.toList)
+  handleSort i args :=
+    recordingCall (.handleSort (Bridge.identifier i) args.asSlice.toList)
   handleTerm node := recordingCall (.handleTerm (termNodeOf node))
   handleSExpr node := recordingCall (.handleSExpr (sExprNodeOf node))
   handleAttribute k v := recordingCall
     (.handleAttribute (Bridge.keyword k) (v.map attributeValueOf))
-  annotateTerm t attrs := recordingCall (.annotateTerm t attrs.toList)
-  startLet bs := recordingCall (.startLet (Bridge.pairs bs))
+  annotateTerm t attrs := recordingCall (.annotateTerm t attrs.asSlice.toList)
+  startLet bs := recordingCall (.startLet (Bridge.pairs bs.toArray))
   endLet s t := recordingCall (.endLet s t)
   startQuantifier q vs := recordingCall
-    (.startQuantifier (Bridge.quantifier q) (Bridge.pairs vs))
+    (.startQuantifier (Bridge.quantifier q) (Bridge.pairs vs.toArray))
   endQuantifier q s t := recordingCall (.endQuantifier (Bridge.quantifier q) s t)
-  startLambda vs := recordingCall (.startLambda (Bridge.pairs vs))
+  startLambda vs := recordingCall (.startLambda (Bridge.pairs vs.toArray))
   endLambda s t := recordingCall (.endLambda s t)
   startMatch t := recordingCall (.startMatch t)
   startMatchCase t p := recordingCall (.startMatchCase t (Bridge.pattern p))
   endMatchCase s t b := recordingCall (.endMatchCase s t b)
   endMatch t cs := recordingCall
-    (.endMatch t (cs.toList.map fun (p, b) => (Bridge.pattern p, b)))
+    (.endMatch t (cs.toArray.toList.map fun (p, b) => (Bridge.pattern p, b)))
 
 /-- The library handler of commands whose state is the log of a recording run: each call writes
 down what the spec's recording handler writes down for it. A non-standard command fails with
 `()`. -/
 instance recordingLibrary : Traits.CommandHandler (List Event) Id where
-  nonstandardCommand _ := ()
+  NonstandardParser := Empty
+  nonstandardCommand _ := throw ()
   commandAssert t := recordingCall (.commandAssert t)
   commandCheckSat := recordingCall .commandCheckSat
-  commandCheckSatAssuming ts := recordingCall (.commandCheckSatAssuming ts.toList)
+  commandCheckSatAssuming ts := recordingCall (.commandCheckSatAssuming ts.asSlice.toList)
   commandDeclareConst s t := recordingCall (.commandDeclareConst (Bridge.symbol s) t)
   startDeclareDatatype s ps := recordingCall
-    (.startDeclareDatatype (Bridge.symbol s) (ps.toList.map Bridge.symbol))
+    (.startDeclareDatatype (Bridge.symbol s) (ps.toArray.toList.map Bridge.symbol))
   endDeclareDatatype cs := recordingCall
-    (.endDeclareDatatype (cs.toList.map (Bridge.constructor (H := List Event))))
+    (.endDeclareDatatype (cs.toArray.toList.map (Bridge.constructor (H := List Event))))
   startDeclareDatatypes ss := recordingCall
-    (.startDeclareDatatypes (ss.toList.map fun (s, n) => (Bridge.symbol s, Bridge.chars n.asSlice)))
+    (.startDeclareDatatypes
+      (ss.toArray.toList.map fun (s, n) => (Bridge.symbol s, Bridge.chars n.asSlice)))
   startDatatypeDeclaration ps := recordingCall
-    (.startDatatypeDeclaration (ps.toList.map Bridge.symbol))
+    (.startDatatypeDeclaration (ps.toArray.toList.map Bridge.symbol))
   endDatatypeDeclaration cs := recordingCall
-    (.endDatatypeDeclaration (cs.toList.map (Bridge.constructor (H := List Event))))
+    (.endDatatypeDeclaration (cs.toArray.toList.map (Bridge.constructor (H := List Event))))
   endDeclareDatatypes := recordingCall .endDeclareDatatypes
   commandDeclareFun s ps r := recordingCall
-    (.commandDeclareFun (Bridge.symbol s) ps.toList r)
+    (.commandDeclareFun (Bridge.symbol s) ps.asSlice.toList r)
   commandDeclareSort s n := recordingCall
     (.commandDeclareSort (Bridge.symbol s) (Bridge.chars n.asSlice))
   commandDeclareSortParameter s := recordingCall
@@ -238,13 +246,13 @@ instance recordingLibrary : Traits.CommandHandler (List Event) Id where
     (.startDefineFunRec (Bridge.signature (H := List Event) sig))
   endDefineFunRec b := recordingCall (.endDefineFunRec b)
   startDefineFunsRec sigs := recordingCall
-    (.startDefineFunsRec (sigs.toList.map (Bridge.signature (H := List Event))))
+    (.startDefineFunsRec (sigs.toArray.toList.map (Bridge.signature (H := List Event))))
   startRecursiveBody sig := recordingCall
     (.startRecursiveBody (Bridge.signature (H := List Event) sig))
   endRecursiveBody b := recordingCall (.endRecursiveBody b)
   endDefineFunsRec := recordingCall .endDefineFunsRec
   startDefineSort s ps := recordingCall
-    (.startDefineSort (Bridge.symbol s) (ps.toList.map Bridge.symbol))
+    (.startDefineSort (Bridge.symbol s) (ps.toArray.toList.map Bridge.symbol))
   endDefineSort t := recordingCall (.endDefineSort t)
   commandEcho c := recordingCall (.commandEcho (Bridge.chars c.asSlice))
   commandExit := recordingCall .commandExit
@@ -256,7 +264,7 @@ instance recordingLibrary : Traits.CommandHandler (List Event) Id where
   commandGetProof := recordingCall .commandGetProof
   commandGetUnsatAssumptions := recordingCall .commandGetUnsatAssumptions
   commandGetUnsatCore := recordingCall .commandGetUnsatCore
-  commandGetValue ts := recordingCall (.commandGetValue ts.toList)
+  commandGetValue ts := recordingCall (.commandGetValue ts.asSlice.toList)
   commandPop n := recordingCall (.commandPop (Bridge.chars n.asSlice))
   commandPush n := recordingCall (.commandPush (Bridge.chars n.asSlice))
   commandReset := recordingCall .commandReset

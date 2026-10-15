@@ -57,7 +57,8 @@ local macro "string_stay" : tactic => `(tactic| (
     · rw [locAt_eq hloc]; rfl
     · exact (contentBytes_clear_extendSlice _ _ (by bound_tac)).symm
     · fits_tac
-  · dsimp only [LocAt, afterColumns, Past.from]
+  · simp only [LocAt, afterColumns, Past.from, Span.Location.Internal.offset_new,
+      Span.Location.Internal.line_new, Span.Location.Internal.column_new]
     refine ⟨?_, ?_, ?_⟩ <;> omega
   · rw [hA]; rfl))
 

@@ -174,7 +174,7 @@ theorem eofStep_sim (hscript : Script version commands) :
         (Recovery.LexRecovery.abandon Recovery.FailFast)
             (Recovery.LexRecovery.recover Recovery.FailFast))
       (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-          (E := Parser.ParseErrorCause Unit)
+          (E := Parser.ParseError Unit)
         (Recovery.LexRecovery.abandon Recovery.FailFast)
             (Recovery.LexRecovery.recover Recovery.FailFast)) :=
   lexEofStep_sim (link_consumers hscript) _ _ _ _ link_abandon link_recover
@@ -216,7 +216,7 @@ theorem eof_step (hscript : Script version commands) (a : FLexer version) (p : P
     (Recovery.LexRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := Parser.ParseErrorCause Unit)
+    (E := Parser.ParseError Unit)
     (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢

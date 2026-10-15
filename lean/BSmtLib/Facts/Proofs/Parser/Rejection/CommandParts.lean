@@ -143,7 +143,7 @@ def literalRem (state : LiteralState Nat Nat Nat Nat Nat) : Lang :=
 
 theorem literalLang_nonempty : ∃ u, LiteralLang u := ⟨_, ⟨.positive ⟨[], false⟩, trivial, rfl⟩⟩
 
-theorem notLang_symbol {s : Nodes.Symbol} (h : (isNot s) = true) :
+theorem notLang_symbol {s : Plain.SymbolView} (h : (isNot s) = true) :
     NotLang [.token (.symbol (Bridge.symbol s))] := by
   refine ⟨Bridge.symbol s, ?_, rfl⟩
   unfold Parser.Command.Internal.Standard.Symbol.isNot at h
@@ -245,7 +245,7 @@ theorem literalStep_advances (version : Token.Version) :
       rw [show termStep (H := List Event) version ⟨.start, [.application f none #[a]]⟩
           .parenClose =
         (Parser.Internal.call
-            (Traits.Handler.handleTerm (H := List Event) (.application f none #[a])) >>=
+            (Traits.Handler.handleTerm (H := List Event) (.application f none (.new #[a]))) >>=
           fun t => termComplete [] t) from rfl, bind_assoc]
       call_step
       rw [show ∀ t, termComplete (H := List Event) [] t = pure (.done t) from fun _ => rfl,
@@ -554,7 +554,7 @@ end
 /-- Every step of the datatype declaration parser advances, whatever it calls at the start of a
 declaration, as long as that never fails. -/
 theorem datatypeStep_advances (version : Token.Version)
-    {start : Array Nodes.Symbol → Quiet.RPM Unit}
+    {start : Array Plain.SymbolView → Quiet.RPM Unit}
     (hstart : ∀ parameters, Sound (fun _ => True) Benign (start parameters)) :
     StepsAdvance version (datatypeStep (H := List Event) start version)
       (datatypeRem (Bridge.version version))

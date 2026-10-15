@@ -159,9 +159,9 @@ theorem readEof_reset {reader : RecReader} {result : Option (Span.Located Unit)}
     {after : RecReader} (h : (reader.readEof : Id _) = .ok (result, after)) :
     (∃ c₀, Internal.core (Reader.Internal.lexer after) = resetOf c₀) ∧
       Internal.held (Reader.Internal.lexer after) = none := by
-  simp only [Reader.readEof] at h
+  simp only [Reader.readEof, BSmtLib.Lexer.lexEof] at h
   rw [run_eqI] at h
-  generalize hR : ((Internal.lexEofStep (R := Unit) (E := Parser.ParseErrorCause Unit)
+  generalize hR : ((Internal.lexEofStep (R := Unit) (E := Parser.ParseError Unit)
     (Recovery.LexRecovery.abandon Recovery.FailFast)
     (Recovery.LexRecovery.recover Recovery.FailFast)).run (Internal.core reader.lexer)).run
       (Internal.handler reader.lexer) = Q at h
@@ -215,7 +215,8 @@ theorem after_state (version : BSmtLibSpec.Lexicon.Version) (slices : List ByteL
     (h : readThrough (readerOf version) slices = .ok (result, before, after)) :
     (Internal.handler (Reader.Internal.lexer after)).parser =
         ScriptParser.new unrestrictedPosture ∧
-      (Internal.handler (Reader.Internal.lexer after)).versionSet = false ∧
+      Parser.Adapter.ParseAdapter.Internal.versionSet
+          (Internal.handler (Reader.Internal.lexer after)) = false ∧
       (∃ c₀, Internal.core (Reader.Internal.lexer after) = resetOf c₀ ∧
         c₀.initialVersion = toVersion version ∧ c₀.recovers = false) ∧
       Internal.held (Reader.Internal.lexer after) = none := by

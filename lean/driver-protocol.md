@@ -619,9 +619,6 @@ The span of the error and its cause:
   types, spelled as in `t` and separated by commas, and
   `TooManyVersionDeclarations` by its limit.
 - `handler <id>`: the handler's error that the Rust side answered a call with.
-- `nonstandard <sym>`: the error of a command named by the symbol, which the
-  Lean handler names without asking (`CommandHandler.nonstandardCommand`). The
-  Rust side asks its handler then.
 - `io <hex>`: an error while reading, with its message as bytes.
 
 ### Calls of the handler
@@ -714,9 +711,19 @@ call command_set_logic <sym>
 call command_set_option <id>
 ```
 
+```
+call nonstandard_command <sym>
+call nonstandard_term <id>
+```
+
 The sort arities of `declare-datatypes` are numerals. `command_declare_fun`
 names the parameter sorts, then the result sort. No command call makes a
 value.
+
+A command named by a symbol is a non-standard one: `nonstandard_command` asks
+whether the handler accepts it. If it does, the command's payload is one term,
+then its `)`, as the Rust tests' handler accepts it, and `nonstandard_term`
+hands the term over at that `)`.
 
 The answer is one of:
 
@@ -749,7 +756,7 @@ as they are. The other lexers have no reader of their own: the driver builds
 the lexer over the library's parse adapter and does what the reader does with
 it, step for step. Where the hand-overs are cut changes nothing a parser
 request reports, with one exception: the naive lexer `v` gives an error of
-its consumer (`syntax`, `handler`, `nonstandard`) an empty span at the end of
+its consumer (`syntax`, `handler`) an empty span at the end of
 the token it failed on, where the other lexers give the span of the token.
 Under `v` the parser tests that check the span of such an error report
 themselves as not applicable on the standard error and end, as the lexer tests

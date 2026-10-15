@@ -35,7 +35,7 @@ the spec.
 namespace BSmtLib.Facts.Parser.Adapters.Outcome
 
 open BSmtLib.Token (Produce)
-open BSmtLib.Parser (Parse ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
 open BSmtLib.Facts.Parser.Adapters.Cursor (Takes Reads)
 
 /-- What a parse answered, read with the parser and the cursor it gave back. -/
@@ -54,13 +54,15 @@ section
 variable {P H R E : Type} {Z : Type} [Produce Z] {cursor : Z}
 
 /-- What a parse answered, as an `Outcome`. -/
-def outcome : Except (ParseErrorCause E) (ControlFlow R) × P × ParseState H ×
+def outcome : Except (ParseError E) (ControlFlow R) × P × ParseState H ×
       { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor } →
     Outcome R P Z E
   | (.ok (.break result), parser, _, next) => .finished result parser next.val
   | (.ok .continue, parser, _, _) => .waits parser
-  | (.error (.syntax kind), _, _, next) => .rejected kind next.val
-  | (.error (.handler error), _, _, _) => .failed error
+  | (.error error, _, _, next) =>
+    match error.cause with
+    | .syntax kind => .rejected kind next.val
+    | .handler error => .failed error
 
 end
 

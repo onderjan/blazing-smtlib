@@ -40,7 +40,7 @@ theorem patternArguments_runs : (arguments : List Tree.SymbolOrWildcard) →
     (∀ argument ∈ arguments, argument.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input},
         Stands tokens (arguments.map Tree.SymbolOrWildcard.token) →
-    ∀ (constructor : Nodes.Symbol) (found : Array Nodes.SymbolOrWildcard),
+    ∀ (constructor : Plain.SymbolView) (found : Array Nodes.SymbolOrWildcard),
     ∃ parsed : Array Nodes.SymbolOrWildcard,
       parsed.toList.map Bridge.symbolOrWildcard = arguments ∧
       RunsS points (PatternState.step (H := H) version) (.arguments constructor found) tokens

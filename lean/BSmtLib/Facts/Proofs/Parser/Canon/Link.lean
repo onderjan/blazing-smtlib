@@ -40,13 +40,13 @@ def relator : Relator RecAdapter Id CanonAdapter Id where
     exact ⟨hQ _ _ (h s t hst).1, (h s t hst).2⟩
 
 /-- The link of the parse adapter and the canonical adapter. -/
-def link : Link RecAdapter Id Unit (ParseErrorCause Unit) CanonAdapter Id Unit
-    (ParseErrorCause Unit) where
+def link : Link RecAdapter Id Unit (ParseError Unit) CanonAdapter Id Unit
+    (ParseError Unit) where
   rc := relator
   rr := (· = ·)
   re := (· = ·)
 
-theorem eRel_refl (x : Except (ParseErrorCause Unit) (ControlFlow Unit)) :
+theorem eRel_refl (x : Except (ParseError Unit) (ControlFlow Unit)) :
     ERel link.re (FlowRel link.rr) x x := by
   rcases x with e | f
   · exact (rfl : e = e)

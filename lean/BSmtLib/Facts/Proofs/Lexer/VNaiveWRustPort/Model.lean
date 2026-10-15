@@ -233,3 +233,106 @@ theorem discardsAfter_none (d : Option Span.Location) : discardsAfter none d = d
   cases d <;> rfl
 
 end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
+
+namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
+
+open BSmtLib.Facts.Lexer.Adapters
+open BSmtLib.Facts.Proofs.Lexer.VNaive.Run
+
+/-! ## The token a consumer fails at is the last it took -/
+
+section
+
+variable (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool)
+
+/-- Where the consumer has stopped by failing at a lexeme, the last token it took is that
+lexeme's. -/
+def FailTaken (h : HandOut C) : Prop :=
+  ∀ e d l p, h = .stop (.fail e d l) p →
+    ∃ x, p.taken.getLast? = some x ∧ x.start = toLocation l.start ∧ x.end = toLocation l.end
+
+/-- Where the consumer has stopped by failing at a lexeme, the last token it took is that
+lexeme's. -/
+def OutFailTaken (o : Out C) : Prop :=
+  ∀ e d l p, o = .stopped (.fail e d l) p →
+    ∃ x, p.taken.getLast? = some x ∧ x.start = toLocation l.start ∧ x.end = toLocation l.end
+
+theorem lexemeEntry_locs {concrete : Bool} {version : Token.Version} {l : Lexeme}
+    {x : BSmtLibSpec.Lexer.Handed} (h : lexemeEntry concrete version l = some x) :
+    x.start = toLocation l.start ∧ x.end = toLocation l.end := by
+  unfold lexemeEntry lexemeHanded at h
+  cases ht : toTokenType l.category with
+  | some t =>
+    simp only [ht, Option.map_some] at h
+    cases h
+    exact ⟨rfl, rfl⟩
+  | none =>
+    simp only [ht, Option.map_none] at h
+    cases hc : concrete
+    · simp only [hc, Bool.false_eq_true, ite_false] at h
+      cases h
+    · simp only [hc, ite_true, Option.some.injEq] at h
+      subst h
+      exact ⟨rfl, rfl⟩
+
+theorem failTaken_cont (p : Prog) : FailTaken C (.cont p) := fun _ _ _ _ h => by cases h
+
+theorem hand1_failTaken {h : HandOut C} (hf : FailTaken C h) (l : Lexeme) :
+    FailTaken C (hand1 C hd h l) := by
+  intro e d l' p hs
+  cases h with
+  | stop s p₀ => exact hf e d l' p hs
+  | wait r l0 p₀ => cases hs
+  | cont p₀ =>
+    cases hhd : hd
+    · cases hx : lexemeEntry C.concrete p₀.ver l with
+      | none => simp [hand1, hhd, hx] at hs
+      | some x =>
+        cases ha : C.answer (p₀.taken ++ [x]) with
+        | fail e' =>
+          simp only [hand1, hhd, hx, ha, Bool.false_eq_true, ite_false, HandOut.stop.injEq,
+            Stop.fail.injEq] at hs
+          obtain ⟨⟨rfl, rfl, rfl⟩, rfl⟩ := hs
+          exact ⟨x, by simp, lexemeEntry_locs hx⟩
+        | «break» r =>
+          simp only [hand1, hhd, hx, ha, Bool.false_eq_true, ite_false] at hs
+          repeat' split at hs
+          all_goals cases hs
+        | «continue» =>
+          simp only [hand1, hhd, hx, ha, Bool.false_eq_true, ite_false] at hs
+          repeat' split at hs
+          all_goals cases hs
+    · simp [hand1, hhd] at hs
+
+theorem handAll_failTaken : ∀ (ls : List Lexeme) {h : HandOut C}, FailTaken C h →
+    FailTaken C (handAll C hd h ls)
+  | [], _, hf => hf
+  | l :: ls, _, hf => handAll_failTaken ls (hand1_failTaken C hd hf l)
+
+theorem outcome_failTaken {h : HandOut C} (hf : FailTaken C h) (r : Consumers.Pure.RunF) :
+    OutFailTaken C (outcome C hd h r) := by
+  intro e d l p ho
+  have key : ∀ (ls : List Lexeme) (k : Prog → Out C),
+      finish C (handAll C hd h ls) k = .stopped (.fail e d l) p →
+      (∀ p', k p' ≠ .stopped (.fail e d l) p) →
+      ∃ x, p.taken.getLast? = some x ∧ x.start = toLocation l.start ∧ x.end = toLocation l.end := by
+    intro ls k hfin hk
+    have hall := handAll_failTaken C hd ls hf
+    generalize handAll C hd h ls = H at hall hfin
+    cases H with
+    | cont p' => exact absurd hfin (hk p')
+    | wait r l0 p' => cases hfin
+    | stop s p' =>
+      cases hfin
+      exact hall e d l p rfl
+  cases r with
+  | ok v =>
+    obtain ⟨st, location, ls⟩ := v
+    exact key ls _ ho (fun _ h' => by cases h')
+  | error v =>
+    obtain ⟨ls, f⟩ := v
+    exact key ls _ ho (fun _ h' => by cases h')
+
+end
+
+end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model
