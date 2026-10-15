@@ -79,7 +79,7 @@ pub enum SmtParseErrorCause<E> {
     Handler(E),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxErrorKind {
     ExpectedToken(&'static [SmtTokenCategory]),
     ExpectedSymbol,

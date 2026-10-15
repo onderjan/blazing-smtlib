@@ -276,7 +276,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SmtSpecialConstantBuf {
     Numeral(SmtNumeralBuf),
     Decimal(SmtDecimalBuf),
@@ -286,7 +286,7 @@ pub enum SmtSpecialConstantBuf {
 }
 
 /// A special constant to be handled.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSpecialConstant<'a> {
     Numeral(SmtNumeral<'a>),
     Decimal(SmtDecimal<'a>),
@@ -314,7 +314,7 @@ pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
     Application(SmtApplication<'a, H>),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtQuantifierKind {
     Exists,
     Forall,

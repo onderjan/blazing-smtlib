@@ -6,7 +6,7 @@
 /// as that is compatible with both LF and CRLF conventions.
 ///
 /// The offset, line, and column all start at zero.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SmtLocation {
     /// Zero-based byte offset from the start of the stream.
     offset: u64,
@@ -39,22 +39,6 @@ impl SmtLocation {
     /// Zero-based column number, measured in bytes.
     pub fn column(&self) -> u64 {
         self.column
-    }
-
-    pub fn min(self, other: Self) -> Self {
-        if self.offset <= other.offset {
-            self
-        } else {
-            other
-        }
-    }
-
-    pub fn max(self, other: Self) -> Self {
-        if self.offset >= other.offset {
-            self
-        } else {
-            other
-        }
     }
 
     /// Location directly at the byte stream start.
@@ -122,7 +106,7 @@ impl<V> SmtLocated<V> {
 /// Span of an SMT-LIB element.
 ///
 /// The span is a half-open range `[start, end)` between locations.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SmtSpan {
     start: SmtLocation,
     end: SmtLocation,

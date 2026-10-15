@@ -1,7 +1,7 @@
 use crate::{SmtBytesBuf, token::SmtVersion};
 
 /// Reserved words in SMT-LIB2, including standard command names.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtReserved {
     General(SmtGeneralReserved),
     CommandName(SmtCommandNameReserved),
@@ -21,7 +21,7 @@ macro_rules! reserved_words {
     )*) => {
         $(
             $(#[$meta])*
-            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
             pub enum $enum_name {
                 $($variant,)*
             }

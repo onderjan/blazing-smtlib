@@ -12,7 +12,7 @@ mod reserved;
 
 pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtTokenCategory {
     ParenOpen,
     ParenClose,
@@ -85,7 +85,7 @@ pub enum SmtSyntaxToken<'a> {
 }
 
 /// Version of the SMT-LIB standard.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub enum SmtVersion {
     V2_0,
     V2_5,
@@ -404,7 +404,7 @@ impl<'a> SmtToken<'a> {
 }
 
 /// Producer refused to switch to a requested version.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtVersionRefused;
 
 /// A sequential producer of tokens.

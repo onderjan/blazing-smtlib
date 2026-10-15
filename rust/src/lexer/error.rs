@@ -1,6 +1,6 @@
 use crate::{SmtLocation, SmtSpan};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {
     UnexpectedCharacter,
     FractionDigitExpected,

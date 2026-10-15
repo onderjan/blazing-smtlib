@@ -28,7 +28,7 @@ pub struct SmtCommandParser<H: SmtCommandHandler> {
 }
 
 /// Why the command parser finished.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtCommandOutcome {
     /// A command other than special ones was parsed.
     Command,
