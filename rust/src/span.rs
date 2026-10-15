@@ -18,7 +18,7 @@ pub struct SmtLocation {
 
 impl SmtLocation {
     #[inline]
-    pub(crate) fn new(offset: u64, line: u64, column: u64) -> Self {
+    pub fn new(offset: u64, line: u64, column: u64) -> Self {
         Self {
             offset,
             line,
@@ -128,14 +128,39 @@ pub struct SmtSpan {
     end: SmtLocation,
 }
 
+/// The end location is not at or after the start location.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SmtInvalidSpan;
+
 impl SmtSpan {
+    #[inline]
+    pub fn new(start: SmtLocation, end: SmtLocation) -> Result<Self, SmtInvalidSpan> {
+        if Self::is_allowed(start, end) {
+            Ok(Self { start, end })
+        } else {
+            Err(SmtInvalidSpan)
+        }
+    }
+
     #[inline]
     pub(crate) fn new_unchecked(start: SmtLocation, end: SmtLocation) -> Self {
         debug_assert!(
-            start.offset <= end.offset,
-            "span start {start:?} is after end {end:?}"
+            Self::is_allowed(start, end),
+            "inconsistent span with start {start:?} and end {end:?}"
         );
         Self { start, end }
+    }
+
+    fn is_allowed(start: SmtLocation, end: SmtLocation) -> bool {
+        // both offsets and line/column information must be consistent
+        if end.offset < start.offset {
+            return false;
+        }
+        match end.line.cmp(&start.line) {
+            std::cmp::Ordering::Less => false,
+            std::cmp::Ordering::Equal => start.column <= end.column,
+            std::cmp::Ordering::Greater => true,
+        }
     }
 
     /// A span within one line: the line, the offset of its start, and the
