@@ -54,6 +54,11 @@ SMT-LIB symbol, quoted or unquoted.
 
 May be empty.
 Must contain only SMT-LIB printable or whitespace bytes except for pipe (|) and backslash (\).
+
+Equality and hash are intentionally not implemented:
+quoted and unquoted symbols refer to the same value semantically,
+so the value without the quoted flag should be compared in that case,
+obtained through `intoBytes`.
 -/
 structure Symbol where
   private ofBytes ::
@@ -278,10 +283,6 @@ local macro "plain_newtype " name:ident view:ident : command => do
 
     @[no_expose] instance : Repr $name := ⟨fun s p => reprPrec s.bytes p⟩
 
-    @[no_expose] instance : BEq $name := ⟨fun a b => a.bytes == b.bytes⟩
-
-    @[no_expose] instance : Hashable $name := ⟨fun s => hash s.bytes⟩
-
     end $name)
   let viewMethods ← `(
     namespace $view
@@ -302,10 +303,27 @@ local macro "plain_newtype " name:ident view:ident : command => do
 
     @[no_expose] instance : Repr $view := ⟨fun s p => reprPrec (Bytes.BytesView.new s.slice) p⟩
 
+    end $view)
+  return ⟨Lean.mkNullNode #[viewStructure, ownedMethods, viewMethods]⟩
+
+/- LEAN: the comparisons that Rust derives on the types of `string8_newtype!`: `BEq` is
+`PartialEq`, `Hashable` is `Hash`. The symbol is not among those types in Rust and has
+neither, so it is given none here. -/
+set_option hygiene false in
+local macro "plain_newtype_eq " name:ident view:ident : command => `(
+    namespace $name
+
+    @[no_expose] instance : BEq $name := ⟨fun a b => a.bytes == b.bytes⟩
+
+    @[no_expose] instance : Hashable $name := ⟨fun s => hash s.bytes⟩
+
+    end $name
+
+    namespace $view
+
     @[no_expose] instance : BEq $view := ⟨fun a b => a.slice == b.slice⟩
 
     end $view)
-  return ⟨Lean.mkNullNode #[viewStructure, ownedMethods, viewMethods]⟩
 
 plain_newtype StringContent StringContentView
 plain_newtype Symbol SymbolView
@@ -316,5 +334,14 @@ plain_newtype BinDigits BinDigitsView
 plain_newtype Decimal DecimalView
 plain_newtype Whitespace WhitespaceView
 plain_newtype Comment CommentView
+
+plain_newtype_eq StringContent StringContentView
+plain_newtype_eq Keyword KeywordView
+plain_newtype_eq Numeral NumeralView
+plain_newtype_eq HexDigits HexDigitsView
+plain_newtype_eq BinDigits BinDigitsView
+plain_newtype_eq Decimal DecimalView
+plain_newtype_eq Whitespace WhitespaceView
+plain_newtype_eq Comment CommentView
 
 end BSmtLib.Plain

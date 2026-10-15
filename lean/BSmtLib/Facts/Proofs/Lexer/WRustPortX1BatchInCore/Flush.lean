@@ -147,7 +147,7 @@ theorem handOverStored_simZ (hcons : ConsumesAlike H m R E) (l ls : Nat) (ty : T
   obtain ⟨⟨hs, ht⟩, hw, hx⟩ := h₀
   subst w x s₀ t₀
   obtain ⟨⟨⟨hst, hl, hls⟩, hlen⟩, hby⟩ := h
-  have hc : s.val.tokenContent = t.val.tokenContent := hst.tokenContent
+  have hc : ContentAgree s.val.tokenContent t.val.tokenContent := hst.tokenContent
   refine SimR.of_bind_pure_left (SimR.bind (SimR.pre ?_ (handOver_sim' hcons l ls s.val.version
     _ _ ?_ t.val.batch.bytes _ _)) fun _ spent => ?_)
   · intro s' t' h'
@@ -155,9 +155,7 @@ theorem handOverStored_simZ (hcons : ConsumesAlike H m R E) (l ls : Nat) (ty : T
     subst hs' ht'
     exact ⟨⟨⟨{ hst with batch := agree_of_len_zero hlen rfl, capacity := by rw [hlen]; decide },
       hl, hls⟩, hlen⟩, rfl, hby⟩
-  · rw [hc]
-    exact ((agree_clear (Token.TokenBatch.empty 1) t.val.batch start.offset start.offset).withBytes
-      t.val.tokenContent.bytes).pushLocated rfl ty 0 t.val.tokenContent.len start «end» _ _ _ _
+  · exact agree_stored hc _ _ _ _ ty start «end» _ _ rfl rfl _ _ _ _
   · refine SimR.post (fun _ _ _ _ h => h.2) (SimR.pre (fun _ _ h => ⟨h.1, ?_⟩)
       (storeSpent_right l ls _ _))
     rw [h.2.2.1]
@@ -215,7 +213,7 @@ theorem handOverEof_simZ (hcons : ConsumesAlike H m R E) (l ls : Nat) (location 
   refine Core.getCore_bind_right fun s' t' h' => ?_
   obtain ⟨hs', ht'⟩ := h'
   subst s' t'
-  have hc : s.val.tokenContent = t.val.tokenContent := hst.tokenContent
+  have hc : ContentAgree s.val.tokenContent t.val.tokenContent := hst.tokenContent
   refine SimR.of_bind_pure_left (SimR.bind (SimR.pre ?_ (handOver_sim' hcons l ls s.val.version
     _ _ ?_ _ _ _)) fun _ spent => ?_)
   · intro s' t' h'
@@ -223,10 +221,7 @@ theorem handOverEof_simZ (hcons : ConsumesAlike H m R E) (l ls : Nat) (location 
     subst hs' ht'
     exact ⟨⟨⟨{ hst with batch := agree_of_len_zero hlen rfl, capacity := by rw [hlen]; decide },
       hl, hls⟩, hlen⟩, rfl, nofun⟩
-  · rw [← hc, hempty]
-    exact ((agree_clear (Token.TokenBatch.empty 1) t.val.batch location.offset
-        location.offset).withBytes
-      s.val.tokenContent.bytes).pushLocated rfl .endOfFile 0 0 location location _ _ _ _
+  · exact agree_stored hc _ _ _ _ .endOfFile location location _ _ hempty rfl _ _ _ _
   · exact SimR.post (fun _ _ _ _ h => h.2.1)
       (SimR.pre (fun _ _ h => ⟨h.1, nofun⟩) (storeSpent_right (strict := false) l ls _ _))
 

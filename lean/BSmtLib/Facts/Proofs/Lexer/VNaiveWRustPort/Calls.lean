@@ -89,8 +89,8 @@ theorem lexOps_lexSliceStepW (core : WP.WCore) (held : Option (Span.Located C.Re
   unfold runIA
   generalize (((Lexer.Internal.WRustPort.lexSliceStep (H := Answering C) (m := AnswerM)
       (R := C.Result)
-    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) slice).run core).run
+    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice).run core).run
     {}).run taken = r
   obtain ⟨⟨⟨res, core'⟩, h⟩, taken'⟩ := r
   rw [answering_eq' h {}]
@@ -107,8 +107,8 @@ theorem lexOps_lexEofStepW (core : WP.WCore) (held : Option (Span.Located C.Resu
   unfold runIA
   generalize (((Lexer.Internal.WRustPort.lexEofStep (H := Answering C) (m := AnswerM)
       (R := C.Result)
-    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast)).run core).run {}).run taken = r
+    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)).run core).run {}).run taken = r
   obtain ⟨⟨⟨res, core'⟩, h⟩, taken'⟩ := r
   rw [answering_eq' h {}]
   rfl
@@ -422,54 +422,66 @@ end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Calls
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Calls
 
+/-- Lexers of the Rust port and of the naive lexer that correspond between two calls: the same
+held result, and states that correspond (`CR`). -/
+def WVRel (C : BSmtLibSpec.Lexer.Consumer) (w : WRustPort.lexOps.Lexer C)
+    (n : VNaive.lexOps.Lexer C) : Prop :=
+  w.held = n.held ∧ CR C w.core n.core
+
+/-- What is left of `WVRel` after a call that failed: the same version and discarding. -/
+def WVWeak (C : BSmtLibSpec.Lexer.Consumer) (w : WRustPort.lexOps.Lexer C)
+    (n : VNaive.lexOps.Lexer C) : Prop :=
+  w.core.version = n.core.version ∧ w.core.discardedFrom = discardedOf n.core
+
+theorem wvRel_new (C : BSmtLibSpec.Lexer.Consumer) (version : Token.Version) :
+    WVRel C (WRustPort.lexOps.new C {} version) (VNaive.lexOps.new C {} version) :=
+  ⟨rfl, ⟨rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl, rfl⟩, .inl ⟨.idle, rfl, rfl, rfl⟩⟩⟩
+
+theorem wv_slice (C : BSmtLibSpec.Lexer.Consumer) (slice : BSmtLibSpec.Regex.Chars) :
+    StepsAlikeF WRustPort.lexOps VNaive.lexOps (WVRel C) (WVWeak C)
+      (fun a => WRustPort.lexOps.lexSliceStep a slice.toByteArray.toByteSlice)
+      (fun b => VNaive.lexOps.lexSliceStep b slice.toByteArray.toByteSlice) := by
+  intro a b taken ⟨hh, hcr⟩
+  obtain ⟨ha, ca, hda⟩ := a
+  obtain ⟨hb, cb, hdb⟩ := b
+  rw [answering_eq' ha {}, answering_eq' hb {}]
+  simp only at hh hcr
+  rw [lexOps_lexSliceStepW, lexOps_lexSliceStep]
+  have hs := slice_step ca cb slice taken hcr
+  generalize runIA (Lexer.Internal.WRustPort.lexSliceStep (H := Answering C) (m := AnswerM)
+    (R := C.Result) (E := Option C.Error) (fun _ => pure ()) (fun _ => pure ())
+    slice.toByteArray.toByteSlice) ca taken = rW at hs ⊢
+  generalize vRun C (Lexer.Internal.VNaive.lexSliceStep (H := Answering C) false
+      (fun _ => pure ())
+    (fun _ => pure ()) slice.toByteArray.toByteSlice cb) taken = rV at hs ⊢
+  obtain ⟨⟨r, c'⟩, t⟩ := rW
+  obtain ⟨⟨r', n'⟩, t'⟩ := rV
+  obtain ⟨e1, e2, e3, e4, e5⟩ := hs
+  exact ⟨e1, e2, fun hok => ⟨hh, e3 hok⟩, e4, e5⟩
+
+theorem wv_eof (C : BSmtLibSpec.Lexer.Consumer) :
+    StepsAlikeF WRustPort.lexOps VNaive.lexOps (WVRel C) (WVWeak C) WRustPort.lexOps.lexEofStep
+      VNaive.lexOps.lexEofStep := by
+  intro a b taken ⟨hh, hcr⟩
+  obtain ⟨ha, ca, hda⟩ := a
+  obtain ⟨hb, cb, hdb⟩ := b
+  rw [answering_eq' ha {}, answering_eq' hb {}]
+  simp only at hh hcr
+  rw [lexOps_lexEofStepW, lexOps_lexEofStep]
+  have hs := eof_step ca cb taken hcr
+  generalize runIA (Lexer.Internal.WRustPort.lexEofStep (H := Answering C) (m := AnswerM)
+    (R := C.Result) (E := Option C.Error) (fun _ => pure ()) (fun _ => pure ())) ca taken = rW
+    at hs ⊢
+  generalize vEnd C cb taken = rV at hs ⊢
+  obtain ⟨⟨r, c'⟩, t⟩ := rW
+  obtain ⟨⟨r', n'⟩, t'⟩ := rV
+  obtain ⟨e1, e2, e3, e4, e5⟩ := hs
+  exact ⟨e1, e2, fun hok => ⟨hh, e3 hok⟩, e4, e5⟩
+
 /-- The Rust port does with every consumer of the spec what the naive lexer does. -/
-theorem lexing_wRustPort_vNaive : lexing WRustPort.lexOps = lexing VNaive.lexOps := by
-  refine lexing_alikeF _ _ (fun C w n => w.held = n.held ∧ CR C w.core n.core)
-    (fun C w n => w.core.version = n.core.version ∧ w.core.discardedFrom = discardedOf n.core)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
-  · intro C version
-    exact ⟨rfl, ⟨rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl, rfl⟩, .inl ⟨.idle, rfl, rfl, rfl⟩⟩⟩
-  · intro C slice a b taken ⟨hh, hcr⟩
-    obtain ⟨ha, ca, hda⟩ := a
-    obtain ⟨hb, cb, hdb⟩ := b
-    rw [answering_eq' ha {}, answering_eq' hb {}]
-    simp only at hh hcr
-    rw [lexOps_lexSliceStepW, lexOps_lexSliceStep]
-    have hs := slice_step ca cb slice taken hcr
-    generalize runIA (Lexer.Internal.WRustPort.lexSliceStep (H := Answering C) (m := AnswerM)
-      (R := C.Result) (E := Option C.Error) (fun _ => pure ()) (fun _ => pure ())
-      slice.toByteArray.toByteSlice) ca taken = rW at hs ⊢
-    generalize vRun C (Lexer.Internal.VNaive.lexSliceStep (H := Answering C) false
-        (fun _ => pure ())
-      (fun _ => pure ()) slice.toByteArray.toByteSlice cb) taken = rV at hs ⊢
-    obtain ⟨⟨r, c'⟩, t⟩ := rW
-    obtain ⟨⟨r', n'⟩, t'⟩ := rV
-    obtain ⟨e1, e2, e3, e4, e5⟩ := hs
-    exact ⟨e1, e2, fun hok => ⟨hh, e3 hok⟩, e4, e5⟩
-  · intro C a b taken ⟨hh, hcr⟩
-    obtain ⟨ha, ca, hda⟩ := a
-    obtain ⟨hb, cb, hdb⟩ := b
-    rw [answering_eq' ha {}, answering_eq' hb {}]
-    simp only at hh hcr
-    rw [lexOps_lexEofStepW, lexOps_lexEofStep]
-    have hs := eof_step ca cb taken hcr
-    generalize runIA (Lexer.Internal.WRustPort.lexEofStep (H := Answering C) (m := AnswerM)
-      (R := C.Result) (E := Option C.Error) (fun _ => pure ()) (fun _ => pure ())) ca taken = rW
-      at hs ⊢
-    generalize vEnd C cb taken = rV at hs ⊢
-    obtain ⟨⟨r, c'⟩, t⟩ := rW
-    obtain ⟨⟨r', n'⟩, t'⟩ := rV
-    obtain ⟨e1, e2, e3, e4, e5⟩ := hs
-    exact ⟨e1, e2, fun hok => ⟨hh, e3 hok⟩, e4, e5⟩
-  · intro C a b h
-    exact h.1
-  · intro C a b held h
-    exact ⟨rfl, h.2⟩
-  · intro C a b h
-    exact ⟨h.2.version, cr_weak h.2⟩
-  · intro C a b h
-    exact h.1
-  · intro C a b h
-    exact h.2
+theorem lexing_wRustPort_vNaive : lexing WRustPort.lexOps = lexing VNaive.lexOps :=
+  lexing_alikeF _ _ WVRel WVWeak wvRel_new wv_slice wv_eof (fun _ _ _ h => h.1)
+    (fun _ _ _ _ h => ⟨rfl, h.2⟩) (fun _ _ _ h => ⟨h.2.version, cr_weak h.2⟩)
+    (fun _ _ _ h => h.1) (fun _ _ _ h => h.2)
 
 end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Calls

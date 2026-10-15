@@ -228,7 +228,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
           exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
         · refine Core.getCore_bind_P fun s t h => ?_
           simp only [throw_bind]
-          refine SimR.ite (by rw [h.1.1.tokenContent]) (fun _ => ?_) fun _ => ?_
+          refine SimR.ite (by content_agree h.1.1.tokenContent) (fun _ => ?_) fun _ => ?_
           · exact SimR.seq (SimR.pre (fun s t h => h.1) (Core.leave_sim _ _ _ _ _ _ _ hb _ _ _ _))
               (Core.error_sim _ _ _ _ _)
           · refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
@@ -294,7 +294,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
         exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
       · refine Core.getCore_bind_P fun s t h => ?_
         simp only [throw_bind]
-        refine SimR.ite (by rw [h.1.1.tokenContent]) (fun _ => ?_) fun _ => ?_
+        refine SimR.ite (by content_agree h.1.1.tokenContent) (fun _ => ?_) fun _ => ?_
         · exact SimR.seq (SimR.pre (fun s t h => h.1) (Core.leave_sim _ _ _ _ _ _ _ hb _ _ _ _))
             (Core.error_sim _ _ _ _ _)
         · refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_
@@ -330,7 +330,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
               _ _ _ _ _ _ _ _)) ?_
             exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
           · refine Core.getCore_bind_P fun s t h => ?_
-            refine SimR.ite (by rw [h.1.1.tokenContent]) (fun _ => ?_) fun _ => ?_
+            refine SimR.ite (by content_agree h.1.1.tokenContent) (fun _ => ?_) fun _ => ?_
             · exact SimR.seq (SimR.pre (fun s t h => h.1) (Core.leave_sim _ _ _ _ _ _ _ hb _ _ _ _))
                 (Core.error_sim _ _ _ _ _)
             · refine SimR.ite Iff.rfl (fun _ => ?_) fun _ => ?_

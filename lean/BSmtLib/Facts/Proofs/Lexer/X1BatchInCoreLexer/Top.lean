@@ -23,10 +23,11 @@ namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Top
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple (MCouple MCouple.map)
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Calls
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Outer BSmtLib.Lexer.Error
+open BSmtLib.Lexer.Recovery (Recovers)
 
 section
 
-variable {H R E : Type} [Token.Consume H R E] {recovery : Lexer.Recovery}
+variable {H R E : Type} [Token.Consume H R E] {recovery : Type}
 
 /-- The library's lexer as `X1BatchInCore`, with its base forgotten. -/
 def lexerMap (l : BSmtLib.Lexer H recovery) : Lexer.Internal.WRustPort.Lexer H recovery :=
@@ -38,39 +39,65 @@ def lexerZb (x : Lexer.Internal.WRustPort.Lexer H recovery) : Lexer.Internal.WRu
     recovery :=
   { handler := x.handler, core := zb x.core, held := x.held }
 
+/-- What a failed call of the library's lexer gives back, mapped by `lexerMap`, by whether the
+lexer recovers. -/
+def afterErrorMapOf : (recovers : Bool) → BSmtLib.Lexer.Internal.AfterErrorOf H recovery recovers →
+    Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers
+  | false, _ => ()
+  | true, l => lexerMap l
+
 /-- What a failed call of the library's lexer gives back, mapped by `lexerMap`. -/
-def afterErrorMap : {recovery : Lexer.Recovery} → BSmtLib.Lexer.AfterError H recovery →
-    Lexer.Internal.WRustPort.Lexer.AfterError H recovery
-  | .failFast, _ => ()
-  | .recovering, l => lexerMap (recovery := .recovering) l
+def afterErrorMap [Recovers recovery] (a : BSmtLib.Lexer.AfterError H recovery) :
+    Lexer.Internal.WRustPort.Lexer.AfterError H recovery :=
+  afterErrorMapOf (Recovers.recovers recovery) a
+
+/-- What a failed call of `X1BatchInCore` gives back, with the base forgotten, by whether the
+lexer recovers. -/
+def afterErrorZbOf : (recovers : Bool) →
+    Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers →
+    Lexer.Internal.WRustPort.Lexer.AfterErrorOf H recovery recovers
+  | false, _ => ()
+  | true, x => lexerZb x
 
 /-- What a failed call of `X1BatchInCore` gives back, with the base
 forgotten. -/
-def afterErrorZb : {recovery : Lexer.Recovery} → Lexer.Internal.WRustPort.Lexer.AfterError H
-    recovery →
-    Lexer.Internal.WRustPort.Lexer.AfterError H recovery
-  | .failFast, _ => ()
-  | .recovering, x => lexerZb (recovery := .recovering) x
+def afterErrorZb [Recovers recovery] (a : Lexer.Internal.WRustPort.Lexer.AfterError H recovery) :
+    Lexer.Internal.WRustPort.Lexer.AfterError H recovery :=
+  afterErrorZbOf (Recovers.recovers recovery) a
 
 /-- The lexer held by a recovering lexer whose end of the input failed and continues. -/
-abbrev pendingLexer (p : BSmtLib.Lexer.PendingEof H) : BSmtLib.Lexer H .recovering :=
+abbrev pendingLexer (p : BSmtLib.Lexer.PendingEof H recovery) : BSmtLib.Lexer H recovery :=
   BSmtLib.Lexer.Internal.pendingLexer p
 
+/-- What a failed end of the input of the library's lexer gives back, mapped by `lexerMap`, by
+whether the lexer recovers. -/
+def afterEofMapOf : (recovers : Bool) →
+    BSmtLib.Lexer.Internal.AfterEofErrorOf H recovery recovers →
+    Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers
+  | false, _ => ()
+  | true, .lexer l => .lexer (lexerMap l)
+  | true, .pending p => .pending ⟨lexerMap (pendingLexer p)⟩
+
 /-- What a failed end of the input of the library's lexer gives back, mapped by `lexerMap`. -/
-def afterEofMap : {recovery : Lexer.Recovery} →
-    BSmtLib.Lexer.AfterEofError H recovery → Lexer.Internal.WRustPort.Lexer.AfterEofError H recovery
-  | .failFast, _ => ()
-  | .recovering, .lexer l => .lexer (lexerMap l)
-  | .recovering, .pending p => .pending ⟨lexerMap (pendingLexer p)⟩
+def afterEofMap [Recovers recovery] (a : BSmtLib.Lexer.AfterEofError H recovery) :
+    Lexer.Internal.WRustPort.Lexer.AfterEofError H recovery :=
+  afterEofMapOf (Recovers.recovers recovery) a
+
+/-- What a failed end of the input of `X1BatchInCore` gives back, with the base forgotten, by
+whether the lexer recovers. -/
+def afterEofZbOf : (recovers : Bool) →
+    Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers →
+    Lexer.Internal.WRustPort.Lexer.AfterEofErrorOf H recovery recovers
+  | false, _ => ()
+  | true, .lexer x => .lexer (lexerZb x)
+  | true, .pending p => .pending ⟨lexerZb p.lexer⟩
 
 /-- What a failed end of the input of `X1BatchInCore` gives back, with the
 base forgotten. -/
-def afterEofZb : {recovery : Lexer.Recovery} → Lexer.Internal.WRustPort.Lexer.AfterEofError H
-    recovery →
-    Lexer.Internal.WRustPort.Lexer.AfterEofError H recovery
-  | .failFast, _ => ()
-  | .recovering, .lexer x => .lexer (lexerZb x)
-  | .recovering, .pending p => .pending ⟨lexerZb p.lexer⟩
+def afterEofZb [Recovers recovery]
+    (a : Lexer.Internal.WRustPort.Lexer.AfterEofError H recovery) :
+    Lexer.Internal.WRustPort.Lexer.AfterEofError H recovery :=
+  afterEofZbOf (Recovers.recovers recovery) a
 
 /-- The result of a call, with what it gives back mapped by `f` and what a failure gives back
 mapped by `after`. -/
@@ -79,6 +106,42 @@ def resultMap {α A A' β β' : Type} (after : A → A') (f : β → β') :
   | .ok b => .ok (f b)
   | .error (e, a) => .error (e, after a)
 
+/-- A failed call gives back related lexers if the lexers it is made on are related, whether
+the lexer recovers or not. -/
+theorem afterErrorMapOf_zb (recovers : Bool) (l : BSmtLib.Lexer H recovery)
+    (x : Lexer.Internal.WRustPort.Lexer H recovery) (hlx : lexerMap l = lexerZb x) :
+    afterErrorMapOf recovers (BSmtLib.Lexer.Internal.afterErrorOf recovers l) =
+      afterErrorZbOf recovers (Lexer.Internal.WRustPort.Lexer.afterErrorOf recovers x) := by
+  cases recovers
+  · rfl
+  · exact hlx
+
+/-- A failed end of the input gives back related lexers if the lexers it is made on are related,
+whether the lexer recovers or not, and whether the error continues or not. -/
+theorem afterEofMapOf_zb (recovers : Bool) (l : BSmtLib.Lexer H recovery)
+    (x : Lexer.Internal.WRustPort.Lexer H recovery) (hlx : lexerMap l = lexerZb x)
+    (continues : Bool) :
+    afterEofMapOf recovers (BSmtLib.Lexer.Internal.afterEofErrorOf recovers l continues) =
+      afterEofZbOf recovers
+        (Lexer.Internal.WRustPort.Lexer.afterEofErrorOf recovers x continues) := by
+  cases recovers
+  · rfl
+  · cases continues
+    · exact congrArg Lexer.Internal.WRustPort.Lexer.AfterEof.lexer hlx
+    · exact congrArg (fun y => Lexer.Internal.WRustPort.Lexer.AfterEof.pending ⟨y⟩) hlx
+
+/-- A lexer with the consumer, the state and no held result, mapped by `lexerMap`, is `lexerZb`
+of the same with a related state. -/
+theorem lexerMap_zb (h : H) {c : Core.ZCore} {x : Core.XCore} (hcx : Rel c x)
+    (held : Option (Span.Located R)) :
+    lexerMap (BSmtLib.Lexer.Internal.withHeld
+        (BSmtLib.Lexer.Internal.ofParts h c held : BSmtLib.Lexer H recovery) none) =
+      lexerZb ({ handler := h, core := x, held := none } :
+        Lexer.Internal.WRustPort.Lexer H recovery) := by
+  simp only [lexerMap, lexerZb, BSmtLib.Lexer.Internal.withHeld, BSmtLib.Lexer.Internal.ofParts,
+    BSmtLib.Lexer.Internal.handler, BSmtLib.Lexer.Internal.core, BSmtLib.Lexer.Internal.held]
+  rw [hcx]
+
 end
 
 section
@@ -86,7 +149,8 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Token.Consume H R E]
   [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
 
-theorem lexSlice_sim {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery recovery H m]
+theorem lexSlice_sim {recovery : Type} [Recovers recovery]
+    [Lexer.Recovery.LexRecovery recovery H m]
     (l : BSmtLib.Lexer H recovery)
     (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
@@ -111,18 +175,14 @@ theorem lexSlice_sim {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery rec
       (BSmtLib.Lexer.Internal.handler l)).symm
   subst e
   rcases a with err | held
-  · cases recovery
-    · rfl
-    · exact congrArg (fun y => (Except.error (err,
-        ({ handler := h, core := y, held := none } : Lexer.Internal.WRustPort.Lexer H .recovering))
-            :
-          Except (LexError E × Lexer.Internal.WRustPort.Lexer H .recovering)
-            (Lexer.Internal.WRustPort.Lexer H .recovering))) hcx.symm
+  · exact congrArg (fun a => Except.error (err, a))
+      (afterErrorMapOf_zb (Recovers.recovers recovery) _ _ (lexerMap_zb h hcx _))
   · simp only [resultMap, lexerMap, lexerZb, BSmtLib.Lexer.Internal.withHeld,
       BSmtLib.Lexer.Internal.handler, BSmtLib.Lexer.Internal.core, BSmtLib.Lexer.Internal.held]
     rw [hcx]
 
-theorem lexEof_sim {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery recovery H m]
+theorem lexEof_sim {recovery : Type} [Recovers recovery]
+    [Lexer.Recovery.LexRecovery recovery H m]
     (l : BSmtLib.Lexer H recovery) (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
     (hx : Rel (BSmtLib.Lexer.Internal.core l) x.core)
@@ -144,17 +204,8 @@ theorem lexEof_sim {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery recov
       (BSmtLib.Lexer.Internal.handler l)).symm
   subst e
   rcases a with err | flow
-  · cases recovery
-    · rfl
-    · dsimp only
-      rcases err.continuesFrom.isSome
-      all_goals
-        simp only [resultMap, afterEofMap, afterEofZb, lexerMap, lexerZb,
-          BSmtLib.Lexer.Internal.withHeld, BSmtLib.Lexer.Internal.handler,
-          BSmtLib.Lexer.Internal.core, BSmtLib.Lexer.Internal.held,
-          Lexer.Internal.WRustPort.Lexer.afterEofError]
-        rw [hcx]
-        rfl
+  · exact congrArg (fun a => Except.error (err, a))
+      (afterEofMapOf_zb (Recovers.recovers recovery) _ _ (lexerMap_zb h hcx _) _)
   · simp only [resultMap, lexerMap, lexerZb, BSmtLib.Lexer.Internal.withHeld,
       BSmtLib.Lexer.Internal.handler, BSmtLib.Lexer.Internal.core, BSmtLib.Lexer.Internal.held]
     rw [hcx]
@@ -166,7 +217,7 @@ end
 
 section
 
-variable {H R E : Type} [Token.Consume H R E] {recovery : Lexer.Recovery}
+variable {H R E : Type} [Token.Consume H R E] {recovery : Type}
 
 /-- The library's lexer and `X1BatchInCore` are related: they have the same consumer and the same
 held result, and their states are equal once the base is forgotten. -/
@@ -185,7 +236,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [
 omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
 /-- Steps that are coupled, run on related lexers by `run`, give results related as the
 coupling relates them, and related lexers. -/
-theorem run_couple {recovery : Lexer.Recovery} {α β : Type} {Rr : α → β → Prop}
+theorem run_couple {recovery : Type} {α β : Type} {Rr : α → β → Prop}
     {f : BSmtLib.Lexer.InnerM H m α} {g : Lexer.Internal.WRustPort.InnerM H m β}
     (hc : Coupled Rr f g)
     (l : BSmtLib.Lexer H recovery) (x : Lexer.Internal.WRustPort.Lexer H recovery)
@@ -212,7 +263,7 @@ theorem run_couple {recovery : Lexer.Recovery} {α β : Type} {Rr : α → β �
 /-- The step of a call on a slice that ends below `USize.size`, run on related lexers: the two
 give the same result, and related lexers, also where the call fails. -/
 theorem run_lexSliceStep (abandon recover : Span.Location → StateT H m Unit)
-    {recovery : Lexer.Recovery} (l : BSmtLib.Lexer H recovery)
+    {recovery : Type} (l : BSmtLib.Lexer H recovery)
     (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hlx : LexerRel l x) (slice : ByteSlice) (hs : slice.stop < USize.size) :
     MCouple (fun a b => a.1 = b.1 ∧ LexerRel a.2 b.2)
@@ -226,7 +277,7 @@ theorem run_lexSliceStep (abandon recover : Span.Location → StateT H m Unit)
 /-- The step of a call on the end of the input, run on related lexers: the two give the same
 result, and related lexers, also where the call fails. -/
 theorem run_lexEofStep (abandon recover : Span.Location → StateT H m Unit)
-    {recovery : Lexer.Recovery} (l : BSmtLib.Lexer H recovery)
+    {recovery : Type} (l : BSmtLib.Lexer H recovery)
     (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hlx : LexerRel l x) :
     MCouple (fun a b => a.1 = b.1 ∧ LexerRel a.2 b.2)

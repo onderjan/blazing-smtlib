@@ -93,7 +93,7 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 in its state, and related lexers, also where the call fails: the two runs are the projections
 of one run of such pairs. -/
 theorem X1BatchInCore.lexSliceStep_sim_lexer (abandon recover : Span.Location → StateT H m Unit)
-    {recovery : Lexer.Recovery} (l : BSmtLib.Lexer H recovery)
+    {recovery : Type} (l : BSmtLib.Lexer H recovery)
     (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hlx : Top.LexerRel l x) (slice : ByteSlice) (hs : slice.stop < USize.size) :
     MCouple (fun a b => a.1 = b.1 ∧ Top.LexerRel a.2 b.2)
@@ -107,7 +107,7 @@ theorem X1BatchInCore.lexSliceStep_sim_lexer (abandon recover : Span.Location �
 result in the library's lexer and in the lexer with the batch kept in its state, and related
 lexers, also where the call fails. -/
 theorem X1BatchInCore.lexEofStep_sim_lexer (abandon recover : Span.Location → StateT H m Unit)
-    {recovery : Lexer.Recovery} (l : BSmtLib.Lexer H recovery)
+    {recovery : Type} (l : BSmtLib.Lexer H recovery)
     (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hlx : Top.LexerRel l x) :
     MCouple (fun a b => a.1 = b.1 ∧ Top.LexerRel a.2 b.2)
@@ -120,8 +120,8 @@ theorem X1BatchInCore.lexEofStep_sim_lexer (abandon recover : Span.Location → 
 /-- The lexer with the batch kept in its state and the library's lexer, with the same consumer,
 the same held result and states equal but for the base, lex a slice that ends below
 `USize.size` alike: the results are equal once the base is forgotten. -/
-theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery
-    recovery H m]
+theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Type}
+    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexRecovery recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
     (hx : Outer.Rel (BSmtLib.Lexer.Internal.core l) x.core)
@@ -135,8 +135,8 @@ theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Lexer.Recovery} [Lexer.Reco
 /-- The lexer with the batch kept in its state and the library's lexer, with the same consumer,
 the same held result and states equal but for the base, lex the end of the input alike: the
 results are equal once the base is forgotten. -/
-theorem X1BatchInCore.lexEof_sim_lexer {recovery : Lexer.Recovery} [Lexer.Recovery.LexRecovery
-    recovery H m]
+theorem X1BatchInCore.lexEof_sim_lexer {recovery : Type}
+    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexRecovery recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
     (hx : Outer.Rel (BSmtLib.Lexer.Internal.core l) x.core)

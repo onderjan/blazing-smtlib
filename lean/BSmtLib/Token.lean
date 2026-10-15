@@ -44,10 +44,11 @@ instance : Inhabited Version := ⟨.v2_7⟩
 
 /- LEAN: Lean cannot derive `PartialOrd`/`Ord` for comparison with `≤` from the order of the
 variants, so the order is spelled out as a rank, and `≤` and `<` compare the ranks. The rank is
-public, in `Internal`, only so that the bodies of these instances, which importing modules see,
-can name it. -/
+public, in `Internal`, so that the bodies of these instances, which importing modules see, can
+name it, and so that the fused reader can compare versions by it. It is inlined, so that a
+comparison compiles to the comparison of the ranks in place, without calls. -/
 /-- The position of the version in the order of releases. -/
-@[expose] def Internal.rank : Version → Nat
+@[expose, inline] def Internal.rank : Version → Nat
   | .v2_0 => 0
   | .v2_5 => 1
   | .v2_6 => 2
@@ -83,10 +84,14 @@ there is none (`SmtVersionPosture`).
 structure VersionPosture where
   allowed : Array Version
   maxDeclarations : Option Nat
+  deriving BEq, Repr
 
 /-- The default posture: 2.5, 2.6 and 2.7, one declaration. -/
 def VersionPosture.default : VersionPosture :=
   { allowed := #[.v2_5, .v2_6, .v2_7], maxDeclarations := some 1 }
+
+/- LEAN: `Inhabited` gives the default value, Rust's `Default`. -/
+instance : Inhabited VersionPosture := ⟨VersionPosture.default⟩
 
 namespace TokenCategory
 
@@ -1416,14 +1421,18 @@ class Consume (H : Type) (R E : outParam Type) where
 consumer. The calls cannot fail, and run in the consumer's monad with its state. The Rust
 blanket `impl SmtRecover for &mut T` has no counterpart, as Lean has no references. -/
 /--
-A token consumer that can recover after an error.
+A token consumer that can recover after an error (EXPERIMENTAL).
 
-This is used in the library to implement SMT-LIB script processing
+This is an experimental feature for processing of SMT-LIB scripts
 with error recovery: after an error, the current command is abandoned
 and the lexer closes all open parentheses before announcing recovery.
 If the command remains unclosed at the end of input, recovery is made
 before the end of input is handed over (only the unclosed command is
 abandoned and dropped).
+
+Lexer recovery is implemented but experimental
+since the exact semantics have not yet been set in stone.
+It can change or be removed in any version and should not be used.
 -/
 class Recover (H : Type) (m : outParam (Type → Type)) where
   /--

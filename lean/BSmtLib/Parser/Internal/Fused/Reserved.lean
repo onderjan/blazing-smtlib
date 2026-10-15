@@ -18,14 +18,6 @@ namespace BSmtLib.Parser.Internal.Fused.Reserved
 
 open BSmtLib.Token (Version)
 
-/-- The position of the version in the order of releases, as `Version`'s order. -/
-@[inline]
-def versionRank : Version → Nat
-  | .v2_0 => 0
-  | .v2_5 => 1
-  | .v2_6 => 2
-  | .v2_7 => 3
-
 /-- The table has a slot for every hash. -/
 theorem size_table : Token.Reserved.Internal.reservedTable.size = 128 :=
   Token.Reserved.Internal.size_reservedTable
@@ -61,7 +53,7 @@ def ofParts? (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ stop)
         rw [size_table]; exact Nat.mod_lt _ (by decide))
     if sized : word.size = length then
       if bytesEqFrom word bytes start length (by omega) (by omega) 0 &&
-          versionRank since ≤ versionRank version then
+          Version.Internal.rank since ≤ Version.Internal.rank version then
         some reserved
       else none
     else none

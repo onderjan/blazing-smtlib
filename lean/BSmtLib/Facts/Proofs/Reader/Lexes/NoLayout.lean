@@ -104,8 +104,8 @@ theorem zok_chunks (hc : C.concrete = false) (s : BSmtLibSpec.Regex.Chars) (p : 
       (t : List Handed), ZOK C (Lexer.Internal.core l) →
       ∀ r (l' : Lexer.Adapters.Lexer.lexOps.Lexer C) t',
         (Lexer.Internal.run l (Lexer.Internal.lexChunks
-            (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) s.toByteArray.toByteSlice p
+            (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) s.toByteArray.toByteSlice p
               acc)).run t =
           ((r, l'), t') →
         (∀ e, r = .error e → e.cause ≠ .consumer none) ∧
@@ -156,8 +156,8 @@ theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : 
       rw [Lexer.X1BatchInCoreLexer.Chunks.stop_toByteSlice, List.size_toByteArray]
       exact hs
     have hz' : (Lexer.Internal.run l (Lexer.Internal.lexChunks
-        (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-        (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) bytes.toByteArray.toByteSlice
+        (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+        (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) bytes.toByteArray.toByteSlice
             0 none)).run
           taken =
         (Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run taken := by
@@ -184,8 +184,8 @@ theorem zok_eof (hc : C.concrete = false) {c : BSmtLib.Lexer.LexerCore} (hz : ZO
     ⟨answering_unique _ _, by rw [hl]; exact hx, rfl⟩
   have hWR : Lexer.WRustPortX1BatchInCore.Calls.LexRel w' x' := ⟨hw.1, hw.2.1, rfl⟩
   have hcoupled := Lexer.X1BatchInCoreLexer.Top.run_lexEofStep (m := AnswerM) (R := C.Result)
-    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) l x' hLR
+    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) l x' hLR
   obtain ⟨⟨e1, -⟩, -⟩ := Lexer.Consumers.Alike.mcouple_answerM hcoupled taken
   change ((Lexer.Adapters.Lexer.lexOps.lexEofStep l).run taken).1.1 =
     ((Lexer.Adapters.X1BatchInCore.lexOps.lexEofStep x').run taken).1.1 at e1

@@ -25,19 +25,19 @@ open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Top
 
 /-- The two lexers correspond: the same consumer, lexer states related by `TopRel`, and the same
 held result. -/
-def LexRel {H R E : Type} [Token.Consume H R E] {recovery : Lexer.Recovery}
+def LexRel {H R E : Type} [Token.Consume H R E] {recovery : Type}
     (a b : Lexer.Internal.WRustPort.Lexer H recovery) : Prop :=
   a.handler = b.handler ∧ TopRel a.core b.core ∧ a.held = b.held
 
 /-- The runs of a step on two lexers give the same result, with lexers that correspond. -/
-def RunRel {H R E α : Type} [Token.Consume H R E] {recovery : Lexer.Recovery}
+def RunRel {H R E α : Type} [Token.Consume H R E] {recovery : Type}
     (a b : α × Lexer.Internal.WRustPort.Lexer H recovery) : Prop :=
   a.1 = b.1 ∧ LexRel a.2 b.2
 
 section
 
 variable {H R E : Type} [Token.Consume H R E] {m : Type → Type} [Monad m] [LawfulMonad m]
-  {recovery : Lexer.Recovery} {α β : Type}
+  {recovery : Type} {α β : Type}
 
 theorem run_couple {Q : α → β → Core → Core → Prop} {step : Lexer.Internal.WRustPort.InnerM H m α}
     {step' : Lexer.Internal.WRustPort.InnerM H m β} (hs : ISim TopRel Q step step')
@@ -70,7 +70,7 @@ section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
   [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
-  {recovery : Lexer.Recovery} {o₁ o₂ : Ops H m R E}
+  {recovery : Type} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
 omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in

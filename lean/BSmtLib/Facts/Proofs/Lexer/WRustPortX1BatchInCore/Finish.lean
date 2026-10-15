@@ -61,7 +61,8 @@ local macro "finish_checked" : tactic => `(tactic| (
   dsimp only
   refine Core.getCore_bind_P fun s t hst => ?_
   simp only [throw_bind]
-  refine SimR.ite (by rw [hst.1.1.tokenContent]) (fun _ => Core.error_sim _ _ _ _ _) fun _ => ?_
+  refine SimR.ite (by content_agree hst.1.1.tokenContent) (fun _ => Core.error_sim _ _ _ _ _)
+    fun _ => ?_
   cases ‹Option UInt8› with
   | some next =>
     exact SimR.seq (Core.expectDelimiter_sim _ _ _ _) (sinkStored_sim ‹_› _ _ _ _ _ _ _)
@@ -111,7 +112,7 @@ local macro "finish_eof" : tactic => `(tactic| (
   dsimp only
   refine Core.getCore_bind_P fun s t hst => ?_
   simp only [throw_bind]
-  refine SimR.ite (by rw [hst.1.1.1.tokenContent]) (fun _ => Core.error_simZ _ _ _ _ _)
+  refine SimR.ite (by content_agree hst.1.1.1.tokenContent) (fun _ => Core.error_simZ _ _ _ _ _)
     fun _ => SimR.pre (fun _ _ h => h.1) (sinkStored_simZ ‹_› _ _ _ _ _ _ _)))
 
 omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in

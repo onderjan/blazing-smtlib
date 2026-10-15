@@ -50,7 +50,7 @@ theorem reset_sim :
     version := h.initialVersion, state := rfl, discardedFrom := rfl, holding := rfl
     consumedDepth := rfl
     lexedDepth := rfl, recoveryState := rfl, tokenStart := rfl, offset := rfl, line := rfl
-    tokenContent := by simp only [h.tokenContent], base := rfl, lineStart := rfl
+    tokenContent := ContentAgree.clear _ _, base := rfl, lineStart := rfl
     batch := agree_clear _ _ _ _, capacity := Core.zero_lt_capacity }
 
 theorem reset_sim' :

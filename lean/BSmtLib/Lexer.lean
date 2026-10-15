@@ -13,6 +13,8 @@ public section
 
 namespace BSmtLib.Lexer
 
+open Recovery (FailFast Recovering)
+
 /-- Maximal number of tokens that can be batched. -/
 def BATCH_CAPACITY : Nat := 256
 
@@ -144,7 +146,7 @@ structure LexerCore where
 /- LEAN: Rust keeps the held result in the lexer as `Option<SmtLocated<C::Result>>`; the result
 type is the consumer's, which its instance of `Consume` gives, so the lexer takes the instance. -/
 structure _root_.BSmtLib.Lexer (H : Type) {R E : Type} [Token.Consume H R E]
-    (recovery : Lexer.Recovery := .failFast) where
+    (recovery : Type := Lexer.Recovery.FailFast) where
   private mk ::
   /-- Consumer of produced tokens. -/
   private handler : H
@@ -2700,9 +2702,15 @@ def new (consumer : H) (version : Token.Version) : Lexer H :=
 
 /- LEAN: Rust requires the consumer to recover by the bound `C: SmtRecover`; here by the
 instance argument, which the construction itself does not use. -/
-/-- Constructs a lexer that recovers from errors. -/
+/--
+Constructs a lexer that recovers from errors (EXPERIMENTAL).
+
+Lexer recovery is implemented but experimental
+since the exact semantics have not yet been set in stone.
+It can change or be removed in any version and should not be used.
+-/
 def newRecovering [Token.Recover H m] (consumer : H)
-    (version : Token.Version) : Lexer H .recovering :=
+    (version : Token.Version) : Lexer H Recovering :=
   let { handler, core, held } := new consumer version
   { handler, core := { core with recovers := true }, held }
 
@@ -2781,7 +2789,18 @@ namespace BSmtLib
 
 section
 
+open Lexer.Recovery (FailFast Recovering Recovers)
+
 variable {H : Type} {R E : Type} [Token.Consume H R E]
+
+/- LEAN: the type `AfterError` is, by whether the lexer recovers: a function of a `Bool` that
+can be matched on, which a function of the recovery type cannot. -/
+/-- What a lexer call that failed gives back, by whether the lexer recovers. -/
+@[expose]
+def Lexer.Internal.AfterErrorOf (H : Type) [Token.Consume H R E] (recovery : Type) :
+    Bool → Type
+  | false => Unit
+  | true => Lexer H recovery
 
 /- LEAN: what Rust's `&mut self` leaves usable after a call that failed: the type of the
 recovering lexer, and nothing for a lexer that stops at its first error, whose further calls
@@ -2792,9 +2811,9 @@ at its first error, which cannot be used again, and the lexer itself for a
 recovering one, from which the rest of the input is to be fed.
 -/
 @[expose]
-def Lexer.AfterError (H : Type) [Token.Consume H R E] : Recovery → Type
-  | .failFast => Unit
-  | .recovering => Lexer H .recovering
+def Lexer.AfterError (H : Type) [Token.Consume H R E] (recovery : Type) [Recovers recovery] :
+    Type :=
+  Lexer.Internal.AfterErrorOf H recovery (Recovers.recovers recovery)
 
 /--
 A recovering lexer whose end of the input raised an error.
@@ -2802,13 +2821,14 @@ A recovering lexer whose end of the input raised an error.
 The input has ended, so only the end of the input can be lexed again,
 which completes the recovery.
 -/
-structure Lexer.PendingEof (H : Type) [Token.Consume H R E] where
+structure Lexer.PendingEof (H : Type) [Token.Consume H R E] (recovery : Type := Recovering)
+    where
   private mk ::
-  private lexer : Lexer H .recovering
+  private lexer : Lexer H recovery
 
 /- LEAN: not in Rust, which has no accessor for it either. -/
 /-- The lexer held by a recovering lexer whose end of the input failed. -/
-def Lexer.Internal.pendingLexer (self : Lexer.PendingEof H) : Lexer H .recovering :=
+def Lexer.Internal.pendingLexer (self : Lexer.PendingEof H recovery) : Lexer H recovery :=
   self.lexer
 
 /- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed. Rust panics on a
@@ -2818,30 +2838,47 @@ What a recovering lexer gives back after its end of the input failed: the
 lexer, if the error is final, or the lexer that can only lex the end of the
 input again, if the error continues at the end.
 -/
-inductive Lexer.AfterEof (H : Type) [Token.Consume H R E] where
-  | lexer (lexer : Lexer H .recovering)
-  | pending (pending : Lexer.PendingEof H)
+inductive Lexer.AfterEof (H : Type) [Token.Consume H R E] (recovery : Type := Recovering) where
+  | lexer (lexer : Lexer H recovery)
+  | pending (pending : Lexer.PendingEof H recovery)
+
+/-- What a lexer gives back after its end of the input failed, by whether the lexer recovers. -/
+@[expose]
+def Lexer.Internal.AfterEofErrorOf (H : Type) [Token.Consume H R E] (recovery : Type) :
+    Bool → Type
+  | false => Unit
+  | true => Lexer.AfterEof H recovery
 
 /--
 What a lexer gives back after its end of the input failed: nothing for a
 lexer that stops at its first error, and what remains of a recovering one.
 -/
 @[expose]
-def Lexer.AfterEofError (H : Type) [Token.Consume H R E] : Recovery → Type
-  | .failFast => Unit
-  | .recovering => Lexer.AfterEof H
+def Lexer.AfterEofError (H : Type) [Token.Consume H R E] (recovery : Type)
+    [Recovers recovery] : Type :=
+  Lexer.Internal.AfterEofErrorOf H recovery (Recovers.recovers recovery)
 
 namespace Lexer
 
-private def afterError : {recovery : Recovery} → Lexer H recovery → AfterError H recovery
-  | .failFast, _ => ()
-  | .recovering, lexer => lexer
+/-- What a failed call gives back, by whether the lexer recovers. -/
+def Internal.afterErrorOf : (recovers : Bool) → Lexer H recovery →
+    Internal.AfterErrorOf H recovery recovers
+  | false, _ => ()
+  | true, lexer => lexer
 
-private def afterEofError : {recovery : Recovery} → Lexer H recovery → (continues : Bool) →
-    AfterEofError H recovery
-  | .failFast, _, _ => ()
-  | .recovering, lexer, true => .pending ⟨lexer⟩
-  | .recovering, lexer, false => .lexer lexer
+private def afterError [Recovers recovery] (lexer : Lexer H recovery) : AfterError H recovery :=
+  Internal.afterErrorOf (Recovers.recovers recovery) lexer
+
+/-- What a failed end of the input gives back, by whether the lexer recovers. -/
+def Internal.afterEofErrorOf : (recovers : Bool) → Lexer H recovery → (continues : Bool) →
+    Internal.AfterEofErrorOf H recovery recovers
+  | false, _, _ => ()
+  | true, lexer, true => .pending ⟨lexer⟩
+  | true, lexer, false => .lexer lexer
+
+private def afterEofError [Recovers recovery] (lexer : Lexer H recovery) (continues : Bool) :
+    AfterEofError H recovery :=
+  Internal.afterEofErrorOf (Recovers.recovers recovery) lexer continues
 
 /- LEAN: what Rust's `lex_eof` returns, or panics on where the consumer continues at the end of
 the input, a broken contract. Here the broken contract is an obligation on the caller, who does
@@ -2877,7 +2914,8 @@ determines the location from which further lexing should be started for
 error recovery.
 -/
 def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
-    [Recovery.LexRecovery recovery H m] (self : Lexer H recovery) (slice : ByteSlice) :
+    [Recovery.Recovers recovery] [Recovery.LexRecovery recovery H m]
+    (self : Lexer H recovery) (slice : ByteSlice) :
     m (Except (Error.LexError E × AfterError H recovery) (Lexer H recovery)) := do
   let step := Internal.lexSliceStep (Recovery.LexRecovery.abandon recovery)
       (Recovery.LexRecovery.recover recovery) slice
@@ -2905,7 +2943,8 @@ and returns the error. `LexError.continuesFrom` determines the location
 from which further lexing should be started for error recovery.
 -/
 def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
-    [Recovery.LexRecovery recovery H m] (self : Lexer H recovery) :
+    [Recovery.Recovers recovery] [Recovery.LexRecovery recovery H m]
+    (self : Lexer H recovery) :
     m (Except (Error.LexError E × AfterEofError H recovery)
         (Option (Span.Located R) × Lexer H recovery)) := do
   let step := Internal.lexEofStep (Recovery.LexRecovery.abandon recovery)
@@ -2925,8 +2964,8 @@ does. An error is final: the lexer resets itself and does not continue.
 def PendingEof.lexEof [Monad m] [∀ batch, Token.ConsumeFrom H
     (Token.BatchCursor batch) m] [Token.Recover H m]
     (self : PendingEof H) :
-    m (Except (Error.LexError E × Lexer H .recovering)
-        (Option (Span.Located R) × Lexer H .recovering)) := do
+    m (Except (Error.LexError E × Lexer H Recovering)
+        (Option (Span.Located R) × Lexer H Recovering)) := do
   let step := Internal.lexEofStep (Token.Recover.abandon (H := H)) (Token.Recover.recover (H := H))
   let (result, lexer) ← Internal.run self.lexer step
   return match result with
@@ -2942,7 +2981,7 @@ If an error occurs, the lexer is not given back.
 -/
 def lexAll [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] (self : Lexer H)
     (input : ByteSlice) :
-    m (Except (Error.LexError E × AfterError H .failFast) (Option (Span.Located R) × Lexer H)) := do
+    m (Except (Error.LexError E × AfterError H FailFast) (Option (Span.Located R) × Lexer H)) := do
   match ← self.lexSlice input with
   | .ok self => self.lexEof
   | .error err => return .error err

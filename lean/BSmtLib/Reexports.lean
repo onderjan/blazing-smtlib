@@ -412,8 +412,8 @@ end BSmtLib
 
 namespace BSmtLib.Symbol
 
-export BSmtLib.Plain.Symbol (asSlice asView instBEq instHashable instRepr intoByteArray intoBytes
-  isAllowed isEmpty len new)
+export BSmtLib.Plain.Symbol (asSlice asView instRepr intoByteArray intoBytes isAllowed isEmpty len
+  new)
 
 end BSmtLib.Symbol
 
@@ -426,7 +426,7 @@ end BSmtLib
 
 namespace BSmtLib.SymbolView
 
-export BSmtLib.Plain.SymbolView (asSlice instBEq instRepr intoOwned isEmpty len newUnchecked)
+export BSmtLib.Plain.SymbolView (asSlice instRepr intoOwned isEmpty len newUnchecked)
 
 end BSmtLib.SymbolView
 
@@ -601,8 +601,14 @@ export BSmtLib.Lexer.Error.LexicalErrorKind (backslashInQuotedSymbol baseSelecti
 
 end BSmtLib.Lexer.LexicalErrorKind
 
-/-! `pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering}` in `lexer.rs`; `SmtFailFast`
-and `SmtRecovering` are the constructors of `BSmtLib.Lexer.Recovery` -/
+/-! `pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering}` in `lexer.rs` -/
+
+-- `BSmtLib.Lexer.Recovery.FailFast`, by `pub use recovery::SmtFailFast`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Recovery (FailFast)
+
+end BSmtLib.Lexer
 
 -- `BSmtLib.Lexer.Recovery.LexRecovery`, by `pub use recovery::SmtLexRecovery`
 namespace BSmtLib.Lexer
@@ -616,6 +622,13 @@ namespace BSmtLib.Lexer.LexRecovery
 export BSmtLib.Lexer.Recovery.LexRecovery (abandon mk recover)
 
 end BSmtLib.Lexer.LexRecovery
+
+-- `BSmtLib.Lexer.Recovery.Recovering`, by `pub use recovery::SmtRecovering`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Recovery (Recovering)
+
+end BSmtLib.Lexer
 
 /-! `pub use {…}` in `parser/category.rs`, for the parsers that have a counterpart -/
 

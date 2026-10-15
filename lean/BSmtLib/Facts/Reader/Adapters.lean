@@ -162,8 +162,8 @@ def lexerCalls (lexer : PLexer) : List Event :=
 def sliceStepped (reader : RecReader) (slice : ByteSlice) : PLexer :=
   (Lexer.Internal.run (Reader.Internal.lexer reader)
     (Lexer.Internal.lexSliceStep (H := RecAdapter) (m := Id)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) slice) :
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice) :
     Id _).2
 
 /-- The reader's lexer after the step of `Reader.readEof`, also where it fails. -/
@@ -171,8 +171,8 @@ def eofStepped (reader : RecReader) : PLexer :=
   (Lexer.Internal.run (Reader.Internal.lexer reader)
     (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
       (E := Parser.ParseErrorCause Unit)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast)) :
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) :
     Id _).2
 
 /-- The reader fed the slices by `Reader.readSlice`, and then the end of the input by

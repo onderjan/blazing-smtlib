@@ -164,20 +164,20 @@ theorem eofRel_eq {ε α : Type} {a b : Except (LexError (Option ε)) (ControlFl
 wrong, for every consumer of the spec. -/
 def flaggedOps : LexOps where
   Lexer consumer := BSmtLib.Lexer (Flagged consumer)
-  AfterError consumer := BSmtLib.Lexer.AfterError (Flagged consumer) .failFast
-  AfterEofError consumer := BSmtLib.Lexer.AfterEofError (Flagged consumer) .failFast
+  AfterError consumer := BSmtLib.Lexer.AfterError (Flagged consumer) Lexer.Recovery.FailFast
+  AfterEofError consumer := BSmtLib.Lexer.AfterEofError (Flagged consumer) Lexer.Recovery.FailFast
   new _ _ version :=
     BSmtLib.Lexer.new { errored := false, version, spoiled := false, layout := false } version
   lexSlice := BSmtLib.Lexer.lexSlice
   lexEof := BSmtLib.Lexer.lexEof
   lexSliceStep lexer slice :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexSliceStep
-      (Recovery.LexRecovery.abandon Recovery.failFast)
-          (Recovery.LexRecovery.recover Recovery.failFast) slice)
+      (Recovery.LexRecovery.abandon Recovery.FailFast)
+          (Recovery.LexRecovery.recover Recovery.FailFast) slice)
   lexEofStep lexer :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexEofStep
-      (Recovery.LexRecovery.abandon Recovery.failFast)
-          (Recovery.LexRecovery.recover Recovery.failFast))
+      (Recovery.LexRecovery.abandon Recovery.FailFast)
+          (Recovery.LexRecovery.recover Recovery.FailFast))
   held := BSmtLib.Lexer.Internal.held
   withHeld := BSmtLib.Lexer.Internal.withHeld
   version := BSmtLib.Lexer.version
@@ -209,14 +209,14 @@ def AlikeLexers (consumer : BSmtLibSpec.Lexer.Consumer) (a : Lexer.lexOps.Lexer 
 
 theorem recovery_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Span.Location) :
     (alikeLink consumer).rc.rel (· = ·)
-      (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.failFast l)
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast l) :=
+      (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast l)
+      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast l) :=
   fun _ _ _ => ⟨rfl, rfl⟩
 
 theorem recover_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Span.Location) :
     (alikeLink consumer).rc.rel (· = ·)
-      (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.failFast l)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast l) :=
+      (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast l)
+      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast l) :=
   fun _ _ _ => ⟨rfl, rfl⟩
 
 /-- The library's lexer does with `Flagged consumer` what it does with `Answering consumer`, for
@@ -230,10 +230,10 @@ theorem lexing_flagged : lexing Lexer.lexOps = lexing flaggedOps := by
     (fun _ _ _ h => congrArg LexerCore.discardedFrom h)
   · intro consumer slice a b taken hab
     have hsim := lexSliceStep_sim (alike_consumers consumer)
-      (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
+      (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+      (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
+      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
       (recovery_alike consumer) (recover_alike consumer) slice.toByteArray.toByteSlice
           (Internal.core a)
       (Internal.handler a) (Internal.handler b)
@@ -245,10 +245,10 @@ theorem lexing_flagged : lexing Lexer.lexOps = lexing flaggedOps := by
     exact ⟨sliceRel_eq hr, ht, fun _ => ⟨hc, hab.2⟩, hc⟩
   · intro consumer a b taken hab
     have hsim := lexEofStep_sim (alike_consumers consumer)
-      (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.failFast)
+      (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+      (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
+      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
       (recovery_alike consumer) (recover_alike consumer) (Internal.core a) (Internal.handler a)
           (Internal.handler b) taken
     obtain ⟨⟨hr, hc⟩, ht⟩ := hsim

@@ -142,7 +142,7 @@ theorem lexNumeralOrDecimal_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
   refine Core.SimR.of_srl fun l ls => ?_
   refine Core.getCore_bind_P fun s t hs => ?_
   simp only [throw_bind]
-  refine SimR.ite (by simp only [hs.1.1.tokenContent])
+  refine SimR.ite (by content_agree hs.1.1.tokenContent)
       (fun _ => Core.errorAt_sim l ls _ _ _) fun _ => ?_
   refine SimR.seq (Core.extendContent_sim l ls _ _ _ _) ?_
   split

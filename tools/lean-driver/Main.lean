@@ -27,7 +27,6 @@ import Parse
 
 open BSmtLib
 open BSmtLib.Token
-open BSmtLib.Lexer (Recovery)
 open BSmtLib.Lexer.Error (LexError LexicalErrorKind)
 
 /-- The response line of a token of the cursor, under the version. -/
@@ -366,7 +365,7 @@ the input continues; after an error on the end of the input that continues, the 
 input is applied again.
 -/
 def driveRecovering (request : Request) (lines : IO.Ref String)
-    (lexer : Lexer (Scripted whitespace) .recovering) : ExceptT String IO Unit := do
+    (lexer : Lexer (Scripted whitespace) Lexer.Recovering) : ExceptT String IO Unit := do
   let mut lexer := lexer
   for feed in request.feeds do
     match feed with
@@ -413,7 +412,7 @@ the library's lexer on a lexer type of its own. -/
 namespace V
 
 /-- The naive lexer. -/
-abbrev NaiveLexer (H : Type) {R E : Type} [Consume H R E] (recovery : Recovery := .failFast) :=
+abbrev NaiveLexer (H : Type) {R E : Type} [Consume H R E] (recovery : Type := Lexer.FailFast) :=
   Lexer.Internal.VNaive.Lexer H recovery
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
@@ -449,7 +448,7 @@ the input continues; after an error on the end of the input that continues, the 
 input is applied again.
 -/
 def driveRecovering (request : Request) (lines : IO.Ref String)
-    (lexer : NaiveLexer (Scripted whitespace) .recovering) : ExceptT String IO Unit := do
+    (lexer : NaiveLexer (Scripted whitespace) Lexer.Recovering) : ExceptT String IO Unit := do
   let mut lexer := lexer
   for feed in request.feeds do
     match feed with
@@ -630,16 +629,16 @@ def answer (ops : (whitespace : Bool) → Ops whitespace) (request : Request) :
 /-- The Rust lexer ported to Lean, `BSmtLib.Lexer.Internal.WRustPort`. -/
 def w (whitespace : Bool) : Ops whitespace :=
   { Lexer := Lexer.Internal.WRustPort.Lexer (Scripted whitespace)
-    Recovering := Lexer.Internal.WRustPort.Lexer (Scripted whitespace) .recovering
+    Recovering := Lexer.Internal.WRustPort.Lexer (Scripted whitespace) Lexer.Recovering
     AfterEof := Lexer.Internal.WRustPort.Lexer.AfterEof (Scripted whitespace)
     new := Lexer.Internal.WRustPort.Lexer.new
     newRecovering := Lexer.Internal.WRustPort.Lexer.newRecovering
-    lexSlice := Lexer.Internal.WRustPort.Lexer.lexSlice
-    lexEof := Lexer.Internal.WRustPort.Lexer.lexEof
+    lexSlice := fun lexer slice => Lexer.Internal.WRustPort.Lexer.lexSlice lexer slice
+    lexEof := fun lexer => Lexer.Internal.WRustPort.Lexer.lexEof lexer
     currentLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
     version := Lexer.Internal.WRustPort.Lexer.version
-    recoveringLexSlice := Lexer.Internal.WRustPort.Lexer.lexSlice
-    recoveringLexEof := Lexer.Internal.WRustPort.Lexer.lexEof
+    recoveringLexSlice := fun lexer slice => Lexer.Internal.WRustPort.Lexer.lexSlice lexer slice
+    recoveringLexEof := fun lexer => Lexer.Internal.WRustPort.Lexer.lexEof lexer
     afterEof := fun
       | .lexer lexer => .inl lexer
       | .pending pending => .inr pending.lexEof
@@ -650,16 +649,17 @@ def w (whitespace : Bool) : Ops whitespace :=
 the Rust port's type and lexes by functions of its own. -/
 def x1 (whitespace : Bool) : Ops whitespace :=
   { Lexer := Lexer.Internal.WRustPort.Lexer (Scripted whitespace)
-    Recovering := Lexer.Internal.WRustPort.Lexer (Scripted whitespace) .recovering
+    Recovering := Lexer.Internal.WRustPort.Lexer (Scripted whitespace) Lexer.Recovering
     AfterEof := Lexer.Internal.WRustPort.Lexer.AfterEof (Scripted whitespace)
     new := Lexer.Internal.WRustPort.Lexer.new
     newRecovering := Lexer.Internal.WRustPort.Lexer.newRecovering
-    lexSlice := Lexer.Internal.X1BatchInCore.Lexer.lexSlice
-    lexEof := Lexer.Internal.X1BatchInCore.Lexer.lexEof
+    lexSlice := fun lexer slice => Lexer.Internal.X1BatchInCore.Lexer.lexSlice lexer slice
+    lexEof := fun lexer => Lexer.Internal.X1BatchInCore.Lexer.lexEof lexer
     currentLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
     version := Lexer.Internal.WRustPort.Lexer.version
-    recoveringLexSlice := Lexer.Internal.X1BatchInCore.Lexer.lexSlice
-    recoveringLexEof := Lexer.Internal.X1BatchInCore.Lexer.lexEof
+    recoveringLexSlice := fun lexer slice =>
+      Lexer.Internal.X1BatchInCore.Lexer.lexSlice lexer slice
+    recoveringLexEof := fun lexer => Lexer.Internal.X1BatchInCore.Lexer.lexEof lexer
     afterEof := fun
       | .lexer lexer => .inl lexer
       | .pending pending => .inr (Lexer.Internal.X1BatchInCore.Lexer.PendingEof.lexEof pending)

@@ -22,7 +22,7 @@ fails the build.
 declared where `SyntaxToken` is, which `Token.lean` cannot import. -/
 
 /--
-info: 6176 declarations in 356 modules; 87 add to a sibling's type:
+info: 6337 declarations in 359 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -135,7 +135,7 @@ BSmtLibSpec.Reader:
 `BSmtLib.Reexports` is what `BSmtLib.Facts.Reexports.render` makes now, and every second name
 resolves. -/
 
-/-- info: 51 items re-exported, with 399 members -/
+/-- info: 53 items re-exported, with 396 members -/
 #guard_msgs in
 #reexports
 

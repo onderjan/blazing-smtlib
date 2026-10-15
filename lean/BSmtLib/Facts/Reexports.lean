@@ -67,10 +67,11 @@ def uses : List Use := [
     items := [("error::SmtLexError", `BSmtLib.Lexer.Error.LexError),
       ("error::SmtLexErrorCause", `BSmtLib.Lexer.Error.LexErrorCause),
       ("error::SmtLexicalErrorKind", `BSmtLib.Lexer.Error.LexicalErrorKind)] },
-  { rust := "`pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering}` in `lexer.rs`; \
-      `SmtFailFast` and `SmtRecovering` are the constructors of `BSmtLib.Lexer.Recovery`",
+  { rust := "`pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering}` in `lexer.rs`",
     target := `BSmtLib.Lexer,
-    items := [("recovery::SmtLexRecovery", `BSmtLib.Lexer.Recovery.LexRecovery)] },
+    items := [("recovery::SmtFailFast", `BSmtLib.Lexer.Recovery.FailFast),
+      ("recovery::SmtLexRecovery", `BSmtLib.Lexer.Recovery.LexRecovery),
+      ("recovery::SmtRecovering", `BSmtLib.Lexer.Recovery.Recovering)] },
   { rust := "`pub use {…}` in `parser/category.rs`, for the parsers that have a counterpart",
     target := `BSmtLib.Parser.Category,
     items := [("s_expr::SmtSExprParser", `BSmtLib.Parser.Category.SExpr.SExprParser),
@@ -106,7 +107,10 @@ def sources : List Name :=
 def generated : Name := `BSmtLib.Reexports
 
 /-- Its path, relative to the package's directory. -/
-def path : System.FilePath := "BSmtLib" / "Reexports.lean"
+-- a literal, not computed: the executable `reexports` runs this module's code but does not run
+-- its initializer, which a module imported with `meta` alone has only at compile time, so a
+-- constant here that is computed when the module is initialized is never set in the executable
+def path : System.FilePath := "BSmtLib/Reexports.lean"
 
 /-- The command that writes it, run in the package's directory. -/
 def command : String := "lake exe reexports"

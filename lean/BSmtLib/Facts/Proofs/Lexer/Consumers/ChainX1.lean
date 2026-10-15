@@ -2,6 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
+public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 import all BSmtLib.Token
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
@@ -30,13 +31,30 @@ namespace BSmtLib.Facts.Proofs.Lexer.Consumers.ChainX1
 
 variable {g g' : Token.BatchTag}
 
+theorem toContent_congr {s s' : ByteSlice} (h : s.toByteArray = s'.toByteArray) :
+    toContent s = toContent s' := by
+  unfold toContent
+  rw [h]
+
+/-- The kind of reserved word a token is reads only the bytes of its content. -/
+theorem reservedKind_congr (category : Token.TokenCategory) {s s' : ByteSlice}
+    (h : s.toByteArray = s'.toByteArray) (version : Token.Version) :
+    toReservedKind (Token.SyntaxToken.fromParts category s version) =
+      toReservedKind (Token.SyntaxToken.fromParts category s' version) := by
+  have hr : Token.Reserved.fromBytes? s version = Token.Reserved.fromBytes? s' version := by
+    rw [← VNaiveWRustPort.Bytes.fromBytes_toByteArray s,
+      ← VNaiveWRustPort.Bytes.fromBytes_toByteArray s', h]
+  cases category <;> simp only [Token.SyntaxToken.fromParts, hr, toReservedKind] <;>
+    cases Token.Reserved.fromBytes? s' version <;> rfl
+
 /-- A token below the length of the batches is recorded alike. -/
 theorem toHanded_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
     {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : toHanded c t = toHanded d t'
     := by
-  unfold toHanded Token.BatchCursor.«syntax» Token.SyntaxToken.fromToken Token.SyntaxToken.fromParts
-  rw [h.category et ht, h.span et ht, h.content et ht, h.version]
+  unfold toHanded Token.BatchCursor.«syntax» Token.SyntaxToken.fromToken
+  rw [h.category et ht, h.span et ht, h.version, reservedKind_congr _ (h.content et ht),
+    toContent_congr (h.content et ht)]
 
 /-- A piece of layout below the length of the batches is recorded alike. -/
 theorem toLayout_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
@@ -44,7 +62,7 @@ theorem toLayout_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : Cu
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : toLayout c t = toLayout d t'
     := by
   unfold toLayout
-  rw [h.category et ht, h.span et ht, h.content et ht]
+  rw [h.category et ht, h.span et ht, toContent_congr (h.content et ht)]
 
 /-- An entry below the length of the batches is taken alike. -/
 theorem entry_eq (consumer : BSmtLibSpec.Lexer.Consumer) {c : Token.BatchCursor g}
@@ -188,10 +206,10 @@ theorem slice_alike (consumer : BSmtLibSpec.Lexer.Consumer) (slice : ByteSlice) 
       (fun b => X1BatchInCore.lexOps.lexSliceStep b slice) := by
   intro a b taken h
   have hc := run_lexSliceStep_sim (H := Answering consumer) (m := AnswerM)
-    (R := consumer.Result) (E := Option consumer.Error) (recovery := .failFast)
+    (R := consumer.Result) (E := Option consumer.Error) (recovery := Lexer.Recovery.FailFast)
     (opsSim_rust_x1BatchInCore (answering_consumesAlike consumer))
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) slice a b h
+    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice a b h
   obtain ⟨hr, ht⟩ := mcouple_answerM hc taken
   exact ⟨hr.1, hr.2, ht⟩
 
@@ -200,10 +218,10 @@ theorem eof_alike (consumer : BSmtLibSpec.Lexer.Consumer) :
       WRustPort.lexOps.lexEofStep X1BatchInCore.lexOps.lexEofStep := by
   intro a b taken h
   have hc := run_lexEofStep_sim (H := Answering consumer) (m := AnswerM)
-    (R := consumer.Result) (E := Option consumer.Error) (recovery := .failFast)
+    (R := consumer.Result) (E := Option consumer.Error) (recovery := Lexer.Recovery.FailFast)
     (opsSim_rust_x1BatchInCore (answering_consumesAlike consumer))
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) a b h
+    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) a b h
   obtain ⟨hr, ht⟩ := mcouple_answerM hc taken
   exact ⟨hr.1, hr.2, ht⟩
 

@@ -43,7 +43,8 @@ open BSmtLib.Lexer.Error
 abbrev _root_.BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Core :=
     Lexer.Internal.WRustPort.LexerCore
 
-/-- The two lexer states have the same fields but for the version and the batch. -/
+/-- The two lexer states have the same fields but for the version and the batch, and the same
+content in their content buffers. -/
 structure SameBut (w x : Core) : Prop where
   initialVersion : w.initialVersion = x.initialVersion
   state : w.state = x.state
@@ -54,7 +55,7 @@ structure SameBut (w x : Core) : Prop where
   lexedDepth : w.lexedDepth = x.lexedDepth
   recoveryState : w.recoveryState = x.recoveryState
   tokenStart : w.tokenStart = x.tokenStart
-  tokenContent : w.tokenContent = x.tokenContent
+  tokenContent : ContentAgree w.tokenContent x.tokenContent
   offset : w.offset = x.offset
   base : w.base = x.base
   line : w.line = x.line
@@ -312,12 +313,13 @@ theorem setTokenState_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBat
   modifyBound_sim _ _ fun _ _ h => ⟨⟨{ h.1.1 with state := rfl, tokenStart := rfl }, h.1.2⟩, h.2⟩
 
 theorem modifyContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
-    (f : Lexer.Helpers.ContentBuffer → Lexer.Helpers.ContentBuffer) :
+    (f : Lexer.Helpers.ContentBuffer → Lexer.Helpers.ContentBuffer)
+    (hf : ∀ a b, ContentAgree a b → ContentAgree (f a) (f b)) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx) (fun _ _ => SRLx l ls Bx) (Lexer.Internal.WRustPort.modifyContent f)
       (Lexer.Internal.WRustPort.modifyContent f) :=
   modifyCore_sim _ _ fun _ _ h =>
-    ⟨⟨{ h.1.1 with tokenContent := congrArg f h.1.1.tokenContent }, h.1.2⟩, h.2⟩
+    ⟨⟨{ h.1.1 with tokenContent := hf _ _ h.1.1.tokenContent }, h.1.2⟩, h.2⟩
 
 theorem extendContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop)
     (input : ByteSlice)
@@ -326,13 +328,13 @@ theorem extendContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBat
       (SRLx l ls Bx) (fun _ _ => SRLx l ls Bx) (Lexer.Internal.WRustPort.extendContent input start
           stop)
       (Lexer.Internal.WRustPort.extendContent input start stop) :=
-  modifyContent_sim l ls Bx _
+  modifyContent_sim l ls Bx _ fun _ _ h => by first | exact h.extendFrom _ _ _ | exact h.push _
 
 theorem pushContent_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop) (c : UInt8) :
     ESim (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) Er
       (SRLx l ls Bx) (fun _ _ => SRLx l ls Bx) (Lexer.Internal.WRustPort.pushContent c)
       (Lexer.Internal.WRustPort.pushContent c) :=
-  modifyContent_sim l ls Bx _
+  modifyContent_sim l ls Bx _ fun _ _ h => by first | exact h.extendFrom _ _ _ | exact h.push _
 
 /-- The start of a token, which empties the content buffer. -/
 theorem startToken_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch → Prop) (offset : Nat)
@@ -352,7 +354,7 @@ theorem startToken_sim (l ls : Nat) (Bx : Token.TokenBatch → Token.TokenBatch 
   refine SimR.seq (P' := fun s t => SRLx l ls Bx s t ∧ s.val.tokenContent.len = 0)
     (modifyCore_sim _ _ fun s t h => ?_) ?_
   · obtain ⟨⟨h, hl', hls'⟩, hz'⟩ := h
-    exact ⟨⟨⟨{ h with tokenContent := by rw [h.tokenContent] }, hl', hls'⟩, hz'⟩, rfl⟩
+    exact ⟨⟨⟨{ h with tokenContent := ContentAgree.clear _ _ }, hl', hls'⟩, hz'⟩, rfl⟩
   exact SimR.pure fun s t h => ⟨by simp only [hst.line, hst.lineStart], h⟩
 
 /-- `startToken_sim` without the content buffer. -/

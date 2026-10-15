@@ -5,6 +5,8 @@ public import BSmtLib.Facts.PublicApi.Adapters.Chain
 public import BSmtLib.Facts.PublicApi.Adapters.Builder
 public import BSmtLib.Facts.PublicApi.Adapters.Constructs
 public import BSmtLib.Facts.Proofs.PublicApi.Reprinting
+public import BSmtLib.Facts.Proofs.PublicApi.Lexing
+public import BSmtLib.Facts.Proofs.PublicApi.Resets
 
 @[expose] public section
 
@@ -140,11 +142,11 @@ theorem lexing_composes (version : Version) (first rest : ByteList) (result : Op
     (hclose : entries.dropLast.getLast?.map (·.1) = some .parenClose) :
     (collect version [first ++ rest]).2 =
         entries.dropLast ++ shift first.length (collect version [rest]).2 ∧
-      (collect version [first ++ rest]).1.toBool = (collect version [rest]).1.toBool := by
-  sorry
+      (collect version [first ++ rest]).1.toBool = (collect version [rest]).1.toBool :=
+  Proofs.PublicApi.Lexing.composes version first rest result entries h hclose
 
 /--
-info: 'BSmtLib.Facts.PublicApi.lexing_composes' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.PublicApi.lexing_composes' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms lexing_composes
@@ -158,11 +160,11 @@ theorem lexing_resets (version : Version) (first : List ByteList) (log : List En
     (h : (collectWith (Lexer.new Collector.mk version) first).run [] = (.ok (result, lexer), log))
     (next : List ByteList) :
     (resultOf <$> collectWith lexer next).run [] =
-      (resultOf <$> collectWith (Lexer.new Collector.mk version) next).run [] := by
-  sorry
+      (resultOf <$> collectWith (Lexer.new Collector.mk version) next).run [] :=
+  Proofs.PublicApi.Resets.resets version first log result lexer h next
 
 /--
-info: 'BSmtLib.Facts.PublicApi.lexing_resets' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.PublicApi.lexing_resets' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms lexing_resets

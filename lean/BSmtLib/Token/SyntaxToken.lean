@@ -31,7 +31,7 @@ inductive _root_.BSmtLib.Token.SyntaxToken where
   | whitespace (value : WhitespaceView)
   | comment (value : CommentView)
   | endOfFile
-  deriving BEq, Repr
+  deriving Repr
 
 /- LEAN: Rust's `from_token(token, version)` reads the token's category and content, which a
 Lean token keeps in its batch; this takes them read already, so that a cursor and a lookahead

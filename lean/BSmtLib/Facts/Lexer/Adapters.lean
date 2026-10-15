@@ -343,19 +343,23 @@ def lexing (ops : LexOps) : BSmtLibSpec.Lexer.Lexing := fun consumer version ear
 /-- The naive lexer `Lexer.VNaive`. -/
 def VNaive.lexOps : LexOps where
   Lexer consumer := Lexer.Internal.VNaive.Lexer (Answering consumer)
-  AfterError consumer := Lexer.Internal.VNaive.Lexer.AfterError (Answering consumer) .failFast
-  AfterEofError consumer := Lexer.Internal.VNaive.Lexer.AfterEofError (Answering consumer) .failFast
+  AfterError consumer := Lexer.Internal.VNaive.Lexer.AfterError
+      (Answering consumer) Lexer.Recovery.FailFast
+  AfterEofError consumer := Lexer.Internal.VNaive.Lexer.AfterEofError
+      (Answering consumer) Lexer.Recovery.FailFast
   new _ := Lexer.Internal.VNaive.Lexer.new
   lexSlice := Lexer.Internal.VNaive.Lexer.lexSlice
   lexEof := Lexer.Internal.VNaive.Lexer.lexEof
   lexSliceStep lexer slice :=
-    lexer.run (Lexer.Internal.VNaive.lexSliceStep (Lexer.Recovery.failFast == .recovering)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) slice)
+    lexer.run (Lexer.Internal.VNaive.lexSliceStep
+      (Lexer.Recovery.Recovers.recovers Lexer.Recovery.FailFast)
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
-    lexer.run (Lexer.Internal.VNaive.lexEofStep (Lexer.Recovery.failFast == .recovering)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast))
+    lexer.run (Lexer.Internal.VNaive.lexEofStep
+      (Lexer.Recovery.Recovers.recovers Lexer.Recovery.FailFast)
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
   held lexer := lexer.held
   withHeld lexer held := { lexer with held }
   version := Lexer.Internal.VNaive.Lexer.version
@@ -364,20 +368,21 @@ def VNaive.lexOps : LexOps where
 /-- The Rust lexer ported to Lean `Lexer.WRustPort`. -/
 def WRustPort.lexOps : LexOps where
   Lexer consumer := Lexer.Internal.WRustPort.Lexer (Answering consumer)
-  AfterError consumer := Lexer.Internal.WRustPort.Lexer.AfterError (Answering consumer) .failFast
+  AfterError consumer := Lexer.Internal.WRustPort.Lexer.AfterError
+      (Answering consumer) Lexer.Recovery.FailFast
   AfterEofError consumer := Lexer.Internal.WRustPort.Lexer.AfterEofError
-      (Answering consumer) .failFast
+      (Answering consumer) Lexer.Recovery.FailFast
   new _ := Lexer.Internal.WRustPort.Lexer.new
   lexSlice := Lexer.Internal.WRustPort.Lexer.lexSlice
   lexEof := Lexer.Internal.WRustPort.Lexer.lexEof
   lexSliceStep lexer slice :=
     lexer.run (Lexer.Internal.WRustPort.lexSliceStep (ops := Lexer.Internal.WRustPort.Rust.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) slice)
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
     lexer.run (Lexer.Internal.WRustPort.lexEofStep (ops := Lexer.Internal.WRustPort.Rust.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast))
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
   held lexer := lexer.held
   withHeld lexer held := { lexer with held }
   version := Lexer.Internal.WRustPort.Lexer.version
@@ -387,20 +392,21 @@ def WRustPort.lexOps : LexOps where
 Rust lexer ported to Lean and lexes by functions of its own. -/
 def X1BatchInCore.lexOps : LexOps where
   Lexer consumer := Lexer.Internal.WRustPort.Lexer (Answering consumer)
-  AfterError consumer := Lexer.Internal.WRustPort.Lexer.AfterError (Answering consumer) .failFast
+  AfterError consumer := Lexer.Internal.WRustPort.Lexer.AfterError
+      (Answering consumer) Lexer.Recovery.FailFast
   AfterEofError consumer := Lexer.Internal.WRustPort.Lexer.AfterEofError
-      (Answering consumer) .failFast
+      (Answering consumer) Lexer.Recovery.FailFast
   new _ := Lexer.Internal.WRustPort.Lexer.new
   lexSlice := Lexer.Internal.X1BatchInCore.Lexer.lexSlice
   lexEof := Lexer.Internal.X1BatchInCore.Lexer.lexEof
   lexSliceStep lexer slice :=
     lexer.run (Lexer.Internal.WRustPort.lexSliceStep (ops := Lexer.Internal.X1BatchInCore.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) slice)
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
     lexer.run (Lexer.Internal.WRustPort.lexEofStep (ops := Lexer.Internal.X1BatchInCore.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast))
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
   held lexer := lexer.held
   withHeld lexer held := { lexer with held }
   version := Lexer.Internal.WRustPort.Lexer.version
@@ -409,19 +415,21 @@ def X1BatchInCore.lexOps : LexOps where
 /-- The library's lexer `BSmtLib.Lexer`. -/
 def Lexer.lexOps : LexOps where
   Lexer consumer := BSmtLib.Lexer (Answering consumer)
-  AfterError consumer := BSmtLib.Lexer.AfterError (Answering consumer) .failFast
-  AfterEofError consumer := BSmtLib.Lexer.AfterEofError (Answering consumer) .failFast
+  AfterError consumer := BSmtLib.Lexer.AfterError
+      (Answering consumer) Lexer.Recovery.FailFast
+  AfterEofError consumer := BSmtLib.Lexer.AfterEofError
+      (Answering consumer) Lexer.Recovery.FailFast
   new _ := BSmtLib.Lexer.new
   lexSlice := BSmtLib.Lexer.lexSlice
   lexEof := BSmtLib.Lexer.lexEof
   lexSliceStep lexer slice :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexSliceStep
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast) slice)
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexEofStep
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast))
+      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
   held := BSmtLib.Lexer.Internal.held
   withHeld := BSmtLib.Lexer.Internal.withHeld
   version := BSmtLib.Lexer.version

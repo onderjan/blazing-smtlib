@@ -112,11 +112,6 @@ theorem slot_eq (bytes : ByteArray) {start stop : Nat} (ordered : start ≤ stop
   simp only [slice_getElem bytes ordered within, hsize, Nat.add_zero]
   rfl
 
-/-- The version holds the word exactly when its rank is at least the word's. -/
-theorem le_iff_rank (since version : Version) :
-    (version ≥ since) ↔ versionRank since ≤ versionRank version := by
-  cases since <;> cases version <;> decide
-
 /-- A read of an entry at equal indices of an array. -/
 theorem array_getElem_congr {α : Type} (a : Array α) {i j : Nat} (hij : i = j) (hi : i < a.size)
     (hj : j < a.size) : a[i] = a[j] := by
@@ -155,10 +150,12 @@ theorem ofParts?_eq (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ 
       have hslice : (word.toByteSlice == bytes.toByteSlice start stop) = true :=
         hcmp.mpr ⟨sized, same⟩
       rw [heq, hslice, Bool.true_and, Bool.true_and]
+      -- `version ≥ since` is by definition the comparison of the ranks
       by_cases hv : version ≥ since
-      · rw [ite_eq_left (decide_eq_true ((le_iff_rank since version).mp hv)),
-          ite_eq_left (decide_eq_true hv)]
-      · rw [ite_eq_right (fun h => hv ((le_iff_rank since version).mpr (of_decide_eq_true h))),
+      · rw [ite_eq_left (decide_eq_true (show Version.Internal.rank since ≤
+            Version.Internal.rank version from hv)), ite_eq_left (decide_eq_true hv)]
+      · rw [ite_eq_right (fun (h : decide (Version.Internal.rank since ≤
+            Version.Internal.rank version) = true) => hv (of_decide_eq_true h)),
           ite_eq_right (fun h => hv (of_decide_eq_true h))]
     · have heq : bytesEqFrom word bytes start (stop - start) (by omega) (by omega) 0 = false := by
         cases h : bytesEqFrom word bytes start (stop - start) (by omega) (by omega) 0

@@ -26,6 +26,7 @@ namespace BSmtLib.Lexer.Internal.X1BatchInCore
 
 open BSmtLib.Lexer (BATCH_CAPACITY Interrupted)
 open WRustPort
+open BSmtLib.Lexer.Recovery (FailFast Recovering)
 
 section
 
@@ -313,7 +314,8 @@ Lexes the given slice, sending the lexed tokens to the consumer, as `WRustPort.L
 does.
 -/
 def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H
-    (Token.BatchCursor batch) m] [Recovery.LexRecovery recovery H m]
+    (Token.BatchCursor batch) m] [Recovery.Recovers recovery]
+    [Recovery.LexRecovery recovery H m]
     (self : WRustPort.Lexer H recovery) (slice : ByteSlice) :
     m (Except (LexError E × WRustPort.Lexer.AfterError H recovery)
       (WRustPort.Lexer H recovery)) := do
@@ -329,7 +331,7 @@ def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H
 Lexes end-of-file, sending the lexed tokens to the consumer, as `WRustPort.Lexer.lexEof` does.
 -/
 def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch)
-    m] [Recovery.LexRecovery recovery H m]
+    m] [Recovery.Recovers recovery] [Recovery.LexRecovery recovery H m]
     (self : WRustPort.Lexer H recovery) :
     m (Except (LexError E × WRustPort.Lexer.AfterEofError H recovery)
       (Option (Span.Located R) × WRustPort.Lexer H recovery)) := do
@@ -350,8 +352,8 @@ Lexes the end of the input again, which completes the recovery, as
 def PendingEof.lexEof [Monad m] [∀ batch, Token.ConsumeFrom H
     (Token.BatchCursor batch) m] [Token.Recover H m]
     (self : WRustPort.Lexer.PendingEof H) :
-    m (Except (LexError E × WRustPort.Lexer H .recovering)
-      (Option (Span.Located R) × WRustPort.Lexer H .recovering)) := do
+    m (Except (LexError E × WRustPort.Lexer H Recovering)
+      (Option (Span.Located R) × WRustPort.Lexer H Recovering)) := do
   let step := WRustPort.lexEofStep (ops := X1BatchInCore.ops) (Token.Recover.abandon (H := H))
     (Token.Recover.recover (H := H))
   let (result, lexer) ← self.lexer.run step
@@ -363,7 +365,7 @@ def PendingEof.lexEof [Monad m] [∀ batch, Token.ConsumeFrom H
 def lexAll [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
     (self : WRustPort.Lexer H)
     (input : ByteSlice) :
-    m (Except (LexError E × WRustPort.Lexer.AfterError H .failFast)
+    m (Except (LexError E × WRustPort.Lexer.AfterError H FailFast)
       (Option (Span.Located R) × WRustPort.Lexer H)) := do
   match ← lexSlice self input with
   | .ok self => lexEof self

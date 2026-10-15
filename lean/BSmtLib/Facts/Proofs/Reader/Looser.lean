@@ -273,53 +273,53 @@ theorem slice_looser (hl : Looser strict loose) (hI : KeepsI strict I) (slice : 
     (c : LexerCore) (w : Watch RecAdapter) (he : w.errored = false) (hv : c.version = w.version)
     (hg : Good strict I w)
     (hok : isError (((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-      (Recovery.LexRecovery.abandon Recovery.failFast)
-          (Recovery.LexRecovery.recover Recovery.failFast)
+      (Recovery.LexRecovery.abandon Recovery.FailFast)
+          (Recovery.LexRecovery.recover Recovery.FailFast)
       slice).run c).run w.inner).1.1 = false) :
     ∃ w' : Watch RecAdapter, w'.errored = false ∧
       (((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-          (Recovery.LexRecovery.abandon Recovery.failFast)
-        (Recovery.LexRecovery.recover Recovery.failFast) slice).run c).run w.inner).1.2.version =
+          (Recovery.LexRecovery.abandon Recovery.FailFast)
+        (Recovery.LexRecovery.recover Recovery.FailFast) slice).run c).run w.inner).1.2.version =
         w'.version ∧ Good strict I w' ∧
       w'.inner = (((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-        (Recovery.LexRecovery.abandon Recovery.failFast)
-            (Recovery.LexRecovery.recover Recovery.failFast)
+        (Recovery.LexRecovery.abandon Recovery.FailFast)
+            (Recovery.LexRecovery.recover Recovery.FailFast)
         slice).run c).run w.inner).2 ∧
       ((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-          (Recovery.LexRecovery.abandon Recovery.failFast)
-        (Recovery.LexRecovery.recover Recovery.failFast) slice).run c).run
+          (Recovery.LexRecovery.abandon Recovery.FailFast)
+        (Recovery.LexRecovery.recover Recovery.FailFast) slice).run c).run
             (adapterWith loose w.inner) =
         ((((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-            (Recovery.LexRecovery.abandon Recovery.failFast)
-          (Recovery.LexRecovery.recover Recovery.failFast) slice).run c).run w.inner).1,
+            (Recovery.LexRecovery.abandon Recovery.FailFast)
+          (Recovery.LexRecovery.recover Recovery.FailFast) slice).run c).run w.inner).1,
           adapterWith loose w'.inner) := by
   have hA := Param.Calls.lexSliceStep_sim (inner_consumers (C := RecAdapter))
-    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.failFast)
+    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.FailFast)
     (fun _ => (innerLink RecAdapter).rc.pure rfl) (fun _ => (innerLink RecAdapter).rc.pure rfl)
     slice c w ()
   have hB := (Param.Calls.lexSliceStep_sim (looser_consumers hl hI)
-    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.failFast)
+    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.FailFast)
     (fun _ => (looserLink strict loose I).rc.pure rfl)
     (fun _ => (looserLink strict loose I).rc.pure rfl) slice c).2.2 w ()
   have hU := Param.UnaryCalls.lexSliceStep_flag slice c w () he hv
   unfold Param.UnaryCalls.irun at hU
   generalize ((StateT.run (Internal.lexSliceStep (H := Watch RecAdapter) (m := WM)
-    (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast) slice) c).run
+    (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast) slice) c).run
       w).run () = rW at hA hB hU
   generalize (StateT.run (Internal.lexSliceStep (H := RecAdapter) (m := Id)
-    (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast) slice) c).run
+    (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast) slice) c).run
       w.inner = rP at hA hok ⊢
   generalize (StateT.run (Internal.lexSliceStep (H := RecAdapter) (m := Id)
-    (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast) slice) c).run
+    (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast) slice) c).run
       (adapterWith loose w.inner) = rL at hB ⊢
   obtain ⟨⟨⟨resW, cW⟩, w'⟩, u'⟩ := rW
   obtain ⟨⟨resP, cP⟩, p'⟩ := rP
@@ -350,45 +350,45 @@ theorem eof_looser (hl : Looser strict loose) (hI : KeepsI strict I)
     (c : LexerCore) (w : Watch RecAdapter) (he : w.errored = false) (hv : c.version = w.version)
     (hg : Good strict I w)
     (hok : isError (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.failFast)
-      (Recovery.LexRecovery.recover Recovery.failFast)).run c).run w.inner).1.1 = false) :
+      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+      (Recovery.LexRecovery.recover Recovery.FailFast)).run c).run w.inner).1.1 = false) :
     ∃ w' : Watch RecAdapter, w'.errored = false ∧ Good strict I w' ∧
       w'.inner = (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-        (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.failFast)
-        (Recovery.LexRecovery.recover Recovery.failFast)).run c).run w.inner).2 ∧
+        (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+        (Recovery.LexRecovery.recover Recovery.FailFast)).run c).run w.inner).2 ∧
       ((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit) (E := ParseErrorCause Unit)
-        (Recovery.LexRecovery.abandon Recovery.failFast)
-            (Recovery.LexRecovery.recover Recovery.failFast)).run
+        (Recovery.LexRecovery.abandon Recovery.FailFast)
+            (Recovery.LexRecovery.recover Recovery.FailFast)).run
           c).run (adapterWith loose w.inner) =
         ((((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit) (E := ParseErrorCause Unit)
-          (Recovery.LexRecovery.abandon Recovery.failFast)
-              (Recovery.LexRecovery.recover Recovery.failFast)).run
+          (Recovery.LexRecovery.abandon Recovery.FailFast)
+              (Recovery.LexRecovery.recover Recovery.FailFast)).run
             c).run w.inner).1, adapterWith loose w'.inner) := by
   have hA := Param.Calls.lexEofStep_sim (inner_consumers (C := RecAdapter))
-    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.failFast)
+    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.FailFast)
     (fun _ => (innerLink RecAdapter).rc.pure rfl) (fun _ => (innerLink RecAdapter).rc.pure rfl)
     c w ()
   have hB := (Param.Calls.lexEofStep_sim (looser_consumers hl hI)
-    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.failFast)
-    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.failFast)
-    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.failFast)
+    (Recovery.LexRecovery.abandon (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := Watch RecAdapter) (m := WM) Recovery.FailFast)
+    (Recovery.LexRecovery.abandon (H := RecAdapter) (m := Id) Recovery.FailFast)
+    (Recovery.LexRecovery.recover (H := RecAdapter) (m := Id) Recovery.FailFast)
     (fun _ => (looserLink strict loose I).rc.pure rfl)
     (fun _ => (looserLink strict loose I).rc.pure rfl) c).2.2 w ()
   have hU := Param.UnaryCalls.lexEofStep_flag c w () he hv
   unfold Param.UnaryCalls.irun at hU
   generalize ((StateT.run (Internal.lexEofStep (H := Watch RecAdapter) (m := WM) (R := Unit)
-    (E := Option (ParseErrorCause Unit)) (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast)) c).run w).run () = rW at hA hB hU
+    (E := Option (ParseErrorCause Unit)) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast)) c).run w).run () = rW at hA hB hU
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast)) c).run w.inner = rP at hA hok ⊢
+    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast)) c).run w.inner = rP at hA hok ⊢
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast)) c).run
+    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast)) c).run
     (adapterWith loose w.inner) = rL at hB ⊢
   obtain ⟨⟨⟨resW, cW⟩, w'⟩, u'⟩ := rW
   obtain ⟨⟨resP, cP⟩, p'⟩ := rP
@@ -449,13 +449,13 @@ theorem lexSlice_looser (hl : Looser strict loose) (hI : KeepsI strict I) (slice
     Param.Flagged.held_ofParts, handler_ofParts] at h ⊢
   rw [hpw] at h ⊢
   have hok : isError (((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-      (Recovery.LexRecovery.abandon Recovery.failFast)
-          (Recovery.LexRecovery.recover Recovery.failFast)
+      (Recovery.LexRecovery.abandon Recovery.FailFast)
+          (Recovery.LexRecovery.recover Recovery.FailFast)
       slice).run (Internal.core p)).run w.inner).1.1 = false := by
     revert h
     generalize (((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-      (Recovery.LexRecovery.abandon Recovery.failFast)
-          (Recovery.LexRecovery.recover Recovery.failFast)
+      (Recovery.LexRecovery.abandon Recovery.FailFast)
+          (Recovery.LexRecovery.recover Recovery.FailFast)
       slice).run (Internal.core p)).run w.inner).1.1 = r
     rcases r with e | held
     · intro h; cases h
@@ -465,8 +465,8 @@ theorem lexSlice_looser (hl : Looser strict loose) (hI : KeepsI strict I) (slice
   rw [hloose]
   revert h hv' hinner
   generalize ((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-    (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast)
+    (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast)
     slice).run (Internal.core p)).run w.inner = r
   obtain ⟨⟨res, c'⟩, a'⟩ := r
   intro h hv' hinner
@@ -490,13 +490,13 @@ theorem lexEof_looser (hl : Looser strict loose) (hI : KeepsI strict I)
     Param.Flagged.held_ofParts, handler_ofParts] at h ⊢
   rw [hpw] at h ⊢
   have hok : isError (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.failFast)
-      (Recovery.LexRecovery.recover Recovery.failFast)).run
+      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+      (Recovery.LexRecovery.recover Recovery.FailFast)).run
           (Internal.core p)).run w.inner).1.1 = false := by
     revert h
     generalize (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.failFast)
-      (Recovery.LexRecovery.recover Recovery.failFast)).run (Internal.core p)).run w.inner).1.1 = r
+      (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+      (Recovery.LexRecovery.recover Recovery.FailFast)).run (Internal.core p)).run w.inner).1.1 = r
     rcases r with e | flow
     · intro h; cases h
     · intro _; rfl
@@ -504,8 +504,8 @@ theorem lexEof_looser (hl : Looser strict loose) (hI : KeepsI strict I)
   rw [hloose]
   revert h hinner
   generalize ((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.failFast)
-    (Recovery.LexRecovery.recover Recovery.failFast)).run (Internal.core p)).run w.inner = r
+    (E := ParseErrorCause Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
+    (Recovery.LexRecovery.recover Recovery.FailFast)).run (Internal.core p)).run w.inner = r
   obtain ⟨⟨res, c'⟩, a'⟩ := r
   intro h hinner
   dsimp only at h hinner ⊢

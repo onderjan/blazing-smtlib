@@ -40,7 +40,8 @@ theorem coreRel_resumeAt {w x : Core} (h : Core.CoreRel w x) (location : Span.Lo
     (position : Nat) : Core.CoreRel (w.resumeAt location position) (x.resumeAt location position) :=
   { h with
     offset := rfl, base := rfl, line := rfl, lineStart := rfl, state := rfl
-    tokenContent := by simp only [Lexer.Internal.WRustPort.LexerCore.resumeAt, h.tokenContent]
+    tokenContent := by
+      simp only [Lexer.Internal.WRustPort.LexerCore.resumeAt]; exact ContentAgree.clear _ _
     tokenStart := rfl, batch := agree_clear _ _ _ _, capacity := Core.zero_lt_capacity }
 
 section

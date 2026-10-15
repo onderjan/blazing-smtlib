@@ -265,15 +265,16 @@ def vSession (core : Core) (held : Option (Span.Located consumer.Result)) (bytes
           | none => .running) core'
 
 
-theorem recovers_failFast : (Lexer.Recovery.failFast == Lexer.Recovery.recovering) = false := (rfl)
+theorem recovers_failFast :
+    Lexer.Recovery.Recovers.recovers Lexer.Recovery.FailFast = false := (rfl)
 
 theorem abandon_failFast :
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.failFast : Span.Location → StateT
+    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast : Span.Location → StateT
     (Answering consumer) AnswerM Unit) =
       fun _ => pure () := rfl
 
 theorem recover_failFast :
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.failFast : Span.Location → StateT
+    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast : Span.Location → StateT
     (Answering consumer) AnswerM Unit) =
       fun _ => pure () := rfl
 
