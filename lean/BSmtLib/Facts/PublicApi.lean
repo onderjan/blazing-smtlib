@@ -7,6 +7,10 @@ public import BSmtLib.Facts.PublicApi.Adapters.Constructs
 public import BSmtLib.Facts.Proofs.PublicApi.Reprinting
 public import BSmtLib.Facts.Proofs.PublicApi.Lexing
 public import BSmtLib.Facts.Proofs.PublicApi.Resets
+public import BSmtLib.Facts.Proofs.PublicApi.Slicing
+public import BSmtLib.Facts.Proofs.PublicApi.Lossless
+public import BSmtLib.Facts.Proofs.PublicApi.Agree
+public import BSmtLib.Facts.Proofs.PublicApi.ReaderResets
 
 @[expose] public section
 
@@ -87,11 +91,11 @@ cover the input from its start up to at most where the error is.
 theorem lexing_lossless (version : Version) (slices : List ByteList) :
     match collect version slices with
     | (.ok _, entries) => Tiles entries 0 slices.flatten.length
-    | (.error error, entries) => ∃ stop, Tiles entries 0 stop ∧ stop ≤ error.span.start.offset := by
-  sorry
+    | (.error error, entries) => ∃ stop, Tiles entries 0 stop ∧ stop ≤ error.span.start.offset :=
+  Proofs.PublicApi.Lossless.lossless version slices
 
 /--
-info: 'BSmtLib.Facts.PublicApi.lexing_lossless' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.PublicApi.lexing_lossless' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms lexing_lossless
@@ -103,11 +107,11 @@ The library's lexer, with a consumer that takes every token, hands over the same
 the same way however the input is cut into slices.
 -/
 theorem lexing_slicing (version : Version) (slices : List ByteList) :
-    collect version slices = collect version [slices.flatten] := by
-  sorry
+    collect version slices = collect version [slices.flatten] :=
+  Proofs.PublicApi.Slicing.slicing version slices
 
 /--
-info: 'BSmtLib.Facts.PublicApi.lexing_slicing' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.PublicApi.lexing_slicing' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms lexing_slicing
@@ -179,11 +183,12 @@ theorem reading_resets :
       ∀ version first next result before after,
         readThrough (r.reader version) first = .ok (result, before, after) →
           r.observe (readThrough after next) =
-            r.observe (readThrough (Reader.script after.handler allVersions version) next) := by
-  sorry
+            r.observe (readThrough (Reader.script after.handler allVersions version) next) :=
+  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
+    Proofs.PublicApi.ReaderResets.recorder_resets⟩
 
 /--
-info: 'BSmtLib.Facts.PublicApi.reading_resets' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.PublicApi.reading_resets' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms reading_resets
@@ -199,11 +204,11 @@ located is not compared.
 theorem lexers_agree (version : Version) (slices : List ByteList) :
     causeOnly (collectV version slices) = causeOnly (collect version slices) ∧
       causeOnly (collectW version slices) = causeOnly (collect version slices) ∧
-      causeOnly (collectX1 version slices) = causeOnly (collect version slices) := by
-  sorry
+      causeOnly (collectX1 version slices) = causeOnly (collect version slices) :=
+  Proofs.PublicApi.Agree.lexers_agree version slices
 
 /--
-info: 'BSmtLib.Facts.PublicApi.lexers_agree' depends on axioms: [propext, sorryAx, Classical.choice, Quot.sound]
+info: 'BSmtLib.Facts.PublicApi.lexers_agree' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in
 #print axioms lexers_agree

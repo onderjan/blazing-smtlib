@@ -39,7 +39,7 @@ variable {floor : Option Nat} {low : Nat}
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
 
-set_option maxHeartbeats 350000 in
+set_option maxHeartbeats 800000 in
 /-- `normalSpec_lt` at the hash that starts a hexadecimal or binary literal. -/
 theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
@@ -100,13 +100,14 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
       rename_i run hrun heqm
       obtain ⟨b, hb, hsel⟩ := Option.bind_eq_some_iff.mp hrun
       obtain ⟨hi1, hb'⟩ := get?_eq hb
-      obtain ⟨radix, hadv, h10', hflag, hstate, htyp, hnotr⟩ : ∃ radix : Radix,
+      obtain ⟨radix, hadv, h10', hflag, hstate, htyp, hnotr, hemptyE⟩ : ∃ radix : Radix,
           advance C.concrete ⟨.hash, location, .empty⟩ (location.afterByte 35) input[index + 1] =
             .pending ⟨.digits radix, location, .empty⟩ ∧ input[index + 1] ≠ 10 ∧
           (∀ c, CharClass.endsRun c run.flag = !radix.allows c) ∧
           (∀ (p : Pending) start content, p.mode = .digits radix → p.start = start →
             p.content = content → TokenAgrees v C.concrete run.state start content p) ∧
-          run.tokenType = radix.category ∧ run.emptyError ≠ .unexpectedTrailingToken := by
+          run.tokenType = radix.category ∧ run.emptyError ≠ .unexpectedTrailingToken ∧
+          run.emptyError = radix.emptyError := by
         rw [hb']
         by_cases hx : (b == 120) = true
         · simp only [hx, ↓reduceIte, Option.some.injEq] at hsel
@@ -114,7 +115,7 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
           have hx' : b = 120 := by simpa using hx
           subst hx'
           exact ⟨.hexadecimal, rfl, by decide, endsRun_hex,
-            fun _ _ _ hm hs hc => ⟨hs, hm, hc⟩, rfl, nofun⟩
+            fun _ _ _ hm hs hc => ⟨hs, hm, hc⟩, rfl, nofun, rfl⟩
         · simp only [hx, Bool.false_eq_true, ↓reduceIte] at hsel
           by_cases hy : (b == 98) = true
           · simp only [hy, ↓reduceIte, Option.some.injEq] at hsel
@@ -122,7 +123,7 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
             have hy' : b = 98 := by simpa using hy
             subst hy'
             exact ⟨.binary, rfl, by decide, endsRun_binary,
-              fun _ _ _ hm hs hc => ⟨hs, hm, hc⟩, rfl, nofun⟩
+              fun _ _ _ hm hs hc => ⟨hs, hm, hc⟩, rfl, nofun, rfl⟩
           · simp only [hy, Bool.false_eq_true, ↓reduceIte] at hsel
             cases hsel
       have hJ : Lexer.Internal.WRustPort.Slice.runEnd input (index + 1 + 1) run.flag =
@@ -192,7 +193,7 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
                 (index + 1 + 1) = 0 := by
               simpa [hsize] using hempty
             omega
-          obtain ⟨f, hf⟩ := advance_end_digits_empty (location := afterColumns location
+          have hf := advance_end_digits_empty (ws := C.concrete) (location := afterColumns location
             (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1 + 1) run.flag - index))
             (q := ⟨.digits radix, location, bytesOf input (index + 1 + 1)
               (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1 + 1) run.flag)⟩) rfl hstop'
@@ -203,6 +204,8 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
           refine stepFails_here (he := ⟨_, rfl, hnotr⟩) ?_ hheld
             ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
           rw [hB, feedFrom_advance_error v C.concrete input hJs hf]
+          rw [hemptyE]
+          failure_eq hloc
         · intro hne
           have hne' : (bytesOf input (index + 1 + 1)
               (Lexer.Internal.WRustPort.Slice.runEnd input (index + 1 + 1) run.flag)).isEmpty =
@@ -239,6 +242,7 @@ theorem normalSpec_hash (v : Token.Version) (input : ByteSlice) (offset base : N
               ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
             rw [hC]
             simp only [Bool.false_eq_true, ↓reduceIte]
+            failure_eq hloc
           · intro hdl
             have hd' : Lexer.Internal.VNaive.isDelimiter
                 input[Lexer.Internal.WRustPort.Slice.runEnd input (index + 1 + 1) run.flag] = true

@@ -38,6 +38,41 @@ def StepsAlikeF {β : Type}
         Rel ((step₁ a).run taken).1.2 ((step₂ b).run taken).1.2) ∧
       Weak ((step₁ a).run taken).1.2 ((step₂ b).run taken).1.2
 
+/-- Steps that give results alike as `g` says, the same tokens taken, lexers related again when
+they do not fail, and weakly related lexers. -/
+def StepsAlikeG {β γ : Type} (g : LexError (Option consumer.Error) → γ)
+    (step₁ : ops₁.Lexer consumer →
+      AnswerM (Except (LexError (Option consumer.Error)) β × ops₁.Lexer consumer))
+    (step₂ : ops₂.Lexer consumer →
+      AnswerM (Except (LexError (Option consumer.Error)) β × ops₂.Lexer consumer)) : Prop :=
+  ∀ a b (taken : List Handed), Rel a b →
+    ((step₁ a).run taken).1.1.mapError g = ((step₂ b).run taken).1.1.mapError g ∧
+      ((step₁ a).run taken).2 = ((step₂ b).run taken).2 ∧
+      (((step₁ a).run taken).1.1.isOk = true →
+        Rel ((step₁ a).run taken).1.2 ((step₂ b).run taken).1.2) ∧
+      Weak ((step₁ a).run taken).1.2 ((step₂ b).run taken).1.2
+
+theorem mapError_comp {ε γ δ β : Type} {g : ε → γ} (k : γ → δ) {x y : Except ε β}
+    (h : x.mapError g = y.mapError g) :
+    x.mapError (k ∘ g) = y.mapError (k ∘ g) := by
+  cases x <;> cases y <;> simp_all [Except.mapError]
+
+/-- Steps alike as a `g` that determines `failureOf` says are alike as `StepsAlikeF` says. -/
+theorem StepsAlikeG.toF {β γ : Type} {g : LexError (Option consumer.Error) → γ}
+    (k : γ → BSmtLibSpec.Lexer.Failure consumer.Error) (hk : ∀ e, k (g e) = failureOf e)
+    {step₁ : ops₁.Lexer consumer →
+      AnswerM (Except (LexError (Option consumer.Error)) β × ops₁.Lexer consumer)}
+    {step₂ : ops₂.Lexer consumer →
+      AnswerM (Except (LexError (Option consumer.Error)) β × ops₂.Lexer consumer)}
+    (h : StepsAlikeG ops₁ ops₂ Rel Weak g step₁ step₂) :
+    StepsAlikeF ops₁ ops₂ Rel Weak step₁ step₂ := by
+  intro a b taken hr
+  obtain ⟨e1, e2, e3, e4⟩ := h a b taken hr
+  have e1' := mapError_comp k e1
+  have hfun : k ∘ g = failureOf := funext hk
+  rw [hfun] at e1'
+  exact ⟨e1', e2, e3, e4⟩
+
 theorem mapError_ok {ε ε' β : Type} {f : ε → ε'} {x y : Except ε β}
     (h : x.mapError f = y.mapError f) {a : β} (hx : x = .ok a) : y = .ok a := by
   subst hx

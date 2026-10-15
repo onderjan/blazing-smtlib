@@ -93,7 +93,7 @@ structure LoopOk (C : BSmtLibSpec.Lexer.Consumer) (c : WP.WCore) (n : Core) : Pr
       EofLoc c s ∧ n.location = s)
 
 /-- What the Rust port's loop over a slice and the naive lexer give alike: the same tokens taken,
-the same version, and the same result, or failures the spec does not tell apart. -/
+the same version, and the same result, or failures alike as `preciseFailure` says. -/
 def LoopRel (C : BSmtLibSpec.Lexer.Consumer)
     (rW : (Except (BSmtLib.Lexer.Internal.Failure (Option C.Error))
     (Option (Span.Located C.Result)) × WP.WCore) ×
@@ -103,7 +103,7 @@ def LoopRel (C : BSmtLibSpec.Lexer.Consumer)
   rW.2 = rV.2 ∧ rW.1.2.version = rV.1.2.version ∧
   match rW.1.1, rV.1.1 with
   | .ok a, .ok b => a = b ∧ LoopOk C rW.1.2 rV.1.2
-  | .error f, .error g => causeFailure f.cause f.span = causeFailure g.cause g.span ∧
+  | .error f, .error g => preciseFailure f.cause f.span = preciseFailure g.cause g.span ∧
       rW.1.2.discardedFrom = discardedOf rV.1.2 ∧ rW.1.2.recovers = false ∧
       (C.concrete = false → f.cause ≠ .consumer none)
   | _, _ => False
@@ -167,8 +167,8 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
     core) coll = rr at hW ⊢
   obtain ⟨⟨exit, c'⟩, coll'⟩ := rr
   generalize hO : outcome C n.holding (.cont ⟨coll, n.version⟩)
-    (lexBytesW n.version C.concrete st n.location (bytes.drop position)) = O at hW hV
-  rcases O with ⟨st', loc', p⟩ | p | ⟨s, p⟩
+    (lexBytesF n.version C.concrete st n.location (bytes.drop position)) = O at hW hV
+  rcases O with ⟨st', loc', p⟩ | ⟨ff, p⟩ | ⟨s, p⟩
   · obtain ⟨hex, hfix, hv', hag, hloc, hcl⟩ := hW
     simp only at hex hfix hv' hag hloc hcl
     subst hex hcl
@@ -178,16 +178,14 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
       hfix.holding.trans a3.symm, hfix.recovers, hfix.recoveryState, .inl ⟨st', a1, ?_,
       hfix.discardedFrom, by rw [a5]; exact hloc⟩⟩⟩
     exact stAgrees_legacy (by rw [a2, ← hv', hfix.version]) hag
-  · obtain ⟨⟨g, hex, err, hg, hk⟩, hst, hcl⟩ := hW
+  · obtain ⟨⟨hex, hk⟩, hst, hcl⟩ := hW
     simp only at hex hst hcl
     subst hex hcl
-    obtain ⟨n', err', span', loc, hvb, hk', a2, a3, a4⟩ := hV
+    obtain ⟨n', hvb, hk', a2, a3, a4⟩ := hV
     rw [hvb]
-    refine ⟨rfl, hst.version.trans a2.symm, ?_,
+    exact ⟨rfl, hst.version.trans a2.symm, rfl,
       hst.discardedFrom.trans (discardedOf_none a4).symm,
-      hst.recovers, fun _ => by rw [hg]; nofun⟩
-    show causeFailure g.cause g.span = causeFailure (.lexical err') span'
-    rw [hg, causeFailure_lexical hk, causeFailure_lexical hk']
+      hst.recovers, fun _ => nofun⟩
   · obtain ⟨hx, hst, hcl⟩ := hW
     simp only at hx hst hcl
     subst hcl
@@ -266,9 +264,9 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
       refine ⟨rfl, hst.version.trans a1.symm, ?_,
         hst.discardedFrom.trans (discardedOf_none a3).symm,
         hst.recovers, fun _ => by rw [hg]; nofun⟩
-      show causeFailure g.cause g.span =
-        causeFailure (.lexical .unexpectedTrailingToken) (trailingSpan l)
-      rw [hg, causeFailure_trailing, causeFailure_trailing, hsp]
+      show preciseFailure g.cause g.span =
+        preciseFailure (.lexical .unexpectedTrailingToken) (trailingSpan l)
+      rw [hg, preciseFailure_trailing, preciseFailure_trailing, hsp]
       rfl
     | fail e d l =>
       obtain ⟨g, rfl, hg⟩ := hx
@@ -276,7 +274,7 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
       rw [hvb]
       refine ⟨rfl, hst.version.trans a1.symm, ?_, hst.discardedFrom.trans a3.symm,
         hst.recovers, fun _ => by rw [hg]; nofun⟩
-      show causeFailure g.cause g.span = causeFailure (.consumer (some e)) span'
+      show preciseFailure g.cause g.span = preciseFailure (.consumer (some e)) span'
       rw [hg]
       rfl
     | layout l =>
@@ -287,7 +285,7 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
         hst.discardedFrom.trans (discardedOf_none a3).symm,
         hst.recovers, fun hc => absurd hO (outcome_ne_layout hc
           (st_taken (by have := hpre.agrees; rwa [hc] at this)) l p)⟩
-      show causeFailure g.cause g.span = causeFailure (.consumer none) span'
+      show preciseFailure g.cause g.span = preciseFailure (.consumer none) span'
       rw [hg]
       rfl
     | brk r l nx =>
@@ -302,9 +300,9 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
         refine ⟨rfl, hst.version.trans a1.symm, ?_,
           hst.discardedFrom.trans (discardedOf_none a3).symm,
         hst.recovers, fun _ => by rw [hg]; nofun⟩
-        show causeFailure g.cause g.span =
-          causeFailure (.lexical .unexpectedTrailingToken) (trailingSpan l2)
-        rw [hg, causeFailure_trailing, causeFailure_trailing, hsp]
+        show preciseFailure g.cause g.span =
+          preciseFailure (.lexical .unexpectedTrailingToken) (trailingSpan l2)
+        rw [hg, preciseFailure_trailing, preciseFailure_trailing, hsp]
         rfl
     | brkX r l =>
       obtain ⟨a, rfl⟩ := hx

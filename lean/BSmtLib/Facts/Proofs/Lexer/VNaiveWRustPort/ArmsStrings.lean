@@ -56,7 +56,7 @@ theorem feedFrom_advance_congr {v : Token.Version} {ws : Bool} {s : ByteSlice} {
     (h : advance ws p location s[i] = advance ws p' location s[i]) :
     feedFrom v ws s (.token p) location i = feedFrom v ws s (.token p') location i := by
   rw [feedFrom_lt hi, feedFrom_lt hi]
-  simp only [byteStepW, failedBeforeW, h]
+  simp only [byteStepW, failedBeforeW, failW, h]
 
 theorem attach_none {s : ByteSlice} {i : Nat}
     (h : ∀ (c : UInt8) (hc : get? s i = some c), (get? s i).attach = some ⟨c, hc⟩ → False) :
@@ -355,18 +355,20 @@ theorem legacySpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
         · exact absurd h1 h92'
         · exact absurd h1 h10'
         · exact absurd h1 h124'
-      have hf : ∃ f, advance C.concrete ⟨.legacyString, tokenStart,
+      have hf : advance C.concrete ⟨.legacyString, tokenStart,
           contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index -
               X.1))
-          input[index] = .error f := by
+          input[index] = .error (failAtByte .forbiddenCharInString tokenStart
+              (afterColumns locX (index - X.1))) := by
         rw [hIc]
         simp [advance, legacyStringByte, h34', h92', htext]
-      obtain ⟨f, hf⟩ := hf
       unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
       wp_walk
       refine stepFails_here ?_ hholds'
         ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4, hfix'.5, hfix'.6⟩ (by first | rfl | assumption)
       rw [hA', feedFrom_advance_error v C.concrete input hIs hf]
+      rw [hts']
+      failure_eq hloc'
   -- the first byte, in the state the string is in
   apply WP.wp_bind; apply WP.wp_getCore
   split
@@ -390,6 +392,9 @@ theorem legacySpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
         ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ (by first | rfl | assumption)
       rw [hC]
       simp only [Bool.false_eq_true, ↓reduceIte]
+      rw [hps]
+      have hc0 : c0.val = consumed := rfl
+      failure_eq hloc
     · intro hd
       have hd' : Lexer.Internal.VNaive.isDelimiter first = true := by
         rw [← isDelimiter_eq]; simpa using hd
@@ -657,18 +662,20 @@ theorem stringSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
           · exact h1
           · exact absurd h1 h34'
           · exact absurd h1 h10'
-        have hf : ∃ f, advance C.concrete ⟨.string, tokenStart,
+        have hf : advance C.concrete ⟨.string, tokenStart,
             contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index -
                 X.1))
-            input[index] = .error f := by
+            input[index] = .error (failAtByte .forbiddenCharInString tokenStart
+                (afterColumns locX (index - X.1))) := by
           rw [hIc]
           simp [advance, h34', htext]
-        obtain ⟨f, hf⟩ := hf
         unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
         wp_walk
         refine stepFails_here ?_ hholds'
           ⟨hfix'.1, hfix'.2, hfix'.3, hfix'.4, hfix'.5, hfix'.6⟩ (by first | rfl | assumption)
         rw [hA', feedFrom_advance_error v C.concrete input hIs hf]
+        rw [hts']
+        failure_eq hloc'
     · -- the run reaches the end of the slice: the string is left in progress
       rename_i hnone
       have hge := Lexer.Internal.WRustPort.Slice.size_le_of_get?_none hnone
@@ -714,6 +721,9 @@ theorem stringSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
           ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ (by first | rfl | assumption)
         rw [hC]
         simp only [Bool.false_eq_true, ↓reduceIte]
+        rw [hps]
+        have hc0 : c0.val = consumed := rfl
+        failure_eq hloc
       · intro hd
         have hd' : Lexer.Internal.VNaive.isDelimiter first = true := by
           rw [← isDelimiter_eq]; simpa using hd

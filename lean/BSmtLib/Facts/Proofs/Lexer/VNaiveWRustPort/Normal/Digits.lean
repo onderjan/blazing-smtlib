@@ -138,10 +138,10 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
       obtain ⟨hz0, hlt⟩ := hz
       have hi1 : index + 1 < input.size := by omega
       have hd1 := hmem (index + 1) hi1 (Nat.le_refl _) hlt
-      have hadv : ∃ f, advance C.concrete ⟨.numeral true, location, ByteArray.empty.push c⟩
-          (location.afterByte c) input[index + 1] = .error f := by
+      have hf : advance C.concrete ⟨.numeral true, location, ByteArray.empty.push c⟩
+          (location.afterByte c) input[index + 1] =
+            .error (failAtByte .numeralLeadingZero location (location.afterByte c)) := by
         simp [advance, hd1]
-      obtain ⟨f, hf⟩ := hadv
       unfold Lexer.Internal.WRustPort.leave Lexer.Internal.WRustPort.errorAt
           Lexer.Internal.WRustPort.errorWith
       wp_walk
@@ -151,7 +151,8 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
       simp only [beq_self_eq_true]
       rw [hz0] at hf
       rw [feedFrom_advance_error v C.concrete input hi1 hf]
-      rfl
+      rw [show location.afterByte 48 = location.afterColumn from rfl]
+      failure_eq hloc
     intro hz
     have hz' : c = 48 → Lexer.Internal.WRustPort.Slice.runEnd input
         (index + 1) CharClass.RUN_DIGIT = index + 1 := by
@@ -346,7 +347,8 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
               have := hlastF
               simp only [hlt, decide_true, Bool.not_true] at this
               simp [this] at hnone
-            obtain ⟨f, hf⟩ := advance_end_fraction_none (location := afterColumns location
+            have hf := advance_end_fraction_none (ws := C.concrete)
+                (location := afterColumns location
               (Lexer.Internal.WRustPort.Slice.runEnd input
                   (Lexer.Internal.WRustPort.Slice.runEnd input
                       (index + 1) CharClass.RUN_DIGIT + 1)
@@ -368,6 +370,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
             refine stepFails_here ?_ hheld
               ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
             rw [hB, feedFrom_advance_error v C.concrete input hFs hf]
+            failure_eq hloc
           · intro hsome
             have hlt : Lexer.Internal.WRustPort.Slice.runEnd input
                 (index + 1) CharClass.RUN_DIGIT + 1 <
@@ -413,6 +416,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
                 ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
               rw [hC]
               simp only [Bool.false_eq_true, ↓reduceIte]
+              failure_eq hloc
             · intro hd'
               have hd'' : Lexer.Internal.VNaive.isDelimiter
                   input[Lexer.Internal.WRustPort.Slice.runEnd input
@@ -449,6 +453,7 @@ theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base :
             ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
           rw [hC]
           simp only [Bool.false_eq_true, ↓reduceIte]
+          failure_eq hloc
         · intro hd'
           have hd'' : Lexer.Internal.VNaive.isDelimiter next = true := by
             rw [← isDelimiter_eq]; simpa using hd'

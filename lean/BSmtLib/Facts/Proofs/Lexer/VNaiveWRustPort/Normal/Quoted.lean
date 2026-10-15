@@ -40,7 +40,7 @@ variable {floor : Option Nat} {low : Nat}
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
 
-set_option maxHeartbeats 500000 in
+set_option maxHeartbeats 1000000 in
 set_option maxRecDepth 2048 in
 /-- `normalSpec_lt` at the pipe that starts a quoted symbol, on the fast path. -/
 theorem normalSpec_quoted (v : Token.Version) (input : ByteSlice) (offset base : Nat)
@@ -208,6 +208,8 @@ theorem normalSpec_quoted (v : Token.Version) (input : ByteSlice) (offset base :
                 ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
               rw [hC]
               simp only [Bool.false_eq_true, ↓reduceIte]
+              simp only [hpipeb, ↓reduceIte]
+              failure_eq hloc
             · intro hdl
               have hd' : Lexer.Internal.VNaive.isDelimiter next = true := by
                 rw [← isDelimiter_eq]; simpa using hdl

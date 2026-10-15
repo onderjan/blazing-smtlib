@@ -28,10 +28,10 @@ whitespace and comments if `ws`: the state and the location after them and the l
 finish, or on an error, the lexemes finished before it. -/
 def feedFrom (version : Token.Version) (ws : Bool) (s : ByteSlice) (st : St)
     (location : Span.Location)
-    (i : Nat) : Except (List Lexeme) (St × Span.Location × List Lexeme) :=
+    (i : Nat) : Consumers.Pure.RunF :=
   if h : i < s.size then
     match byteStepW version ws st location s[i] with
-    | none => .error (failedBeforeW ws st location s[i])
+    | none => .error (failedBeforeW ws st location s[i], failW version ws st location s[i])
     | some (st', ls) => Prep ls (feedFrom version ws s st' (location.afterByte s[i]) (i + 1))
   else
     .ok (st, location, [])
@@ -41,7 +41,7 @@ theorem feedFrom_lt {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : N
     (st : St) (location : Span.Location) :
     feedFrom version ws s st location i =
       match byteStepW version ws st location s[i] with
-      | none => .error (failedBeforeW ws st location s[i])
+      | none => .error (failedBeforeW ws st location s[i], failW version ws st location s[i])
       | some (st', ls) => Prep ls (feedFrom version ws s st'
           (location.afterByte s[i]) (i + 1)) := by
   rw [feedFrom]
@@ -67,14 +67,15 @@ theorem feedFrom_step {version : Token.Version} {ws : Bool} {s : ByteSlice} {i :
 theorem feedFrom_fail {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : Nat}
     (h : i < s.size)
     {st : St} {location : Span.Location} (hstep : byteStepW version ws st location s[i] = none) :
-    feedFrom version ws s st location i = .error (failedBeforeW ws st location s[i]) := by
+    feedFrom version ws s st location i =
+      .error (failedBeforeW ws st location s[i], failW version ws st location s[i]) := by
   rw [feedFrom_lt h, hstep]
 
 /-- The run over a slice of the bytes of a list is the run over the list from the index on. -/
 theorem feedFrom_toByteSlice (version : Token.Version) (ws : Bool) (bytes : List UInt8) :
     ∀ (n i : Nat), bytes.length - i = n → ∀ (st : St) (location : Span.Location),
       feedFrom version ws bytes.toByteArray.toByteSlice st location i =
-        lexBytesW version ws st location (bytes.drop i) := by
+        lexBytesF version ws st location (bytes.drop i) := by
   intro n
   induction n with
   | zero =>
@@ -87,7 +88,7 @@ theorem feedFrom_toByteSlice (version : Token.Version) (ws : Bool) (bytes : List
     have hlt : i < bytes.length := by omega
     have hs : i < bytes.toByteArray.toByteSlice.size := by rw [size_toByteSlice]; exact hlt
     rw [feedFrom_lt hs, getElem_toByteSlice, List.drop_eq_getElem_cons hlt]
-    simp only [lexBytesW]
+    simp only [lexBytesF]
     cases byteStepW version ws st location bytes[i] with
     | none => rfl
     | some e =>
@@ -168,7 +169,7 @@ theorem feedFrom_tokenBefore {j : Nat} (hj : j < s.size) {q : Pending} {location
   rw [feedFrom_lt hj, feedFrom_lt hj]
   simp only [byteStepW, h]
   cases startStepW v ws location s[j] with
-  | none => simp [failedBeforeW, h, withBefore]
+  | none => simp [failedBeforeW, failW, h, Consumers.Pure.withBeforeF]
   | some e =>
     obtain ⟨st, ls⟩ := e
     simp only [Option.map_some]
@@ -178,16 +179,16 @@ theorem feedFrom_tokenBefore {j : Nat} (hj : j < s.size) {q : Pending} {location
 /-- A token in progress at a byte that it fails at. -/
 theorem feedFrom_advance_error {j : Nat} (hj : j < s.size) {q : Pending} {location : Span.Location}
     {f : LexFailure} (h : advance ws q location s[j] = .error f) :
-    feedFrom v ws s (.token q) location j = .error [] := by
+    feedFrom v ws s (.token q) location j = .error ([], f) := by
   rw [feedFrom_lt hj]
-  simp only [byteStepW, h, failedBeforeW]
+  simp only [byteStepW, h, failedBeforeW, failW]
 
 /-- A byte that fails with no token in progress. -/
 theorem feedFrom_start_error {j : Nat} (hj : j < s.size) {location : Span.Location} {f : LexFailure}
     (h : start v ws location s[j] = .error f) :
-    feedFrom v ws s .idle location j = .error [] := by
+    feedFrom v ws s .idle location j = .error ([], f) := by
   rw [feedFrom_lt hj]
-  simp only [byteStepW, startStepW, h, failedBeforeW]
+  simp only [byteStepW, startStepW, h, failedBeforeW, failW, startFail]
 
 end
 
@@ -288,7 +289,7 @@ theorem feedFrom_end {j : Nat} (hj : j < s.size) {q : Pending} {location : Span.
     (h : advance ws q location s[j] =
       if isDelimiter s[j] then .tokenBefore l else .error f) :
     feedFrom v ws s (.token q) location j =
-      if isDelimiter s[j] then Prep [l] (feedFrom v ws s .idle location j) else .error [] := by
+      if isDelimiter s[j] then Prep [l] (feedFrom v ws s .idle location j) else .error ([], f) := by
   split
   · rename_i hd
     simp only [hd, ↓reduceIte] at h
@@ -302,6 +303,16 @@ end
 section
 
 variable {ws : Bool} {q : Pending} {location : Span.Location} {c : UInt8}
+
+theorem failAtByte_def (kind : BSmtLib.Lexer.Error.LexicalErrorKind)
+    (start location : Span.Location) :
+    failAtByte kind start location =
+      { kind, span := Span.Internal.newUnchecked start location.afterColumn, location } := (rfl)
+
+theorem failAtEnd_def (kind : BSmtLib.Lexer.Error.LexicalErrorKind)
+    (start location : Span.Location) :
+    failAtEnd kind start location =
+      { kind, span := Span.Internal.newUnchecked start location, location } := (rfl)
 
 theorem advance_end_simpleSymbol (hm : q.mode = .simpleSymbol) (hc : isSymbolByte c = false) :
     advance ws q location c =
@@ -323,7 +334,8 @@ theorem advance_end_keyword (hm : q.mode = .keyword) (hc : isSymbolByte c = fals
   simp [advance, hc, hne]
 
 theorem advance_end_keyword_empty (hm : q.mode = .keyword) (hc : isSymbolByte c = false)
-    (he : q.content.isEmpty = true) : ∃ f, advance ws q location c = .error f := by
+    (he : q.content.isEmpty = true) :
+    advance ws q location c = .error (failAtByte .forbiddenKeywordName q.start location) := by
   obtain ⟨mode, start, content⟩ := q
   simp only at hm he
   subst hm
@@ -341,7 +353,7 @@ theorem advance_end_digits {radix : Radix} (hm : q.mode = .digits radix)
 
 theorem advance_end_digits_empty {radix : Radix} (hm : q.mode = .digits radix)
     (hc : radix.allows c = false) (he : q.content.isEmpty = true) :
-    ∃ f, advance ws q location c = .error f := by
+    advance ws q location c = .error (failAtByte radix.emptyError q.start location) := by
   obtain ⟨mode, start, content⟩ := q
   simp only at hm he
   subst hm
@@ -367,7 +379,7 @@ theorem advance_end_fraction (hm : q.mode = .fraction true) (hc : isDigit c = fa
   simp [advance, hc]
 
 theorem advance_end_fraction_none (hm : q.mode = .fraction false) (hc : isDigit c = false) :
-    ∃ f, advance ws q location c = .error f := by
+    advance ws q location c = .error (failAtByte .fractionDigitExpected q.start location) := by
   obtain ⟨mode, start, content⟩ := q
   simp only at hm
   subst hm

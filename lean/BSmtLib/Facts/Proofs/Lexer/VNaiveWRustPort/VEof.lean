@@ -83,7 +83,7 @@ theorem eof_tail (X : Core) (tk : List Handed) (hX : X.holding = false)
       vRun C (handOverAt (H := Answering C) X (eofAt loc) (eofAt_valid _)) tk =
         ((r, core3), taken3) →
       EofTail C (hand1 C false (.cont ⟨tk, X.version⟩) (eofLexeme loc)) d d0 loc
-        ((eofAfter C r core3 taken3).1.1.mapError failureOf)
+        ((eofAfter C r core3 taken3).1.1.mapError preciseOf)
         (eofAfter C r core3 taken3).1.2.version (discardedOf (eofAfter C r core3 taken3).1.2)
         (eofAfter C r core3 taken3).2 ∧
       ResetOk C iv (eofAfter C r core3 taken3) := by
@@ -164,15 +164,15 @@ that discards, gives what `EofRes` states for what the consumer does there. -/
 theorem vEnd_eofRes (core : Core) (st : St) (taken : List Handed)
     (ha : core.activity = st.activity ∨ (st = .idle ∧ ∃ s, core.activity = .discarding s)) :
     EofRes C (eofOut C core.holding C.concrete core.version taken st core.location)
-      (discardedOf core) core.version taken core.location
-      ((vEnd C core taken).1.1.mapError failureOf) (vEnd C core taken).1.2.version
+      (discardedOf core) core.version taken core.location (finishFail C.concrete st core.location)
+      ((vEnd C core taken).1.1.mapError preciseOf) (vEnd C core taken).1.2.version
       (discardedOf (vEnd C core taken).1.2) (vEnd C core taken).2 ∧
     ResetOk C core.initialVersion (vEnd C core taken) := by
   -- with nothing in progress, or discarding
   have idle : core.activity = .idle ∨ (∃ s, core.activity = .discarding s) →
       EofTail C (eofHand C core.holding (eofLexeme core.location) (.cont ⟨taken, core.version⟩)).1
         none (discardedOf core) core.location
-        ((vEnd C core taken).1.1.mapError failureOf) (vEnd C core taken).1.2.version
+        ((vEnd C core taken).1.1.mapError preciseOf) (vEnd C core taken).1.2.version
         (discardedOf (vEnd C core taken).1.2) (vEnd C core taken).2 ∧
       ResetOk C core.initialVersion (vEnd C core taken) := by
     intro hid
@@ -217,7 +217,10 @@ theorem vEnd_eofRes (core : Core) (st : St) (taken : List Handed)
             none := by
           simp only [eofOut, finishLs, hf, Option.map_none]
         rw [he, vEnd_finish_error C core taken ha hf]
-        exact ⟨⟨congrArg Except.error (failureOf_lexical C (kind_ne (finish_error_kind hf))),
+        have hff : finishFail C.concrete (.token p) core.location = f := by
+          simp only [finishFail, hf]
+        rw [hff]
+        exact ⟨⟨congrArg Except.error (preciseFailure_lexical (kind_ne (finish_error_kind hf))),
           rfl, rfl, rfl⟩, nofun⟩
       | token l =>
         have he : eofOut C core.holding C.concrete core.version taken (.token p) core.location =

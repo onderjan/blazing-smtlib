@@ -83,9 +83,9 @@ def _root_.BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VOut (core : Core)
     (taken : List Handed) : Out C → Prop
   | .endOk st loc p => ∃ c', vBytes C core held bs taken = ((.ok held, c'), p.taken) ∧
       VOut.VEnd' core c' st.activity p.ver core.holding ∧ c'.location = loc
-  | .endErr p => ∃ (c' : Core) (kind : LexicalErrorKind) (span : Span) (loc : Span.Location),
-      vBytes C core held bs taken = ((.error ⟨.lexical kind, span, loc⟩, c'), p.taken) ∧
-      kind ≠ .unexpectedTrailingToken ∧ c'.version = p.ver ∧
+  | .endErr f p => ∃ c' : Core,
+      vBytes C core held bs taken = ((.error ⟨.lexical f.kind, f.span, f.location⟩, c'), p.taken) ∧
+      f.kind ≠ .unexpectedTrailingToken ∧ c'.version = p.ver ∧
       c'.initialVersion = core.initialVersion ∧ ∀ s, c'.activity ≠ .discarding s
   | .stopped s p =>
     match s with
@@ -127,11 +127,11 @@ theorem cons {core c' : Core} {held : Option (Span.Located C.Result)} {c : UInt8
       VTrailing C core held (c :: rest) taken l p := by
     intro l p ⟨c2, e, a1, a2, a3⟩
     exact ⟨c2, hv.trans e, a1, a2.trans hi, a3⟩
-  rcases O with ⟨st, loc, p⟩ | p | ⟨s, p⟩
+  rcases O with ⟨st, loc, p⟩ | ⟨f, p⟩ | ⟨s, p⟩
   · obtain ⟨c2, e, ⟨a1, a2, a3, a4⟩, a5⟩ := h
     exact ⟨c2, hv.trans e, ⟨a1, a2, a3.trans hh, a4.trans hi⟩, a5⟩
-  · obtain ⟨c2, err, span, loc, e, a1, a2, a3, a4⟩ := h
-    exact ⟨c2, err, span, loc, hv.trans e, a1, a2, a3.trans hi, a4⟩
+  · obtain ⟨c2, e, a1, a2, a3, a4⟩ := h
+    exact ⟨c2, hv.trans e, a1, a2, a3.trans hi, a4⟩
   · cases s with
     | trailing l => exact ht h
     | fail e d l =>
@@ -167,11 +167,11 @@ theorem same {core c' : Core} {held : Option (Span.Located C.Result)} {bs : List
       VTrailing C core held bs taken l p := by
     intro l p ⟨c2, e, a1, a2, a3⟩
     exact ⟨c2, hv.trans e, a1, a2.trans hi, a3⟩
-  rcases O with ⟨st, loc, p⟩ | p | ⟨s, p⟩
+  rcases O with ⟨st, loc, p⟩ | ⟨f, p⟩ | ⟨s, p⟩
   · obtain ⟨c2, e, ⟨a1, a2, a3, a4⟩, a5⟩ := h
     exact ⟨c2, hv.trans e, ⟨a1, a2, a3.trans hh, a4.trans hi⟩, a5⟩
-  · obtain ⟨c2, err, span, loc, e, a1, a2, a3, a4⟩ := h
-    exact ⟨c2, err, span, loc, hv.trans e, a1, a2, a3.trans hi, a4⟩
+  · obtain ⟨c2, e, a1, a2, a3, a4⟩ := h
+    exact ⟨c2, hv.trans e, a1, a2, a3.trans hi, a4⟩
   · cases s with
     | trailing l => exact ht h
     | fail e d l =>

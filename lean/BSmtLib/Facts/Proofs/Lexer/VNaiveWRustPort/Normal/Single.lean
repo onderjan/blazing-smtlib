@@ -286,6 +286,7 @@ theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base
           rw [← hoff, ← hbase])) hheld hbytes) ?_
     rw [hpure]
 
+set_option maxHeartbeats 400000 in
 /-- `normalSpec_lt` at a byte that starts no token. -/
 theorem normalSpec_other (v : Token.Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat)
@@ -358,6 +359,7 @@ theorem normalSpec_other (v : Token.Version) (input : ByteSlice) (offset base : 
     refine stepFails_here ?_ hheld
       ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
     rw [feedFrom_start_error v C.concrete input hi herr]
+    failure_eq hloc
 
 end
 

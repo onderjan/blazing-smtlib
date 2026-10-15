@@ -88,16 +88,17 @@ theorem arm_baseSelection (v : Token.Version) (input : ByteSlice) (start : Nat)
     · intro hb'
       have hx' : input[start] ≠ 120 := by simpa using hx
       have hb'' : input[start] ≠ 98 := by simpa using hb'
-      have herr : ∃ f, advance C.concrete ⟨.hash, pstart, pcontent⟩ location
-          input[start] = .error f :=
-        by
+      have hf : advance C.concrete ⟨.hash, pstart, pcontent⟩ location input[start] =
+          .error (failAtByte .baseSelectionExpected pstart location) := by
         simp [advance, hx', hb'']
-      obtain ⟨f, hf⟩ := herr
       unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
       wp_walk
       refine stepFails_here ?_ hpre.holds
         ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
       rw [feedFrom_advance_error v C.concrete input hstart hf]
+      rw [hps]
+      have := hpre.base
+      failure_eq hloc
 
 theorem stored_last_append (a b : ByteArray) (hb : b.size ≠ 0) :
     lastOf (a ++ b) = lastOf b := by
@@ -153,7 +154,7 @@ theorem fractionFrom_wp (v : Token.Version) (input : ByteSlice) (j : Nat) (hj : 
         tokenStart)
     (hqc : q.content = contentBytes s.val.tokenContent) (hfits : Fits s.val.tokenContent)
     (hanchor : feedFrom v C.concrete input st0 loc0 start0 = feedFrom v C.concrete input
-        (.token q) locq j) :
+        (.token q) locq j) (hts : s.val.tokenStart = tokenStart) :
     WP (Lexer.Internal.WRustPort.lexFractionFrom (H := Answering C) (m := AnswerM) (R := C.Result)
         (E := Option C.Error)
         input j tokenStart base h) s coll
@@ -212,7 +213,7 @@ theorem fractionFrom_wp (v : Token.Version) (input : ByteSlice) (j : Nat) (hj : 
         simp only [fractionChecks, Bool.not_eq_false']
         rw [← hext, ← last?_stored hfits']
         exact hbad
-      obtain ⟨f, hf⟩ := advance_end_fraction_none (location := afterColumns locq
+      have hf := advance_end_fraction_none (ws := C.concrete) (location := afterColumns locq
         (Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_DIGIT - j))
         (q := ⟨.fraction (fractionChecks (contentBytes s.val.tokenContent ++
           bytesOf input j (Lexer.Internal.WRustPort.Slice.runEnd input j
@@ -226,6 +227,8 @@ theorem fractionFrom_wp (v : Token.Version) (input : ByteSlice) (j : Nat) (hj : 
       refine stepFails_here ?_ hholds
         ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
       rw [hA', feedFrom_advance_error v C.concrete input hEs hf]
+      rw [← hts]
+      failure_eq hloc
     · intro hgood
       have hfc' : fractionChecks (contentBytes s.val.tokenContent ++
           bytesOf input j (Lexer.Internal.WRustPort.Slice.runEnd input j
@@ -260,6 +263,8 @@ theorem fractionFrom_wp (v : Token.Version) (input : ByteSlice) (j : Nat) (hj : 
           ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
         rw [hC]
         simp only [Bool.false_eq_true, ↓reduceIte]
+        rw [← hts]
+        failure_eq hloc
       · intro hd
         have hd' : Lexer.Internal.VNaive.isDelimiter
             input[Lexer.Internal.WRustPort.Slice.runEnd input j CharClass.RUN_DIGIT] = true
@@ -426,7 +431,8 @@ theorem arm_numeralOrDecimal (v : Token.Version) (input : ByteSlice) (start : Na
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hz
     obtain ⟨hlt, hzero⟩ := hz
     have hd := hmem start hstart (Nat.le_refl _) hlt
-    have hf : ∃ f, advance C.concrete p location input[start] = .error f := by
+    have hf : advance C.concrete p location input[start] =
+        .error (failAtByte .numeralLeadingZero p.start location) := by
       obtain ⟨mode, pstart, pcontent⟩ := p
       simp only at hm
       subst hm
@@ -437,12 +443,14 @@ theorem arm_numeralOrDecimal (v : Token.Version) (input : ByteSlice) (start : Na
         rw [e]
         exact hzero
       simp [advance, this, hd]
-    obtain ⟨f, hf⟩ := hf
     unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
     wp_walk
     refine stepFails_here ?_ hpre.holds
       ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
     rw [feedFrom_advance_error v C.concrete input hstart hf]
+    rw [hps]
+    have := hpre.base
+    failure_eq hloc
   intro hz
   rw [← isZero_contentBytes hfits] at hz
   have hA : feedFrom v C.concrete input (.token p) location start =
@@ -527,7 +535,7 @@ theorem arm_numeralOrDecimal (v : Token.Version) (input : ByteSlice) (start : Na
           (Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_DIGIT)).push 46⟩
         (afterColumns location (Lexer.Internal.WRustPort.Slice.runEnd input start
             CharClass.RUN_DIGIT + 1 - start))
-        ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hB) ?_ ?_
+        ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ hB hts.symm) ?_ ?_
       · exact ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4,
             hpre.fixed.5, hpre.fixed.6⟩
       · exact hpre.base
@@ -578,6 +586,9 @@ theorem arm_numeralOrDecimal (v : Token.Version) (input : ByteSlice) (start : Na
           ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
         rw [hC]
         simp only [Bool.false_eq_true, ↓reduceIte]
+        rw [hps]
+        have := hpre.base
+        failure_eq hloc
       · intro hd
         have hd' : Lexer.Internal.VNaive.isDelimiter next = true := by
           rw [← isDelimiter_eq]; simpa using hd

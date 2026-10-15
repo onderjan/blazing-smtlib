@@ -206,6 +206,7 @@ theorem normalSpec_symbol (v : Token.Version) (input : ByteSlice) (offset base :
                 ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
               rw [hC]
               simp only [Bool.false_eq_true, ↓reduceIte]
+              failure_eq hloc
             · intro hdl
               have hd' : Lexer.Internal.VNaive.isDelimiter next = true := by
                 rw [← isDelimiter_eq]; simpa using hdl

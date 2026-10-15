@@ -38,7 +38,7 @@ theorem handAll_wait (r : C.Result) (l : Lexeme) (p : Prog) : ∀ ls,
 
 /-- After a break, the consumer waits for the next lexeme, which is trailing input. -/
 theorem outcome_wait (r : C.Result) (l : Lexeme) (p : Prog) (ls : List Lexeme)
-    (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
+    (e : RunF) :
     ∃ nx, outcome C hd (handAll C hd (.wait r l p) ls) e = .stopped (.brk r l nx) p := by
   have hf : ∀ (ls' : List Lexeme) (k : Prog → Out C), ∃ nx,
       Model.finish C (handAll C hd (handAll C hd (.wait r l p) ls) ls') k =
@@ -50,7 +50,7 @@ theorem outcome_wait (r : C.Result) (l : Lexeme) (p : Prog) (ls : List Lexeme)
     · exact ⟨nx, by rw [h]; rfl⟩
   cases e with
   | ok e => obtain ⟨st, loc, ls'⟩ := e; exact hf ls' _
-  | error ls' => exact hf ls' _
+  | error r => obtain ⟨ls', f⟩ := r; exact hf ls' _
 
 /-- A lexeme the consumer goes on after keeps the lexical rules. -/
 theorem hand1_cont_legacy {p p' : Prog} {l : Lexeme} (h : hand1 C hd (.cont p) l = .cont p') :
@@ -78,7 +78,7 @@ theorem hand1_wait_legacy {p p' : Prog} {l l' : Lexeme} {r : C.Result}
 /-- After a break, the lexeme handed over next is trailing input, as it is while a result is
 held. -/
 theorem outcome_wait_trailing {r : C.Result} {l l2 : Lexeme} {p p' : Prog}
-    {e : Except (List Lexeme) (St × Span.Location × List Lexeme)}
+    {e : RunF}
     (h : outcome C hd (handAll C hd (.wait r l p) []) e = .stopped (.brk r l (some l2)) p') :
     outcome C true (.cont p) e = .stopped (.trailing l2) p' := by
   have key : ∀ (ls : List Lexeme) (k : Prog → Out C),
@@ -99,18 +99,18 @@ theorem outcome_wait_trailing {r : C.Result} {l l2 : Lexeme} {p p' : Prog}
       rfl
   cases e with
   | ok e => obtain ⟨st, loc, ls⟩ := e; exact key ls _ h
-  | error ls => exact key ls _ h
+  | error r => obtain ⟨ls, f⟩ := r; exact key ls _ h
 
 theorem withBefore_withBefore (a b : List Lexeme)
-    (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
-    withBefore a (withBefore b e) = withBefore (a ++ b) e := by
+    (e : RunF) :
+    withBeforeF a (withBeforeF b e) = withBeforeF (a ++ b) e := by
   cases e with
-  | ok e => obtain ⟨st, loc, ls⟩ := e; simp [withBefore]
-  | error ls => simp [withBefore]
+  | ok e => obtain ⟨st, loc, ls⟩ := e; simp [withBeforeF]
+  | error r => obtain ⟨ls, f⟩ := r; simp [withBeforeF]
 
 theorem outcome_cont_one (hd : Bool) (p : Prog) (l : Lexeme)
-    (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
-    outcome C hd (.cont p) (withBefore [l] e) = outcome C hd (hand1 C hd (.cont p) l) e :=
+    (e : RunF) :
+    outcome C hd (.cont p) (withBeforeF [l] e) = outcome C hd (hand1 C hd (.cont p) l) e :=
   outcome_prep C hd (.cont p) [] [l] e
 
 end
@@ -121,11 +121,11 @@ variable (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version)
 
 theorem lexBytesW_tokenBefore {ws : Bool} {p : Pending} {location : Span.Location} {b : UInt8}
     {l : Lexeme} (rest : List UInt8) (h : advance ws p location b = .tokenBefore l) :
-    lexBytesW v ws (.token p) location (b :: rest) =
-      withBefore [l] (lexBytesW v ws .idle location (b :: rest)) := by
-  simp only [lexBytesW, byteStepW, h]
+    lexBytesF v ws (.token p) location (b :: rest) =
+      withBeforeF [l] (lexBytesF v ws .idle location (b :: rest)) := by
+  simp only [lexBytesF, byteStepW, h]
   cases hs : startStepW v ws location b with
-  | none => simp [failedBeforeW, h, withBefore]
+  | none => simp [failedBeforeW, failW, h, withBeforeF]
   | some e =>
     obtain ⟨st', ls'⟩ := e
     simp only [Option.map_some]
@@ -134,15 +134,15 @@ theorem lexBytesW_tokenBefore {ws : Bool} {p : Pending} {location : Span.Locatio
 
 theorem lexBytesW_idle_token {ws : Bool} {location : Span.Location} {b : UInt8} {l : Lexeme}
     (rest : List UInt8) (h : start v ws location b = .token l) :
-    lexBytesW v ws .idle location (b :: rest) =
-      withBefore [l] (lexBytesW v ws .idle (location.afterByte b) rest) := by
-  simp only [lexBytesW, byteStepW, startStepW, h]
+    lexBytesF v ws .idle location (b :: rest) =
+      withBeforeF [l] (lexBytesF v ws .idle (location.afterByte b) rest) := by
+  simp only [lexBytesF, byteStepW, startStepW, h]
 
 theorem lexBytesW_tokenWith {ws : Bool} {p : Pending} {location : Span.Location} {b : UInt8}
     {l : Lexeme} (rest : List UInt8) (h : advance ws p location b = .tokenWith l) :
-    lexBytesW v ws (.token p) location (b :: rest) =
-      withBefore [l] (lexBytesW v ws .idle (location.afterByte b) rest) := by
-  simp only [lexBytesW, byteStepW, h]
+    lexBytesF v ws (.token p) location (b :: rest) =
+      withBeforeF [l] (lexBytesF v ws .idle (location.afterByte b) rest) := by
+  simp only [lexBytesF, byteStepW, h]
 
 theorem kind_ne {k : LexicalErrorKind} (h : (k == .unexpectedTrailingToken) = false) :
     k ≠ .unexpectedTrailingToken := by
@@ -156,7 +156,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
     (held : Option (Span.Located C.Result)) (taken : List Handed),
     core.activity = st.activity → (core.version == .v2_0) = (v == .v2_0) →
     VOut C core held bs taken (outcome C core.holding (.cont ⟨taken, core.version⟩)
-      (lexBytesW v C.concrete st core.location bs)) := by
+      (lexBytesF v C.concrete st core.location bs)) := by
   induction bs with
   | nil =>
     intro core st held taken hact _
@@ -171,7 +171,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
         vByte C core b taken = vRun C (handOverAt (H := Answering C) X l hl) taken →
         VOut C core held (b :: rest) taken (outcome C core.holding
           (hand1 C core.holding (.cont ⟨taken, core.version⟩) l)
-          (lexBytesW v C.concrete .idle (core.location.afterByte b) rest)) := by
+          (lexBytesF v C.concrete .idle (core.location.afterByte b) rest)) := by
       intro core X held taken l hl hver hXa hXl hXv hXh hXi hle hv
       have hH := handOverAt_hand1 C X l hl taken
       rw [hXv, hXh] at hH
@@ -197,7 +197,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
           (by rw [hs.version, hand1_wait_legacy hho]; exact hver)
         rw [hs.holding, hs.version, hs.location, hXl] at hih
         obtain ⟨nx, hnx⟩ := outcome_wait (hd := core.holding) r0 l0 p' []
-          (lexBytesW v C.concrete .idle (core.location.afterByte b) rest)
+          (lexBytesF v C.concrete .idle (core.location.afterByte b) rest)
         rw [show outcome C core.holding (.wait r0 l0 p') _ = _ from hnx]
         refine ⟨⟨1, c', hle, hs.activity.trans hXa, hs.location.trans (hXl.trans hle.symm),
           hs.version, hs.holding, hs.initial.trans hXi, ?_⟩, fun l2 hl2 => ?_⟩
@@ -261,7 +261,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
     have caseIdle : ∀ (core : Core) (held : Option (Span.Located C.Result)) (taken : List Handed),
         core.activity = .idle → (core.version == .v2_0) = (v == .v2_0) →
         VOut C core held (b :: rest) taken (outcome C core.holding (.cont ⟨taken, core.version⟩)
-          (lexBytesW v C.concrete .idle core.location (b :: rest))) := by
+          (lexBytesF v C.concrete .idle core.location (b :: rest))) := by
       intro core held taken hact hver
       have hst := VOut.startStepW_legacy hver
       have hsl := VOut.start_legacy hver
@@ -272,9 +272,9 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
           (by rw [hst]; simp [startStepW, hs])
         have := ih c' .idle held taken a2 (by rw [a1]; exact hver)
         rw [a1, a3, a4] at this
-        have he : lexBytesW v C.concrete .idle core.location (b :: rest) =
-            lexBytesW v C.concrete .idle (core.location.afterByte b) rest := by
-          simp only [lexBytesW, byteStepW, startStepW, hs, withBefore_nil]
+        have he : lexBytesF v C.concrete .idle core.location (b :: rest) =
+            lexBytesF v C.concrete .idle (core.location.afterByte b) rest := by
+          simp only [lexBytesF, byteStepW, startStepW, hs, withBeforeF_nil]
         rw [he]
         exact VOut.cons _ (by simp only [vBytes, hvb, h]) a4 a5 a3 this
       | pending p =>
@@ -282,9 +282,9 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
           (by rw [hst]; simp [startStepW, hs])
         have := ih c' (.token p) held taken a2 (by rw [a1]; exact hver)
         rw [a1, a3, a4] at this
-        have he : lexBytesW v C.concrete .idle core.location (b :: rest) =
-            lexBytesW v C.concrete (.token p) (core.location.afterByte b) rest := by
-          simp only [lexBytesW, byteStepW, startStepW, hs, withBefore_nil]
+        have he : lexBytesF v C.concrete .idle core.location (b :: rest) =
+            lexBytesF v C.concrete (.token p) (core.location.afterByte b) rest := by
+          simp only [lexBytesF, byteStepW, startStepW, hs, withBeforeF_nil]
         rw [he]
         exact VOut.cons _ (by simp only [vBytes, hvb, h]) a4 a5 a3 this
       | token l =>
@@ -294,11 +294,12 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
           (start_token_span hs).2 (hvb.trans h)
       | error f =>
         have h := lexStart_error' C core b taken (by rw [hsl]; exact hs)
-        have he : lexBytesW v C.concrete .idle core.location (b :: rest) = .error [] := by
-          simp only [lexBytesW, byteStepW, startStepW, hs]
+        have he : lexBytesF v C.concrete .idle core.location (b :: rest) =
+            .error ([], f) := by
+          simp only [lexBytesF, byteStepW, startStepW, hs, failW, startFail]
           rfl
         rw [he]
-        exact ⟨core, f.kind, f.span, f.location, by simp only [vBytes, hvb, h], kind_ne
+        exact ⟨core, by simp only [vBytes, hvb, h], kind_ne
           (start_error_kind hs), rfl, rfl, by rw [hact]; nofun⟩
     -- a lexeme that ends before the byte, handed over from `idleAt core`
     have caseB : ∀ (core : Core) (held : Option (Span.Located C.Result)) (taken : List Handed)
@@ -307,7 +308,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
         advance C.concrete p core.location b = .tokenBefore l →
         VOut C core held (b :: rest) taken (outcome C core.holding
           (hand1 C core.holding (.cont ⟨taken, core.version⟩) l)
-          (lexBytesW v C.concrete .idle core.location (b :: rest))) := by
+          (lexBytesF v C.concrete .idle core.location (b :: rest))) := by
       intro core held taken p l hact hver hadv
       have hle := (advance_tokenBefore hadv).2
       obtain ⟨hl, hv⟩ := lexByte_tokenBefore C core b taken hact hadv
@@ -358,7 +359,7 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
         subst core2
         have hvb := holdStep _ rfl hs.activity hs.holding
         obtain ⟨nx, hnx⟩ := outcome_wait (hd := core.holding) r0 l0 p' []
-          (lexBytesW v C.concrete .idle core.location (b :: rest))
+          (lexBytesF v C.concrete .idle core.location (b :: rest))
         rw [show outcome C core.holding (.wait r0 l0 p') _ = _ from hnx]
         refine ⟨⟨0, c', hle, hs.activity, hs.location.trans hle.symm, hs.version, hs.holding,
           hs.initial, hvb⟩, fun l2 hl2 => ?_⟩
@@ -453,18 +454,18 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
         obtain ⟨c', h, a1, a2, a3, a4, a5⟩ := lexByte_pending C core b taken hact hadv
         have := ih c' (.token p') held taken a2 (by rw [a1]; exact hver)
         rw [a1, a3, a4] at this
-        have he : lexBytesW v C.concrete (.token p) core.location (b :: rest) =
-            lexBytesW v C.concrete (.token p') (core.location.afterByte b) rest := by
-          simp only [lexBytesW, byteStepW, hadv, withBefore_nil]
+        have he : lexBytesF v C.concrete (.token p) core.location (b :: rest) =
+            lexBytesF v C.concrete (.token p') (core.location.afterByte b) rest := by
+          simp only [lexBytesF, byteStepW, hadv, withBeforeF_nil]
         rw [he]
         exact VOut.cons _ (by simp only [vBytes, h]) a4 a5 a3 this
       | idle =>
         obtain ⟨c', h, a1, a2, a3, a4, a5⟩ := lexByte_advance_idle C core b taken hact hadv
         have := ih c' .idle held taken a2 (by rw [a1]; exact hver)
         rw [a1, a3, a4] at this
-        have he : lexBytesW v C.concrete (.token p) core.location (b :: rest) =
-            lexBytesW v C.concrete .idle (core.location.afterByte b) rest := by
-          simp only [lexBytesW, byteStepW, hadv, withBefore_nil]
+        have he : lexBytesF v C.concrete (.token p) core.location (b :: rest) =
+            lexBytesF v C.concrete .idle (core.location.afterByte b) rest := by
+          simp only [lexBytesF, byteStepW, hadv, withBeforeF_nil]
         rw [he]
         exact VOut.cons _ (by simp only [vBytes, h]) a4 a5 a3 this
       | tokenWith l =>
@@ -477,10 +478,11 @@ theorem vBytes_out (bs : List UInt8) : ∀ (core : Core) (st : St)
         exact caseB core held taken p l hact hver hadv
       | error f =>
         have h := lexByte_advance_error C core b taken hact hadv
-        have he : lexBytesW v C.concrete (.token p) core.location (b :: rest) = .error [] := by
-          simp only [lexBytesW, byteStepW, failedBeforeW, hadv]
+        have he : lexBytesF v C.concrete (.token p) core.location (b :: rest) =
+            .error ([], f) := by
+          simp only [lexBytesF, byteStepW, failedBeforeW, failW, hadv]
         rw [he]
-        exact ⟨core, f.kind, f.span, f.location, by simp only [vBytes, h], kind_ne
+        exact ⟨core, by simp only [vBytes, h], kind_ne
           (advance_error_kind hadv), rfl, rfl, by rw [hact]; nofun⟩
 
 end

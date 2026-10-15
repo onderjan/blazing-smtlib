@@ -35,6 +35,15 @@ def finishLs (ws : Bool) (st : St) (location : Span.Location) : Option (List Lex
     | .token l => some [l]
     | .error _ => none
 
+/-- The failure of finishing the token in progress at the end of the input, where it fails. -/
+def finishFail (ws : Bool) (st : St) (location : Span.Location) : LexFailure :=
+  match st with
+  | .idle => failAtEnd .unexpectedCharacter location location
+  | .token p =>
+    match Lexer.Internal.VNaive.finish ws p location with
+    | .error f => f
+    | _ => failAtEnd .unexpectedCharacter location location
+
 section
 
 variable (C : BSmtLibSpec.Lexer.Consumer)
@@ -77,6 +86,44 @@ theorem causeFailure_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
   rw [this]
   rfl
 
+/-- A failure as precisely as the lexers agree on it: the spec's failure and, for a lexical
+error other than trailing input, its kind and span. -/
+abbrev PFailure (ε : Type) := BSmtLibSpec.Lexer.Failure ε × Option (LexicalErrorKind × Span)
+
+/-- The kind and span of a lexical error other than trailing input; none for another error. -/
+def lexicalKey {ε : Type} (cause : LexErrorCause (Option ε)) (span : Span) :
+    Option (LexicalErrorKind × Span) :=
+  match cause with
+  | .lexical kind => if kind == .unexpectedTrailingToken then none else some (kind, span)
+  | .consumer _ => none
+
+/-- The precise failure for the cause of an error and its span. -/
+def preciseFailure {ε : Type} (cause : LexErrorCause (Option ε)) (span : Span) : PFailure ε :=
+  (causeFailure cause span, lexicalKey cause span)
+
+/-- The precise failure of an error. -/
+def preciseOf {ε : Type} (e : LexError (Option ε)) : PFailure ε :=
+  preciseFailure e.cause e.span
+
+theorem preciseFailure_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
+    (h : k ≠ .unexpectedTrailingToken) :
+    preciseFailure (ε := ε) (.lexical k) span = (.lexical, some (k, span)) := by
+  have : (k == .unexpectedTrailingToken) = false := by
+    cases k <;> first | rfl | exact absurd rfl h
+  simp only [preciseFailure, causeFailure_lexical h, lexicalKey, this]
+  rfl
+
+theorem preciseFailure_trailing {ε : Type} {span : Span} :
+    preciseFailure (ε := ε) (.lexical .unexpectedTrailingToken) span =
+      (.trailing (toLocation span.start), none) := (rfl)
+
+theorem preciseFailure_consumer {ε : Type} {o : Option ε} {span : Span} :
+    preciseFailure (.consumer o) span = (causeFailure (.consumer o) span, none) := (rfl)
+
+/-- The precise failure gives the spec's failure. -/
+theorem preciseOf_fst {ε : Type} (e : LexError (Option ε)) : (preciseOf e).1 = failureOf e :=
+  rfl
+
 /-- The spec's failure at a stop of the consumer that fails the lexer. -/
 def stopFailure {C : BSmtLibSpec.Lexer.Consumer} : Stop C → BSmtLibSpec.Lexer.Failure C.Error
   | .trailing l => .trailing (toLocation l.start)
@@ -90,7 +137,7 @@ at a finished lexeme made the lexer discard from `d`, and it discarded from `d0`
 `location`. -/
 def EofTail (C : BSmtLibSpec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Span.Location)
     (location : Span.Location)
-    (res : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Span.Located C.Result)))
+    (res : Except (PFailure C.Error) (ControlFlow (Span.Located C.Result)))
     (ver' : Token.Version)
     (d' : Option Span.Location) (coll' : List Handed) : Prop :=
   match h with
@@ -103,21 +150,22 @@ def EofTail (C : BSmtLibSpec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Span
     | .discard none _ => res = .ok .continue ∧ coll' = p.taken
     | .relex _ => res = .ok .continue ∧ coll' = p.taken
     | .brk _ _ _ => False
-    | s => res = .error (stopFailure s) ∧ ver' = p.ver ∧ d' = discardsAfter (d.or d0) s.discards ∧
-        coll' = p.taken
+    | s => res = .error (stopFailure s, none) ∧ ver' = p.ver ∧
+        d' = discardsAfter (d.or d0) s.discards ∧ coll' = p.taken
 
 /-- The result of the end of the input `res`, the version `ver'` in force after it, where the
 lexer discards from `d'` after it and the tokens taken `coll'`, as `o`, what the consumer does at
 the end of the input, says, from the tokens `coll` taken under the version `ver`, where the lexer
-discarded from `d0`, at `location`. -/
+discarded from `d0`, at `location`; `fl` is the failure of finishing the token in progress, if it
+fails. -/
 def EofRes (C : BSmtLibSpec.Lexer.Consumer) (o : Option (HandOut C × Option Span.Location))
     (d0 : Option Span.Location) (ver : Token.Version) (coll : List Handed)
-    (location : Span.Location)
-    (res : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Span.Located C.Result)))
+    (location : Span.Location) (fl : LexFailure)
+    (res : Except (PFailure C.Error) (ControlFlow (Span.Located C.Result)))
     (ver' : Token.Version)
     (d' : Option Span.Location) (coll' : List Handed) : Prop :=
   match o with
-  | none => res = .error .lexical ∧ ver' = ver ∧ d' = d0 ∧ coll' = coll
+  | none => res = .error (.lexical, some (fl.kind, fl.span)) ∧ ver' = ver ∧ d' = d0 ∧ coll' = coll
   | some (h, d) => EofTail C h d d0 location res ver' d' coll'
 
 /-- What two ends of the input that satisfy `EofRes` for the same `o` give alike: the same
@@ -125,11 +173,11 @@ result, the same tokens taken, and after an error, the same version and discardi
 theorem eofRes_unique {C : BSmtLibSpec.Lexer.Consumer}
     {o : Option (HandOut C × Option Span.Location)}
     {d0 : Option Span.Location} {ver : Token.Version} {coll : List Handed}
-    {location : Span.Location}
-    {res₁ res₂ : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Span.Located C.Result))}
+    {location : Span.Location} {fl : LexFailure}
+    {res₁ res₂ : Except (PFailure C.Error) (ControlFlow (Span.Located C.Result))}
     {ver₁ ver₂ : Token.Version} {d₁ d₂ : Option Span.Location} {coll₁ coll₂ : List Handed}
-    (h₁ : EofRes C o d0 ver coll location res₁ ver₁ d₁ coll₁)
-    (h₂ : EofRes C o d0 ver coll location res₂ ver₂ d₂ coll₂) :
+    (h₁ : EofRes C o d0 ver coll location fl res₁ ver₁ d₁ coll₁)
+    (h₂ : EofRes C o d0 ver coll location fl res₂ ver₂ d₂ coll₂) :
     res₁ = res₂ ∧ coll₁ = coll₂ ∧ (res₁.isOk = false → ver₁ = ver₂ ∧ d₁ = d₂) := by
   unfold EofRes EofTail at h₁ h₂
   rcases o with _ | ⟨h, d⟩

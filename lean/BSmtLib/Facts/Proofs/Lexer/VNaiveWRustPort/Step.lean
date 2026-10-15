@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Feed
+import all BSmtLib.Lexer.Internal.WRustPort.Slice
 
 @[expose] public section
 
@@ -45,6 +46,58 @@ structure StepPre (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Boo
 def IsLexical {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (e : WP.Intr C floor) : Prop :=
   ∃ kind : LexicalErrorKind, e.result = .error (.lexical kind) ∧ kind ≠ .unexpectedTrailingToken
 
+/-- The failure of the naive lexer that the interruption is, if it is a lexical error. -/
+def intrFailure {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (e : WP.Intr C floor) :
+    LexFailure where
+  kind := match e.result with
+    | .error (.lexical kind) => kind
+    | _ => .unexpectedCharacter
+  span := e.span
+  location := e.location
+
+theorem mkAtByte_position (position : Nat) :
+    (Lexer.Internal.WRustPort.Slice.TokenEnd.mkAtByte position).position = position := (rfl)
+
+theorem mkAtByte_atByte (position : Nat) :
+    (Lexer.Internal.WRustPort.Slice.TokenEnd.mkAtByte position).atByte = true := (rfl)
+
+theorem eof_position : Lexer.Internal.WRustPort.Slice.TokenEnd.EOF.position = 0 := (rfl)
+
+theorem eof_atByte : Lexer.Internal.WRustPort.Slice.TokenEnd.EOF.atByte = false := (rfl)
+
+theorem failure_congr {k k' : LexicalErrorKind} {a b c a' b' c' : Span.Location} (hk : k = k')
+    (h1 : a = a') (h2 : b = b') (h3 : c = c') :
+    ({ kind := k, span := Span.Internal.newUnchecked a b, location := c } : LexFailure) =
+      { kind := k', span := Span.Internal.newUnchecked a' b', location := c' } := by
+  subst hk h1 h2 h3; rfl
+
+/-- Closes the goal that a failure of the naive lexer at the location `h` is that of an
+interruption, from the facts about indices in the context. -/
+macro "failure_eq" h:term : tactic => `(tactic| (
+  have hlocf := $h
+  obtain ⟨_, _, _⟩ := id hlocf
+  (try rw [BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure.locAt_eq hlocf])
+  simp only [intrFailure,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Feed.failAtByte_def,
+    BSmtLib.Span.Location.afterByte,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Feed.failAtEnd_def,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes.afterColumns,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure.locOf,
+    BSmtLib.Lexer.Internal.WRustPort.LexerCore.locationAt,
+    BSmtLib.Lexer.Internal.WRustPort.LexerCore.offsetAt, BSmtLib.Span.Location.afterColumn,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes.prep_nil,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step.mkAtByte_position,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step.mkAtByte_atByte,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step.eof_position,
+    BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step.eof_atByte, Bool.false_eq_true, ↓reduceIte]
+  first
+  | refine BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step.failure_congr ?_ ?_ ?_ ?_
+  | (congr 2; refine BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step.failure_congr ?_ ?_ ?_ ?_)
+  all_goals first
+    | (with_reducible rfl)
+    | ((try simp only [BSmtLib.Span.Location.mk.injEq, true_and, and_true]) <;> omega)
+    | rfl))
+
 /-- The lexer state at the index `next` and the tokens taken are, after a step from the naive
 lexer's pure state `st` at `location` at the index `start`, under the version `ver`, with the
 tokens taken `coll` and the lexemes `held`, as the naive lexer's run from there leaves them. -/
@@ -69,9 +122,10 @@ def StepFails (C : BSmtLibSpec.Lexer.Consumer) {floor : Option Nat} (v : Token.V
     (ver : Token.Version) (coll : List Handed) (held : List Lexeme) (e : WP.Intr C floor)
     (c : WP.WCore)
     (coll' : List Handed) : Prop :=
-  (IsLexical e ∧ ∃ held', Holds c.batch held' ∧ Fixed v hd iv c ∧ c.batch.bytes = input.byteArray ∧
+  (IsLexical e ∧ ∃ held', Holds c.batch held' ∧ Fixed v hd iv c ∧
+    c.batch.bytes = input.byteArray ∧
     outcome C hd (pending C hd ver coll held) (feedFrom v C.concrete input st location start) =
-      outcome C hd (pending C hd c.version coll' held') (.error [])) ∨
+      outcome C hd (pending C hd c.version coll' held') (.error ([], intrFailure e))) ∨
   (∃ stop p, outcome C hd (pending C hd ver coll held)
       (feedFrom v C.concrete input st location start) = .stopped stop p ∧
     Matches stop e ∧ coll' = p.taken ∧ c.version = p.ver ∧ Holds c.batch [] ∧
@@ -85,7 +139,7 @@ variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat}
 /-- What the consumer does after a stop on lexemes, whatever follows. -/
 theorem outcome_of_stops {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls : List Lexeme}
     {e : WP.Intr C floor} {p : Prog} {d : Option Span.Location} (h : Stops C hd ver coll ls e p d)
-    (rest : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
+    (rest : Consumers.Pure.RunF) :
     ∃ stop, outcome C hd (pending C hd ver coll ls) rest = .stopped stop p ∧ Matches stop e ∧
       stop.discards = d := by
   unfold Stops at h
@@ -109,7 +163,8 @@ theorem outcome_of_stops {hd : Bool} {ver : Token.Version} {coll : List Handed} 
       | cons l2 ls' =>
         refine ⟨.brk r l (some l2), ?_, hm' _, rfl⟩
         simp only [outcome, handAll_cons, hand1, handAll_stop, Model.finish]
-    | error ls' =>
+    | error r =>
+      obtain ⟨ls', f⟩ := r
       cases ls' with
       | nil => exact ⟨.brk r l none, rfl, hm' none, rfl⟩
       | cons l2 ls' =>
@@ -122,7 +177,7 @@ variable {v : Token.Version} {hd : Bool} {iv : Token.Version} {input : ByteSlice
 
 /-- A step interrupted where the consumer stopped. -/
 theorem stepFails_of_stops {ver1 : Token.Version} {coll1 : List Handed} {held1 : List Lexeme}
-    {rest : Except (List Lexeme) (St × Span.Location × List Lexeme)}
+    {rest : Consumers.Pure.RunF}
     (h : outcome C hd (pending C hd ver coll held) (feedFrom v C.concrete input st location start) =
       outcome C hd (pending C hd ver1 coll1 held1) rest)
     {e : WP.Intr C floor} {p : Prog} {d : Option Span.Location}
@@ -137,8 +192,9 @@ theorem stepFails_of_stops {ver1 : Token.Version} {coll1 : List Handed} {held1 :
 
 /-- A step interrupted where the naive lexer's run fails before it finishes a lexeme, with the
 consumer and the batch it started with. -/
-theorem stepFails_here (h : feedFrom v C.concrete input st location start = .error [])
-    {e : WP.Intr C floor} {c : WP.WCore} (hH : Holds c.batch held)
+theorem stepFails_here {e : WP.Intr C floor}
+    (h : feedFrom v C.concrete input st location start = .error ([], intrFailure e))
+    {c : WP.WCore} (hH : Holds c.batch held)
     (hfix : Fixed v hd iv c) (hv : c.version = ver)
     (he : IsLexical e := by refine ⟨_, rfl, ?_⟩; simp)
     (hby : c.batch.bytes = input.byteArray := by

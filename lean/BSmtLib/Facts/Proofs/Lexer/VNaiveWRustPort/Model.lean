@@ -70,8 +70,8 @@ inductive HandOut where
 inductive Out where
   /-- It went on to the end of the slice, where the run is in the state at the location. -/
   | endOk (st : St) (location : Span.Location) (p : Prog)
-  /-- It went on to where the run fails. -/
-  | endErr (p : Prog)
+  /-- It went on to where the run fails, with the failure. -/
+  | endErr (f : LexFailure) (p : Prog)
   /-- It stopped. -/
   | stopped (s : Stop C) (p : Prog)
 
@@ -133,9 +133,9 @@ def finish : HandOut C → (Prog → Out C) → Out C
 
 /-- What the consumer does with the lexemes of the run over the rest of a slice, from where it
 is: what it has done at the end of the slice, or where the run fails, or where it stopped. -/
-def outcome (h : HandOut C) : Except (List Lexeme) (St × Span.Location × List Lexeme) → Out C
+def outcome (h : HandOut C) : Consumers.Pure.RunF → Out C
   | .ok (st, location, ls) => finish C (handAll C hd h ls) (.endOk st location)
-  | .error ls => finish C (handAll C hd h ls) .endErr
+  | .error (ls, f) => finish C (handAll C hd h ls) (.endErr f)
 
 theorem handAll_nil (h : HandOut C) : handAll C hd h [] = h := rfl
 
@@ -171,33 +171,34 @@ theorem pending_stop_append {ver : Token.Version} {coll : List Handed} {xs : Lis
 
 /-- Lexemes moved from the run to those handed over before it. -/
 theorem outcome_prep (h : HandOut C) (held ls : List Lexeme)
-    (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
+    (e : Consumers.Pure.RunF) :
     outcome C hd (handAll C hd h held) (Prep ls e) =
       outcome C hd (handAll C hd h (held ++ ls)) e := by
   cases e with
   | ok e =>
     obtain ⟨st, location, ls'⟩ := e
-    simp only [outcome, Prep, withBefore, handAll_append]
-  | error ls' =>
-    simp only [outcome, Prep, withBefore, handAll_append]
+    simp only [outcome, Prep, Consumers.Pure.withBeforeF, handAll_append]
+  | error r =>
+    obtain ⟨ls', f⟩ := r
+    simp only [outcome, Prep, Consumers.Pure.withBeforeF, handAll_append]
 
 theorem outcome_pending_prep (ver : Token.Version) (coll : List Handed) (held ls : List Lexeme)
-    (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
+    (e : Consumers.Pure.RunF) :
     outcome C hd (pending C hd ver coll held) (Prep ls e) =
       outcome C hd (pending C hd ver coll (held ++ ls)) e :=
   outcome_prep C hd _ held ls e
 
 /-- A run that stopped stays stopped. -/
 theorem outcome_stop (s : Stop C) (p : Prog)
-    (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
+    (e : Consumers.Pure.RunF) :
     outcome C hd (.stop s p) e = .stopped s p := by
   cases e with
   | ok e => obtain ⟨st, location, ls⟩ := e; simp only [outcome, handAll_stop, finish]
-  | error ls => simp only [outcome, handAll_stop, finish]
+  | error r => obtain ⟨ls, f⟩ := r; simp only [outcome, handAll_stop, finish]
 
 /-- A run that fails at once leaves the consumer where it is. -/
-theorem outcome_error_nil (h : HandOut C) :
-    outcome C hd h (.error []) = finish C h .endErr := rfl
+theorem outcome_error_nil (h : HandOut C) (f : LexFailure) :
+    outcome C hd h (.error ([], f)) = finish C h (.endErr f) := rfl
 
 end
 

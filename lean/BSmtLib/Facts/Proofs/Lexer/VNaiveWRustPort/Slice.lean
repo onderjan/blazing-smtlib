@@ -162,9 +162,9 @@ def SliceOut (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (i
   | .endOk st' location' p =>
     r.1.1 = .done (.ok .continue) ∧ Fixed v hd iv r.1.2.val ∧ r.1.2.val.version = p.ver ∧
       StAgrees v C.concrete st' r.1.2.val ∧ EofLoc r.1.2.val location' ∧ r.2 = p.taken
-  | .endErr p =>
-    (∃ g, r.1.1 = .done (.error g) ∧ ∃ kind : LexicalErrorKind, g.cause = .lexical kind ∧
-      kind ≠ .unexpectedTrailingToken) ∧ AfterStop hd iv input.byteArray p none r.1.2.val ∧
+  | .endErr f p =>
+    (r.1.1 = .done (.error ⟨.lexical f.kind, f.span, f.location⟩) ∧
+      f.kind ≠ .unexpectedTrailingToken) ∧ AfterStop hd iv input.byteArray p none r.1.2.val ∧
       r.2 = p.taken
   | .stopped s p =>
     ExitMatches s r.1.1 ∧ AfterStop hd iv input.byteArray p s.discards r.1.2.val ∧ r.2 = p.taken
@@ -212,25 +212,25 @@ theorem sliceRun_flush (input : ByteSlice) (position : Nat)
     cases result <;> exact .inr ⟨_, p, d, hs, hst, rfl, rfl⟩
 
 /-- The loop over a slice after a lexical error hands over the batch it was left with. -/
-theorem sliceRun_error (input : ByteSlice) (position : Nat)
-    (f : Lexer.Internal.Failure (Option C.Error))
+theorem sliceRun_error (input : ByteSlice) (position : Nat) (ff : LexFailure)
     (core : WP.BS floor 0) (coll : List Handed) (ls : List Lexeme) (hH : Holds core.val.batch ls)
-    (hfix : Fixed v hd iv core.val) {kind : LexicalErrorKind} (hf : f.cause = .lexical kind)
-    (hk : kind ≠ .unexpectedTrailingToken) (hby : core.val.batch.bytes = input.byteArray) :
+    (hfix : Fixed v hd iv core.val) (hk : ff.kind ≠ .unexpectedTrailingToken)
+    (hby : core.val.batch.bytes = input.byteArray) :
     ∀ r, r = runS (Lexer.Internal.WRustPort.lexSliceRun (H := Answering C) (m := AnswerM)
-      (R := C.Result) (E := Option C.Error) input position (.error f) core) coll →
-    match outcome C hd (pending C hd core.val.version coll ls) (.error []) with
+      (R := C.Result) (E := Option C.Error) input position
+        (.error ⟨.lexical ff.kind, ff.span, ff.location⟩) core) coll →
+    match outcome C hd (pending C hd core.val.version coll ls) (.error ([], ff)) with
     | .endOk _ _ _ => False
-    | .endErr p =>
-      (∃ g, r.1.1 = .done (.error g) ∧ ∃ kind : LexicalErrorKind, g.cause = .lexical kind ∧
-        kind ≠ .unexpectedTrailingToken) ∧ AfterStop hd iv input.byteArray p none r.1.2.val ∧
+    | .endErr f p =>
+      (r.1.1 = .done (.error ⟨.lexical f.kind, f.span, f.location⟩) ∧
+        f.kind ≠ .unexpectedTrailingToken) ∧ AfterStop hd iv input.byteArray p none r.1.2.val ∧
         r.2 = p.taken
     | .stopped s p =>
       ExitMatches s r.1.1 ∧ AfterStop hd iv input.byteArray p s.discards r.1.2.val ∧
         r.2 = p.taken := by
   intro r hr
-  have h := sliceRun_flush (C := C) input position (.error f) core coll ls hH hfix.recovers
-    (.inr ⟨f, rfl⟩) r hr
+  have h := sliceRun_flush (C := C) input position _ core coll ls hH hfix.recovers
+    (.inr ⟨_, rfl⟩) r hr
   rcases h with ⟨c', h1, hk', hby', hc⟩ | ⟨e, p, d, hs, hst, h1, h2⟩
   · rw [hfix.holding, pending_nil] at hc
     rw [← hc]
@@ -238,12 +238,12 @@ theorem sliceRun_error (input : ByteSlice) (position : Nat)
     obtain ⟨⟨-, e1'⟩, -, e3, e4, e5, -⟩ := key_fields hk'
     simp only [Prod.mk.injEq] at e3
     rw [h1]
-    refine ⟨⟨f, rfl, kind, hf, hk⟩, ⟨rfl, e4.trans hfix.recovers, e3.2.trans hfix.holding,
+    refine ⟨⟨rfl, hk⟩, ⟨rfl, e4.trans hfix.recovers, e3.2.trans hfix.holding,
       e3.1.trans hfix.discardedFrom, e5.trans hfix.recoveryState, e1'.trans hfix.initial,
       hby'.trans hby⟩, ?_⟩
     trivial
   · rw [hfix.holding] at hs
-    obtain ⟨stop, hst', hm, hsd⟩ := outcome_of_stops hs (.error [])
+    obtain ⟨stop, hst', hm, hsd⟩ := outcome_of_stops hs (.error ([], ff))
     rw [hst']
     refine ⟨h1 ▸ exitMatches_of hm, ⟨hst.version, hst.recovers.trans hfix.recovers,
       hst.holding.trans hfix.holding,
@@ -315,13 +315,14 @@ theorem sliceRun_ok (v : Token.Version) (input : ByteSlice) :
         obtain ⟨result, span, location, stopAfter⟩ := e
         simp only at he
         subst he
-        have hse := sliceRun_error (C := C) input position ⟨.lexical err, span, location⟩
-          ⟨c'.val, c'.property.weaken⟩ coll' held' hH hfix rfl hk hby _ rfl
-        dsimp only at hse ⊢
+        have hse := sliceRun_error (C := C) input position ⟨err, span, location⟩
+          ⟨c'.val, c'.property.weaken⟩ coll' held' hH hfix hk hby _ rfl
+        dsimp only [intrFailure] at hse ⊢
         revert hse
-        cases outcome C hd (pending C hd c'.val.version coll' held') (.error []) with
+        cases outcome C hd (pending C hd c'.val.version coll' held')
+            (.error ([], ⟨err, span, location⟩)) with
         | endOk _ _ _ => intro h; exact h.elim
-        | endErr p => intro h; exact h
+        | endErr f p => intro h; exact h
         | stopped s p => intro h; exact h
       · rw [h]
         subst hc

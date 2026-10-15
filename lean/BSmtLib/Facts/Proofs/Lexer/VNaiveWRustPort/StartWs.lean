@@ -77,7 +77,7 @@ variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {hd :
 theorem outcome_pending_congr {ver1 ver2 : Token.Version} {c1 c2 : List Handed}
     {h1 h2 : List Lexeme}
     (h : pending C hd ver1 c1 h1 = pending C hd ver2 c2 h2)
-    (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
+    (e : Consumers.Pure.RunF) :
     outcome C hd (pending C hd ver1 c1 h1) e = outcome C hd (pending C hd ver2 c2 h2) e := by
   rw [h]
 

@@ -91,7 +91,7 @@ theorem zok_fit (hc : C.concrete = false) {c : BSmtLib.Lexer.Internal.LexerCore}
   simp only at e1 e2 f1 f2 hW hcall hnn
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := hW
   subst e1 f1
-  obtain ⟨-, -, hok, -, -⟩ := hcall
+  obtain ⟨-, -, -, hok, -, -⟩ := hcall
   refine ⟨fun e he => hnn e he, fun r hr => ?_⟩
   subst hr
   exact ⟨lx, _, _, e2.2, f2, hok rfl⟩

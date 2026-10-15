@@ -91,10 +91,10 @@ structure EofSame (c c' : WP.WCore) : Prop where
 
 /-- The result the end of the input gives after the interruption. -/
 def intrRes {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (location : Span.Location)
-    (e : WP.Intr C floor) : Except (BSmtLibSpec.Lexer.Failure C.Error)
+    (e : WP.Intr C floor) : Except (PFailure C.Error)
     (ControlFlow (Span.Located C.Result)) :=
   match e.result with
-  | .error cause => .error (causeFailure cause e.span)
+  | .error cause => .error (preciseFailure cause e.span)
   | .ok .relex => .ok .continue
   | .ok (.discarded none) => .ok .continue
   | .ok (.finished r) => .ok (.break ⟨r, location⟩)
@@ -125,7 +125,7 @@ def PendQE (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (c : WP.WCore) (coll : L
     (st : St)
     (location : Span.Location) (e : WP.Intr C none) (s' : WP.WCore) (coll' : List Handed) : Prop :=
   (finishLs C.concrete st location = none ∧ IsLexical e ∧ s'.version = c.version ∧
-    EofSame c s' ∧ coll' = coll) ∨
+    EofSame c s' ∧ coll' = coll ∧ intrFailure e = finishFail C.concrete st location) ∨
   (∃ ls p d, finishLs C.concrete st location = some ls ∧ Stops C hd c.version coll ls e p d ∧
     (∃ B, StopState c p d s' B) ∧ coll' = p.taken)
 
@@ -166,7 +166,7 @@ theorem tail_of_stops {h : HandOut C} {d d0 dd : Option Span.Location} {location
       simp only at h1
       subst h1
       refine ⟨?_, hv, hd, rfl⟩
-      simp only [intrRes, causeFailure, failureOf, stopFailure, h2]
+      simp only [intrRes, preciseFailure, lexicalKey, causeFailure, failureOf, stopFailure, h2]
       rfl
     | fail err b l =>
       simp only [Matches] at hm
@@ -209,10 +209,10 @@ def runIA {α : Type} (x : Lexer.Internal.WRustPort.InnerM (Answering C) AnswerM
 /-- The result of the end of the input before it is located, in the spec's form. -/
 def innerRes (location : Span.Location) :
     Except (Lexer.Internal.Failure (Option C.Error)) (ControlFlow C.Result) →
-      Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Span.Located C.Result))
+      Except (PFailure C.Error) (ControlFlow (Span.Located C.Result))
   | .ok .continue => .ok .continue
   | .ok (.break r) => .ok (.break ⟨r, location⟩)
-  | .error f => .error (causeFailure f.cause f.span)
+  | .error f => .error (preciseFailure f.cause f.span)
 
 /-- The fields of the lexer state that say where it is, kept, with the version it was created
 with and whether it recovers. -/
@@ -227,11 +227,12 @@ structure LocKeep (c c' : WP.WCore) : Prop where
 tokens taken, as `EofRes` says, and the location kept. -/
 def EofFin (C : BSmtLibSpec.Lexer.Consumer) (c : WP.WCore) (coll : List Handed) (st : St)
     (location : Span.Location)
-    (res : Except (BSmtLibSpec.Lexer.Failure C.Error) (ControlFlow (Span.Located C.Result)))
+    (res : Except (PFailure C.Error) (ControlFlow (Span.Located C.Result)))
     (c' : WP.WCore)
     (coll' : List Handed) : Prop :=
   EofRes C (eofOut C c.holding C.concrete c.version coll st location) c.discardedFrom c.version
-    coll location res c'.version c'.discardedFrom coll' ∧ LocKeep c c'
+    coll location (finishFail C.concrete st location) res c'.version c'.discardedFrom coll' ∧
+    LocKeep c c'
 
 theorem run_bindA {α β : Type} (y : StateT (Answering C) AnswerM α)
     (k : α → StateT (Answering C) AnswerM β) (coll : List Handed) :
@@ -241,6 +242,11 @@ theorem run_bindA {α β : Type} (y : StateT (Answering C) AnswerM α)
   generalize y {} coll = r
   obtain ⟨⟨a, h⟩, t⟩ := r
   rw [answering_eq' h {}]
+
+theorem eofLocAt {c : WP.WCore} {location : Span.Location} (h : EofLoc c location) :
+    LocAt c c.offset c.base c.base location := by
+  obtain ⟨h1, h2, h3⟩ := h
+  exact ⟨by rw [h1]; omega, h2, h3⟩
 
 theorem finishLs_short {ws : Bool} {st : St} {location : Span.Location} {ls : List Lexeme}
     (h : finishLs ws st location = some ls) : ls = [] ∨ ∃ l, ls = [l] := by
@@ -263,10 +269,12 @@ local macro "eof_digits" : tactic => `(tactic| (
   · intro hbad
     unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
     wp_walk
-    refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl⟩
     have he : (contentBytes c.tokenContent).isEmpty = true := by
       unfold ByteArray.isEmpty; rw [size_contentBytes (token_fits hagree)]; exact hbad
+    refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl, ?_⟩
     simp [finishLs, Lexer.Internal.VNaive.finish, he]
+    simp only [finishFail, Lexer.Internal.VNaive.finish, he, ↓reduceIte]
+    failure_eq (eofLocAt (show EofLoc c1 location from hloc))
   · intro hgood
     refine hsink _ _ (token_fits hagree) ?_
     have he : (contentBytes c.tokenContent).isEmpty = false := by
@@ -275,7 +283,7 @@ local macro "eof_digits" : tactic => `(tactic| (
     simp [finishLs, Lexer.Internal.VNaive.finish, he]
     rfl))
 
-set_option maxHeartbeats 400000 in
+set_option maxHeartbeats 800000 in
 theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) (st : St)
     (location : Span.Location) (hrec : c.recovers = false) (hagree : StAgrees v C.concrete st c)
     (hloc : EofLoc c location) :
@@ -369,10 +377,13 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
             rw [← last?_stored (token_fits hagree)]; exact hbad
           unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
           wp_walk
-          refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl⟩
+          refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl, ?_⟩
           simp only [finishLs, Lexer.Internal.VNaive.finish, hbad', Bool.not_true,
               Bool.false_eq_true,
             ↓reduceIte]
+          simp only [finishFail, Lexer.Internal.VNaive.finish, hbad', Bool.not_true,
+            Bool.false_eq_true, ↓reduceIte]
+          failure_eq (eofLocAt (show EofLoc c1 location from hloc))
         · intro hgood
           have hgood' : ((lastOf (contentBytes c.tokenContent)).isNone ||
               lastOf (contentBytes c.tokenContent) == some 46) = false := by
@@ -404,7 +415,9 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         subst hm hps hcont
         unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
         wp_walk
-        exact .inl ⟨rfl, ⟨_, rfl, nofun⟩, rfl, hsame, rfl⟩
+        refine .inl ⟨rfl, ⟨_, rfl, nofun⟩, rfl, hsame, rfl, ?_⟩
+        simp only [finishFail, Lexer.Internal.VNaive.finish]
+        failure_eq (eofLocAt (show EofLoc c1 location from hloc))
       next =>
         obtain ⟨hps, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
@@ -412,9 +425,13 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         subst hm hps hcont
         unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
         wp_walk
-        refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl⟩
+        refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl, ?_⟩
         rcases Bool.eq_false_or_eq_true (v == .v2_0) with hv | hv <;>
           simp [finishLs, Lexer.Internal.VNaive.finish, hv]
+        rcases Bool.eq_false_or_eq_true (v == .v2_0) with hv | hv <;>
+          simp only [finishFail, Lexer.Internal.VNaive.finish, hv, Bool.false_eq_true,
+            ↓reduceIte] <;>
+          failure_eq (eofLocAt (show EofLoc c1 location from hloc))
       next =>
         obtain ⟨hps, -, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
@@ -422,7 +439,9 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         subst hm hps hcont
         unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
         wp_walk
-        exact .inl ⟨rfl, ⟨_, rfl, nofun⟩, rfl, hsame, rfl⟩
+        refine .inl ⟨rfl, ⟨_, rfl, nofun⟩, rfl, hsame, rfl, ?_⟩
+        simp only [finishFail, Lexer.Internal.VNaive.finish]
+        failure_eq (eofLocAt (show EofLoc c1 location from hloc))
       next =>
         obtain ⟨hps, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
@@ -451,10 +470,12 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         · intro hbad
           unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
           wp_walk
-          refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl⟩
           have he : (contentBytes c.tokenContent).isEmpty = true := by
             unfold ByteArray.isEmpty; rw [size_contentBytes (token_fits hagree)]; exact hbad
+          refine .inl ⟨?_, ⟨_, rfl, nofun⟩, rfl, hsame, rfl, ?_⟩
           simp [finishLs, Lexer.Internal.VNaive.finish, he]
+          simp only [finishFail, Lexer.Internal.VNaive.finish, he, ↓reduceIte]
+          failure_eq (eofLocAt (show EofLoc c1 location from hloc))
         · intro hgood
           refine hsink _ _ (token_fits hagree) ?_
           have he : (contentBytes c.tokenContent).isEmpty = false := by
@@ -468,7 +489,9 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         subst hm hps hcont
         unfold Lexer.Internal.WRustPort.error Lexer.Internal.WRustPort.errorWith
         wp_walk
-        exact .inl ⟨rfl, ⟨_, rfl, nofun⟩, rfl, hsame, rfl⟩
+        refine .inl ⟨rfl, ⟨_, rfl, nofun⟩, rfl, hsame, rfl, ?_⟩
+        simp only [finishFail, Lexer.Internal.VNaive.finish]
+        failure_eq (eofLocAt (show EofLoc c1 location from hloc))
       next =>
         obtain ⟨hps, -, hm, hcont⟩ := token_agrees hagree ‹c1.state = _›
         obtain ⟨mode, pstart, pcontent⟩ := p
@@ -592,7 +615,7 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         (hsame.recovers.trans hrec) (by rw [hsame.discardedFrom]; rfl)
         ⟨hsame.offset, hsame.line, hsame.lineStart, hsame.initial, hsame.recovers⟩ ?_
       simp only [eofOut, hfin, Option.map_some, ← hc, eofHand]
-    · rcases h with ⟨hfin, ⟨err, he, hk⟩, hv, hsame, rfl⟩ |
+    · rcases h with ⟨hfin, ⟨err, he, hk⟩, hv, hsame, rfl, hfl⟩ |
         ⟨ls, p, d, hfin, hs', ⟨B, hss⟩, rfl⟩
       · obtain ⟨result, espan, eloc, stopAfter⟩ := e
         simp only at he
@@ -601,7 +624,10 @@ theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) 
         refine ⟨⟨?_, ⟨hsame.offset, hsame.line, hsame.lineStart, hsame.initial, hsame.recovers⟩⟩,
           fun _ => nofun⟩
         simp only [EofRes, eofOut, hfin, Option.map_none]
-        exact ⟨by simp only [intrRes, causeFailure_lexical hk], hv, hsame.discardedFrom, trivial⟩
+        refine ⟨?_, hv, hsame.discardedFrom, trivial⟩
+        rw [← hfl]
+        simp only [intrRes, preciseFailure_lexical hk]
+        rfl
       · rw [stops_eq] at hs'
         have hkeep : LocKeep c s'.val := ⟨hss.offset, hss.line, hss.lineStart,
             hss.initial, hss.recovers⟩

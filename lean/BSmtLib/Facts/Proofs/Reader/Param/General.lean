@@ -3,6 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Reader.Param.Dom
 public import BSmtLib.Facts.Proofs.Reader.Param.Layout
 public import BSmtLib.Facts.Proofs.Reader.Param.Relate
+public import BSmtLib.Facts.Proofs.Reader.Param.KeepsPosture
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
 import all BSmtLib.Token.SyntaxToken
@@ -44,14 +45,18 @@ attribute [local instance high] Stop.consumeFrom
 
 /-- Where the adapter stands after the items, in the version, as `AdapterAt` says, the handler
 told the version exactly where it took an item, and also after the recording run failed: its
-handler holds the run's log with the events that are not calls left out. -/
+handler holds the run's log with the events that are not calls left out, and where the run
+finished, the adapter is reset and not told the version. -/
 def AdapterAtG (version : Lexicon.Version) (items : List LibItem) (v : Token.Version)
     (adapter : RecAdapter) : Prop :=
   match recRun version items with
   | (.ok (.inl (v', parser)), log) =>
     v' = v ∧ adapter.parser = parser ∧ startLog adapter v = calls log ∧
       adapter.versionSet = !items.isEmpty
-  | (.ok (.inr _), log) => adapter.handler = calls log
+  | (.ok (.inr _), log) =>
+    adapter.handler = calls log ∧
+      adapter.parser = ScriptParser.new Parser.Adapters.Run.unrestrictedPosture ∧
+      adapter.versionSet = false
   | (.error _, log) => adapter.handler = calls log
 
 theorem map_libItem (taken : List Handed) :
@@ -269,6 +274,9 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
           refine ⟨trivial, by rw [← hsw', ← hdi'], fun _ => ⟨items ++ [item], hst', ?_⟩⟩
           unfold AdapterAtG
           rw [recRun_snoc version items item hrun, hR]
+          refine ⟨rfl, ?_, rfl⟩
+          show ScriptParser.new parser.posture = _
+          rw [KeepsPosture.recRun_posture version items hrun]
         | «continue» =>
           simp only [hcase] at hgood ⊢
           have hres : ∃ v' p', res = .ok (.inl (v', p')) := by

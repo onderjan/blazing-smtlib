@@ -50,10 +50,6 @@ whose proofs are still to come. Shrink-only. -/
 def sorryAllowed : List Name := [
   `BSmtLib.Facts.PublicApi.builds_commands,
   `BSmtLib.Facts.PublicApi.construct_spans,
-  `BSmtLib.Facts.PublicApi.lexers_agree,
-  `BSmtLib.Facts.PublicApi.lexing_lossless,
-  `BSmtLib.Facts.PublicApi.lexing_slicing,
-  `BSmtLib.Facts.PublicApi.reading_resets,
   `BSmtLib.Facts.PublicApi.reading_slicing]
 
 /-- The definitions that may be `partial`: the reader's loop over a whole input, and two

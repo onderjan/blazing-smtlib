@@ -109,6 +109,9 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
         ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
       rw [hC]
       simp only [Bool.false_eq_true, ↓reduceIte]
+      rw [hps]
+      have := hpre.base
+      failure_eq hpre.loc
     · intro hd
       have hd' : Lexer.Internal.VNaive.isDelimiter
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
@@ -237,9 +240,8 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
           (Lexer.Internal.WRustPort.Slice.runEnd input start
               CharClass.RUN_SIMPLE_SYMBOL)).isEmpty = true := by
         rw [hcont, ← hext]; unfold ByteArray.isEmpty; rw [size_contentBytes hfits']; exact hempty
-      obtain ⟨f, hf⟩ := advance_end_keyword_empty (location := afterColumns location
-        (Lexer.Internal.WRustPort.Slice.runEnd input start
-            CharClass.RUN_SIMPLE_SYMBOL -
+      have hf := advance_end_keyword_empty (ws := C.concrete) (location := afterColumns location
+        (Lexer.Internal.WRustPort.Slice.runEnd input start CharClass.RUN_SIMPLE_SYMBOL -
             start))
         (q := ⟨p.mode, p.start, p.content ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start
@@ -250,6 +252,9 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
       refine stepFails_here ?_ hpre.holds
         ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
       rw [hA, feedFrom_advance_error v C.concrete input hJs hf]
+      rw [hps]
+      have := hpre.base
+      failure_eq hpre.loc
     intro hne
     have hne' : (p.content ++ bytesOf input start
         (Lexer.Internal.WRustPort.Slice.runEnd input start
@@ -284,6 +289,9 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
         ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
       rw [hC]
       simp only [Bool.false_eq_true, ↓reduceIte]
+      rw [hps]
+      have := hpre.base
+      failure_eq hpre.loc
     · intro hd
       have hd' : Lexer.Internal.VNaive.isDelimiter
           input[Lexer.Internal.WRustPort.Slice.runEnd input start
@@ -372,6 +380,7 @@ theorem arm_digitRun (v : Token.Version) (input : ByteSlice) (start : Nat)
     (hinv : ∀ st content q, TokenAgrees v C.concrete s.val.state st content q →
       q.start = st ∧ q.mode = .digits radix ∧ q.content = content)
     (hnotr : run.emptyError ≠ .unexpectedTrailingToken)
+    (hemptyE : run.emptyError = radix.emptyError)
     (hagr : ∀ (q : Pending) st content, q.mode = .digits radix → q.start = st →
       q.content = content → TokenAgrees v C.concrete s.val.state st content q) :
     WP (Lexer.Internal.WRustPort.lexDigitRun (H := Answering C) (m := AnswerM) (R := C.Result)
@@ -417,7 +426,7 @@ theorem arm_digitRun (v : Token.Version) (input : ByteSlice) (start : Nat)
       have he : (p.content ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start run.flag)).isEmpty = true := by
         rw [hcont, ← hext]; unfold ByteArray.isEmpty; rw [size_contentBytes hfits']; exact hempty
-      obtain ⟨f, hf⟩ := advance_end_digits_empty (location := afterColumns location
+      have hf := advance_end_digits_empty (ws := C.concrete) (location := afterColumns location
         (Lexer.Internal.WRustPort.Slice.runEnd input start run.flag - start))
         (q := ⟨p.mode, p.start, p.content ++ bytesOf input start
           (Lexer.Internal.WRustPort.Slice.runEnd input start run.flag)⟩) hm hJs' he
@@ -426,6 +435,10 @@ theorem arm_digitRun (v : Token.Version) (input : ByteSlice) (start : Nat)
       refine stepFails_here (he := ⟨_, rfl, hnotr⟩) ?_ hpre.holds
         ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
       rw [hA, feedFrom_advance_error v C.concrete input hJs hf]
+      rw [hemptyE]
+      rw [hps]
+      have := hpre.base
+      failure_eq hpre.loc
     intro hne
     have hne' : (p.content ++ bytesOf input start
         (Lexer.Internal.WRustPort.Slice.runEnd input start run.flag)).isEmpty = false := by
@@ -457,6 +470,9 @@ theorem arm_digitRun (v : Token.Version) (input : ByteSlice) (start : Nat)
         ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
       rw [hC]
       simp only [Bool.false_eq_true, ↓reduceIte]
+      rw [hps]
+      have := hpre.base
+      failure_eq hpre.loc
     · intro hd
       have hd' : Lexer.Internal.VNaive.isDelimiter
           input[Lexer.Internal.WRustPort.Slice.runEnd input start run.flag] = true := by

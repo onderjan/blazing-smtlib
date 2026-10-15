@@ -110,11 +110,12 @@ comment. -/
 theorem outcome_ne_layout (hc : C.concrete = false) {hd : Bool} {q : Prog} {v : Token.Version}
     {st : St} (hst : st.Taken) {location : Span.Location} {bytes : List UInt8} (l : Lexeme)
     (p : Prog) :
-    outcome C hd (.cont q) (lexBytesW v C.concrete st location bytes) ≠ .stopped (.layout l) p := by
+    outcome C hd (.cont q) (lexBytesF v C.concrete st location bytes) ≠ .stopped (.layout l) p := by
   rw [hc]
   have ht := lexBytesW_taken (v := v) (location := location) (bytes := bytes) hst
+  rw [← plain_lexBytesF] at ht
   revert ht
-  rcases lexBytesW v false st location bytes with ls | ⟨st', loc', ls⟩
+  rcases lexBytesF v false st location bytes with ⟨ls, f⟩ | ⟨st', loc', ls⟩
   all_goals
     intro ht heq
     simp only [outcome] at heq

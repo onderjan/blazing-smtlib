@@ -39,7 +39,7 @@ variable {floor : Option Nat} {low : Nat}
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
 
-set_option maxHeartbeats 250000 in
+set_option maxHeartbeats 600000 in
 /-- `normalSpec_lt` at the colon that starts a keyword. -/
 theorem normalSpec_keyword (v : Token.Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
@@ -159,7 +159,7 @@ theorem normalSpec_keyword (v : Token.Version) (input : ByteSlice) (offset base 
               by
             simpa [hsize] using hempty
           omega
-        obtain ⟨f, hf⟩ := advance_end_keyword_empty (location := afterColumns location
+        have hf := advance_end_keyword_empty (ws := C.concrete) (location := afterColumns location
           (Lexer.Internal.WRustPort.Slice.runEnd input
               (index + 1) CharClass.RUN_SIMPLE_SYMBOL - index))
           (q := ⟨.keyword, location, bytesOf input (index + 1)
@@ -172,6 +172,7 @@ theorem normalSpec_keyword (v : Token.Version) (input : ByteSlice) (offset base 
         refine stepFails_here ?_ hheld
           ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
         rw [hA, feedFrom_advance_error v C.concrete input hJs hf]
+        failure_eq hloc
       · intro hne
         have hne' : (bytesOf input (index + 1)
             (Lexer.Internal.WRustPort.Slice.runEnd input
@@ -211,6 +212,7 @@ theorem normalSpec_keyword (v : Token.Version) (input : ByteSlice) (offset base 
             ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
           rw [hC]
           simp only [Bool.false_eq_true, ↓reduceIte]
+          failure_eq hloc
         · intro hdl
           have hd' : Lexer.Internal.VNaive.isDelimiter
               input[Lexer.Internal.WRustPort.Slice.runEnd input

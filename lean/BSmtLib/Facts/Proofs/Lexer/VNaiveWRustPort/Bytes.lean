@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaive
+public import BSmtLib.Facts.Proofs.Lexer.Consumers.Pure
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
 import all BSmtLib.Token.Reserved
@@ -367,16 +368,14 @@ theorem fromBytes_toByteArray (s : ByteSlice) (v : Token.Version) :
 /-! ## The run with lexemes before it -/
 
 /-- The run with the lexemes `ls` before the ones it finishes, also before an error. -/
-abbrev Prep (ls : List Lexeme) (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) :
-    Except (List Lexeme) (St × Span.Location × List Lexeme) :=
-  withBefore ls e
+abbrev Prep (ls : List Lexeme) (e : Consumers.Pure.RunF) : Consumers.Pure.RunF :=
+  Consumers.Pure.withBeforeF ls e
 
-theorem prep_nil (e : Except (List Lexeme) (St × Span.Location × List Lexeme)) : Prep [] e = e :=
-  withBefore_nil e
+theorem prep_nil (e : Consumers.Pure.RunF) : Prep [] e = e :=
+  Consumers.Pure.withBeforeF_nil e
 
-theorem prep_prep (ls ls' : List Lexeme) (e : Except (List Lexeme)
-    (St × Span.Location × List Lexeme)) :
+theorem prep_prep (ls ls' : List Lexeme) (e : Consumers.Pure.RunF) :
     Prep ls (Prep ls' e) = Prep (ls ++ ls') e :=
-  withBefore_withBefore ls ls' e
+  Consumers.Pure.withBeforeF_withBeforeF ls ls' e
 
 end BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes

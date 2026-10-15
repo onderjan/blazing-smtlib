@@ -153,6 +153,8 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
             ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
           rw [hC]
           simp only [Bool.false_eq_true, ↓reduceIte]
+          rw [hts]
+          failure_eq hloc
         · intro hd
           have hd' : Lexer.Internal.VNaive.isDelimiter next = true := by
             rw [← isDelimiter_eq]; simpa using hd
@@ -224,7 +226,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
       · -- a backslash
         intro hbs
         have hbs' : c = 92 := by simpa using hbs
-        have hf : ∃ f, advance C.concrete ⟨.quotedSymbol, tokenStart, contentBytes
+        have hf : advance C.concrete ⟨.quotedSymbol, tokenStart, contentBytes
             s.val.tokenContent ++
             bytesOf input consumed (Lexer.Internal.WRustPort.Slice.runEnd input consumed
                 CharClass.RUN_QUOTED_PLAIN)⟩
@@ -232,14 +234,17 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
                 CharClass.RUN_QUOTED_PLAIN -
               consumed)) input[Lexer.Internal.WRustPort.Slice.runEnd input consumed
                   CharClass.RUN_QUOTED_PLAIN] =
-            .error f := by
-          rw [hIc, hbs']; exact ⟨_, rfl⟩
-        obtain ⟨f, hf⟩ := hf
+            .error (failAtByte .backslashInQuotedSymbol tokenStart
+                (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
+                  CharClass.RUN_QUOTED_PLAIN - consumed))) := by
+          rw [hIc, hbs']; rfl
         unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
         wp_walk
         refine stepFails_here ?_ hholds
           ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
         rw [hA', feedFrom_advance_error v C.concrete input hIs hf]
+        rw [hts]
+        failure_eq hloc
       · intro hbs
         have hbs' : c ≠ 92 := by simpa using hbs
         apply WP.wp_ite
@@ -291,7 +296,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
             · exact absurd h1 hp'
             · exact absurd h1 hbs'
             · exact absurd h1 h10'
-          have hf : ∃ f, advance C.concrete ⟨.quotedSymbol, tokenStart, contentBytes
+          have hf : advance C.concrete ⟨.quotedSymbol, tokenStart, contentBytes
               s.val.tokenContent
               ++
               bytesOf input consumed (Lexer.Internal.WRustPort.Slice.runEnd input consumed
@@ -300,15 +305,18 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
                   CharClass.RUN_QUOTED_PLAIN -
                 consumed)) input[Lexer.Internal.WRustPort.Slice.runEnd input consumed
                     CharClass.RUN_QUOTED_PLAIN] =
-              .error f := by
+              .error (failAtByte .forbiddenCharInQuotedSymbol tokenStart
+                  (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
+                    CharClass.RUN_QUOTED_PLAIN - consumed))) := by
             rw [hIc]
             simp [advance, hp', hbs', htext]
-          obtain ⟨f, hf⟩ := hf
           unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
           wp_walk
           refine stepFails_here ?_ hholds
             ⟨hfix.1, hfix.2, hfix.3, hfix.4, hfix.5, hfix.6⟩ rfl
           rw [hA', feedFrom_advance_error v C.concrete input hIs hf]
+          rw [hts]
+          failure_eq hloc
   · -- the run reaches the end of the slice: the symbol is left in progress
     rename_i hget
     have hIe := Lexer.Internal.WRustPort.Slice.size_le_of_get?_none hget

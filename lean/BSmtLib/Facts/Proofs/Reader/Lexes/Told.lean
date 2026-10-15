@@ -406,7 +406,7 @@ theorem calls_of_invG {fl : Flagged (scriptConsumer version)} {taken : List Hand
       rw [hnil.mpr ht, recRun_nil] at hR
       cases hR
     simp only [hne, ite_false]
-    rw [hat, List.filter_reverse]
+    rw [hat.1, List.filter_reverse]
 
 theorem runInput_extendsT :
     ∀ (ended : Bool) (slices : List Regex.Chars) (a : FLexer version) (taken : List Handed),

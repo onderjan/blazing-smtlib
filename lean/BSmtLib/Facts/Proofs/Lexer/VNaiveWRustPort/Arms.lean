@@ -246,6 +246,9 @@ theorem arm_quotedSymbolClosed (v : Token.Version) (input : ByteSlice) (start : 
       ⟨hpre.fixed.1, hpre.fixed.2, hpre.fixed.3, hpre.fixed.4, hpre.fixed.5, hpre.fixed.6⟩ rfl
     rw [hC]
     simp only [Bool.false_eq_true, ↓reduceIte]
+    rw [hps]
+    have := hpre.base
+    failure_eq hpre.loc
   · intro hd
     have hd' : Lexer.Internal.VNaive.isDelimiter input[start] = true := by
       rw [← isDelimiter_eq]; simpa using hd

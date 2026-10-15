@@ -107,6 +107,79 @@ theorem endStepW_false : endStepW false = endStep := by
   funext st location
   cases st <;> rfl
 
+/-! ## The pure run with its failure
+
+The pure run above reports, on an error, the lexemes finished before it; `lexBytesF` reports also
+the failure the naive lexer raises there (`failW`): what `start` or `advance` fails with at the
+byte. -/
+
+/-- The failure of `start` at the byte, if it fails; another failure otherwise. -/
+def startFail (version : Token.Version) (ws : Bool) (location : Span.Location) (c : UInt8) :
+    LexFailure :=
+  match start version ws location c with
+  | .error f => f
+  | _ => failAtByte .unexpectedCharacter location location
+
+/-- The failure of the pure step at the byte in the state, where it fails: that of `advance` on
+the token in progress, or that of `start` when the byte, having delimited the token, starts
+none. -/
+def failW (version : Token.Version) (ws : Bool) : St → Span.Location → UInt8 → LexFailure
+  | .idle, location, c => startFail version ws location c
+  | .token p, location, c =>
+    match advance ws p location c with
+    | .error f => f
+    | _ => startFail version ws location c
+
+/-- A pure run that reports, on an error, the lexemes finished before it and the failure. -/
+abbrev RunF := Except (List Lexeme × LexFailure) (St × Span.Location × List Lexeme)
+
+/-- The run without its failure. -/
+def RunF.plain (e : RunF) : Except (List Lexeme) (St × Span.Location × List Lexeme) :=
+  e.mapError Prod.fst
+
+/-- The run with the lexemes `ls` before the ones it finishes, also before an error. -/
+def withBeforeF (ls : List Lexeme) : RunF → RunF
+  | .ok (st, location, ls') => .ok (st, location, ls ++ ls')
+  | .error (ls', f) => .error (ls ++ ls', f)
+
+theorem withBeforeF_nil (e : RunF) : withBeforeF [] e = e := by
+  cases e with
+  | ok r => obtain ⟨st, location, ls⟩ := r; rfl
+  | error r => obtain ⟨ls, f⟩ := r; rfl
+
+theorem withBeforeF_withBeforeF (ls ls' : List Lexeme) (e : RunF) :
+    withBeforeF ls (withBeforeF ls' e) = withBeforeF (ls ++ ls') e := by
+  cases e with
+  | ok r => obtain ⟨st, location, ls''⟩ := r; simp [withBeforeF, List.append_assoc]
+  | error r => obtain ⟨ls'', f⟩ := r; simp [withBeforeF, List.append_assoc]
+
+theorem plain_withBeforeF (ls : List Lexeme) (e : RunF) :
+    (withBeforeF ls e).plain = withBefore ls e.plain := by
+  cases e with
+  | ok r => obtain ⟨st, location, ls'⟩ := r; rfl
+  | error r => obtain ⟨ls', f⟩ := r; rfl
+
+/-- The bytes from the state at `location`, as `lexBytesW`, with the failure on an error. -/
+def lexBytesF (version : Token.Version) (ws : Bool) : St → Span.Location → List UInt8 → RunF
+  | st, location, [] => .ok (st, location, [])
+  | st, location, c :: cs =>
+    match byteStepW version ws st location c with
+    | none => .error (failedBeforeW ws st location c, failW version ws st location c)
+    | some (st', ls) => withBeforeF ls (lexBytesF version ws st' (location.afterByte c) cs)
+
+theorem plain_lexBytesF (version : Token.Version) (ws : Bool) :
+    ∀ (bytes : List UInt8) (st : St) (location : Span.Location),
+      (lexBytesF version ws st location bytes).plain = lexBytesW version ws st location bytes
+  | [], _, _ => rfl
+  | c :: cs, st, location => by
+    simp only [lexBytesF, lexBytesW]
+    cases byteStepW version ws st location c with
+    | none => rfl
+    | some r =>
+      obtain ⟨st', ls⟩ := r
+      simp only
+      rw [plain_withBeforeF, plain_lexBytesF version ws cs]
+
 theorem lexBytesW_append (version : Token.Version) (ws : Bool) (st : St) (location : Span.Location)
     (a b : List UInt8) :
     lexBytesW version ws st location (a ++ b) =

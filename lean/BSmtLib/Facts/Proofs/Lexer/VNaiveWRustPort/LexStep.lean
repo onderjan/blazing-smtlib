@@ -94,19 +94,19 @@ theorem lexStep_wp (v : Token.Version) (input : ByteSlice) (start : Nat)
       tokenStart base _ s coll (.token p) location held p location hpre.fixed hpre.base
       hpre.holds hpre.bytes hpre.loc hlow hb (token_agrees hpre.agrees hstate).2.1
       ((token_agrees hpre.agrees hstate).1.trans hts) (token_agrees hpre.agrees hstate).2.2
-      (token_fits hpre.agrees) rfl)
+      (token_fits hpre.agrees) rfl hts)
   | baseSelection =>
     token_arm (arm_baseSelection v input start hstart tokenStart _ s coll p location held hpre
       hts' hstate)
   | hexadecimal =>
     token_arm (arm_digitRun v input start hstart tokenStart base _ s coll p location held hpre hlow
       hts' hb _ .hexadecimal (fun c => endsRun_hex c) rfl
-      (fun st content q h => by rw [hstate] at h; exact ⟨h.1, h.2.1, h.2.2⟩) nofun
+      (fun st content q h => by rw [hstate] at h; exact ⟨h.1, h.2.1, h.2.2⟩) nofun rfl
       (fun q st content hm hs hc => by rw [hstate]; exact ⟨hs, hm, hc⟩))
   | binary =>
     token_arm (arm_digitRun v input start hstart tokenStart base _ s coll p location held hpre hlow
       hts' hb _ .binary (fun c => endsRun_binary c) rfl
-      (fun st content q h => by rw [hstate] at h; exact ⟨h.1, h.2.1, h.2.2⟩) nofun
+      (fun st content q h => by rw [hstate] at h; exact ⟨h.1, h.2.1, h.2.2⟩) nofun rfl
       (fun q st content hm hs hc => by rw [hstate]; exact ⟨hs, hm, hc⟩))
   | stringLiteral =>
     token_arm (arm_stringLiteral v input start hstart tokenStart base _ s coll p location held hpre
