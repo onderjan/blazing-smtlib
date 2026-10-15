@@ -1,4 +1,7 @@
-use std::ops::ControlFlow;
+use std::{
+    io::{self, Write},
+    ops::ControlFlow,
+};
 
 use crate::{
     SmtBinDigits, SmtComment, SmtDecimal, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral,
@@ -228,6 +231,132 @@ impl<'a> SmtSyntaxToken<'a> {
             }
             SmtTokenCategory::EndOfFile => SmtSyntaxToken::EndOfFile,
         }
+    }
+
+    /// Writes the token as SMT-LIB text in the given version.
+    ///
+    /// No delimiter is written, only the SMT-LIB token as
+    /// it should appear in a byte stream.
+    /// 2.0 string literals have backslashes always written escaped
+    /// for sanity even if a single backslash would have been acceptable.
+    ///
+    /// If a simple symbol collides with a reserved word in the given
+    /// version, it is written as a quoted symbol, so version upgrades
+    /// are possible without problems.
+    ///
+    /// Returns an error if the reserved word is not present
+    /// in the given version or if the underlying writer returns one.
+    pub fn write_smt<W: Write + ?Sized>(
+        &self,
+        writer: &mut W,
+        version: SmtVersion,
+    ) -> Result<(), SmtWriteError> {
+        match self {
+            SmtSyntaxToken::ParenOpen => writer.write_all(b"(")?,
+            SmtSyntaxToken::ParenClose => writer.write_all(b")")?,
+            SmtSyntaxToken::Numeral(numeral) => writer.write_all(numeral.as_slice())?,
+            SmtSyntaxToken::Decimal(decimal) => writer.write_all(decimal.as_slice())?,
+            SmtSyntaxToken::Hexadecimal(digits) => {
+                writer.write_all(b"#x")?;
+                writer.write_all(digits.as_slice())?;
+            }
+            SmtSyntaxToken::Binary(digits) => {
+                writer.write_all(b"#b")?;
+                writer.write_all(digits.as_slice())?;
+            }
+            SmtSyntaxToken::String(content) => {
+                writer.write_all(b"\"")?;
+                if version == SmtVersion::V2_0 {
+                    // SMT-LIB 2.0: a double quote and a backslash are escaped by a backslash
+                    for chunk in content
+                        .as_slice()
+                        .split_inclusive(|c| *c == b'"' || *c == b'\\')
+                    {
+                        let (last, rest) = chunk.split_last().expect("split chunks are not empty");
+                        writer.write_all(rest)?;
+                        // escape quotes and backslashes
+                        // for sanity, always escape backslashes, even if not strictly needed
+                        // e.g. in \q, the backslash does not technically need to be escaped
+                        if *last == b'"' || *last == b'\\' {
+                            writer.write_all(b"\\")?;
+                        }
+                        writer.write_all(&[*last])?;
+                    }
+                } else {
+                    // SMT-LIB 2.5+: a double quote is escaped by another double quote
+                    for chunk in content.as_slice().split_inclusive(|c| *c == b'"') {
+                        writer.write_all(chunk)?;
+                        if chunk.last() == Some(&b'"') {
+                            writer.write_all(b"\"")?;
+                        }
+                    }
+                }
+                writer.write_all(b"\"")?;
+            }
+            SmtSyntaxToken::Keyword(keyword) => {
+                writer.write_all(b":")?;
+                writer.write_all(keyword.as_slice())?;
+            }
+            SmtSyntaxToken::Symbol(symbol) => {
+                // a simple symbol that is a reserved word in the version
+                // would be read as the reserved word, quote it to keep the symbol
+                if symbol.is_quoted()
+                    || SmtReserved::from_bytes_opt(symbol.as_slice(), version).is_some()
+                {
+                    writer.write_all(b"|")?;
+                    writer.write_all(symbol.as_slice())?;
+                    writer.write_all(b"|")?;
+                } else {
+                    writer.write_all(symbol.as_slice())?;
+                }
+            }
+            SmtSyntaxToken::Reserved(reserved) => {
+                if !reserved.is_in_version(version) {
+                    // the reserved word is not in the version
+                    // there is no way to write it
+                    return Err(SmtWriteError(SmtWriteErrorCause::NotInVersion(*reserved)));
+                }
+                writer.write_all(reserved.as_str().as_bytes())?;
+            }
+            SmtSyntaxToken::Whitespace(whitespace) => writer.write_all(whitespace.as_slice())?,
+            SmtSyntaxToken::Comment(comment) => {
+                writer.write_all(b";")?;
+                writer.write_all(comment.as_slice())?;
+            }
+            SmtSyntaxToken::EndOfFile => {}
+        }
+        Ok(())
+    }
+}
+
+/// Determines why writing a token has failed.
+#[derive(Debug)]
+pub enum SmtWriteErrorCause {
+    /// Writing to the writer failed.
+    Io(io::Error),
+    /// The reserved word is not reserved in the version, so no text in it is the token.
+    NotInVersion(SmtReserved),
+}
+
+/// An error that ended writing a token.
+#[derive(Debug)]
+pub struct SmtWriteError(SmtWriteErrorCause);
+
+impl SmtWriteError {
+    /// Determines why writing has failed.
+    pub fn cause(&self) -> &SmtWriteErrorCause {
+        &self.0
+    }
+
+    /// Convert into the enumeration that determines why writing has failed.
+    pub fn into_cause(self) -> SmtWriteErrorCause {
+        self.0
+    }
+}
+
+impl From<io::Error> for SmtWriteError {
+    fn from(err: io::Error) -> Self {
+        Self(SmtWriteErrorCause::Io(err))
     }
 }
 
