@@ -531,7 +531,7 @@ theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Parse
   obtain ⟨posture, phase, declarations⟩ := parser
   simp only [ScriptParser.Internal.command] at hphase
   subst hphase
-  refine ⟨.syntax .expectedFunctionBody,
+  refine ⟨.syntax (.missing .functionBody),
     .process (.token .parenClose) :: .arrive (.token .parenClose) :: events, ?_, trivial⟩
   have h₁ : ((ExceptT.lift
       (arriveAt recordingPoints Parser.Internal.Input.parenClose) : Quiet.RPM Unit).run.run

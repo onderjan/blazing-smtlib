@@ -24,6 +24,6 @@ inductive CommandOutcome where
   | exit
   /-- The end of the input was reached before a command. -/
   | endOfFile
-  deriving BEq, Repr
+  deriving BEq, Hashable, Repr
 
 end BSmtLib.Parser.Command

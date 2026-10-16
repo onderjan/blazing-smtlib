@@ -80,6 +80,40 @@ structure Ident where
 def Ident.intoOwned (self : Ident) : IdentBuf :=
   { name := self.name.intoOwned, indices := self.indices.map Index.intoOwned }
 
+/- LEAN: the index with its bytes copied, so that it holds no storage of the input; how the owned
+buffers keep what they are given. -/
+@[inline]
+def Index.Internal.copy : Index → Index
+  | .numeral digits => .numeral digits.intoOwned.asView
+  | .symbol name => .symbol name.intoOwned.asView
+
+/-- Owned indices of an identifier, from which `Ident.indices` is viewed. -/
+/- LEAN: Rust's `SmtIndicesBuf`, from which `SmtIndices` is viewed; Lean's indices are an
+`Array` of the views (see `Ident`), which `view` gives. Each index is a view of a copy of its
+bytes that the buffer made, so the view needs no copy. -/
+structure IndicesBuf where
+  private ofArray ::
+  private entries : Array Index
+
+namespace IndicesBuf
+
+def new : IndicesBuf := ⟨#[]⟩
+
+def push (self : IndicesBuf) (index : Index) : IndicesBuf :=
+  ⟨self.entries.push (Index.Internal.copy index)⟩
+
+def clear (_ : IndicesBuf) : IndicesBuf := new
+
+def view (self : IndicesBuf) : Array Index := self.entries
+
+def len (self : IndicesBuf) : Nat := self.entries.size
+
+def isEmpty (self : IndicesBuf) : Bool := self.entries.isEmpty
+
+@[no_expose] instance : Inhabited IndicesBuf := ⟨new⟩
+
+end IndicesBuf
+
 /-- A qualified identifier: an identifier, with the sort it is qualified with by `as`, if it is
 qualified. -/
 structure QualifiedIdent (HandledSort : Type) where
@@ -97,7 +131,7 @@ inductive SpecialConstantBuf where
   | hexadecimal (digits : HexDigitsBuf)
   | binary (digits : BinDigitsBuf)
   | string (content : StringContentBuf)
-  deriving Repr
+  deriving BEq, Hashable, Repr
 
 /-- A constant, as a view of its token's content. -/
 inductive SpecialConstant where
@@ -106,7 +140,7 @@ inductive SpecialConstant where
   | hexadecimal (digits : HexDigits)
   | binary (digits : BinDigits)
   | string (content : StringContent)
-  deriving Repr
+  deriving BEq, Hashable, Repr
 
 def SpecialConstant.intoOwned : SpecialConstant → SpecialConstantBuf
   | .numeral digits => .numeral digits.intoOwned
@@ -164,11 +198,53 @@ def Pattern.intoOwned : Pattern → PatternBuf
   | .application constructor args =>
     .application constructor.intoOwned (args.map SimplePattern.intoOwned)
 
+/- LEAN: the simple pattern with its bytes copied, so that it holds no storage of the input; how
+the owned buffers keep what they are given. -/
+@[inline]
+def SimplePattern.Internal.copy : SimplePattern → SimplePattern
+  | .symbol name => .symbol name.intoOwned.asView
+  | .wildcard => .wildcard
+
+/- LEAN: the pattern with its bytes copied, as `SimplePattern.Internal.copy`. -/
+@[inline]
+def Pattern.Internal.copy : Pattern → Pattern
+  | .simple pattern => .simple (SimplePattern.Internal.copy pattern)
+  | .application constructor args =>
+    .application constructor.intoOwned.asView (args.map SimplePattern.Internal.copy)
+
+/-- Owned arguments of a constructor pattern, from which the `args` of `Pattern.application` are
+viewed. -/
+/- LEAN: Rust's `SmtSimplePatternsBuf`, from which `SmtSimplePatterns` is viewed; Lean's
+arguments are an `Array` of the views (see `Pattern`), which `view` gives. Each pattern is a view
+of a copy of its bytes that the buffer made, so the view needs no copy. -/
+structure SimplePatternsBuf where
+  private ofArray ::
+  private entries : Array SimplePattern
+
+namespace SimplePatternsBuf
+
+def new : SimplePatternsBuf := ⟨#[]⟩
+
+def push (self : SimplePatternsBuf) (pattern : SimplePattern) : SimplePatternsBuf :=
+  ⟨self.entries.push (SimplePattern.Internal.copy pattern)⟩
+
+def clear (_ : SimplePatternsBuf) : SimplePatternsBuf := new
+
+def view (self : SimplePatternsBuf) : Array SimplePattern := self.entries
+
+def len (self : SimplePatternsBuf) : Nat := self.entries.size
+
+def isEmpty (self : SimplePatternsBuf) : Bool := self.entries.isEmpty
+
+@[no_expose] instance : Inhabited SimplePatternsBuf := ⟨new⟩
+
+end SimplePatternsBuf
+
 /-- The two quantifiers. -/
 inductive QuantifierKind where
   | «exists»
   | «forall»
-  deriving BEq, Repr
+  deriving BEq, Hashable, Repr
 
 /-- Sorts to be handled. -/
 /- LEAN: parameterised by the handled sorts, where Rust's is by the handler. -/

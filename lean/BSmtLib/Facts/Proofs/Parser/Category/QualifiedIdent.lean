@@ -23,7 +23,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Category.QualifiedIdent
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 open BSmtLib.Parser (Parse ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.QualifiedIdent BSmtLib.Parser.Category.Ident
@@ -285,7 +285,7 @@ theorem qualifiedIdent_runs {version : Token.Version}
     rw [bind_pure_comp]
 
 omit [LawfulMonad m] in
-private theorem qualifiedIdent_hparse {Z : Type} [Produce Z] (p : QualifiedIdentParser H)
+private theorem qualifiedIdent_hparse {Z : Type} [Cursor Z] (p : QualifiedIdentParser H)
     (s : ParseState H) (c : Z) :
     Parse.parse (m := m) p s c = Parser.Internal.parseByToken p s c := rfl
 
@@ -371,7 +371,7 @@ private theorem qualifiedIdent_rejects {version : Token.Version}
 theorem qualifiedIdent_rejects_first {version : Token.Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen) :
     Rejects version (QualifiedIdentParser.new (H := H)) [token] (pure () : PM H Unit)
-      .expectedIdent :=
+      (.expected #[.ident]) :=
   qualifiedIdent_rejects (tokens := []) (.nil _) (by
     cases token <;> first | exact absurd rfl (hsymbol _) | exact absurd rfl hopen |
       simp [qualStep, qualIdentStep, Parser.Internal.syntaxError])
@@ -381,7 +381,8 @@ theorem qualifiedIdent_rejects_opened {version : Token.Version} {token : Parser.
     (hunderscore : token ≠ .reserved (.general .underscore))
     (has : token ≠ .reserved (.general .as)) :
     Rejects version (QualifiedIdentParser.new (H := H)) [.parenOpen, token]
-      (pure () : PM H Unit) .expectedUnderscoreOrAs := by
+      (pure () : PM H Unit)
+      (.expected #[.reserved (.general .underscore), .reserved (.general .as)]) := by
   have hu : token.isWord .underscore = false := by
     cases token with
     | reserved word =>
@@ -490,8 +491,8 @@ theorem qualifiedIdent_rejects_sort_inner {version : Token.Version} {identifier 
 
 /--
 The qualified identifier parser on `(` `as`, the tokens of a valid identifier and of a valid sort,
-and a token that is not `)`: it rejects that token with `expectedToken [)]`, having made the
-traversal's calls for the sort.
+and a token that is not `)`: it rejects that token with `expected #[.token .parenClose]`, having
+made the traversal's calls for the sort.
 -/
 theorem qualifiedIdent_rejects_close {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -503,14 +504,14 @@ theorem qualifiedIdent_rejects_close {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ (sortTokens ++ [token])))
       ((fun _ => ()) <$> adaptRun (Traversal.sort noPoints h sort))
-      (.expectedToken #[.parenClose]) := by
+      (.expected #[.token .parenClose]) := by
   obtain ⟨head, hruns⟩ := qualifiedIdent_sortRuns hvalid.1 hident
     (BSmtLib.Facts.Proofs.Parser.Category.StepsSort.sort_runs (points := noPoints) hA sort
       hvalid.2 hsort [])
   have hfail : ∀ handled : Traits.Handler.«Sort» H,
       RunsS noPoints (qualIdentStep version) (.close head handled) [token]
         (do tick noPoints token; pure ())
-        fun _ => throw (.syntax (.expectedToken #[.parenClose])) :=
+        fun _ => throw (.syntax (.expected #[.token .parenClose])) :=
     fun handled => RunsS.token (by
       cases token <;> first | exact absurd rfl htoken |
         simp [qualIdentStep, Parser.Category.Token.Internal.expectClose, Parser.Internal.syntaxError])
@@ -537,7 +538,8 @@ theorem qualifiedIdent_rejects_sortInner {version : Token.Version} {identifier :
     (hopen : token ≠ .parenOpen) (hunderscore : token ≠ .reserved (.general .underscore)) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ [.parenOpen, token]))
-      (pure () : PM H Unit) .expectedSortInner := by
+      (pure () : PM H Unit)
+      (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]) := by
   have := qualifiedIdent_rejects_sort_inner (H := H) (m := m) hvalid hident
     (BSmtLib.Facts.Proofs.Parser.Category.SortedVar.sort_fails_inner (version := version)
       hsymbol hopen hunderscore)
@@ -552,14 +554,14 @@ theorem qualifiedIdent_rejects_sortEmpty {version : Token.Version} {identifier :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ [.parenOpen, .symbol head, .parenClose]))
-      (pure () : PM H Unit) .emptySortApplication := by
+      (pure () : PM H Unit) (.empty .sortApplication) := by
   have := qualifiedIdent_rejects_sort_inner (H := H) (m := m) hvalid hident
     (BSmtLib.Facts.Proofs.Parser.Category.SortedVar.sort_fails_empty (version := version) head)
   simpa using this
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, `(`, the
 tokens of a valid identifier and of valid sorts and a token that neither starts another argument
-of the sort nor ends it: it rejects that token with `expectedSort`, having made the traversal's
+of the sort nor ends it: it rejects that token with `expected #[.sort]`, having made the traversal's
 calls for the sorts. -/
 theorem qualifiedIdent_rejects_sortArgument {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -576,7 +578,7 @@ theorem qualifiedIdent_rejects_sortArgument {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ .parenOpen :: (headTokens ++ (sortTokens ++ [token]))))
-      ((fun _ => ()) <$> adaptRun (Traversal.sorts noPoints h sorts)) .expectedSort := by
+      ((fun _ => ()) <$> adaptRun (Traversal.sorts noPoints h sorts)) (.expected #[.sort]) := by
   have := qualifiedIdent_rejects_sort_inner (H := H) (m := m) hvalid hident
     (BSmtLib.Facts.Proofs.Parser.Category.SortedVar.sort_fails_argument hA hhead hsHead hsorts
       hsSorts hsymbol hopen hclose)
@@ -590,7 +592,7 @@ open BSmtLib.Facts.Proofs.Parser.Category.SortedVar (frameTokens sortFrames_fail
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
 applications and a token that neither starts another argument nor ends an application: it
-rejects that token with `expectedSort`, having made the traversal's calls for the applications'
+rejects that token with `expected #[.sort]`, having made the traversal's calls for the applications'
 argument sorts. -/
 theorem qualifiedIdent_rejects_sortDeepArgument {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -606,14 +608,15 @@ theorem qualifiedIdent_rejects_sortDeepArgument {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ (tokens ++ [token])))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .expectedSort := by
+      (.expected #[.sort]) := by
   have := qualifiedIdent_rejects_sort_inner (H := H) (m := m) hvalid hident
     (sortFrames_fails hA hframes hs (sortLevels_fails_argument hsymbol hopen hclose))
   simpa [Functor.map_map] using this
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
 applications, `(` and a token that starts no head: it rejects that token with
-`expectedSortInner`, having made the traversal's calls for the applications' argument sorts. -/
+`expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, having made the
+traversal's calls for the applications' argument sorts. -/
 theorem qualifiedIdent_rejects_sortDeepInner {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) {identifier : Tree.Identifier}
@@ -628,13 +631,13 @@ theorem qualifiedIdent_rejects_sortDeepInner {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ (tokens ++ [.parenOpen, token])))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .expectedSortInner := by
+      (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]) := by
   have := qualifiedIdent_rejects_sort_inner (H := H) (m := m) hvalid hident
     (sortFrames_fails hA hframes hs (sortLevels_fails_inner hsymbol hopen hunderscore))
   simpa [Functor.map_map] using this
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
-applications, and `(`, a symbol and `)`: it rejects the `)` with `emptySortApplication`, having
+applications, and `(`, a symbol and `)`: it rejects the `)` with `empty .sortApplication`, having
 made the traversal's calls for the applications' argument sorts. -/
 theorem qualifiedIdent_rejects_sortDeepEmpty {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -650,7 +653,7 @@ theorem qualifiedIdent_rejects_sortDeepEmpty {version : Token.Version}
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ (tokens ++ [.parenOpen, .symbol head, .parenClose])))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .emptySortApplication := by
+      (.empty .sortApplication) := by
   have := qualifiedIdent_rejects_sort_inner (H := H) (m := m) hvalid hident
     (sortFrames_fails hA hframes hs (sortLevels_fails_empty head))
   simpa [Functor.map_map] using this

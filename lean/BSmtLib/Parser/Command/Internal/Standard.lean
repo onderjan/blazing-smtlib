@@ -30,7 +30,7 @@ open BSmtLib.Plain (Numeral Keyword StringContent Symbol)
 open BSmtLib.Multiple (SortedVars)
 open BSmtLib.Token (Version)
 open BSmtLib.Token.Reserved (CommandNameReserved)
-open BSmtLib.Parser.Internal (PM call syntaxError)
+open BSmtLib.Parser.Internal (PM call syntaxError versionError)
 
 /-- The shape of a propositional literal read so far, ⟨symbol⟩ | `(` `not` ⟨symbol⟩ `)`. -/
 inductive LiteralShape where
@@ -73,10 +73,10 @@ def literalStep (version : Version) (self : LiteralStateOf H) (token : Internal.
     | .start, .parenOpen => pure .negation
     | .negation, .symbol symbol =>
       if Symbol.isNot symbol then pure .negated
-      else syntaxError .expectedPropositionalLiteral
+      else syntaxError (.expected #[.propositionalLiteral])
     | .negated, .symbol _ => pure .close
     | .close, .parenClose => pure .start
-    | _, _ => syntaxError .expectedPropositionalLiteral
+    | _, _ => syntaxError (.expected #[.propositionalLiteral])
   match ← termStep version self.term token with
   | .more term => return .more { shape, term }
   | .done term => return .done term
@@ -354,7 +354,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     match ← state.step .start SortDecState.step none token with
     | .more state => return .more (.declareDatatypesSorts state)
     | .done sorts =>
-      if sorts.isEmpty then syntaxError .emptyDatatypeIntroductions
+      if sorts.isEmpty then syntaxError (.empty .datatypeIntroductions)
       call (CommandHandler.startDeclareDatatypes (H := H)
         (Multiple.SortArities.Internal.new sorts))
       return .more (.declareDatatypesDatatypes sorts.size (ListState.paren .start))
@@ -371,7 +371,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     match ← state.step .start datatype (some count) token with
     | .more state => return .more (.declareDatatypesDatatypes count state)
     | .done datatypes =>
-      if datatypes.size != count then syntaxError .expectedDatatype
+      if datatypes.size != count then syntaxError (.missing .datatype)
       close .endDeclareDatatypes
   | .defineSortParameters symbol state =>
     match ← state.step () symbolStep none token with
@@ -409,7 +409,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     match ← state.step .start (functionDecStep version) none token with
     | .more state => return .more (.defineFunsRecDeclarations state)
     | .done signatures =>
-      if signatures.isEmpty then syntaxError .emptyFunctionSignatures
+      if signatures.isEmpty then syntaxError (.empty .functionSignatures)
       call (CommandHandler.startDefineFunsRec
         (Multiple.FunctionSignatures.Internal.new signatures))
       return .more (.defineFunsRecBodies signatures (ListState.paren .init))
@@ -417,7 +417,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     match ← bodiesStep signatures.size version state token with
     | .more state => return .more (.defineFunsRecBodies signatures state)
     | .done bodies =>
-      if bodies.size != signatures.size then syntaxError .expectedFunctionBody
+      if bodies.size != signatures.size then syntaxError (.missing .functionBody)
       close .endDefineFunsRec
   | .echo => close (.echo (← expectString token))
   | .getInfo => close (.getInfo (← expectKeyword token))
@@ -426,7 +426,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     match ← state.step .init (termStep version) none token with
     | .more state => return .more (.getValue state)
     | .done values =>
-      if values.isEmpty then syntaxError .emptyGetValueTerms
+      if values.isEmpty then syntaxError (.empty .getValueTerms)
       close (.getValue values)
   | .pop => close (.pop (← expectNumeral token))
   | .push => close (.push (← expectNumeral token))
@@ -436,17 +436,17 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     match ← attributeStep true version state token with
     | .more state => return .more (.setInfo declaration state)
     | .done attributes =>
-      let some info := attributes[0]? | syntaxError .expectedAttribute
+      let some info := attributes[0]? | syntaxError (.expected #[.attribute])
       call (CommandHandler.commandSetInfo info)
       match declaration with
       | .value (some declared) => return .done (.setVersion declared)
-      | .keyword | .value none => syntaxError .unsupportedVersion
+      | .keyword | .value none => versionError .unsupported
       | .start | .other => return .done .command
   | .setOption state =>
     match ← attributeStep true version state token with
     | .more state => return .more (.setOption state)
     | .done attributes =>
-      let some option := attributes[0]? | syntaxError .expectedAttribute
+      let some option := attributes[0]? | syntaxError (.expected #[.attribute])
       call (CommandHandler.commandSetOption option)
       return .done .command
 

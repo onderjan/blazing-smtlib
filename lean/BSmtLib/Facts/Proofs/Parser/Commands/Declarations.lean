@@ -199,7 +199,7 @@ theorem declareDatatypes_payload (sortDecs : List Tree.SortDec)
         (outerArrival :=
             Parser.Command.Internal.Standard.payloadArrive) Payload.declareDatatypesSorts
       (fun sorts => do
-        if sorts.isEmpty then Parser.Internal.syntaxError .emptyDatatypeIntroductions
+        if sorts.isEmpty then Parser.Internal.syntaxError (.empty .datatypeIntroductions)
         Parser.Internal.call (Traits.CommandHandler.startDeclareDatatypes (H := H)
           (Multiple.SortArities.Internal.new sorts))
         return .more (.declareDatatypesDatatypes sorts.size (ListState.paren .start)))
@@ -213,7 +213,7 @@ theorem declareDatatypes_payload (sortDecs : List Tree.SortDec)
     (Payload.declareDatatypesDatatypes count)
     (fun datatypes => do
       if (datatypes.size != count) = true then (do
-        Parser.Internal.syntaxError .expectedDatatype
+        Parser.Internal.syntaxError (.missing .datatype)
         pure (.more (.closing .endDeclareDatatypes)))
       else
         pure (.more (.closing .endDeclareDatatypes)))

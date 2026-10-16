@@ -5,7 +5,7 @@ public import BSmtLib.Lexer.Error
 public import BSmtLib.Lexer.Internal.Helpers
 public import BSmtLib.Lexer.Recovery
 public import BSmtLib.Token
-public import BSmtLib.Token.Produce
+public import BSmtLib.Token.Cursor
 public import BSmtLib.Token.ConsumeFrom
 import all Std.Data.ByteSlice
 
@@ -694,7 +694,7 @@ def finishDecimal (tokenEnd : Helpers.TokenEnd) (next : Option UInt8) (start : S
   -- decimals of the form 7. without any digit in fractional part are disallowed
   let last := Helpers.Content.stored.last? (← getCore).tokenContent
   if last.isNone || last == some (byte! '.') then
-    fail .fractionDigitExpected tokenEnd
+    fail (.expected .fractionDigit) tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
   sinkStored .decimal tokenEnd start base h
@@ -743,7 +743,7 @@ def finishKeyword (tokenEnd : Helpers.TokenEnd) (next : Option UInt8) (start : S
     (base : USize) (h : Started floor low start) : LexM H m R E floor low Unit := do
   -- ensure the keyword is not empty
   if Helpers.Content.stored.size (← getCore).tokenContent == 0 then
-    fail .forbiddenKeywordName tokenEnd
+    fail .emptyKeyword tokenEnd
   if let some next := next then
     expectDelimiter next tokenEnd.position
   sinkStored .keyword tokenEnd start base h
@@ -1483,7 +1483,7 @@ def lexNormalFrom (input : CharClass.Input) (offset : Nat) (base index : USize)
     if (Helpers.Content.borrow input after afterEnd (by decreasing_position) hwithin).size
         (← getCore).tokenContent == 0 then
       leave offset base index batch hframe hbatch
-      fail .forbiddenKeywordName (.mkAtByte afterEnd)
+      fail .emptyKeyword (.mkAtByte afterEnd)
     let next := input.get afterEnd (CharClass.Input.lt_stop_of_ne hwithin hend)
     if !Helpers.isDelimiter next then
       leave offset base index batch hframe hbatch
@@ -1536,7 +1536,7 @@ def lexNormalFrom (input : CharClass.Input) (offset : Nat) (base index : USize)
           hwithin).last? (← getCore).tokenContent
         if last.isNone || last == some (byte! '.') then
           leave offset base index batch hframe hbatch
-          fail .fractionDigitExpected (.mkAtByte afterFractionEnd)
+          fail (.expected .fractionDigit) (.mkAtByte afterFractionEnd)
         let following := input.get afterFractionEnd (CharClass.Input.lt_stop_of_ne hwithin hend)
         if !Helpers.isDelimiter following then
           leave offset base index batch hframe hbatch
@@ -1689,7 +1689,7 @@ def lexBaseSelection (input : CharClass.Input) (start : USize)
   else if c == byte! 'b' then
     setTokenState .binary tokenStart h
   else
-    failAt .baseSelectionExpected (start + 1)
+    failAt (.expected .base) (start + 1)
   return ⟨start + 1, by rw [CharClass.toNat_add_one_of_lt hstart]; omega⟩
 
 /-- Lexes a digit run, either hexadecimal or binary. -/
@@ -2346,7 +2346,7 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
         ⟨h.resolve_left nofun, fun _ h => nomatch h⟩
     | .baseSelection, _ =>
       -- hash without selection following it
-      fail .baseSelectionExpected Helpers.TokenEnd.EOF
+      fail (.expected .base) Helpers.TokenEnd.EOF
     | .stringLiteral, _ | .stringLiteralBackslashEscape, _ =>
       -- we are still within the string literal
       -- forbidden as the literal must be totally enclosed by double quotes

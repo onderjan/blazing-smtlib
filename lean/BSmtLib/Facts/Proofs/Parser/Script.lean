@@ -81,8 +81,8 @@ theorem check_policyOf (posture : VersionPosture) (declarations : Nat)
     (check posture) declarations version =
       match (policyOf posture).check declarations (Bridge.version version) with
       | .ok () => none
-      | .error .unsupportedVersion => some .unsupportedVersion
-      | .error (.tooManyDeclarations limit) => some (.tooManyVersionDeclarations limit) := by
+      | .error .unsupportedVersion => some .unsupported
+      | .error (.tooManyDeclarations limit) => some (.tooManyDeclarations limit) := by
   have hmem := mem_policyOf posture version
   rw [Array.contains_iff_mem] at hmem
   unfold Parser.Script.Internal.VersionPosture.check VersionPolicy.check
@@ -120,10 +120,10 @@ def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Pars
       (scriptAt (H := H) posture .awaiting declarations) rest
   | .setVersion declared =>
     match (check posture) declarations declared with
-    | some kind => Parser.Internal.syntaxError kind
+    | some kind => Parser.Internal.versionError kind
     | none => do
       match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
-      | .error _ => throw (.syntax .unsupportedVersion)
+      | .error _ => throw (.version .unsupported)
       | .ok () => do
         ExceptT.lift (Traits.Handler.setVersion (H := H) declared)
         driveParse points producer declared
@@ -180,7 +180,7 @@ theorem script_embed (version : Token.Version) (command : Parser.Command.Interna
       | command => simp [scriptAfter]
       | setVersion declared =>
         cases hck : (check posture) declarations declared <;>
-          simp [scriptAfter, hck, Parser.Internal.syntaxError] <;> rfl
+          simp [scriptAfter, hck, Parser.Internal.versionError] <;> rfl
       | exit => simp [scriptAfter]
       | endOfFile => simp [scriptAfter]
 
@@ -305,10 +305,10 @@ script parser makes them, are the spec's switch to the version under the policy 
 theorem switch_eq (hA : Agrees h) (producer : Producer (StateT H m)) (posture : VersionPosture)
     (declarations : Nat) (declared : Token.Version) {β : Type} (k : PM H β) :
     (match (check posture) declarations declared with
-      | some kind => Parser.Internal.syntaxError kind
+      | some kind => Parser.Internal.versionError kind
       | none => do
         match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
-        | .error _ => throw (.syntax .unsupportedVersion)
+        | .error _ => throw (.version .unsupported)
         | .ok () => do
           ExceptT.lift (Traits.Handler.setVersion (H := H) declared)
           k) =
@@ -319,7 +319,7 @@ theorem switch_eq (hA : Agrees h) (producer : Producer (StateT H m)) (posture : 
   rw [check_policyOf, BSmtLibSpec.Facts.Proofs.Parser.Equations.switchVersion_eq]
   cases (policyOf posture).check declarations (Bridge.version declared) with
   | error error =>
-    cases error <;> simp [adaptRun, Parser.Internal.syntaxError, causeOf]
+    cases error <;> simp [adaptRun, Parser.Internal.versionError, causeOf]
   | ok u =>
     cases u
     simp only [adaptRun_bind, bind_assoc, adaptRun_lift, hA.setVersion]

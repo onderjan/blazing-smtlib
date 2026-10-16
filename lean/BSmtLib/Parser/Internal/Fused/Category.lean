@@ -89,18 +89,18 @@ def identStep {batch : BatchTag} (version : Version) (self : IdentState)
     | _ =>
       match symbolOf? version category next token with
       | some symbol => .done ⟨symbol, #[]⟩
-      | none => .error .expectedIdent
+      | none => .error (.expected #[.ident])
   | .opened =>
     if isWord version category next token .underscore then .more .afterUnderscore
-    else .error .expectedUnderscore
+    else .error (.expected #[.reserved (.general .underscore)])
   | .afterUnderscore =>
     match symbolOf? version category next token with
     | some symbol => .more (.indices symbol #[])
-    | none => .error .expectedSymbol
+    | none => .error (.expected #[.symbol])
   | .indices symbol found =>
     match category with
     | .parenClose =>
-      if found.isEmpty then .error .emptyIdentIndices else .done ⟨symbol, found⟩
+      if found.isEmpty then .error (.empty .identIndices) else .done ⟨symbol, found⟩
     | .numeral =>
       .more (.indices symbol
         (found.push (.numeral (Numeral.Internal.newUnchecked (contentOf next token)))))
@@ -108,8 +108,8 @@ def identStep {batch : BatchTag} (version : Version) (self : IdentState)
       match symbolOf? version category next token with
       | some index =>
         if version ≥ .v2_5 then .more (.indices symbol (found.push (.symbol index)))
-        else .error .expectedIndexOrCloseParen
-      | none => .error .expectedIndexOrCloseParen
+        else .error (.expected #[.index, .token .parenClose])
+      | none => .error (.expected #[.index, .token .parenClose])
 
 section
 
@@ -149,14 +149,14 @@ def sortStep {batch : BatchTag} (version : Version) (h : H) (self : SortStateOf 
     | .parenOpen => return .more h { mode := .opened, levels }
     | .parenClose =>
       match levels with
-      | [] => return .error h (.syntax .expectedSort)
+      | [] => return .error h (.syntax (.expected #[.sort]))
       | level :: outer =>
-        if level.arguments.isEmpty then return .error h (.syntax .emptySortApplication)
+        if level.arguments.isEmpty then return .error h (.syntax (.empty .sortApplication))
         else sortComplete h outer level.head level.arguments
     | _ =>
       match symbolOf? version category next token with
       | some name => sortComplete h levels ⟨name, #[]⟩ #[]
-      | none => return .error h (.syntax .expectedSort)
+      | none => return .error h (.syntax (.expected #[.sort]))
   | .opened =>
     match category with
     | .parenOpen => return .more h { mode := .startingIdent .opened, levels }
@@ -166,7 +166,9 @@ def sortStep {batch : BatchTag} (version : Version) (h : H) (self : SortStateOf 
       | none =>
         if isWord version category next token .underscore then
           return .more h { mode := .identOnly .afterUnderscore, levels }
-        else return .error h (.syntax .expectedSortInner)
+        else
+          return .error h
+            (.syntax (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]))
   | .identOnly ident =>
     match identStep version ident category next token with
     | .more ident => return .more h { mode := .identOnly ident, levels }
@@ -189,7 +191,7 @@ def sortsStep {batch : BatchTag} (version : Version) (h : H)
   if !opened then
     match category with
     | .parenOpen => return .more h { opened := true, outside, inner, items }
-    | _ => return .error h (.syntax (.expectedToken #[.parenOpen]))
+    | _ => return .error h (.syntax (.expected #[.token .parenOpen]))
   else if outside && category == .parenClose then
     return .done h items
   else
@@ -218,11 +220,11 @@ def sortedVarStep {batch : BatchTag} (version : Version) (h : H) (self : SortedV
   | .start =>
     match category with
     | .parenOpen => return .more h .opened
-    | _ => return .error h (.syntax (.expectedToken #[.parenOpen]))
+    | _ => return .error h (.syntax (.expected #[.token .parenOpen]))
   | .opened =>
     match symbolOf? version category next token with
     | some symbol => return .more h (.sort symbol .init)
-    | none => return .error h (.syntax .expectedSymbol)
+    | none => return .error h (.syntax (.expected #[.symbol]))
   | .sort symbol sort =>
     match ← sortStep version h sort category next token with
     | .more h sort => return .more h (.sort symbol sort)
@@ -231,7 +233,7 @@ def sortedVarStep {batch : BatchTag} (version : Version) (h : H) (self : SortedV
   | .close symbol sort =>
     match category with
     | .parenClose => return .done h (symbol, sort)
-    | _ => return .error h (.syntax (.expectedToken #[.parenClose]))
+    | _ => return .error h (.syntax (.expected #[.token .parenClose]))
 
 /-- `ListState.step` without a maximum, of sorted variables, on the token's category. -/
 @[inline]
@@ -242,7 +244,7 @@ def sortedVarsStep {batch : BatchTag} (version : Version) (h : H) (self : Sorted
   if !opened then
     match category with
     | .parenOpen => return .more h { opened := true, outside, inner, items }
-    | _ => return .error h (.syntax (.expectedToken #[.parenOpen]))
+    | _ => return .error h (.syntax (.expected #[.token .parenOpen]))
   else if outside && category == .parenClose then
     return .done h items
   else
@@ -265,7 +267,7 @@ def signatureStep {batch : BatchTag} (version : Version) (h : H)
   | .start =>
     match symbolOf? version category next token with
     | some symbol => return .more h (.parameters symbol (ListState.paren .start))
-    | none => return .error h (.syntax .expectedSymbol)
+    | none => return .error h (.syntax (.expected #[.symbol]))
   | .parameters symbol state =>
     match ← sortedVarsStep version h state category next token with
     | .more h state => return .more h (.parameters symbol state)
@@ -288,7 +290,7 @@ def qualIdentStep {batch : BatchTag} (version : Version)
   | .opened =>
     if isWord version category next token .underscore then some (.more (.indexed .afterUnderscore))
     else if isWord version category next token .as then some (.more (.qualifiedIdent .start))
-    else some (.error .expectedUnderscoreOrAs)
+    else some (.error (.expected #[.reserved (.general .underscore), .reserved (.general .as)]))
   | .indexed ident =>
     match identStep version ident category next token with
     | .more ident => some (.more (.indexed ident))

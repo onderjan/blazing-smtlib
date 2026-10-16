@@ -60,7 +60,7 @@ def attributeStep (single : Bool) (version : Version)
   let finish (attributes : Array (Handler.Attribute H)) :
       PM H (Internal.Step (AttributeState (Handler.SExpr H) (Handler.Attribute H))
         (Array (Handler.Attribute H))) :=
-    if single && attributes.isEmpty then syntaxError .expectedAttribute
+    if single && attributes.isEmpty then syntaxError (.expected #[.attribute])
     else pure (.done attributes)
   match self.mode with
   | .start =>
@@ -70,7 +70,7 @@ def attributeStep (single : Bool) (version : Version)
     match token with
     | .parenClose => finish self.attributes
     | .keyword name => return .more { self with mode := .afterName name }
-    | _ => syntaxError .expectedAttribute
+    | _ => syntaxError (.expected #[.attribute])
   | .afterName keyword =>
     let valued (value : AttributeValue (Handler.SExpr H)) := do
       let handled ← call (Handler.handleAttribute keyword (some value))
@@ -84,10 +84,10 @@ def attributeStep (single : Bool) (version : Version)
       finish (self.attributes.push handled)
     | .keyword name =>
       -- a single attribute is followed by the `)`: reject the keyword before handing over
-      if single then syntaxError (.expectedToken #[.parenClose])
+      if single then syntaxError (.expected #[.token .parenClose])
       let handled ← call (Handler.handleAttribute keyword none)
       return .more { mode := .afterName name, attributes := self.attributes.push handled }
-    | _ => syntaxError .expectedAttribute
+    | _ => syntaxError (.expected #[.attribute])
   | .inside keyword items sExpr outside =>
     if outside then
       if let .parenClose := token then
@@ -137,7 +137,7 @@ instance Internal.instParseByTokenClosedAttributeParser :
       -- with `single`, the step finishes with exactly one attribute
       match attributes[0]? with
       | some first => return .done first
-      | none => syntaxError .expectedAttribute
+      | none => syntaxError (.expected #[.attribute])
   reset _ := .new
 
 instance : Parse (ClosedAttributeParser H) H m (Handler.Error H) (Handler.Attribute H) where

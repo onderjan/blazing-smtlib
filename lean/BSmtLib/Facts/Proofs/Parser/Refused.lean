@@ -101,16 +101,16 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
         let handled ← attributeThen points h (BSmtLibSpec.Regex.chars "smt-lib-version") .parenClose
           value
         Program.callUnit h (.commandSetInfo handled)))
-      fun _ => Parser.Internal.syntaxError .unsupportedVersion := by
+      fun _ => Parser.Internal.versionError .unsupported := by
   have hruns := attributeSingle_runs (points := points) hA.toTermAgrees _ value hvalid
     (Stands.append hs (Stands.cons (token := .parenClose) rfl Stands.nil))
   have hembed := Runs.bind_next ((Runs.embedA (outer := payloadStep version)
       (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
     (Payload.setInfo (.value none))
     (fun attributes => do
-      let some info := attributes[0]? | Parser.Internal.syntaxError .expectedAttribute
+      let some info := attributes[0]? | Parser.Internal.syntaxError (.expected #[.attribute])
       Parser.Internal.call (Traits.CommandHandler.commandSetInfo info)
-      Parser.Internal.syntaxError .unsupportedVersion)
+      Parser.Internal.versionError .unsupported)
     (by
       intro state token
       simp only [payloadStep]
@@ -122,7 +122,7 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
         simp only [Parser.Internal.Step.wrap, Declaration.next]
         cases r[0]? <;> rfl) hruns).congr rfl
     (next' := fun r => Parser.Internal.call (Traits.CommandHandler.commandSetInfo r) >>=
-      fun _ => Parser.Internal.syntaxError .unsupportedVersion)
+      fun _ => Parser.Internal.versionError .unsupported)
     (by funext; simp [Parser.Internal.Step.wrap]))
   -- the keyword, then the token after it: the value's first, or the `)`
   obtain ⟨keywordToken, second, others, first, hpayload, hkeywordToken, hsecond, hfirst⟩ :
@@ -211,7 +211,7 @@ theorem command_runs_refused (hA : Agrees h) (command : Tree.Command)
         rest) Parser.Command.Internal.commandArrive =
       (do
         adaptRun (Traversal.command points h command)
-        (throw (.syntax .unsupportedVersion) : PM H (Option
+        (throw (.version .unsupported) : PM H (Option
             (CommandOutcome × List Parser.Internal.Input)))) := by
   obtain ⟨value, rfl, hvalue⟩ : ∃ value, command = .setInfo
       ⟨BSmtLibSpec.Regex.chars "smt-lib-version",

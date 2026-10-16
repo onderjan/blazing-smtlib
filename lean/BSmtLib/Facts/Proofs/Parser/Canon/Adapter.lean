@@ -5,7 +5,7 @@ public import BSmtLib.Facts.Parser
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
-import all BSmtLib.Token.Produce
+import all BSmtLib.Token.Cursor
 
 @[expose] public section
 

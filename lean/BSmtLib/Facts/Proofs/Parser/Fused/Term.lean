@@ -28,7 +28,7 @@ open BSmtLib.Parser.Category.Term.Internal (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Produce VersionPosture)
+open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
 open BSmtLib.Facts.Proofs.Parser.Fused.Run
 open BSmtLib.Facts.Proofs.Parser.Fused.Category
 

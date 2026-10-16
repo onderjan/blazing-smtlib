@@ -54,23 +54,25 @@ def step (version : Version) (self : PatternState) (token : Internal.Input) :
       match symbolOrWildcard? version token with
       | some symbol => pure (.done (.simple symbol))
       | none =>
-        syntaxError (if wildcardAllowed version then .expectedSymbolUnderscoreOrParenOpen
-          else .expectedSymbolOrParenOpen)
+        syntaxError (if wildcardAllowed version
+          then (.expected #[.symbol, .reserved (.general .underscore), .token .parenOpen])
+          else (.expected #[.symbol, .token .parenOpen]))
   | .opened =>
     match token with
     | .symbol constructor => pure (.more (.arguments constructor #[]))
-    | _ => syntaxError .expectedSymbol
+    | _ => syntaxError (.expected #[.symbol])
   | .arguments constructor found =>
     match token with
     | .parenClose =>
-      if found.isEmpty then syntaxError .emptyPatternArguments
+      if found.isEmpty then syntaxError (.empty .patternArguments)
       else pure (.done (.application constructor found))
     | token =>
       match symbolOrWildcard? version token with
       | some argument => pure (.more (.arguments constructor (found.push argument)))
       | none =>
-        syntaxError (if wildcardAllowed version then .expectedSymbolOrUnderscore
-          else .expectedSymbol)
+        syntaxError (if wildcardAllowed version
+          then (.expected #[.symbol, .reserved (.general .underscore)])
+          else (.expected #[.symbol]))
 
 end PatternState
 

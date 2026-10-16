@@ -154,7 +154,8 @@ def isAllowed (value : ByteSlice) : Bool :=
   else
     false
 
-/- LEAN: Rust's `from_usize`; Lean's natural numbers stand for every unsigned type. -/
+/- LEAN: not in Rust: Lean's natural numbers stand for every unsigned type, Rust's `u128` among
+them, which Lean has no type for. -/
 /-- Construct from a natural number. -/
 def fromNat (value : Nat) : NumeralBuf :=
   -- convert the value into a string and get its bytes
@@ -282,6 +283,10 @@ def intoByteArray (self : DisallowedByteVecError) : ByteArray :=
   self.bytes.intoByteArray
 
 @[no_expose] instance : Repr DisallowedByteVecError := ⟨fun s p => reprPrec s.bytes p⟩
+
+@[no_expose] instance : BEq DisallowedByteVecError := ⟨fun a b => a.bytes == b.bytes⟩
+
+@[no_expose] instance : Hashable DisallowedByteVecError := ⟨fun s => hash s.bytes⟩
 
 end DisallowedByteVecError
 
@@ -471,5 +476,119 @@ plain_newtype_eq BinDigitsBuf BinDigits
 plain_newtype_eq DecimalBuf Decimal
 plain_newtype_eq WhitespaceBuf Whitespace
 plain_newtype_eq CommentBuf Comment
+
+
+/-! ## Numeric values -/
+
+/- LEAN: Rust's `to_u32`, `to_u64` and `to_usize` are the functions with `?`; its `TryFrom`
+implementations for these types, whose error is `NumeralOverflow`, have no counterpart, as Lean
+has no class for a fallible conversion. Lean has no 128-bit unsigned type: `toNat` and
+`NumeralBuf.fromNat` stand for Rust's `to_u128` and `from_u128`, and take every value. -/
+
+/-- The numeral does not fit into the integer type it is converted to. -/
+structure NumeralOverflow where
+  deriving BEq, Hashable, Repr
+
+namespace Numeral
+
+/- LEAN: not in Rust: the value as a natural number, which every numeral has. -/
+/-- The value. -/
+def toNat (self : Numeral) : Nat :=
+  let rec loop (i value : Nat) : Nat :=
+    if h : i < self.slice.size then
+      loop (i + 1) (value * 10 + (self.slice[i] - byte! '0').toNat)
+    else
+      value
+  loop 0 0
+
+/-- The value as `UInt32`, or `none` if it does not fit. -/
+def toUInt32? (self : Numeral) : Option UInt32 :=
+  let value := self.toNat
+  if value < UInt32.size then some (UInt32.ofNat value) else none
+
+/-- The value as `UInt64`, or `none` if it does not fit. -/
+def toUInt64? (self : Numeral) : Option UInt64 :=
+  let value := self.toNat
+  if value < UInt64.size then some (UInt64.ofNat value) else none
+
+/--
+The value as `USize`, or `none` if it does not fit.
+
+Whether a value fits depends on the platform.
+-/
+def toUSize? (self : Numeral) : Option USize :=
+  let value := self.toNat
+  if value < USize.size then some (USize.ofNat value) else none
+
+end Numeral
+
+namespace NumeralBuf
+
+/-- Construct from `UInt32`. -/
+def fromUInt32 (value : UInt32) : NumeralBuf := fromNat value.toNat
+
+/-- Construct from `UInt64`. -/
+def fromUInt64 (value : UInt64) : NumeralBuf := fromNat value.toNat
+
+/-- Construct from `USize`. -/
+def fromUSize (value : USize) : NumeralBuf := fromNat value.toNat
+
+/- LEAN: not in Rust, as `Numeral.toNat`. -/
+/-- The value. -/
+def toNat (self : NumeralBuf) : Nat := self.asView.toNat
+
+/-- The value as `UInt32`, or `none` if it does not fit. -/
+def toUInt32? (self : NumeralBuf) : Option UInt32 := self.asView.toUInt32?
+
+/-- The value as `UInt64`, or `none` if it does not fit. -/
+def toUInt64? (self : NumeralBuf) : Option UInt64 := self.asView.toUInt64?
+
+/--
+The value as `USize`, or `none` if it does not fit.
+
+Whether a value fits depends on the platform.
+-/
+def toUSize? (self : NumeralBuf) : Option USize := self.asView.toUSize?
+
+end NumeralBuf
+
+/-! ## The parts of a decimal -/
+
+namespace Decimal
+
+/- LEAN: Rust panics where a decimal has no dot. No decimal lacks one: the library views the
+content of a decimal token, which has one, and `DecimalBuf.new` checks for it. A value without a
+dot would here be all whole part, with an empty fractional part. -/
+/-- The position of the dot. -/
+private def dot (self : Decimal) : Nat :=
+  (findByte self.slice (byte! '.')).getD self.slice.size
+
+/-- The whole part, before the dot. -/
+def whole (self : Decimal) : Numeral :=
+  Numeral.Internal.newUnchecked (self.slice.slice 0 self.dot)
+
+/--
+The digits of the fractional part, after the dot.
+
+They may have leading zeros, so they are not a numeral.
+-/
+def fraction (self : Decimal) : ByteSlice :=
+  self.slice.slice (self.dot + 1)
+
+end Decimal
+
+namespace DecimalBuf
+
+/-- The whole part, before the dot. -/
+def whole (self : DecimalBuf) : Numeral := self.asView.whole
+
+/--
+The digits of the fractional part, after the dot.
+
+They may have leading zeros, so they are not a numeral.
+-/
+def fraction (self : DecimalBuf) : ByteSlice := self.asView.fraction
+
+end DecimalBuf
 
 end BSmtLib.Plain

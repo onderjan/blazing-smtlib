@@ -18,7 +18,7 @@ proofs' (`Category.StepsPattern.pattern_runs`).
 namespace BSmtLib.Facts.Proofs.Parser.Category.Pattern
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 open BSmtLib.Parser (Parse ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Pattern
@@ -49,7 +49,7 @@ private theorem pattern_sim (version : Token.Version) :
   cases step <;> rfl
 
 omit [LawfulMonad m] in
-private theorem pattern_hparse {Z : Type} [Produce Z] (p : PatternParser H) (s : ParseState H)
+private theorem pattern_hparse {Z : Type} [Cursor Z] (p : PatternParser H) (s : ParseState H)
     (c : Z) : Parse.parse (m := m) p s c = Parser.Internal.parseByToken p s c := rfl
 
 /-- The pattern parser from its start on the tokens of a valid pattern: it finishes with the
@@ -83,8 +83,9 @@ theorem pattern_rejects_first {version : Token.Version} {token : Parser.Internal
     (hopen : token ≠ .parenOpen) (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hwildcard : version ≥ .v2_7 → token ≠ .reserved (.general .underscore)) :
     Rejects version (PatternParser.new (H := H)) [token] (pure () : PM H Unit)
-      (if version ≥ .v2_7 then .expectedSymbolUnderscoreOrParenOpen
-        else .expectedSymbolOrParenOpen) := by
+      (if version ≥ .v2_7
+        then (.expected #[.symbol, .reserved (.general .underscore), .token .parenOpen])
+        else (.expected #[.symbol, .token .parenOpen])) := by
   have hnone : PatternState.symbolOrWildcard? version token = none := by
     cases token with
     | symbol s => exact absurd rfl (hsymbol s)
@@ -107,7 +108,7 @@ theorem pattern_rejects_first {version : Token.Version} {token : Parser.Internal
 theorem pattern_rejects_constructor {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, token] (pure () : PM H Unit)
-      .expectedSymbol :=
+      (.expected #[.symbol]) :=
   pattern_rejects (tokens := [.parenOpen])
     (.cons (middle := .opened) (by simp [PatternState.step]) (.nil _)) (by
       cases token <;> first | exact absurd rfl (htoken _) |
@@ -117,7 +118,7 @@ theorem pattern_rejects_constructor {version : Token.Version} {token : Parser.In
 arguments. -/
 theorem pattern_rejects_empty {version : Token.Version} (constructor : Plain.Symbol) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, .symbol constructor, .parenClose]
-      (pure () : PM H Unit) .emptyPatternArguments :=
+      (pure () : PM H Unit) (.empty .patternArguments) :=
   pattern_rejects (tokens := [.parenOpen, .symbol constructor])
     (.cons (middle := .opened) (by simp [PatternState.step])
       (.cons (middle := .arguments constructor #[]) (by simp [PatternState.step]) (.nil _)))
@@ -159,7 +160,8 @@ theorem pattern_rejects_argument {version : Token.Version} (constructor : Plain.
     (hclose : token ≠ .parenClose) :
     Rejects version (PatternParser.new (H := H))
       ([.parenOpen, .symbol constructor] ++ arguments ++ [token]) (pure () : PM H Unit)
-      (if version ≥ .v2_7 then .expectedSymbolOrUnderscore else .expectedSymbol) := by
+      (if version ≥ .v2_7 then (.expected #[.symbol, .reserved (.general .underscore)])
+        else (.expected #[.symbol])) := by
   obtain ⟨found, hmoves⟩ :=
     arguments_move (H := H) (version := version) constructor arguments harguments #[]
   refine pattern_rejects (.cons (middle := .opened) (by simp [PatternState.step])

@@ -1,6 +1,5 @@
 module
 
-public import BSmtLib.Bytes
 public import BSmtLib.Token
 import all Init.Data.Array.Basic
 import all Init.Data.String.Defs
@@ -31,7 +30,7 @@ inductive GeneralReserved where
   | «forall»
   | «match»
   | par
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Hashable, Repr, Inhabited
 
 /--
 Reserved words naming standard SMT-LIB2 commands.
@@ -71,13 +70,13 @@ inductive CommandNameReserved where
   | setInfo
   | setLogic
   | setOption
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Hashable, Repr, Inhabited
 
 /-- Reserved words in SMT-LIB2, including standard command names. -/
 inductive _root_.BSmtLib.Token.Reserved where
   | general (reserved : Reserved.GeneralReserved)
   | commandName (reserved : Reserved.CommandNameReserved)
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Hashable, Repr, Inhabited
 
 namespace GeneralReserved
 
@@ -266,11 +265,6 @@ def fromBytes? (symbol : ByteSlice) (version : Version) : Option Reserved :=
       Internal.reservedTable[slot.val]'(by rw [Internal.size_reservedTable]; exact slot.isLt)
     -- if the symbol is equal to the reserved word and the version has it, return it
     if word.toByteSlice == symbol && version ≥ since then some reserved else none
-
-/-- The reserved word that the symbol spells in the version, if any. -/
-@[inline]
-def fromSymbol? (symbol : Bytes) (version : Version) : Option Reserved :=
-  fromBytes? symbol.asSlice version
 
 /-- Whether the reserved word is the name of a standard command. -/
 @[inline]

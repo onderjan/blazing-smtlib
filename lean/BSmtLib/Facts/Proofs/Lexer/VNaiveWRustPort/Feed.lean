@@ -336,7 +336,7 @@ theorem advance_end_keyword (hm : q.mode = .keyword) (hc : isSymbolByte c = fals
 
 theorem advance_end_keyword_empty (hm : q.mode = .keyword) (hc : isSymbolByte c = false)
     (he : q.content.isEmpty = true) :
-    advance ws q location c = .error (failAtByte .forbiddenKeywordName q.start location) := by
+    advance ws q location c = .error (failAtByte .emptyKeyword q.start location) := by
   obtain ⟨mode, start, content⟩ := q
   simp only at hm he
   subst hm
@@ -380,7 +380,7 @@ theorem advance_end_fraction (hm : q.mode = .fraction true) (hc : isDigit c = fa
   simp [advance, hc]
 
 theorem advance_end_fraction_none (hm : q.mode = .fraction false) (hc : isDigit c = false) :
-    advance ws q location c = .error (failAtByte .fractionDigitExpected q.start location) := by
+    advance ws q location c = .error (failAtByte (.expected .fractionDigit) q.start location) := by
   obtain ⟨mode, start, content⟩ := q
   simp only at hm
   subst hm

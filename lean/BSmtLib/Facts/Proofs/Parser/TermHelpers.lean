@@ -82,8 +82,8 @@ def binderScope (binder : SortedBinder)
     PM H (Traits.Handler.Scope H) := do
   if variables.isEmpty then
     syntaxError (match binder with
-      | .lambda => .emptyLambdaBindings
-      | _ => .emptyQuantifierBindings)
+      | .lambda => (.empty .lambdaBindings)
+      | _ => (.empty .quantifierBindings))
   startBinder binder variables
 
 /-- What the term parser does when a binder's variables are complete. -/
@@ -92,8 +92,8 @@ def binderStarted (levels : List (TermLevelOf H)) (binder : SortedBinder)
     PM H (Parser.Internal.Step (TermStateOf H) (Traits.Handler.Term H)) := do
   if variables.isEmpty then
     syntaxError (match binder with
-      | .lambda => .emptyLambdaBindings
-      | _ => .emptyQuantifierBindings)
+      | .lambda => (.empty .lambdaBindings)
+      | _ => (.empty .quantifierBindings))
   let scope ← startBinder binder variables
   return .more { mode := .start, levels := .binder (.sorted binder) scope :: levels }
 
@@ -143,7 +143,7 @@ theorem termStep_matchPattern (levels : List (TermLevelOf H)) (scrutinee : Trait
 def annotated (levels : List (TermLevelOf H)) (term : Traits.Handler.Term H)
     (attributes : Array (Traits.Handler.Attribute H)) :
     PM H (Parser.Internal.Step (TermStateOf H) (Traits.Handler.Term H)) := do
-  if attributes.isEmpty then syntaxError .emptyAnnotation
+  if attributes.isEmpty then syntaxError (.empty .annotation)
   let annotated ← Parser.Internal.call (Traits.Handler.annotateTerm term (.new attributes))
   termComplete levels annotated
 

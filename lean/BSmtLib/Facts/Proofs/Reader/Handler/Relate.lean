@@ -48,7 +48,7 @@ variable {H : Type} [CommandHandler H Id]
 
 theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
     ∀ (n : Nat) (parser : ScriptParser H) (cursor : Token.BatchCursor b)
-      (consumed : Token.Produce.Consumed cursor origin) (handler : H), remaining cursor < n →
+      (consumed : Token.Cursor.Consumed cursor origin) (handler : H), remaining cursor < n →
       let r := (Stop.rest (m := Id) origin parser cursor consumed).run handler
       ((r.1.1, r.1.2.1, r.1.2.2.val), r.2) = (loop parser cursor).run handler
   | 0, _, _, _, _, hn => absurd hn (Nat.not_lt_zero _)
@@ -201,7 +201,7 @@ end
 them. -/
 def partnerOfH {ε α : Type} :
     Except ε (ControlFlow α) → Except (ParseError (Handler.Error H)) (ControlFlow α)
-  | .error _ => .error (ParseError.Internal.new (.syntax .unsupportedVersion))
+  | .error _ => .error (ParseError.Internal.new (.version .unsupported))
   | .ok flow => .ok flow
 
 section

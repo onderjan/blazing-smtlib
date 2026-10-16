@@ -135,19 +135,19 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
   simp only [Param.Stop.takeOne, StateT.run_bind]
   rw [run_bind_ok (arrive_run _ _ _), step_eq, run_bind_split]
   obtain ⟨added, hlog, hadded, -⟩ := (commandStep_silent (bad := isSwitch)
-    (Token.Produce.version next) (commandOf parser)
-    (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).holds
+    (Token.Cursor.version next) (commandOf parser)
+    (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» next token))).holds
       (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-          (Token.Produce.«syntax» next token)) ++ handler)
+          (Token.Cursor.«syntax» next token)) ++ handler)
   have hh' : ToldAllowed strict
       (added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-          (Token.Produce.«syntax» next token)) ++
+          (Token.Cursor.«syntax» next token)) ++
           handler)) :=
     toldAllowed_append hadded (toldAllowed_append (arrivalCalls_switchless _ _) hh)
-  generalize (commandStep (Token.Produce.version next) (commandOf parser)
-    (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).run.run
+  generalize (commandStep (Token.Cursor.version next) (commandOf parser)
+    (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» next token))).run.run
       (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-          (Token.Produce.«syntax» next token)) ++ handler) =
+          (Token.Cursor.«syntax» next token)) ++ handler) =
           c at hlog
   obtain ⟨res, handler'⟩ := c
   dsimp only at hlog
@@ -162,11 +162,11 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
       | some kind =>
         have hs : (scriptAfter parser (.done (.setVersion declared))).run.run
             (added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-                (Token.Produce.«syntax» next token)) ++
+                (Token.Cursor.«syntax» next token)) ++
               handler)) =
-            (.error (.syntax kind), added ++
+            (.error (.version kind), added ++
               (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-                  (Token.Produce.«syntax» next token)) ++
+                  (Token.Cursor.«syntax» next token)) ++
                   handler)) := by
           simp only [Param.Posture.scriptAfter, hc]
           rfl
@@ -175,14 +175,14 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
       | none =>
         have hs : (scriptAfter parser (.done (.setVersion declared))).run.run
             (added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-                (Token.Produce.«syntax» next token)) ++
+                (Token.Cursor.«syntax» next token)) ++
               handler)) =
             (.ok (.switchVersion declared (do
               ExceptT.lift (Handler.setVersion (H := List Event) declared)
               return .more
                 (scriptParser (postureOf parser) .awaiting (declarationsOf parser + 1)))),
               added ++ (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-                  (Token.Produce.«syntax» next token)) ++
+                  (Token.Cursor.«syntax» next token)) ++
                 handler)) := by
           simp only [Param.Posture.scriptAfter, hc]
           rfl

@@ -29,42 +29,42 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 def expectOpen (token : Internal.Input) : PM H Unit :=
   match token with
   | .parenOpen => pure ()
-  | _ => syntaxError (.expectedToken #[.parenOpen])
+  | _ => syntaxError (.expected #[.token .parenOpen])
 
 /-- Takes a `)`. -/
 @[inline]
 def expectClose (token : Internal.Input) : PM H Unit :=
   match token with
   | .parenClose => pure ()
-  | _ => syntaxError (.expectedToken #[.parenClose])
+  | _ => syntaxError (.expected #[.token .parenClose])
 
 /-- Takes a symbol. -/
 @[inline]
 def expectSymbol (token : Internal.Input) : PM H Symbol :=
   match token with
   | .symbol symbol => pure symbol
-  | _ => syntaxError .expectedSymbol
+  | _ => syntaxError (.expected #[.symbol])
 
 /-- Takes a numeral. -/
 @[inline]
 def expectNumeral (token : Internal.Input) : PM H Numeral :=
   match token with
   | .constant (.numeral digits) => pure digits
-  | _ => syntaxError (.expectedToken #[.numeral])
+  | _ => syntaxError (.expected #[.token .numeral])
 
 /-- Takes a keyword. -/
 @[inline]
 def expectKeyword (token : Internal.Input) : PM H Keyword :=
   match token with
   | .keyword name => pure name
-  | _ => syntaxError (.expectedToken #[.keyword])
+  | _ => syntaxError (.expected #[.token .keyword])
 
 /-- Takes a string literal. -/
 @[inline]
 def expectString (token : Internal.Input) : PM H StringContent :=
   match token with
   | .constant (.string content) => pure content
-  | _ => syntaxError (.expectedToken #[.string])
+  | _ => syntaxError (.expected #[.token .string])
 
 end
 

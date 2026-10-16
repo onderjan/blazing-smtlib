@@ -19,7 +19,7 @@ give what the parser does on a cursor.
 namespace BSmtLib.Facts.Proofs.Parser.Category.Ident
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 open BSmtLib.Parser (Parse ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Ident
@@ -53,7 +53,7 @@ private theorem ident_sim (version : Token.Version) :
   cases step <;> rfl
 
 omit [LawfulMonad m] in
-private theorem ident_hparse {Z : Type} [Produce Z] (parser : IdentParser)
+private theorem ident_hparse {Z : Type} [Cursor Z] (parser : IdentParser)
     (state : ParseState H) (cursor : Z) :
     Parse.parse (m := m) parser state cursor =
       @Parser.Internal.parseByToken H IdentParser Nodes.IdentBuf _ m _
@@ -126,7 +126,7 @@ private theorem ident_rejects {version : Token.Version} {state last : IdentState
 /-- The identifier parser on a first token that is neither a symbol nor `(`. -/
 theorem ident_rejects_first {version : Token.Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen) :
-    Rejects version IdentParser.new [token] (pure () : PM H Unit) .expectedIdent :=
+    Rejects version IdentParser.new [token] (pure () : PM H Unit) (.expected #[.ident]) :=
   ident_rejects (tokens := []) (.nil _) (by
     cases token <;> first | exact absurd rfl (hsymbol _) | exact absurd rfl hopen | rfl)
 
@@ -134,7 +134,7 @@ theorem ident_rejects_first {version : Token.Version} {token : Parser.Internal.I
 theorem ident_rejects_underscore {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : token ≠ .reserved (.general .underscore)) :
     Rejects version IdentParser.new [.parenOpen, token] (pure () : PM H Unit)
-      .expectedUnderscore :=
+      (.expected #[.reserved (.general .underscore)]) :=
   ident_rejects (tokens := [.parenOpen])
     (.cons (middle := .opened) (by simp [IdentState.step]) (.nil _)) (by
     have : token.isWord .underscore = false := by
@@ -151,7 +151,7 @@ theorem ident_rejects_underscore {version : Token.Version} {token : Parser.Inter
 theorem ident_rejects_symbol {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version IdentParser.new [.parenOpen, .reserved (.general .underscore), token]
-      (pure () : PM H Unit) .expectedSymbol :=
+      (pure () : PM H Unit) (.expected #[.symbol]) :=
   ident_rejects (tokens := [.parenOpen, .reserved (.general .underscore)])
     (.cons (middle := .opened) (by simp [IdentState.step])
       (.cons (middle := .afterUnderscore) (by simp [IdentState.step]) (.nil _))) (by
@@ -161,7 +161,7 @@ theorem ident_rejects_symbol {version : Token.Version} {token : Parser.Internal.
 theorem ident_rejects_empty {version : Token.Version} (symbol : Plain.Symbol) :
     Rejects version IdentParser.new
       [.parenOpen, .reserved (.general .underscore), .symbol symbol, .parenClose]
-      (pure () : PM H Unit) .emptyIdentIndices :=
+      (pure () : PM H Unit) (.empty .identIndices) :=
   ident_rejects (tokens := [.parenOpen, .reserved (.general .underscore), .symbol symbol])
     (.cons (middle := .opened) (by simp [IdentState.step])
       (.cons (middle := .afterUnderscore) (by simp [IdentState.step])
@@ -197,7 +197,7 @@ theorem ident_rejects_index {version : Token.Version} (symbol : Plain.Symbol)
     (hclose : token ≠ .parenClose) :
     Rejects version IdentParser.new
       ([.parenOpen, .reserved (.general .underscore), .symbol symbol] ++ indices ++ [token])
-      (pure () : PM H Unit) .expectedIndexOrCloseParen := by
+      (pure () : PM H Unit) (.expected #[.index, .token .parenClose]) := by
   obtain ⟨found, hmoves⟩ := indices_move (H := H) (version := version) symbol indices hindices #[]
   refine ident_rejects (.cons (middle := .opened) (by simp [IdentState.step])
     (.cons (middle := .afterUnderscore) (by simp [IdentState.step])

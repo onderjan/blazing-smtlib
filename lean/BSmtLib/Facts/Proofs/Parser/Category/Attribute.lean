@@ -23,7 +23,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Category.Attribute
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 open BSmtLib.Parser (Parse ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Attribute
@@ -55,7 +55,7 @@ def singleStep (version : Token.Version)
   | .done attributes =>
     match attributes[0]? with
     | some first => return .done first
-    | none => Parser.Internal.syntaxError .expectedAttribute
+    | none => Parser.Internal.syntaxError (.expected #[.attribute])
 
 private theorem closedAttribute_sim (version : Token.Version) :
     Simulates version (ClosedAttributeParser.mk (H := H)) (singleStep version)
@@ -80,12 +80,12 @@ private theorem closedMultipleAttribute_sim (version : Token.Version) :
   cases step <;> rfl
 
 omit [LawfulMonad m] in
-private theorem closedAttribute_hparse {Z : Type} [Produce Z] (p : ClosedAttributeParser H)
+private theorem closedAttribute_hparse {Z : Type} [Cursor Z] (p : ClosedAttributeParser H)
     (s : ParseState H) (c : Z) :
     Parse.parse (m := m) p s c = Parser.Internal.parseByToken p s c := rfl
 
 omit [LawfulMonad m] in
-private theorem closedMultipleAttribute_hparse {Z : Type} [Produce Z]
+private theorem closedMultipleAttribute_hparse {Z : Type} [Cursor Z]
     (p : ClosedMultipleAttributeParser H) (s : ParseState H) (c : Z) :
     Parse.parse (m := m) p s c = Parser.Internal.parseByToken p s c := rfl
 
@@ -100,11 +100,11 @@ private theorem singleStep_embed {version : Token.Version}
     RunsS noPoints (singleStep version) state tokens program fun a =>
       next a >>= Parser.Internal.Step.wrap id fun attributes => match attributes[0]? with
         | some first => pure (.done first)
-        | none => Parser.Internal.syntaxError .expectedAttribute :=
+        | none => Parser.Internal.syntaxError (.expected #[.attribute]) :=
   RunsS.embed (outer := singleStep (H := H) version) id
     (fun attributes => match attributes[0]? with
       | some first => pure (.done first)
-      | none => Parser.Internal.syntaxError .expectedAttribute)
+      | none => Parser.Internal.syntaxError (.expected #[.attribute]))
     (fun state token => by
       simp only [singleStep]
       congr 1
@@ -168,9 +168,9 @@ there, and a `)` would close an empty attribute. -/
 theorem closedAttribute_rejects_first {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : ∀ name, token ≠ .keyword name) :
     Rejects version (ClosedAttributeParser.new (H := H)) [token] (pure () : PM H Unit)
-      .expectedAttribute := by
+      (.expected #[.attribute]) := by
   have hfail : singleStep (H := H) version AttributeState.init token =
-      throw (.syntax .expectedAttribute) := by
+      throw (.syntax (.expected #[.attribute])) := by
     cases token <;> first | exact absurd rfl (htoken _) |
       simp [singleStep, attributeStep, AttributeState.init, Parser.Internal.syntaxError]
   exact rejects_of_movesS (tokens := []) (@closedAttribute_hparse H m _ _)
@@ -181,9 +181,9 @@ theorem closedMultipleAttribute_rejects_first {version : Token.Version}
     {token : Parser.Internal.Input} (htoken : ∀ name, token ≠ .keyword name)
     (hclose : token ≠ .parenClose) :
     Rejects version (ClosedMultipleAttributeParser.new (H := H)) [token] (pure () : PM H Unit)
-      .expectedAttribute := by
+      (.expected #[.attribute]) := by
   have hfail : attributeStep (H := H) false version AttributeState.init token =
-      throw (.syntax .expectedAttribute) := by
+      throw (.syntax (.expected #[.attribute])) := by
     cases token <;> first | exact absurd rfl (htoken _) | exact absurd rfl hclose |
       simp [attributeStep, AttributeState.init, Parser.Internal.syntaxError]
   exact rejects_of_movesS (tokens := []) (@closedMultipleAttribute_hparse H m _ _)
@@ -200,11 +200,11 @@ the attribute. -/
 theorem closedAttribute_rejects_value {version : Token.Version} (name : BSmtLib.Plain.Keyword)
     {token : Parser.Internal.Input} (htoken : ¬ AfterKeyword token) :
     Rejects version (ClosedAttributeParser.new (H := H)) [.keyword name, token]
-      (pure () : PM H Unit) .expectedAttribute := by
+      (pure () : PM H Unit) (.expected #[.attribute]) := by
   simp only [AfterKeyword, not_or, not_exists] at htoken
   obtain ⟨hs, hc, ho, hcl, hk⟩ := htoken
   have hfail : singleStep (H := H) version { mode := .afterName name, attributes := #[] } token =
-      throw (.syntax .expectedAttribute) := by
+      throw (.syntax (.expected #[.attribute])) := by
     cases token <;> first | exact absurd rfl (hs _) | exact absurd rfl (hc _) |
       exact absurd rfl ho | exact absurd rfl hcl | exact absurd rfl (hk _) |
       simp [singleStep, attributeStep, Parser.Internal.syntaxError]
@@ -218,12 +218,12 @@ theorem closedMultipleAttribute_rejects_value {version : Token.Version}
     (name : BSmtLib.Plain.Keyword)
     {token : Parser.Internal.Input} (htoken : ¬ AfterKeyword token) :
     Rejects version (ClosedMultipleAttributeParser.new (H := H)) [.keyword name, token]
-      (pure () : PM H Unit) .expectedAttribute := by
+      (pure () : PM H Unit) (.expected #[.attribute]) := by
   simp only [AfterKeyword, not_or, not_exists] at htoken
   obtain ⟨hs, hc, ho, hcl, hk⟩ := htoken
   have hfail : attributeStep (H := H) false version
       { mode := .afterName name, attributes := #[] } token =
-      throw (.syntax .expectedAttribute) := by
+      throw (.syntax (.expected #[.attribute])) := by
     cases token <;> first | exact absurd rfl (hs _) | exact absurd rfl (hc _) |
       exact absurd rfl ho | exact absurd rfl hcl | exact absurd rfl (hk _) |
       simp [attributeStep, Parser.Internal.syntaxError]
@@ -236,9 +236,9 @@ followed by another, where its `)` is due. -/
 theorem closedAttribute_rejects_keyword {version : Token.Version}
     (name name' : BSmtLib.Plain.Keyword) :
     Rejects version (ClosedAttributeParser.new (H := H)) [.keyword name, .keyword name']
-      (pure () : PM H Unit) (.expectedToken #[.parenClose]) := by
+      (pure () : PM H Unit) (.expected #[.token .parenClose]) := by
   have hfail : singleStep (H := H) version { mode := .afterName name, attributes := #[] }
-      (.keyword name') = throw (.syntax (.expectedToken #[.parenClose])) := by
+      (.keyword name') = throw (.syntax (.expected #[.token .parenClose])) := by
     simp [singleStep, attributeStep, Parser.Internal.syntaxError]
   exact rejects_of_movesS (tokens := [.keyword name]) (@closedAttribute_hparse H m _ _)
     (closedAttribute_sim version)
@@ -280,8 +280,8 @@ private theorem valued_runs {version : Token.Version} (single : Bool)
   rfl
 
 /-- The parser of one attribute on the tokens of a valid attribute with a value and a token
-that is not `)`: it rejects that token with `expectedToken [)]`, having made the traversal's
-calls for the attribute. -/
+that is not `)`: it rejects that token with `expected #[.token .parenClose]`, having made the
+traversal's calls for the attribute. -/
 theorem closedAttribute_rejects_close {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Chars) (value : Tree.AttributeValue)
@@ -290,11 +290,11 @@ theorem closedAttribute_rejects_close {version : Token.Version}
     (hs : Stands tokens (Tree.Attribute.tokens ⟨keyword, some value⟩))
     {token : Parser.Internal.Input} (htoken : token ≠ .parenClose) :
     Rejects version (ClosedAttributeParser.new (H := H)) (tokens ++ [token])
-      (valuedProgram h keyword value) (.expectedToken #[.parenClose]) := by
+      (valuedProgram h keyword value) (.expected #[.token .parenClose]) := by
   have hfail : ∀ handled : Traits.Handler.Attribute H,
       RunsS noPoints (attributeStep true version) { mode := .start, attributes := #[handled] }
         [token] (do tick noPoints token; pure ())
-        fun _ => throw (.syntax (.expectedToken #[.parenClose])) :=
+        fun _ => throw (.syntax (.expected #[.token .parenClose])) :=
     fun handled => RunsS.token (by
       cases token <;> first | exact absurd rfl htoken |
         simp [attributeStep.eq_def, Parser.Category.Token.Internal.expectClose, Parser.Internal.syntaxError])
@@ -302,7 +302,7 @@ theorem closedAttribute_rejects_close {version : Token.Version}
     ({ mode := .start, attributes := #[handled] } : AttributeState _ _))
     (valued_runs true hA keyword value hvalid hs) hfail
   have hembed := (singleStep_embed hruns).congr
-    (next' := fun _ => throw (Parser.ParseErrorCause.syntax (.expectedToken #[.parenClose]))) rfl
+    (next' := fun _ => throw (Parser.ParseErrorCause.syntax (.expected #[.token .parenClose]))) rfl
     (by
       funext a
       apply ExceptT.ext
@@ -324,11 +324,11 @@ theorem closedMultipleAttribute_rejects_after {version : Token.Version}
     {token : Parser.Internal.Input} (hkeyword : ∀ name, token ≠ .keyword name)
     (hclose : token ≠ .parenClose) :
     Rejects version (ClosedMultipleAttributeParser.new (H := H)) (tokens ++ [token])
-      (valuedProgram h keyword value) .expectedAttribute := by
+      (valuedProgram h keyword value) (.expected #[.attribute]) := by
   have hfail : ∀ handled : Traits.Handler.Attribute H,
       RunsS noPoints (attributeStep false version) { mode := .start, attributes := #[handled] }
         [token] (do tick noPoints token; pure ())
-        fun _ => throw (.syntax .expectedAttribute) :=
+        fun _ => throw (.syntax (.expected #[.attribute])) :=
     fun handled => RunsS.token (by
       cases token <;> first | exact absurd rfl hclose | exact absurd rfl (hkeyword _) |
         simp [attributeStep.eq_def, Parser.Internal.syntaxError])
@@ -406,7 +406,7 @@ theorem sExprLevels_fails {version : Token.Version} {token : Parser.Internal.Inp
     (hkeyword : ∀ name, token ≠ .keyword name)
     (hreserved : ∀ word, token = .reserved word → ¬ version ≥ .v2_6)
     (levels : SExprState (Traits.Handler.SExpr H)) :
-    sExprStep (H := H) version levels token = throw (.syntax .expectedSExpr) := by
+    sExprStep (H := H) version levels token = throw (.syntax (.expected #[.sExpr])) := by
   cases token with
   | parenOpen => exact absurd rfl hopen
   | parenClose => exact absurd rfl hclose
@@ -420,7 +420,7 @@ theorem sExprLevels_fails {version : Token.Version} {token : Parser.Internal.Inp
 
 /-- The attribute steps on a keyword, `(`, the tokens of valid items, of open lists and a token
 that starts no s-expression and does not end a list: they fail at that token with
-`expectedSExpr`, having made the traversal's calls for the items. -/
+`expected #[.sExpr]`, having made the traversal's calls for the items. -/
 private theorem sExpr_value_runs {version : Token.Version} (single : Bool)
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (name : BSmtLib.Plain.Keyword) {items : List Tree.SExpr}
@@ -440,12 +440,12 @@ private theorem sExpr_value_runs {version : Token.Version} (single : Bool)
       (.keyword name :: .parenOpen :: (itemTokens ++ (tokens ++ [token])))
       ((fun _ => ()) <$> (adaptRun (Traversal.sExprs noPoints h items) >>= fun _ =>
         adaptRun (frames.mapM fun items => Traversal.sExprs noPoints h items)))
-      fun _ => throw (.syntax .expectedSExpr) := by
+      fun _ => throw (.syntax (.expected #[.sExpr])) := by
   -- the s-expression steps from the empty stack, to the failure
   obtain ⟨build, hframesRuns⟩ := sExprFrames_runs (version := version) hA frames hframes hs []
   have hfail : ∀ handled, RunsS noPoints (sExprStep (H := H) version) (build handled) [token]
       (do tick noPoints token; (pure () : PM H Unit))
-      fun _ => throw (.syntax .expectedSExpr) := fun handled =>
+      fun _ => throw (.syntax (.expected #[.sExpr])) := fun handled =>
     RunsS.token (by
       simp only [pure_bind]
       exact sExprLevels_fails hopen hclose hconstant hsymbol hkeyword hreserved _)
@@ -469,7 +469,7 @@ private theorem sExpr_value_runs {version : Token.Version} (single : Bool)
       RunsS noPoints (attributeStep (H := H) single version)
         { mode := .inside name found [] true, attributes := #[] } (tokens ++ [token])
         ((fun _ => ()) <$> adaptRun (frames.mapM fun items => Traversal.sExprs noPoints h items))
-        fun _ => throw (.syntax .expectedSExpr) := by
+        fun _ => throw (.syntax (.expected #[.sExpr])) := by
     intro found
     have hne : ∃ first rest, tokens ++ [token] = first :: rest ∧ first ≠ .parenClose := by
       cases frames with
@@ -516,7 +516,7 @@ private theorem sExpr_value_runs {version : Token.Version} (single : Bool)
 /--
 The parser of one attribute on a keyword, `(`, the tokens of valid items, of open lists of
 s-expressions and a token that starts no s-expression and does not end a list: it rejects that
-token with `expectedSExpr`, having made the traversal's calls for the items.
+token with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedAttribute_rejects_sExpr {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -536,11 +536,11 @@ theorem closedAttribute_rejects_sExpr {version : Token.Version}
       (.keyword name :: .parenOpen :: (itemTokens ++ (tokens ++ [token])))
       ((fun _ => ()) <$> (adaptRun (Traversal.sExprs noPoints h items) >>= fun _ =>
         adaptRun (frames.mapM fun items => Traversal.sExprs noPoints h items)))
-      .expectedSExpr := by
+      (.expected #[.sExpr]) := by
   have hruns := sExpr_value_runs true hA name hitems hsItems hframes hs hopen hclose hconstant
     hsymbol hkeyword hreserved
   have hembed := (singleStep_embed hruns).congr
-    (next' := fun _ => throw (Parser.ParseErrorCause.syntax .expectedSExpr)) rfl (by
+    (next' := fun _ => throw (Parser.ParseErrorCause.syntax (.expected #[.sExpr]))) rfl (by
       funext a
       apply ExceptT.ext
       simp [ExceptT.run_throw])
@@ -552,7 +552,7 @@ theorem closedAttribute_rejects_sExpr {version : Token.Version}
 /--
 The parser of attributes up to a `)` on a keyword, `(`, the tokens of valid items, of open lists
 of s-expressions and a token that starts no s-expression and does not end a list: it rejects that
-token with `expectedSExpr`, having made the traversal's calls for the items.
+token with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedMultipleAttribute_rejects_sExpr {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -572,7 +572,7 @@ theorem closedMultipleAttribute_rejects_sExpr {version : Token.Version}
       (.keyword name :: .parenOpen :: (itemTokens ++ (tokens ++ [token])))
       ((fun _ => ()) <$> (adaptRun (Traversal.sExprs noPoints h items) >>= fun _ =>
         adaptRun (frames.mapM fun items => Traversal.sExprs noPoints h items)))
-      .expectedSExpr := by
+      (.expected #[.sExpr]) := by
   have := rejects_of_runsS (state := AttributeState.init)
     (@closedMultipleAttribute_hparse H m _ _) (closedMultipleAttribute_sim version)
     (sExpr_value_runs false hA name hitems hsItems hframes hs hopen hclose hconstant hsymbol

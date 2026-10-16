@@ -98,7 +98,8 @@ theorem answer_eq (version : Lexicon.Version) (taken : List Handed) :
 /-- The stand-in consumer's answer where the parser's run failed: it fails. -/
 theorem answerOf_error (atEnd : Bool) (e : Parser.ParseErrorCause Unit) :
     ∃ err, answerOf atEnd (libEnding (.error e)) = .fail err := by
-  rcases e with k | h
+  rcases e with k | k | h
+  · cases k <;> exact ⟨_, rfl⟩
   · cases k <;> exact ⟨_, rfl⟩
   · exact ⟨_, rfl⟩
 

@@ -123,7 +123,7 @@ def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
     (k : OutcomeOf H next → m β) : m β := do
   let parser : ScriptParser H := scriptParser posture command declarations
   let fresh : ScriptParser H := ScriptParser.new posture
-  let input := Internal.Input.ofSyntax (Token.Produce.«syntax» next token)
+  let input := Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)
   let version := next.version
   match ← runParser
       (do ScriptParser.Internal.arrive parser input; ScriptParser.Internal.step version parser input)
@@ -134,7 +134,7 @@ def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
   | (.ok (.switchVersion declared resume), h) =>
     match switch : next.setVersion declared with
     | .error _ =>
-      k <| .stop (.error (ParseError.Internal.new (.syntax .unsupportedVersion))) fresh next
+      k <| .stop (.error (ParseError.Internal.new (.version .unsupported))) fresh next
         (.refl _) h
     | .ok switched =>
       let follows := BatchCursor.setVersion_follows switch

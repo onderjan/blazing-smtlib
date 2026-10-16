@@ -32,7 +32,7 @@ open BSmtLib.Lexer.Error (LexError LexicalErrorKind)
 /- The loops over a cursor's tokens end as each step consumes a token: they descend by the
 producer's consumption, which is well-founded. -/
 local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
-  ⟨Produce.Consumed, Produce.consumed_wf⟩
+  ⟨Cursor.Consumed, Cursor.consumed_wf⟩
 
 /-- The response line of a token of the cursor, under the version. -/
 def tokenLine {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)

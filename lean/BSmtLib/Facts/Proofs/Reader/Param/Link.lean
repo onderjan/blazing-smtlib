@@ -255,14 +255,14 @@ theorem script_token {version : Lexicon.Version} {commands : List Tree.Command}
     have hend := congrArg Prod.snd hparse
     simp only [hlt, ite_true] at hend
     rcases res with e | (⟨v', p'⟩ | u)
-    · rcases e with (_ | _) | _ <;> simp [libEnding] at hend
+    · rcases e with _ | (_ | _) | _ <;> simp [libEnding] at hend
     · exact ⟨v', p', rfl⟩
     · simp [libEnding] at hend
   · have hend := congrArg Prod.snd hparse
     simp only [hlt, ite_false] at hend
     refine ⟨by rw [hans, ite_eq_right hlt]; rfl, ?_⟩
     rcases res with e | (⟨v', p'⟩ | u)
-    · rcases e with (_ | _) | _ <;> simp [libEnding] at hend
+    · rcases e with _ | (_ | _) | _ <;> simp [libEnding] at hend
     · simp [libEnding] at hend
     · rfl
 

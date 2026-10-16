@@ -24,12 +24,12 @@ namespace BSmtLib.Facts.Proofs.Parser.Fused.Adapter
 
 open BSmtLib.Traits
 open BSmtLib.Parser (Parse ParseError ParseErrorCause)
-open BSmtLib.Parser.Internal (PM call syntaxError)
+open BSmtLib.Parser.Internal (PM call versionError)
 open BSmtLib.Parser.Category.Term.Internal (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Produce VersionPosture)
+open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
 open BSmtLib.Facts.Proofs.Parser.Fused.Loop
 open BSmtLib.Facts.Proofs.Parser.Fused.Run
 
@@ -75,7 +75,7 @@ theorem takeOne_eq_portStep (parser : ScriptParser H) {batch : BatchTag}
         | exit => simp [toPort, Parser.Internal.resumed]; rfl
         | setVersion declared =>
           cases hc : Parser.Script.Internal.VersionPosture.check posture declarations declared with
-          | some kind => simp [toPort, syntaxError, hc]
+          | some kind => simp [toPort, versionError, hc]
           | none =>
             simp only [hc, ExceptT.run_pure, StateT.run_pure, pure_bind]
             split

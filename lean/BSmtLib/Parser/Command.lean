@@ -74,11 +74,11 @@ whether the command goes on in the parser given back (`some`) or ended at its `)
 the cursor the parser gave back.
 -/
 @[inline]
-def Internal.nonstandardParse {Z : Type} [Token.Produce Z]
+def Internal.nonstandardParse {Z : Type} [Token.Cursor Z]
     (parser : CommandHandler.NonstandardParser H) (cursor : Z) :
     StateT H m
       (Except (ParseError (Handler.Error H)) (Option (CommandHandler.NonstandardParser H)) ×
-      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor }) := do
+      { next : Z // Token.Cursor.HasNext cursor → Token.Cursor.Consumed next cursor }) := do
   let (answer, parser, _, next) ← Parse.parse parser ParseState.new cursor
   match answer with
   | .error error => return (.error error, next)
@@ -88,7 +88,7 @@ def Internal.nonstandardParse {Z : Type} [Token.Produce Z]
 /- LEAN: the loops over single tokens hand the cursor to the non-standard parser, as Rust's
 command parser does (`Parser.Internal.ParseByToken.handOver?`). This step serves a driver that
 steps the parser by single tokens: it hands each token on in a producer of that one token
-(`Parser.Internal.InputProducer`), as Rust's standard command parsers hand a token they took to
+(`Parser.Internal.InputCursor`), as Rust's standard command parsers hand a token they took to
 a parser they hold, so that the non-standard parser cannot switch the version and is called once
 per token. -/
 /--
@@ -99,7 +99,7 @@ def Internal.nonstandardStep (version : Version) (parser : CommandHandler.Nonsta
     (token : Internal.Input) :
     PM H (Internal.Step (Internal.CommandStateOf H) CommandOutcome) := do
   let (answer, parser, _) ← ExceptT.lift
-    (Parse.parse parser ParseState.new (Internal.InputProducer.mk version (some token)))
+    (Parse.parse parser ParseState.new (Internal.InputCursor.mk version (some token)))
   match answer with
   | .error error => throw error.cause
   | .ok .continue => return .more (.nonstandard parser)
@@ -119,13 +119,13 @@ def Internal.commandStep (version : Version) (self : Internal.CommandStateOf H)
     match token with
     | .parenOpen => return .more .opened
     | .endOfInput => return .done .endOfFile
-    | _ => syntaxError .expectedCommand
+    | _ => syntaxError (.expected #[.token .parenOpen, .token .endOfFile])
   | .opened =>
     match token with
     | .reserved (.commandName name) => return .more (.payload (Payload.init name version))
     | .symbol name =>
       return .more (.nonstandard (← call (CommandHandler.nonstandardCommand (H := H) name)))
-    | _ => syntaxError .expectedCommandName
+    | _ => syntaxError (.expected #[.commandName])
   | .payload payload =>
     match ← payloadStep version payload token with
     | .more payload => return .more (.payload payload)
@@ -164,14 +164,14 @@ instance : Parse (CommandParser H) H m (Handler.Error H) CommandOutcome where
 
 end
 
-/- LEAN: Rust's trait `SmtCommandRule<H>`, implemented by a type `C` that names the rule. The
+/- LEAN: Rust's trait `SmtCommandRule<H>`, implemented by a type `R` that names the rule. The
 parser's result type, which Rust reads from the parser's `SmtParse` impl, is a field here, so that
 `handle` can name it. Rust bounds `H` by `SmtCommandHandler`; here a `Handler` is enough, so
 that a handler's `CommandHandler` instance can name a payload parser of a rule for that same
 handler as its non-standard parser: Lean has no cycles between instances. -/
 /-- Determines how a single command should be handled by a command handler
 (`SmtCommandRule`). -/
-class CommandRule (C : Type) (H : Type) {m : outParam (Type → Type)} [Handler H m] where
+class CommandRule (R : Type) (H : Type) {m : outParam (Type → Type)} [Handler H m] where
   /-- The parser of the command's payload. -/
   Parser : Type
   /-- What the parser finishes with. -/
@@ -179,7 +179,9 @@ class CommandRule (C : Type) (H : Type) {m : outParam (Type → Type)} [Handler 
   /-- The parser's instance of `Parse`, filled in by instance search. -/
   [parse : Parse Parser H m (Handler.Error H) Result]
   /-- Handles the result of a command. -/
-  handle : Result → ExceptT (Handler.Error H) (StateT H m) Unit
+  /- LEAN: Rust's `handle(&mut self, handler, result)`: the rule is given and given back, as
+  the handler is the state of the monad. -/
+  handle : R → Result → ExceptT (Handler.Error H) (StateT H m) R
 
 /- The rule's parser's `Parse` instance, found from the rule's. -/
 attribute [instance_reducible, instance] CommandRule.parse
@@ -191,37 +193,41 @@ A parser that processes the payload of a single command (starting after its name
 Preserves self-reset: if the inner parser is self-resetting, moves back into the default state
 before returning `ControlFlow.break`.
 -/
-structure CommandPayloadParser (H C : Type) {m : Type → Type} [Handler H m]
-    [CommandRule C H] where
+structure CommandPayloadParser (H R : Type) {m : Type → Type} [Handler H m]
+    [CommandRule R H] where
   private mk ::
-  private parser : CommandRule.Parser C H
+  private rule : R
+  private parser : CommandRule.Parser R H
 
 section
 
-variable {H C : Type} {m : Type → Type} [Handler H m] [CommandRule C H]
+variable {H R : Type} {m : Type → Type} [Handler H m] [CommandRule R H]
 
-/-- The payload parser over the rule's parser. -/
-def CommandPayloadParser.new (parser : CommandRule.Parser C H) : CommandPayloadParser H C :=
-  ⟨parser⟩
+/-- The payload parser of the rule, over the rule's parser. -/
+def CommandPayloadParser.new (rule : R) (parser : CommandRule.Parser R H) :
+    CommandPayloadParser H R :=
+  ⟨rule, parser⟩
 
-/- LEAN: Rust's `Default`, where the rule's parser has one. -/
+/- LEAN: Rust's `Default`, where the rule and its parser have one. -/
 @[no_expose]
-instance [Inhabited (CommandRule.Parser C H)] : Inhabited (CommandPayloadParser H C) :=
-  ⟨.new default⟩
+instance [Inhabited R] [Inhabited (CommandRule.Parser R H)] :
+    Inhabited (CommandPayloadParser H R) :=
+  ⟨.new default default⟩
 
 @[no_expose]
-instance [Monad m] : Parse (CommandPayloadParser H C) H m (Handler.Error H) Unit where
+instance [Monad m] : Parse (CommandPayloadParser H R) H m (Handler.Error H) Unit where
   parse self state cursor := do
     let (answer, parser, state, next) ← Parse.parse self.parser state cursor
     match answer with
-    | .error cause => return (.error cause, ⟨parser⟩, state, next)
-    | .ok .continue => return (.ok .continue, ⟨parser⟩, state, next)
+    | .error cause => return (.error cause, ⟨self.rule, parser⟩, state, next)
+    | .ok .continue => return (.ok .continue, ⟨self.rule, parser⟩, state, next)
     | .ok (.break result) =>
       -- the command ends at the last consumed token
-      match ← (CommandRule.handle (C := C) result).run with
+      match ← (CommandRule.handle self.rule result).run with
       | .error error =>
-        return (.error (ParseError.Internal.new (.handler error)), ⟨parser⟩, state, next)
-      | .ok () => return (.ok (.break ()), ⟨parser⟩, state, next)
+        return (.error (ParseError.Internal.new (.handler error)), ⟨self.rule, parser⟩, state,
+          next)
+      | .ok rule => return (.ok (.break ()), ⟨rule, parser⟩, state, next)
 
 end
 

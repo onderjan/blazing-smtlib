@@ -99,7 +99,7 @@ theorem adapter_feed_file (version : Lexicon.Version) (slices : List Regex.Chars
     simp only [hlen, Nat.lt_irrefl, ite_false] at hend
     revert hend
     rcases (recRun version items).1 with e | (x | r)
-    · rcases e with (_ | _) | _ <;> simp [libEnding]
+    · rcases e with _ | (_ | _) | _ <;> simp [libEnding]
     · simp [libEnding]
     · intro _; exact ⟨r, rfl⟩
   obtain ⟨r, hr⟩ := hend

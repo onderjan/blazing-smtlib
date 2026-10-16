@@ -110,7 +110,7 @@ def driveParse : Token.Version → P → List Parser.Internal.Input → PM H (Op
     | .done result => pure (some (result, tokens))
     | .switchVersion declared resume =>
       match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
-      | .error _ => throw (.syntax .unsupportedVersion)
+      | .error _ => throw (.version .unsupported)
       | .ok () =>
         match ← resume with
         | .more parser => driveParse declared parser tokens
@@ -201,8 +201,8 @@ def libEnding : Except (Parser.ParseErrorCause Unit) (Option
     (Unit × List Parser.Internal.Input)) → Ending
   | .ok none => .waiting
   | .ok (some _) => .finished
-  | .error (.syntax .unsupportedVersion) => .failed .unsupportedVersion
-  | .error (.syntax (.tooManyVersionDeclarations limit)) => .failed (.tooManyDeclarations limit)
+  | .error (.version .unsupported) => .failed .unsupportedVersion
+  | .error (.version (.tooManyDeclarations limit)) => .failed (.tooManyDeclarations limit)
   | .error _ => .rejected
 
 /-- The parser's tokens other than whitespace and comments. -/

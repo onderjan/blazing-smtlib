@@ -18,8 +18,8 @@ answer depends on no more than that.
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Combinator
 
-open BSmtLib.Token (Produce)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Token (Cursor)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Token.Internal
@@ -38,7 +38,7 @@ macro "answer_cases" a:ident : tactic => `(tactic| (
   all_goals (try (
     obtain ⟨c, rfl⟩ : ∃ c, e = BSmtLib.Parser.ParseError.Internal.new c :=
       ⟨e.cause, (BSmtLib.Parser.ParseError.Internal.new_eta e).symm⟩
-    rcases c with kind | error))))
+    rcases c with kind | kind | error))))
 
 /-! ## Answers known through `outcome` -/
 
@@ -51,31 +51,35 @@ theorem parseState_eq (a b : ParseState H) : a = b := by
   cases b
   rfl
 
-variable {P R E γ δ α : Type} {Z : Type} [Produce Z] {cursor : Z}
+variable {P R E γ δ α : Type} {Z : Type} [Cursor Z] {cursor : Z}
 
 /-- What a parse of the cursor gives. -/
-abbrev Answer (H P R E : Type) {Z : Type} [Produce Z] (cursor : Z) : Type :=
+abbrev Answer (H P R E : Type) {Z : Type} [Cursor Z] (cursor : Z) : Type :=
   Except (ParseError E) (ControlFlow R) × P × ParseState H ×
-    { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }
+    { next : Z // Cursor.HasNext cursor → Cursor.Consumed next cursor }
 
 /-- A continuation of a parse, on what `outcome` reads of the parse; `x₀` fills in what it does
 not read. -/
 noncomputable def onOutcome (k : Answer H P R E cursor → StateT H m γ)
     (x₀ : Answer H P R E cursor) : Outcome R P Z E → StateT H m γ
   | .finished result parser next =>
-    @dite _ (Produce.HasNext cursor → Produce.Consumed next cursor) (Classical.propDecidable _)
+    @dite _ (Cursor.HasNext cursor → Cursor.Consumed next cursor) (Classical.propDecidable _)
       (fun h => k (.ok (.break result), parser, .new, ⟨next, h⟩)) fun _ => k x₀
   | .waits parser => k (.ok .continue, parser, .new, x₀.2.2.2)
   | .rejected kind next =>
-    @dite _ (Produce.HasNext cursor → Produce.Consumed next cursor) (Classical.propDecidable _)
+    @dite _ (Cursor.HasNext cursor → Cursor.Consumed next cursor) (Classical.propDecidable _)
       (fun h => k (.error (ParseError.Internal.new (.syntax kind)), x₀.2.1, .new, ⟨next, h⟩))
+      fun _ => k x₀
+  | .rejectedVersion kind next =>
+    @dite _ (Cursor.HasNext cursor → Cursor.Consumed next cursor) (Classical.propDecidable _)
+      (fun h => k (.error (ParseError.Internal.new (.version kind)), x₀.2.1, .new, ⟨next, h⟩))
       fun _ => k x₀
   | .failed error => k (.error (ParseError.Internal.new (.handler error)), x₀.2.1, .new, x₀.2.2.2)
 
 omit [Monad m] [LawfulMonad m] in
 theorem onOutcome_finished (k : Answer H P R E cursor → StateT H m γ) (x₀ : Answer H P R E cursor)
     (result : R) (parser : P) {next : Z}
-    (h : Produce.HasNext cursor → Produce.Consumed next cursor) :
+    (h : Cursor.HasNext cursor → Cursor.Consumed next cursor) :
     onOutcome k x₀ (.finished result parser next) =
       k (.ok (.break result), parser, .new, ⟨next, h⟩) := by
   simp only [onOutcome]
@@ -84,9 +88,18 @@ theorem onOutcome_finished (k : Answer H P R E cursor → StateT H m γ) (x₀ :
 omit [Monad m] [LawfulMonad m] in
 theorem onOutcome_rejected (k : Answer H P R E cursor → StateT H m γ) (x₀ : Answer H P R E cursor)
     (kind : SyntaxErrorKind) {next : Z}
-    (h : Produce.HasNext cursor → Produce.Consumed next cursor) :
+    (h : Cursor.HasNext cursor → Cursor.Consumed next cursor) :
     onOutcome k x₀ (.rejected kind next) =
       k (.error (ParseError.Internal.new (.syntax kind)), x₀.2.1, .new, ⟨next, h⟩) := by
+  simp only [onOutcome]
+  rw [dite_eq_left_of_eq_true (eq_true h)]
+
+omit [Monad m] [LawfulMonad m] in
+theorem onOutcome_rejectedVersion (k : Answer H P R E cursor → StateT H m γ)
+    (x₀ : Answer H P R E cursor) (kind : VersionErrorKind) {next : Z}
+    (h : Cursor.HasNext cursor → Cursor.Consumed next cursor) :
+    onOutcome k x₀ (.rejectedVersion kind next) =
+      k (.error (ParseError.Internal.new (.version kind)), x₀.2.1, .new, ⟨next, h⟩) := by
   simp only [onOutcome]
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
@@ -116,7 +129,7 @@ theorem handler_run {x : ExceptT (ParseErrorCause E) (StateT H m) α} (hx : Hand
         | .error error => .error (.handler error)) <$> calls.run :=
   handlerOnly_run_eq hx
 
-omit [Produce Z] in
+omit [Cursor Z] in
 /-- The answer of a handler-only program, bound. -/
 theorem answer_bind {Q : Type} {x : ExceptT (ParseErrorCause E) (StateT H m) α}
     {calls : ExceptT E (StateT H m) α}
@@ -132,7 +145,7 @@ theorem answer_bind {Q : Type} {x : ExceptT (ParseErrorCause E) (StateT H m) α}
   refine bind_congr fun e => ?_
   rcases e with error | a <;> rfl
 
-omit [Produce Z] in
+omit [Cursor Z] in
 /-- The answer of a handler-only program followed by more, as a map. -/
 theorem answer_run_bind {β : Type} {x : ExceptT (ParseErrorCause E) (StateT H m) α}
     {calls : ExceptT E (StateT H m) α}
@@ -154,8 +167,8 @@ theorem answer_run_bind {β : Type} {x : ExceptT (ParseErrorCause E) (StateT H m
 omit [LawfulMonad m] in
 /-- `outcome` reads alike two answers with the same answer, parser and cursor. -/
 theorem outcome_rewrap {cursor' : Z} (a : Except (ParseError E) (ControlFlow R)) (p : P)
-    (s s' : ParseState H) (z : Z) (h : Produce.HasNext cursor → Produce.Consumed z cursor)
-    (h' : Produce.HasNext cursor' → Produce.Consumed z cursor') :
+    (s s' : ParseState H) (z : Z) (h : Cursor.HasNext cursor → Cursor.Consumed z cursor)
+    (h' : Cursor.HasNext cursor' → Cursor.Consumed z cursor') :
     outcome (cursor := cursor) (a, p, s, ⟨z, h⟩) =
       outcome (cursor := cursor') (a, p, s', ⟨z, h'⟩) := by
   rcases a with _ | (_ | _) <;> rfl
@@ -183,13 +196,13 @@ theorem waits_of_map {Pa Ra : Type} [Parse Pa H m E Ra] {version : Token.Version
 
 theorem Takes.consumed_of_ne {version : Token.Version} {cursor next : Z}
     {tokens : List Parser.Internal.Input} (h : Takes version cursor tokens next)
-    (hne : tokens ≠ []) : Produce.HasNext cursor → Produce.Consumed next cursor := by
+    (hne : tokens ≠ []) : Cursor.HasNext cursor → Cursor.Consumed next cursor := by
   obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil hne
   exact fun _ => Takes.consumed h
 
 theorem Takes.hasNext_of_ne {version : Token.Version} {cursor next : Z}
     {tokens : List Parser.Internal.Input} (h : Takes version cursor tokens next)
-    (hne : tokens ≠ []) : Produce.HasNext cursor := by
+    (hne : tokens ≠ []) : Cursor.HasNext cursor := by
   obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil hne
   exact Takes.hasNext h
 
@@ -197,7 +210,7 @@ end
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
-variable {P P' R R' E : Type} {Z : Type} [Produce Z] {cursor : Z}
+variable {P P' R R' E : Type} {Z : Type} [Cursor Z] {cursor : Z}
 
 /-- A parse followed by a pure change of its answer that `outcome` reads through `F`. -/
 theorem outcome_map {cursor' : Z} (X : StateT H m (Answer H P R E cursor'))
@@ -224,9 +237,10 @@ private def afterSecond (p₁ : P₁) (first : R₁) {Z : Type} :
   | .finished second p₂ next => .finished (first, second) (PairParser.new p₁ p₂) next
   | .waits p₂ => .waits ⟨p₁, p₂, some first⟩
   | .rejected kind next => .rejected kind next
+  | .rejectedVersion kind next => .rejectedVersion kind next
   | .failed error => .failed error
 
-private theorem parseSecond_outcome (p₁ : P₁) (p₂ : P₂) (first : R₁) {Z : Type} [Produce Z]
+private theorem parseSecond_outcome (p₁ : P₁) (p₂ : P₂) (first : R₁) {Z : Type} [Cursor Z]
     (state : ParseState H) (cursor : Z) :
     outcome <$> (PairParser.new (H := H) p₁ p₂).parseSecond first state cursor =
       afterSecond p₁ first <$> (outcome <$> Parse.parse p₂ state cursor) := by
@@ -239,7 +253,7 @@ private theorem parseSecond_outcome (p₁ : P₁) (p₂ : P₂) (first : R₁) {
 omit [LawfulMonad m] in
 /-- The pair's parse, its first parser not finished yet: the first parser parses, then the pair
 goes on as `pairAfterFirst` says. -/
-private theorem pair_parse_eq (p₁ : P₁) (p₂ : P₂) {Z : Type} [Produce Z] (state : ParseState H)
+private theorem pair_parse_eq (p₁ : P₁) (p₂ : P₂) {Z : Type} [Cursor Z] (state : ParseState H)
     (cursor : Z) :
     outcome <$> Parse.parse (PairParser.new (H := H) p₁ p₂) state cursor =
       outcome <$> (Parse.parse p₁ state cursor >>= fun x =>
@@ -250,18 +264,18 @@ private theorem pair_parse_eq (p₁ : P₁) (p₂ : P₂) {Z : Type} [Produce Z]
               ⟨next, consumed⟩)
           | .ok .continue => pure (.ok .continue, ⟨first, p₂, none⟩, state, ⟨next, consumed⟩)
           | .ok (.break result) =>
-            match Produce.decideHasNext next with
+            match Cursor.decideHasNext next with
             | .isFalse _ => pure (.ok .continue, ⟨first, p₂, some result⟩, state,
                 ⟨next, consumed⟩)
             | .isTrue h => do
               let (answer, self, state, ⟨later, taken⟩) ←
                 (PairParser.new (H := H) first p₂).parseSecond result state next
               return (answer, self, state,
-                ⟨later, fun hn => Produce.consumed_trans (taken h) (consumed hn)⟩)) := rfl
+                ⟨later, fun hn => Cursor.consumed_trans (taken h) (consumed hn)⟩)) := rfl
 
 /-- What the pair's continuation after the first parser does, read by `outcome`, depends on no
 more than what `outcome` reads of the first parser's answer. -/
-private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Produce Z] {cursor : Z}
+private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Cursor Z] {cursor : Z}
     (x₀ : Answer H P₁ R₁ (Traits.Handler.Error H) cursor)
     (x : Answer H P₁ R₁ (Traits.Handler.Error H) cursor) :
     let k := fun (x : Answer H P₁ R₁ (Traits.Handler.Error H) cursor) =>
@@ -272,14 +286,14 @@ private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Produce Z] {cursor : Z}
               ⟨next, consumed⟩)
           | .ok .continue => pure (.ok .continue, ⟨first, p₂, none⟩, state, ⟨next, consumed⟩)
           | .ok (.break result) =>
-            match Produce.decideHasNext next with
+            match Cursor.decideHasNext next with
             | .isFalse _ => pure (.ok .continue, ⟨first, p₂, some result⟩, state,
                 ⟨next, consumed⟩)
             | .isTrue h => do
               let (answer, self, state, ⟨later, taken⟩) ←
                 (PairParser.new (H := H) first p₂).parseSecond result state next
               return (answer, self, state,
-                ⟨later, fun hn => Produce.consumed_trans (taken h) (consumed hn)⟩) :
+                ⟨later, fun hn => Cursor.consumed_trans (taken h) (consumed hn)⟩) :
         StateT H m (Answer H (PairParser H P₁ P₂) (R₁ × R₂) (Traits.Handler.Error H) cursor))
     outcome <$> k x = outcome <$> onOutcome k x₀ (outcome x) := by
   intro k
@@ -288,6 +302,11 @@ private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Produce Z] {cursor : Z}
   · rw [show outcome (cursor := cursor)
         (.error (ParseError.Internal.new (.syntax kind)), p, s, ⟨z, hz⟩) =
       .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
+    simp only [k, map_pure]
+    rfl
+  · rw [show outcome (cursor := cursor)
+        (.error (ParseError.Internal.new (.version kind)), p, s, ⟨z, hz⟩) =
+      .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
     simp only [k, map_pure]
     rfl
   · simp only [onOutcome, outcome, k, map_pure, ParseError.Internal.cause_new]
@@ -317,6 +336,11 @@ theorem pair_parses {version : Token.Version} {p₁ b₁ : P₁} {p₂ b₂ : P�
       · rw [show outcome (cursor := cursor)
             (.error (ParseError.Internal.new (.syntax kind)), p, s, ⟨z, hz⟩) =
           .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
+        simp only [map_pure]
+        rfl
+      · rw [show outcome (cursor := cursor)
+            (.error (ParseError.Internal.new (.version kind)), p, s, ⟨z, hz⟩) =
+          .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
         simp only [map_pure]
         rfl
       · simp only [onOutcome, outcome, map_pure, ParseError.Internal.cause_new]
@@ -406,7 +430,7 @@ theorem pair_waits_first {version : Token.Version} {p₁ : P₁} {p₂ : P₂}
       fun a => PairParser.new (after a) p₂ := by
   refine ⟨h.1, fun state cursor last htakes hnone => ?_⟩
   obtain ⟨calls, hcalls⟩ := handler_run h.1
-  have hc : Produce.HasNext cursor → Produce.Consumed last cursor := by
+  have hc : Cursor.HasNext cursor → Cursor.Consumed last cursor := by
     cases tokens with
     | nil =>
       rw [Takes.nil_inv htakes] at hnone ⊢
@@ -422,7 +446,7 @@ theorem pair_waits_first {version : Token.Version} {p₁ : P₁} {p₂ : P₂}
   · simp [onOutcome, outcome, answer, PairParser.new]
 
 private theorem parseSecond_outcome' (p₁ : P₁) (p₂ : P₂) (first : R₁) (fr : Option R₁) {Z : Type}
-    [Produce Z] (state : ParseState H) (cursor : Z) :
+    [Cursor Z] (state : ParseState H) (cursor : Z) :
     outcome <$> (⟨p₁, p₂, fr⟩ : PairParser H P₁ P₂).parseSecond first state cursor =
       afterSecond p₁ first <$> (outcome <$> Parse.parse p₂ state cursor) := by
   simp only [PairParser.parseSecond]
@@ -564,6 +588,7 @@ private def closedF {Z : Type} :
   | .finished result pair next => .finished result.1 ⟨pair⟩ next
   | .waits pair => .waits ⟨pair⟩
   | .rejected kind next => .rejected kind next
+  | .rejectedVersion kind next => .rejectedVersion kind next
   | .failed error => .failed error
 
 /-- The opened parser's answer from its pair's. -/
@@ -573,9 +598,10 @@ private def openedF {Z : Type} :
   | .finished result pair next => .finished result.2 ⟨pair⟩ next
   | .waits pair => .waits ⟨pair⟩
   | .rejected kind next => .rejected kind next
+  | .rejectedVersion kind next => .rejectedVersion kind next
   | .failed error => .failed error
 
-private theorem closed_outcome (pair : PairParser H P CloseParenParser) {Z : Type} [Produce Z]
+private theorem closed_outcome (pair : PairParser H P CloseParenParser) {Z : Type} [Cursor Z]
     (state : ParseState H) (cursor : Z) :
     outcome <$> Parse.parse (⟨pair⟩ : ClosedParser H P) state cursor =
       closedF <$> (outcome <$> Parse.parse pair state cursor) := by
@@ -587,7 +613,7 @@ private theorem closed_outcome (pair : PairParser H P CloseParenParser) {Z : Typ
   obtain ⟨a, p, s, ⟨z, hz⟩⟩ := x
   rcases a with (_ | _) | (_ | ⟨r, ⟨⟩⟩) <;> simp only [map_pure] <;> rfl
 
-private theorem opened_outcome (pair : PairParser H OpenParenParser P) {Z : Type} [Produce Z]
+private theorem opened_outcome (pair : PairParser H OpenParenParser P) {Z : Type} [Cursor Z]
     (state : ParseState H) (cursor : Z) :
     outcome <$> Parse.parse (⟨pair⟩ : OpenedParser H P) state cursor =
       openedF <$> (outcome <$> Parse.parse pair state cursor) := by
@@ -693,7 +719,7 @@ theorem closed_rejects_close {version : Token.Version} {p b : P}
     (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ [])
     (htoken : token ≠ .parenClose) :
     Outcome.Rejects version (ClosedParser.new (H := H) p) (tokens ++ [token])
-      (do let _ ← program; pure ()) (.expectedToken #[.parenClose]) :=
+      (do let _ ← program; pure ()) (.expected #[.token .parenClose]) :=
   closed_rejects_of (pair_rejects_second h (closeParen_rejects (H := H) version htoken) hne
     (List.cons_ne_nil _ _))
 
@@ -716,7 +742,7 @@ theorem closed_waits_close {version : Token.Version} {p b : P}
         (pure result : PM H R) (ClosedParser.new b)) ∧
       (∀ result {token : Parser.Internal.Input}, token ≠ .parenClose →
         Outcome.Rejects version (after result) [token] (pure () : PM H Unit)
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   obtain ⟨after, hwaits, hfin, hrej⟩ := pair_waits_between (p₂ := CloseParenParser.new) h hne
   refine ⟨fun r => ⟨after r⟩, closed_waits_of hwaits, fun r => ?_, fun r _ ht =>
     closed_rejects_of (hrej r (closeParen_rejects version ht))⟩
@@ -737,7 +763,7 @@ theorem opened_parses {version : Token.Version} {p b : P} {tokens : List Parser.
 theorem opened_rejects_open {version : Token.Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Outcome.Rejects version (OpenedParser.new (H := H) p) [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) :=
+      (.expected #[.token .parenOpen]) :=
   opened_rejects_of (pair_rejects_first (openParen_rejects version htoken) (List.cons_ne_nil _ _))
 
 /-- The opened parser rejects where its inner parser rejects after the `(`. -/
@@ -810,7 +836,7 @@ theorem paren_rejects_open {version : Token.Version} {p : P} {token : Parser.Int
     (htoken : token ≠ .parenOpen) :
     Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
       [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) :=
+      (.expected #[.token .parenOpen]) :=
   opened_rejects_open htoken
 
 /-- The parenthesised parser rejects where its inner parser rejects after the `(`. -/
@@ -828,7 +854,7 @@ theorem paren_rejects_close {version : Token.Version} {p b : P}
     (htoken : token ≠ .parenClose) :
     Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
       (.parenOpen :: (tokens ++ [token]))
-      (do let _ ← program; pure ()) (.expectedToken #[.parenClose]) :=
+      (do let _ ← program; pure ()) (.expected #[.token .parenClose]) :=
   opened_rejects_inner (closed_rejects_close h hne htoken) (by simp)
 
 end

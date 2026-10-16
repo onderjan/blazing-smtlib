@@ -48,7 +48,7 @@ open BSmtLib.Lexer.Error (LexError)
 /- The loops over a cursor's tokens end as each step consumes a token: they descend by the
 producer's consumption, which is well-founded. -/
 local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
-  ⟨Produce.Consumed, Produce.consumed_wf⟩
+  ⟨Cursor.Consumed, Cursor.consumed_wf⟩
 
 /-- Default timed runs per file; additional warm-up runs are discarded. -/
 def defaultIterations : Nat := 5
@@ -153,6 +153,8 @@ def parseFromMemory (data : ByteArray) (path : String) : IO Unit := do
       match error.cause with
       | .syntax kind =>
         throw <| IO.userError s!"benchmark file {path} must parse, got parser error {repr kind}"
+      | .version kind =>
+        throw <| IO.userError s!"benchmark file {path} must parse, got version error {repr kind}"
       | .handler nonstandard =>
         throw <| IO.userError s!"benchmark file {path} must parse, got nonstandard command \
           {(String.fromUTF8? nonstandard.name.asSlice.toByteArray).getD "(not UTF-8)"}"

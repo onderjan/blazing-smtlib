@@ -89,7 +89,7 @@ theorem arm_baseSelection (v : Token.Version) (input : ByteSlice) (start : Nat)
       have hx' : input[start] ≠ 120 := by simpa using hx
       have hb'' : input[start] ≠ 98 := by simpa using hb'
       have hf : advance C.concrete ⟨.hash, pstart, pcontent⟩ location input[start] =
-          .error (failAtByte .baseSelectionExpected pstart location) := by
+          .error (failAtByte (.expected .base) pstart location) := by
         simp [advance, hx', hb'']
       unfold Lexer.Internal.WRustPort.errorAt Lexer.Internal.WRustPort.errorWith
       wp_walk

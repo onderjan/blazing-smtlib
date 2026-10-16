@@ -41,6 +41,8 @@ inductive ReadErrorCause (E : Type) where
   rejected with a `ReadErrorCause.handler` error cause instead.
   -/
   | syntax (kind : SyntaxErrorKind)
+  /-- The script declares a version that cannot be used. -/
+  | version (kind : VersionErrorKind)
   /-- The handler rejected a command or a syntactic category. -/
   | handler (error : E)
 
@@ -55,6 +57,7 @@ message. -/
     | .io error => app "io" (reprArg (toString error))
     | .lexical kind => app "lexical" (reprArg kind)
     | .syntax kind => app "syntax" (reprArg kind)
+    | .version kind => app "version" (reprArg kind)
     | .handler error => app "handler" (reprArg error)
 
 /- LEAN: the constructor is private, as Rust's fields are, and the reader builds an error with
@@ -114,6 +117,7 @@ errors in the facts of the public interface name it. -/
 def ReadError.ofParse {E : Type} (err : ParseError E) (span : Span) : ReadError E :=
   let cause := match err.cause with
     | .syntax err => ReadErrorCause.«syntax» err
+    | .version err => ReadErrorCause.version err
     | .handler err => ReadErrorCause.handler err
   { cause, span }
 

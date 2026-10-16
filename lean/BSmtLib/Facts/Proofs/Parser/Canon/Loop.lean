@@ -9,7 +9,7 @@ import all BSmtLib.Parser
 import all BSmtLib.Plain
 import all BSmtLib.Token
 import all BSmtLib.Token.SyntaxToken
-import all BSmtLib.Token.Produce
+import all BSmtLib.Token.Cursor
 import all BSmtLib.Parser.Script
 
 @[expose] public section
@@ -234,8 +234,8 @@ variable {Rel : Token.BatchCursor g → Token.BatchCursor g' → Prop}
 
 theorem takeOne_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ = canon p₂)
     {c₁ n₁ : Token.BatchCursor g} {c₂ n₂ : Token.BatchCursor g'} {t₁ : BSmtLib.Token g}
-    {t₂ : BSmtLib.Token g'} (k₁ : Token.Produce.Consumed n₁ c₁)
-    (k₂ : Token.Produce.Consumed n₂ c₂) (hR : CursorRel Rel) (hn : Rel n₁ n₂)
+    {t₂ : BSmtLib.Token g'} (k₁ : Token.Cursor.Consumed n₁ c₁)
+    (k₂ : Token.Cursor.Consumed n₂ c₂) (hR : CursorRel Rel) (hn : Rel n₁ n₂)
     (hi : canonInput (Internal.Input.ofSyntax (n₁.syntax t₁)) =
       canonInput (Internal.Input.ofSyntax (n₂.syntax t₂)))
     (log : List Event) :
@@ -245,14 +245,14 @@ theorem takeOne_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ =
         ((Internal.takeOne p₂ c₂ t₂ n₂ k₂).run log).1.2.val ∧
       ((Internal.takeOne p₁ c₁ t₁ n₁ k₁).run log).2 =
         ((Internal.takeOne p₂ c₂ t₂ n₂ k₂).run log).2 := by
-  have hv : Token.Produce.version n₁ = Token.Produce.version n₂ := hR.version hn
-  obtain ⟨hb1, hb2⟩ := block_agree (Token.Produce.version n₂) hp hi log
+  have hv : Token.Cursor.version n₁ = Token.Cursor.version n₂ := hR.version hn
+  obtain ⟨hb1, hb2⟩ := block_agree (Token.Cursor.version n₂) hp hi log
   unfold Internal.takeOne
   simp only [StateT.run_bind, id_bind_eq]
   rw [hv]
-  generalize ((block (Token.Produce.version n₂) p₁
+  generalize ((block (Token.Cursor.version n₂) p₁
     (Internal.Input.ofSyntax (n₁.syntax t₁))).run.run log) = R₁ at hb1 hb2 ⊢
-  generalize ((block (Token.Produce.version n₂) p₂
+  generalize ((block (Token.Cursor.version n₂) p₂
     (Internal.Input.ofSyntax (n₂.syntax t₂))).run.run log) = R₂ at hb1 hb2 ⊢
   obtain ⟨r₁, l₁⟩ := R₁
   obtain ⟨r₂, l₂⟩ := R₂
@@ -275,11 +275,11 @@ theorem takeOne_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ =
       dsimp only
       split
       · rename_i heq
-        simp [Token.Produce.setVersion, Token.BatchCursor.setVersion] at heq
+        simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
       · rename_i s₁ hs₁
         split
         · rename_i heq
-          simp [Token.Produce.setVersion, Token.BatchCursor.setVersion] at heq
+          simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
         · rename_i s₂ hs₂
           have hag := hR.setVersion hn v hs₁ hs₂
           simp only [StateT.run_bind, id_bind_eq]
@@ -325,16 +325,16 @@ answer and log, canonically equal parsers and cursors that agree. -/
 def LoopRel (Rel : Token.BatchCursor g → Token.BatchCursor g' → Prop)
     {o₁ : Token.BatchCursor g} {o₂ : Token.BatchCursor g'}
     (r₁ : (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
-      { z : Token.BatchCursor g // Token.Produce.Consumed z o₁ }) × List Event)
+      { z : Token.BatchCursor g // Token.Cursor.Consumed z o₁ }) × List Event)
     (r₂ : (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
-      { z : Token.BatchCursor g' // Token.Produce.Consumed z o₂ }) × List Event) : Prop :=
+      { z : Token.BatchCursor g' // Token.Cursor.Consumed z o₂ }) × List Event) : Prop :=
   r₁.1.1 = r₂.1.1 ∧ canon r₁.1.2.1 = canon r₂.1.2.1 ∧ Rel r₁.1.2.2.val r₂.1.2.2.val ∧
     r₁.2 = r₂.2
 
 theorem rest_agree (hR : CursorRel Rel) (n : Nat) :
     ∀ {p₁ p₂ : ScriptParser (List Event)}, canon p₁ = canon p₂ →
     ∀ {o₁ c₁ : Token.BatchCursor g} {o₂ c₂ : Token.BatchCursor g'}
-      (k₁ : Token.Produce.Consumed c₁ o₁) (k₂ : Token.Produce.Consumed c₂ o₂),
+      (k₁ : Token.Cursor.Consumed c₁ o₁) (k₂ : Token.Cursor.Consumed c₂ o₂),
       Rel c₁ c₂ → remaining c₁ < n → ∀ log : List Event,
       LoopRel Rel ((Internal.rest o₁ p₁ c₁ k₁).run log)
         ((Internal.rest o₂ p₂ c₂ k₂).run log) := by
@@ -345,10 +345,10 @@ theorem rest_agree (hR : CursorRel Rel) (n : Nat) :
   rw [rest_of_none k₁ (recording_noHandOver _ _), rest_of_none k₂ (recording_noHandOver _ _)]
   by_cases h₁ : c₁.HasNext
   · have h₂ : c₂.HasNext := (hR.hasNext hc).mp h₁
-    have e₁ : Token.Produce.next? c₁ = some (c₁.next h₁) := by
+    have e₁ : Token.Cursor.next? c₁ = some (c₁.next h₁) := by
       show Token.BatchCursor.next? c₁ = _
       simp [Token.BatchCursor.next?, h₁]
-    have e₂ : Token.Produce.next? c₂ = some (c₂.next h₂) := by
+    have e₂ : Token.Cursor.next? c₂ = some (c₂.next h₂) := by
       show Token.BatchCursor.next? c₂ = _
       simp [Token.BatchCursor.next?, h₂]
     simp only [e₁, e₂]
@@ -368,10 +368,10 @@ theorem rest_agree (hR : CursorRel Rel) (n : Nat) :
     · obtain ⟨rfl, rfl⟩ := ha
       exact ⟨rfl, rfl, hag, rfl⟩
   · have h₂ : ¬ c₂.HasNext := fun h => h₁ ((hR.hasNext hc).mpr h)
-    have e₁ : Token.Produce.next? c₁ = none := by
+    have e₁ : Token.Cursor.next? c₁ = none := by
       show Token.BatchCursor.next? c₁ = _
       simp [Token.BatchCursor.next?, h₁]
-    have e₂ : Token.Produce.next? c₂ = none := by
+    have e₂ : Token.Cursor.next? c₂ = none := by
       show Token.BatchCursor.next? c₂ = _
       simp [Token.BatchCursor.next?, h₂]
     simp only [e₁, e₂]
@@ -396,10 +396,10 @@ theorem parseByToken_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p
     parseByToken_of_none st (recording_noHandOver _ _)]
   by_cases h₁ : c₁.HasNext
   · have h₂ : c₂.HasNext := (hR.hasNext hc).mp h₁
-    have e₁ : Token.Produce.next? c₁ = some (c₁.next h₁) := by
+    have e₁ : Token.Cursor.next? c₁ = some (c₁.next h₁) := by
       show Token.BatchCursor.next? c₁ = _
       simp [Token.BatchCursor.next?, h₁]
-    have e₂ : Token.Produce.next? c₂ = some (c₂.next h₂) := by
+    have e₂ : Token.Cursor.next? c₂ = some (c₂.next h₂) := by
       show Token.BatchCursor.next? c₂ = _
       simp [Token.BatchCursor.next?, h₂]
     split
@@ -440,10 +440,10 @@ theorem parseByToken_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p
         · obtain ⟨rfl, rfl⟩ := ha
           refine ⟨?_, ?_, ?_, hag, ?_⟩ <;> first | rfl | trivial
   · have h₂ : ¬ c₂.HasNext := fun h => h₁ ((hR.hasNext hc).mpr h)
-    have e₁ : Token.Produce.next? c₁ = none := by
+    have e₁ : Token.Cursor.next? c₁ = none := by
       show Token.BatchCursor.next? c₁ = _
       simp [Token.BatchCursor.next?, h₁]
-    have e₂ : Token.Produce.next? c₂ = none := by
+    have e₂ : Token.Cursor.next? c₂ = none := by
       show Token.BatchCursor.next? c₂ = _
       simp [Token.BatchCursor.next?, h₂]
     split

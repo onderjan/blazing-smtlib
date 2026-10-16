@@ -218,12 +218,12 @@ structure DigitRun where
 @[expose]
 def HEXADECIMAL_RUN : DigitRun :=
   { flag := CharClass.RUN_HEX_DIGIT, state := .hexadecimal, tokenType := .hexadecimal,
-    emptyError := .hexadecimalDigitExpected }
+    emptyError := (.expected .hexadecimalDigit) }
 
 @[expose]
 def BINARY_RUN : DigitRun :=
   { flag := CharClass.RUN_BINARY_DIGIT, state := .binary, tokenType := .binary,
-    emptyError := .binaryDigitExpected }
+    emptyError := (.expected .binaryDigit) }
 
 /-- Where a token ended. -/
 structure TokenEnd where

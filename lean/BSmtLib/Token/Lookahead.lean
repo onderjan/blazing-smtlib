@@ -12,8 +12,8 @@ namespace BSmtLib.Token.Lookahead
 
 /- LEAN: Rust's `next(&mut self)` returns the token and advances the window in place; here the
 window after the token is returned, with the proof that it took the token, so that an extractor
-gives back the window it took its tokens from (`Produce.attempt`). -/
-/-- A lookahead window for `Produce.attempt` (`SmtLookahead`). -/
+gives back the window it took its tokens from (`Cursor.attempt`). -/
+/-- A lookahead window for `Cursor.attempt` (`SmtLookahead`). -/
 class _root_.BSmtLib.Token.Lookahead (W T : Type) where
   /-- Whether the first window comes from the second one by taking at least one more token. -/
   Consumed : W → W → Prop

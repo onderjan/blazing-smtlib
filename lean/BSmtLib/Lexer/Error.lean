@@ -6,15 +6,26 @@ public section
 
 namespace BSmtLib.Lexer.Error
 
+/-- What the lexer expected, in `LexicalErrorKind.expected`. -/
+inductive LexicalExpected where
+  /-- A digit of the fractional part of a decimal. -/
+  | fractionDigit
+  /-- A hexadecimal digit after `#x`. -/
+  | hexadecimalDigit
+  /-- A binary digit after `#b`. -/
+  | binaryDigit
+  /-- The base of a number after `#`: `x` or `b`. -/
+  | base
+  deriving BEq, Hashable, Repr, Inhabited
+
 inductive LexicalErrorKind where
   | unexpectedCharacter
-  | fractionDigitExpected
-  | hexadecimalDigitExpected
-  | binaryDigitExpected
-  | baseSelectionExpected
+  /-- The item was expected here. -/
+  | expected (item : LexicalExpected)
   | unclosedStringLiteral
   | forbiddenCharInString
-  | forbiddenKeywordName
+  /-- A colon is not followed by a keyword name. -/
+  | emptyKeyword
   | backslashInQuotedSymbol
   | forbiddenCharInQuotedSymbol
   | unclosedQuotedSymbol
@@ -22,7 +33,7 @@ inductive LexicalErrorKind where
   | missingDelimiter
   /-- An entry was to be handed over after the value the consumer broke with. -/
   | unexpectedTrailingToken
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Hashable, Repr, Inhabited
 
 /-- The reason why a lexer call failed: a lexical error or a consumer error. -/
 inductive LexErrorCause (E : Type) where

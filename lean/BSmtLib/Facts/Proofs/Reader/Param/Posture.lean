@@ -28,7 +28,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Param.Posture
 
 open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser
-open BSmtLib.Parser.Internal (PM call syntaxError)
+open BSmtLib.Parser.Internal (PM call versionError)
 open BSmtLib.Facts.Reader.Adapters (RecAdapter)
 open BSmtLib.Facts.Proofs.Reader.Param.Adapter (paLoop startLog consume_eq id_bind_eq)
 open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Parser.Adapter BSmtLib.Parser.Command
@@ -92,7 +92,7 @@ def scriptAfter (parser : ScriptParser (List Event)) :
     return .more (scriptParser (postureOf parser) .awaiting (declarationsOf parser))
   | .done (.setVersion declared) =>
     match (check (postureOf parser)) (declarationsOf parser) declared with
-    | some kind => syntaxError kind
+    | some kind => versionError kind
     | none =>
       return .switchVersion declared (do
         ExceptT.lift (Handler.setVersion (H := List Event) declared)
@@ -157,7 +157,7 @@ theorem scriptAfter_looser {strict loose : Token.VersionPosture} (hl : Looser st
   · unfold scriptAfter
     cases hc : (check (postureOf parser)) (declarationsOf parser) declared with
     | some kind =>
-      exact .inl ⟨.syntax kind, by simp only [hc]; rfl⟩
+      exact .inl ⟨.version kind, by simp only [hc]; rfl⟩
     | none =>
       have hc' : (check (postureOf (withPosture loose parser)))
           (declarationsOf (withPosture loose parser))
@@ -216,14 +216,14 @@ theorem takeOne_looser {strict loose : Token.VersionPosture} (hl : Looser strict
     run_bind_split, run_bind_split]
   have hcmd : commandOf (withPosture loose parser) = commandOf parser := rfl
   have harr : arrivalCalls (withPosture loose parser)
-      (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token)) =
+      (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)) =
       arrivalCalls parser (Parser.Internal.Input.ofSyntax
-          (Token.Produce.«syntax» next token)) := rfl
+          (Token.Cursor.«syntax» next token)) := rfl
   rw [hcmd, harr]
-  generalize (commandStep (Token.Produce.version next) (commandOf parser)
-    (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token))).run.run
+  generalize (commandStep (Token.Cursor.version next) (commandOf parser)
+    (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» next token))).run.run
       (arrivalCalls parser (Parser.Internal.Input.ofSyntax
-          (Token.Produce.«syntax» next token)) ++ handler) = c
+          (Token.Cursor.«syntax» next token)) ++ handler) = c
   obtain ⟨res, handler'⟩ := c
   rcases res with e | outcome
   · exact .inl trivial

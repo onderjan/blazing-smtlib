@@ -288,7 +288,7 @@ def ScriptPost (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (x : 
 declaration that names no supported version, whose `)` the item is. -/
 def ScriptFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (x : Received)
     (e : Parser.ParseErrorCause Unit) : Prop :=
-  Benign e ∨ e = .syntax .unsupportedVersion ∧
+  Benign e ∨ e = .version .unsupported ∧
     ∃ commands, Takes start commands (pre ++ [x]) (.failed .unsupportedVersion)
 
 /-! ## A step of the script parser -/
@@ -697,7 +697,7 @@ or the rejection of a declaration that names no supported version at its `)`. -/
 def RunFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received)
     (items : List Parser.Internal.Input)
     (e : Parser.ParseErrorCause Unit) : Prop :=
-  Benign e ∨ e = .syntax .unsupportedVersion ∧ ∃ j commands, j < items.length ∧
+  Benign e ∨ e = .version .unsupported ∧ ∃ j commands, j < items.length ∧
     Takes start commands (pre ++ (items.take (j + 1)).map rcv) (.failed .unsupportedVersion)
 
 /-- The script parser's run over items goes on in a state that says what it has taken, where

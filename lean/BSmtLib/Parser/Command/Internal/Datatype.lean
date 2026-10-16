@@ -116,12 +116,12 @@ def datatypeStep (start : Array Symbol → PM H Unit) (version : Version)
         { opened := true, outside := false, inner := .opened, items := #[] })
     | token =>
       if token.isWord .par then return .more (.parameters (ListState.paren ()))
-      else syntaxError .expectedDatatypeKind
+      else syntaxError (.expected #[.reserved (.general .par), .token .parenOpen])
   | .parameters state =>
     match ← state.step () symbolStep none token with
     | .more state => return .more (.parameters state)
     | .done parameters =>
-      if parameters.isEmpty then syntaxError .emptyDatatypeParameters
+      if parameters.isEmpty then syntaxError (.empty .datatypeParameters)
       start parameters
       return .more .constructorsOpen
   | .constructorsOpen =>
@@ -131,7 +131,7 @@ def datatypeStep (start : Array Symbol → PM H Unit) (version : Version)
     match ← state.step .start (constructorStep version) none token with
     | .more state => return .more (.constructors parametric state)
     | .done constructors =>
-      if constructors.isEmpty then syntaxError .emptyDatatypeConstructors
+      if constructors.isEmpty then syntaxError (.empty .datatypeConstructors)
       if parametric then return .more (.close constructors)
       else return .done constructors
   | .close constructors =>

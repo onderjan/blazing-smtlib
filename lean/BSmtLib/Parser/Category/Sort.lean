@@ -72,11 +72,11 @@ def sortStep (version : Version) (self : SortState (Handler.«Sort» H)) (token 
     | .parenOpen => pure (.more { self with mode := .opened })
     | .parenClose =>
       match self.levels with
-      | [] => syntaxError .expectedSort
+      | [] => syntaxError (.expected #[.sort])
       | level :: outer =>
-        if level.arguments.isEmpty then syntaxError .emptySortApplication
+        if level.arguments.isEmpty then syntaxError (.empty .sortApplication)
         else sortComplete outer level.head level.arguments
-    | _ => syntaxError .expectedSort
+    | _ => syntaxError (.expected #[.sort])
   | .opened =>
     match token with
     | .symbol name =>
@@ -85,7 +85,7 @@ def sortStep (version : Version) (self : SortState (Handler.«Sort» H)) (token 
     | token =>
       if token.isWord .underscore then
         pure (.more { self with mode := .identOnly .afterUnderscore })
-      else syntaxError .expectedSortInner
+      else syntaxError (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen])
   | .identOnly ident => do
     match ← ident.step version token with
     | .more ident => return .more { self with mode := .identOnly ident }

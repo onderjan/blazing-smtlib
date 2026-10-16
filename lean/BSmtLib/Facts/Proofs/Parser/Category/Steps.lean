@@ -21,7 +21,7 @@ them in the modules beside this one.
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Steps
 
-open BSmtLib.Parser (ParseErrorCause SyntaxErrorKind)
+open BSmtLib.Parser (ParseErrorCause SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Parser.Adapters.Outcome (HandlerOnly)
@@ -129,6 +129,8 @@ inductive Res (σ ρ E : Type) where
   | done (result : ρ) (rest : List Parser.Internal.Input)
   /-- A syntax error of the kind, the tokens after the token whose step raised it. -/
   | rejected (kind : SyntaxErrorKind) (rest : List Parser.Internal.Input)
+  /-- A version error of the kind, the tokens after the token whose step raised it. -/
+  | rejectedVersion (kind : VersionErrorKind) (rest : List Parser.Internal.Input)
   /-- The handler's error. -/
   | failed (error : E)
 
@@ -145,6 +147,7 @@ def onStep (continue_ : σ → StateT H m (Res σ ρ (Traits.Handler.Error H)))
   | .ok (.more state) => continue_ state
   | .ok (.done result) => pure (.done result rest)
   | .error (.syntax kind) => pure (.rejected kind rest)
+  | .error (.version kind) => pure (.rejectedVersion kind rest)
   | .error (.handler error) => pure (.failed error)
 
 /-- The steps over the tokens, from the state, keeping where they stopped. -/
@@ -168,6 +171,7 @@ def afterProgram (k : α → StateT H m (Res σ ρ (Traits.Handler.Error H)))
     StateT H m (Res σ ρ (Traits.Handler.Error H))
   | .ok a => k a
   | .error (.syntax kind) => pure (.rejected kind rest)
+  | .error (.version kind) => pure (.rejectedVersion kind rest)
   | .error (.handler error) => pure (.failed error)
 
 /--
@@ -294,7 +298,7 @@ theorem map_program {step : σ → Parser.Internal.Input → PM H (Parser.Intern
   refine ⟨handlerOnly_map f h.1, fun rest => ?_⟩
   rw [h.2, ExceptT.run_map, bind_map_left]
   refine bind_congr fun e => ?_
-  rcases e with (kind | error) | a <;> rfl
+  rcases e with (kind | kind | error) | a <;> rfl
 
 /-- Effects at the start of the continuation, handler-only, are effects of the run. -/
 theorem bind_next {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)}
@@ -306,7 +310,8 @@ theorem bind_next {step : σ → Parser.Internal.Input → PM H (Parser.Internal
   refine ⟨handlerOnly_bind h.1 hf, fun rest => ?_⟩
   rw [h.2, ExceptT.run_bind, bind_assoc]
   refine bind_congr fun e => ?_
-  rcases e with (kind | error) | a
+  rcases e with (kind | kind | error) | a
+  · simp [afterProgram]
   · simp [afterProgram]
   · simp [afterProgram]
   · simp only [afterProgram, resumeS]
@@ -326,6 +331,7 @@ theorem driveS_embed {inner : σ → Parser.Internal.Input → PM H (Parser.Inte
         | .waits state => pure (.waits (wrap state))
         | .done result rest => resumeS points outer (after result) rest
         | .rejected kind rest => pure (.rejected kind rest)
+        | .rejectedVersion kind rest => pure (.rejectedVersion kind rest)
         | .failed error => pure (.failed error) := by
   induction tokens generalizing state with
   | nil => simp [driveS_nil]
@@ -333,19 +339,21 @@ theorem driveS_embed {inner : σ → Parser.Internal.Input → PM H (Parser.Inte
     simp only [driveS_cons, hstep, bind_assoc]
     rw [ExceptT.run_bind, ExceptT.run_bind, ExceptT.run_bind, bind_assoc, bind_assoc]
     refine bind_congr fun e => ?_
-    rcases e with (kind | error) | u
+    rcases e with (kind | kind | error) | u
+    · simp [onStep]
     · simp [onStep]
     · simp [onStep]
     · rw [bind_assoc]
       apply bind_congr
       intro e
-      rcases e with (kind | error) | (state' | result)
+      rcases e with (kind | kind | error) | (state' | result)
+      · simp [onStep]
       · simp [onStep]
       · simp [onStep]
       · simp [onStep, Parser.Internal.Step.wrap, ih]
       · simp only [onStep, Parser.Internal.Step.wrap, resumeS, pure_bind]
         refine bind_congr fun e => ?_
-        rcases e with (kind | error) | (state' | result) <;> rfl
+        rcases e with (kind | kind | error) | (state' | result) <;> rfl
 
 
 namespace RunsS
@@ -364,12 +372,14 @@ theorem embed {inner : σ → Parser.Internal.Input → PM H (Parser.Internal.St
   refine ⟨h.1, fun rest => ?_⟩
   rw [driveS_embed wrap after hstep, h.2, bind_assoc]
   refine bind_congr fun e => ?_
-  rcases e with (kind | error) | a
+  rcases e with (kind | kind | error) | a
+  · simp [afterProgram]
   · simp [afterProgram]
   · simp [afterProgram]
   · simp only [afterProgram, resumeS, bind_assoc, ExceptT.run_bind]
     refine bind_congr fun e => ?_
-    rcases e with (kind | error) | (state' | result)
+    rcases e with (kind | kind | error) | (state' | result)
+    · simp [onStep]
     · simp [onStep]
     · simp [onStep]
     · simp [onStep, Parser.Internal.Step.wrap, driveS_embed wrap after hstep]

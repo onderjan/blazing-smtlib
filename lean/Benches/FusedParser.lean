@@ -31,7 +31,7 @@ open BSmtLib.Lexer.Error (LexError)
 /- The loops over a cursor's tokens end as each step consumes a token: they descend by the
 producer's consumption, which is well-founded. -/
 local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
-  ⟨Produce.Consumed, Produce.consumed_wf⟩
+  ⟨Cursor.Consumed, Cursor.consumed_wf⟩
 
 /-! ## The syntax checker of the benchmark: the library's `SyntaxChecker`, and one in `IO` -/
 
@@ -181,11 +181,11 @@ structure TermRule where
 instance : Parser.CommandRule TermRule TermCommandChecker where
   Parser := Parser.ClosedParser TermCommandChecker (Parser.TermParser TermCommandChecker)
   Result := Unit
-  handle _ := pure ()
+  handle self _ := pure self
 
 instance : CommandHandler TermCommandChecker Id where
   NonstandardParser := Parser.CommandPayloadParser TermCommandChecker TermRule
-  nonstandardCommand _ := return .new (.new .new)
+  nonstandardCommand _ := return .new {} (.new .new)
   commandAssert _ := pure ()
   commandCheckSat := pure ()
   commandCheckSatAssuming _ := pure ()
@@ -497,6 +497,7 @@ def showResult {E R L : Type} (showE : E → String)
       | .consumer error =>
         match error.cause with
         | .syntax kind => s!"syntax {repr kind}"
+        | .version kind => s!"version {repr kind}"
         | .handler e => s!"handler {showE e}"
     s!"error {cause} at {repr err.span}"
 

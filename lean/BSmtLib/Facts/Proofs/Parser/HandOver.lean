@@ -23,25 +23,25 @@ open BSmtLib.Parser.Internal (ParseByToken takeOne rest parseByToken not_hasNext
 /-- The parser hands its cursor over in no state, on no cursor. -/
 def NoHandOver (P : Type) {H : Type} {m : Type → Type} {E R : Type}
     [ParseByToken P H m E R] : Prop :=
-  ∀ {Z : Type} [Token.Produce Z] (parser : P) (cursor : Z),
+  ∀ {Z : Type} [Token.Cursor Z] (parser : P) (cursor : Z),
     ParseByToken.handOver? parser cursor = none
 
 variable {H P R E : Type} {m : Type → Type} [Monad m] [ParseByToken P H m E R]
-variable {Z : Type} [Token.Produce Z]
+variable {Z : Type} [Token.Cursor Z]
 
 /-- The loop, from a parser that does not hand the cursor over: it takes the next token. -/
 theorem rest_of_none {origin : Z} {parser : P} {cursor : Z}
-    (consumed : Token.Produce.Consumed cursor origin)
+    (consumed : Token.Cursor.Consumed cursor origin)
     (h : ParseByToken.handOver? parser cursor = none) :
     rest (m := m) origin parser cursor consumed =
-      match Token.Produce.next? cursor with
+      match Token.Cursor.next? cursor with
       | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
       | some (token, ⟨next, step⟩) => do
         match ← takeOne parser cursor token next step with
         | (.goOn parser, ⟨later, taken⟩) =>
-          rest origin parser later (Token.Produce.consumed_trans taken consumed)
+          rest origin parser later (Token.Cursor.consumed_trans taken consumed)
         | (.stop answer parser, ⟨later, taken⟩) =>
-          return (answer, parser, ⟨later, Token.Produce.consumed_trans taken consumed⟩) := by
+          return (answer, parser, ⟨later, Token.Cursor.consumed_trans taken consumed⟩) := by
   rw [rest, h]
   rfl
 
@@ -49,7 +49,7 @@ theorem rest_of_none {origin : Z} {parser : P} {cursor : Z}
 theorem parseByToken_of_none {parser : P} (state : ParseState H) {cursor : Z}
     (h : ParseByToken.handOver? parser cursor = none) :
     parseByToken (m := m) parser state cursor =
-      match hn : Token.Produce.next? cursor with
+      match hn : Token.Cursor.next? cursor with
       | none =>
         return (.ok .continue, parser, state, ⟨cursor, fun has => absurd has (not_hasNext hn)⟩)
       | some (token, ⟨next, consumed⟩) => do

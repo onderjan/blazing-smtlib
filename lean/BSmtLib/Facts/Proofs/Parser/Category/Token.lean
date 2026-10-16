@@ -15,7 +15,7 @@ expects of the token: it finishes at its first token with what it takes of it, o
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Token
 
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 open BSmtLib.Parser (Parse ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token
@@ -49,7 +49,7 @@ theorem single_sim (expect : Parser.Internal.Input → PM H ρ) (parser : P)
 /-- A parser of a single token, on a token it takes. -/
 theorem single_parses [Parse P H m (Traits.Handler.Error H) ρ]
     (expect : Parser.Internal.Input → PM H ρ) (parser : P)
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (state : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (state : ParseState H) (cursor : Z),
       Parse.parse parser state cursor =
         @Parser.Internal.parseByToken H P ρ _ m _ (Internal.singleByToken (P := P) H expect) Z _
           parser state cursor)
@@ -68,7 +68,7 @@ theorem single_parses [Parse P H m (Traits.Handler.Error H) ρ]
 /-- A parser of a single token, on a token it does not take. -/
 theorem single_rejects [Parse P H m (Traits.Handler.Error H) ρ]
     (expect : Parser.Internal.Input → PM H ρ) (parser : P)
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (state : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (state : ParseState H) (cursor : Z),
       Parse.parse parser state cursor =
         @Parser.Internal.parseByToken H P ρ _ m _ (Internal.singleByToken (P := P) H expect) Z _
           parser state cursor)
@@ -89,7 +89,7 @@ theorem single_rejects [Parse P H m (Traits.Handler.Error H) ρ]
 /-- A parser of a single token, on a cursor with no token: it wants more, as it was. -/
 theorem single_waits [Parse P H m (Traits.Handler.Error H) ρ]
     (expect : Parser.Internal.Input → PM H ρ) (parser : P)
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (state : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (state : ParseState H) (cursor : Z),
       Parse.parse parser state cursor =
         @Parser.Internal.parseByToken H P ρ _ m _ (Internal.singleByToken (P := P) H expect) Z _
           parser state cursor)
@@ -118,7 +118,7 @@ theorem symbol_parses (symbol : Plain.Symbol) :
     SymbolParser.new (fun _ _ _ => rfl) version (by simp [expectSymbol])
 
 theorem symbol_rejects {token : Parser.Internal.Input} (h : ∀ symbol, token ≠ .symbol symbol) :
-    Outcome.Rejects version SymbolParser.new [token] (pure () : PM H Unit) .expectedSymbol :=
+    Outcome.Rejects version SymbolParser.new [token] (pure () : PM H Unit) (.expected #[.symbol]) :=
   single_rejects (fun token => Plain.Symbol.intoOwned <$> expectSymbol token)
     SymbolParser.new (fun _ _ _ => rfl) version
     (by
@@ -133,7 +133,7 @@ theorem openParen_parses :
 
 theorem openParen_rejects {token : Parser.Internal.Input} (h : token ≠ .parenOpen) :
     Outcome.Rejects version OpenParenParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) :=
+      (.expected #[.token .parenOpen]) :=
   single_rejects expectOpen OpenParenParser.new (fun _ _ _ => rfl) version
     (by cases token <;> first | exact absurd rfl h | rfl)
 
@@ -144,7 +144,7 @@ theorem closeParen_parses :
 
 theorem closeParen_rejects {token : Parser.Internal.Input} (h : token ≠ .parenClose) :
     Outcome.Rejects version CloseParenParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenClose]) :=
+      (.expected #[.token .parenClose]) :=
   single_rejects expectClose CloseParenParser.new (fun _ _ _ => rfl) version
     (by cases token <;> first | exact absurd rfl h | rfl)
 
@@ -157,7 +157,7 @@ theorem numeral_parses (digits : Numeral) :
 theorem numeral_rejects {token : Parser.Internal.Input}
     (h : ∀ digits, token ≠ .constant (.numeral digits)) :
     Outcome.Rejects version NumeralParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.numeral]) :=
+      (.expected #[.token .numeral]) :=
   single_rejects (fun token => Numeral.intoOwned <$> expectNumeral token)
     NumeralParser.new (fun _ _ _ => rfl) version
     (by
@@ -176,7 +176,7 @@ theorem keyword_parses (name : Keyword) :
 
 theorem keyword_rejects {token : Parser.Internal.Input} (h : ∀ name, token ≠ .keyword name) :
     Outcome.Rejects version KeywordParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.keyword]) :=
+      (.expected #[.token .keyword]) :=
   single_rejects (fun token => Keyword.intoOwned <$> expectKeyword token)
     KeywordParser.new (fun _ _ _ => rfl) version
     (by
@@ -193,7 +193,7 @@ theorem string_parses (content : StringContent) :
 theorem string_rejects {token : Parser.Internal.Input}
     (h : ∀ content, token ≠ .constant (.string content)) :
     Outcome.Rejects version StringParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.string]) :=
+      (.expected #[.token .string]) :=
   single_rejects (fun token => StringContent.intoOwned <$> expectString token)
     StringParser.new (fun _ _ _ => rfl) version
     (by

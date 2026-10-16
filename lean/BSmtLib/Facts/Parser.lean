@@ -322,7 +322,7 @@ info: 'BSmtLib.Facts.Parser.fused_parses_as_port' depends on axioms: [propext, C
 ## The category parsers and the combinators on a cursor
 
 The parsers of the categories and the combinators parse a cursor of any producer
-(`Token.Produce`). What they do is stated against the tokens the cursor gives, as the parsers
+(`Token.Cursor`). What they do is stated against the tokens the cursor gives, as the parsers
 take them, all in one version, read as `Adapters.Outcome.outcome` reads a parse: on a cursor that
 has given tokens first, followed by anything, a parser makes the effects of a handler-only
 program and finishes with its result right after the tokens, as a parser it gives back
@@ -372,10 +372,10 @@ info: 'BSmtLib.Facts.Parser.symbol_parser_parses' depends on axioms: [propext, C
 #guard_msgs in
 #print axioms symbol_parser_parses
 
-/-- The symbol parser rejects any other token with `expectedSymbol`, making no call. -/
+/-- The symbol parser rejects any other token with `expected #[.symbol]`, making no call. -/
 theorem symbol_parser_rejects {token : Parser.Internal.Input}
     (h : ∀ symbol, token ≠ .symbol symbol) :
-    Rejects version SymbolParser.new [token] (pure () : PM H Unit) .expectedSymbol := by
+    Rejects version SymbolParser.new [token] (pure () : PM H Unit) (.expected #[.symbol]) := by
   apply Proofs.Parser.Category.Token.symbol_rejects <;> assumption
 
 /--
@@ -396,10 +396,10 @@ info: 'BSmtLib.Facts.Parser.openParen_parser_parses' depends on axioms: [propext
 #guard_msgs in
 #print axioms openParen_parser_parses
 
-/-- The `(` parser rejects any other token with `expectedToken [(]`, making no call. -/
+/-- The `(` parser rejects any other token with `expected #[.token .parenOpen]`, making no call. -/
 theorem openParen_parser_rejects {token : Parser.Internal.Input} (h : token ≠ .parenOpen) :
     Rejects version OpenParenParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) := by
+      (.expected #[.token .parenOpen]) := by
   apply Proofs.Parser.Category.Token.openParen_rejects <;> assumption
 
 /--
@@ -420,10 +420,10 @@ info: 'BSmtLib.Facts.Parser.closeParen_parser_parses' depends on axioms: [propex
 #guard_msgs in
 #print axioms closeParen_parser_parses
 
-/-- The `)` parser rejects any other token with `expectedToken [)]`, making no call. -/
+/-- The `)` parser rejects any other token with `expected #[.token .parenClose]`, making no call. -/
 theorem closeParen_parser_rejects {token : Parser.Internal.Input} (h : token ≠ .parenClose) :
     Rejects version CloseParenParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenClose]) := by
+      (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.Token.closeParen_rejects <;> assumption
 
 /--
@@ -444,12 +444,12 @@ info: 'BSmtLib.Facts.Parser.numeral_parser_parses' depends on axioms: [propext, 
 #guard_msgs in
 #print axioms numeral_parser_parses
 
-/-- The numeral parser rejects any other token with `expectedToken [numeral]`, making no
+/-- The numeral parser rejects any other token with `expected #[.token .numeral]`, making no
 call. -/
 theorem numeral_parser_rejects {token : Parser.Internal.Input}
     (h : ∀ digits, token ≠ .constant (.numeral digits)) :
     Rejects version NumeralParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.numeral]) := by
+      (.expected #[.token .numeral]) := by
   apply Proofs.Parser.Category.Token.numeral_rejects <;> assumption
 
 /--
@@ -470,11 +470,11 @@ info: 'BSmtLib.Facts.Parser.keyword_parser_parses' depends on axioms: [propext, 
 #guard_msgs in
 #print axioms keyword_parser_parses
 
-/-- The keyword parser rejects any other token with `expectedToken [keyword]`, making no
+/-- The keyword parser rejects any other token with `expected #[.token .keyword]`, making no
 call. -/
 theorem keyword_parser_rejects {token : Parser.Internal.Input} (h : ∀ name, token ≠ .keyword name) :
     Rejects version KeywordParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.keyword]) := by
+      (.expected #[.token .keyword]) := by
   apply Proofs.Parser.Category.Token.keyword_rejects <;> assumption
 
 /--
@@ -496,12 +496,12 @@ info: 'BSmtLib.Facts.Parser.string_parser_parses' depends on axioms: [propext, C
 #guard_msgs in
 #print axioms string_parser_parses
 
-/-- The string literal parser rejects any other token with `expectedToken [string]`, making no
+/-- The string literal parser rejects any other token with `expected #[.token .string]`, making no
 call. -/
 theorem string_parser_rejects {token : Parser.Internal.Input}
     (h : ∀ content, token ≠ .constant (.string content)) :
     Rejects version StringParser.new [token] (pure () : PM H Unit)
-      (.expectedToken #[.string]) := by
+      (.expected #[.token .string]) := by
   apply Proofs.Parser.Category.Token.string_rejects <;> assumption
 
 /--
@@ -740,7 +740,7 @@ theorem closed_parser_rejects_close {version : Token.Version} {p b : P}
     (h : Finishes version p tokens program b) (hne : tokens ≠ [])
     (htoken : token ≠ .parenClose) :
     Rejects version (ClosedParser.new (H := H) p) (tokens ++ [token])
-      (do let _ ← program; pure ()) (.expectedToken #[.parenClose]) := by
+      (do let _ ← program; pure ()) (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.Combinator.closed_rejects_close <;> assumption
 
 /--
@@ -775,7 +775,7 @@ theorem closed_parser_waits_close {version : Token.Version} {p b : P}
         (pure result : PM H R) (ClosedParser.new b)) ∧
       (∀ result {token : Parser.Internal.Input}, token ≠ .parenClose →
         Rejects version (after result) [token] (pure () : PM H Unit)
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   apply Proofs.Parser.Category.Combinator.closed_waits_close <;> assumption
 
 /--
@@ -802,7 +802,7 @@ info: 'BSmtLib.Facts.Parser.opened_parser_parses' depends on axioms: [propext, C
 theorem opened_parser_rejects_open {version : Token.Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Rejects version (OpenedParser.new (H := H) p) [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) := by
+      (.expected #[.token .parenOpen]) := by
   apply Proofs.Parser.Category.Combinator.opened_rejects_open <;> assumption
 
 /--
@@ -896,7 +896,7 @@ info: 'BSmtLib.Facts.Parser.paren_parser_parses' depends on axioms: [propext, Cl
 theorem paren_parser_rejects_open {version : Token.Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Rejects version (ParenParser.new (ClosedParser.new (H := H) p)) [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) := by
+      (.expected #[.token .parenOpen]) := by
   apply Proofs.Parser.Category.Combinator.paren_rejects_open <;> assumption
 
 /--
@@ -926,7 +926,7 @@ theorem paren_parser_rejects_close {version : Token.Version} {p b : P}
     (htoken : token ≠ .parenClose) :
     Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
       (.parenOpen :: (tokens ++ [token]))
-      (do let _ ← program; pure ()) (.expectedToken #[.parenClose]) := by
+      (do let _ ← program; pure ()) (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.Combinator.paren_rejects_close <;> assumption
 
 /--
@@ -1060,7 +1060,7 @@ theorem parenMultiple_parser_rejects_open {version : Token.Version} {p : P}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
     Rejects version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
       [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) := by
+      (.expected #[.token .parenOpen]) := by
   apply Proofs.Parser.Category.Multiple.parenMultiple_rejects_open <;> assumption
 
 /--
@@ -1162,7 +1162,7 @@ theorem closedMaximum_parser_rejects_beyond {version : Token.Version} {p : P} {m
     (htoken : token ≠ .parenClose) :
     Rejects version (ClosedMaximumParser.new (H := H) p maximum)
       (values.flatMap (·.1) ++ [token])
-      (do let _ ← values.mapM fun value => value.2; pure ()) (.expectedToken #[.parenClose]) := by
+      (do let _ ← values.mapM fun value => value.2; pure ()) (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.Maximum.closedMaximum_rejects_beyond <;> assumption
 
 /--
@@ -1222,7 +1222,7 @@ theorem closedMaximum_parser_waits_between {version : Token.Version} {p : P}
         token ≠ .parenClose →
         Rejects version (after maximum found) (values'.flatMap (·.1) ++ [token])
           (do let _ ← values'.mapM fun value => value.2; pure ())
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   apply Proofs.Parser.Category.Maximum.closedMaximum_waits_between <;> assumption
 
 /--
@@ -1280,7 +1280,7 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_parses' depends on axioms: [prop
 theorem parenMaximum_parser_rejects_open {version : Token.Version} {p : P} {maximum : Nat}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
     Rejects version (ParenMaximumParser.new (H := H) p maximum) [token]
-      (pure () : PM H Unit) (.expectedToken #[.parenOpen]) := by
+      (pure () : PM H Unit) (.expected #[.token .parenOpen]) := by
   apply Proofs.Parser.Category.Maximum.parenMaximum_rejects_open <;> assumption
 
 /--
@@ -1299,7 +1299,7 @@ theorem parenMaximum_parser_rejects_beyond {version : Token.Version} {p : P} {ma
     (htoken : token ≠ .parenClose) :
     Rejects version (ParenMaximumParser.new (H := H) p maximum)
       (.parenOpen :: (values.flatMap (·.1) ++ [token]))
-      (do let _ ← values.mapM fun value => value.2; pure ()) (.expectedToken #[.parenClose]) := by
+      (do let _ ← values.mapM fun value => value.2; pure ()) (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.Maximum.parenMaximum_rejects_beyond <;> assumption
 
 /--
@@ -1431,7 +1431,7 @@ theorem parenMaximum_parser_waits_after_open {version : Token.Version} {p : P} :
         values.length = maximum → token ≠ .parenClose →
         Rejects version (after maximum) (values.flatMap (·.1) ++ [token])
           (do let _ ← values.mapM fun value => value.2; pure ())
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   apply Proofs.Parser.Category.Maximum.parenMaximum_waits_after_open <;> assumption
 
 /--
@@ -1471,7 +1471,7 @@ theorem parenMaximum_parser_waits_between {version : Token.Version} {p : P}
         token ≠ .parenClose →
         Rejects version (after maximum found) (values'.flatMap (·.1) ++ [token])
           (do let _ ← values'.mapM fun value => value.2; pure ())
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   apply Proofs.Parser.Category.Maximum.parenMaximum_waits_between <;> assumption
 
 /--
@@ -1556,7 +1556,7 @@ info: 'BSmtLib.Facts.Parser.ident_parser_parses' depends on axioms: [propext, Cl
 /-- The identifier parser on a first token that is neither a symbol nor `(`. -/
 theorem ident_parser_rejects_first {version : Token.Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen) :
-    Rejects version IdentParser.new [token] (pure () : PM H Unit) .expectedIdent := by
+    Rejects version IdentParser.new [token] (pure () : PM H Unit) (.expected #[.ident]) := by
   apply Proofs.Parser.Category.Ident.ident_rejects_first <;> assumption
 
 /--
@@ -1569,7 +1569,7 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_first' depends on axioms: [prop
 theorem ident_parser_rejects_underscore {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : token ≠ .reserved (.general .underscore)) :
     Rejects version IdentParser.new [.parenOpen, token] (pure () : PM H Unit)
-      .expectedUnderscore := by
+      (.expected #[.reserved (.general .underscore)]) := by
   apply Proofs.Parser.Category.Ident.ident_rejects_underscore <;> assumption
 
 /--
@@ -1582,7 +1582,7 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_underscore' depends on axioms: 
 theorem ident_parser_rejects_symbol {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version IdentParser.new [.parenOpen, .reserved (.general .underscore), token]
-      (pure () : PM H Unit) .expectedSymbol := by
+      (pure () : PM H Unit) (.expected #[.symbol]) := by
   apply Proofs.Parser.Category.Ident.ident_rejects_symbol <;> assumption
 
 /--
@@ -1595,7 +1595,7 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_symbol' depends on axioms: [pro
 theorem ident_parser_rejects_empty {version : Token.Version} (symbol : Plain.Symbol) :
     Rejects version IdentParser.new
       [.parenOpen, .reserved (.general .underscore), .symbol symbol, .parenClose]
-      (pure () : PM H Unit) .emptyIdentIndices := by
+      (pure () : PM H Unit) (.empty .identIndices) := by
   apply Proofs.Parser.Category.Ident.ident_rejects_empty <;> assumption
 
 /--
@@ -1616,7 +1616,7 @@ theorem ident_parser_rejects_index {version : Token.Version} (symbol : Plain.Sym
     (hclose : token ≠ .parenClose) :
     Rejects version IdentParser.new
       ([.parenOpen, .reserved (.general .underscore), .symbol symbol] ++ indices ++ [token])
-      (pure () : PM H Unit) .expectedIndexOrCloseParen := by
+      (pure () : PM H Unit) (.expected #[.index, .token .parenClose]) := by
   apply Proofs.Parser.Category.Ident.ident_rejects_index <;> assumption
 
 /--
@@ -1649,7 +1649,7 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_parses' depends on axioms: [propext
 theorem sortedVar_parser_rejects_open {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Rejects version (SortedVarParser.new (H := H)) [token] (pure () : PM H Unit)
-      (.expectedToken #[.parenOpen]) := by
+      (.expected #[.token .parenOpen]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_open <;> assumption
 
 /--
@@ -1662,7 +1662,7 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_open' depends on axioms: [p
 theorem sortedVar_parser_rejects_symbol {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version (SortedVarParser.new (H := H)) [.parenOpen, token] (pure () : PM H Unit)
-      .expectedSymbol := by
+      (.expected #[.symbol]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_symbol <;> assumption
 
 /--
@@ -1677,7 +1677,7 @@ theorem sortedVar_parser_rejects_sort {version : Token.Version} (symbol : Plain.
     {token : Parser.Internal.Input} (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hopen : token ≠ .parenOpen) :
     Rejects version (SortedVarParser.new (H := H)) [.parenOpen, .symbol symbol, token]
-      (pure () : PM H Unit) .expectedSort := by
+      (pure () : PM H Unit) (.expected #[.sort]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_sort <;> assumption
 
 /--
@@ -1687,8 +1687,8 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sort' depends on axioms: [p
 #print axioms sortedVar_parser_rejects_sort
 
 /-- The sorted variable parser on `(`, a symbol, the tokens of a valid sort and a token that is
-not `)`: it rejects that token with `expectedToken [)]`, having made the traversal's calls for
-the sort. -/
+not `)`: it rejects that token with `expected #[.token .parenClose]`, having made the traversal's
+calls for the sort. -/
 theorem sortedVar_parser_rejects_close {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Plain.Symbol) {sort : Tree.«Sort»} (hvalid : sort.Valid (Bridge.version version))
@@ -1697,7 +1697,7 @@ theorem sortedVar_parser_rejects_close {version : Token.Version}
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: (sortTokens ++ [token]))
       ((fun _ => ()) <$> adaptRun (Traversal.sort noPoints h sort))
-      (.expectedToken #[.parenClose]) := by
+      (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_close <;> assumption
 
 /--
@@ -1713,7 +1713,7 @@ theorem sortedVar_parser_rejects_sortInner {version : Token.Version} (symbol : P
     (hopen : token ≠ .parenOpen) (hunderscore : token ≠ .reserved (.general .underscore)) :
     Rejects version (SortedVarParser.new (H := H))
       [.parenOpen, .symbol symbol, .parenOpen, token] (pure () : PM H Unit)
-      .expectedSortInner := by
+      (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_sortInner <;> assumption
 
 /--
@@ -1728,7 +1728,7 @@ theorem sortedVar_parser_rejects_sortEmpty {version : Token.Version}
     (symbol head : Plain.Symbol) :
     Rejects version (SortedVarParser.new (H := H))
       [.parenOpen, .symbol symbol, .parenOpen, .symbol head, .parenClose] (pure () : PM H Unit)
-      .emptySortApplication := by
+      (.empty .sortApplication) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_sortEmpty <;> assumption
 
 /--
@@ -1739,7 +1739,7 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortEmpty' depends on axiom
 
 /-- The sorted variable parser on `(`, a symbol, `(`, the tokens of a valid identifier and of
 valid sorts and a token that neither starts another argument of the sort nor ends it: it rejects
-that token with `expectedSort`, having made the traversal's calls for the sorts. -/
+that token with `expected #[.sort]`, having made the traversal's calls for the sorts. -/
 theorem sortedVar_parser_rejects_sortArgument {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Plain.Symbol) {head : Tree.Identifier}
@@ -1752,7 +1752,7 @@ theorem sortedVar_parser_rejects_sortArgument {version : Token.Version}
     (hopen : token ≠ .parenOpen) (hclose : token ≠ .parenClose) :
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: .parenOpen :: (headTokens ++ (sortTokens ++ [token])))
-      ((fun _ => ()) <$> adaptRun (Traversal.sorts noPoints h sorts)) .expectedSort := by
+      ((fun _ => ()) <$> adaptRun (Traversal.sorts noPoints h sorts)) (.expected #[.sort]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_sortArgument <;> assumption
 
 /--
@@ -1807,7 +1807,7 @@ theorem qualifiedIdent_parser_rejects_first {version : Token.Version}
     {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen) :
     Rejects version (QualifiedIdentParser.new (H := H)) [token] (pure () : PM H Unit)
-      .expectedIdent := by
+      (.expected #[.ident]) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_first <;> assumption
 
 /--
@@ -1822,7 +1822,8 @@ theorem qualifiedIdent_parser_rejects_opened {version : Token.Version}
     (hunderscore : token ≠ .reserved (.general .underscore))
     (has : token ≠ .reserved (.general .as)) :
     Rejects version (QualifiedIdentParser.new (H := H)) [.parenOpen, token]
-      (pure () : PM H Unit) .expectedUnderscoreOrAs := by
+      (pure () : PM H Unit)
+      (.expected #[.reserved (.general .underscore), .reserved (.general .as)]) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_opened <;> assumption
 
 /--
@@ -1833,8 +1834,8 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_opened' depends on axi
 
 /--
 The qualified identifier parser on `(` `as`, the tokens of a valid identifier and of a valid sort,
-and a token that is not `)`: it rejects that token with `expectedToken [)]`, having made the
-traversal's calls for the sort.
+and a token that is not `)`: it rejects that token with `expected #[.token .parenClose]`, having
+made the traversal's calls for the sort.
 -/
 theorem qualifiedIdent_parser_rejects_close {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -1846,7 +1847,7 @@ theorem qualifiedIdent_parser_rejects_close {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ (sortTokens ++ [token])))
       ((fun _ => ()) <$> adaptRun (Traversal.sort noPoints h sort))
-      (.expectedToken #[.parenClose]) := by
+      (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_close <;> assumption
 
 /--
@@ -1865,7 +1866,8 @@ theorem qualifiedIdent_parser_rejects_sortInner {version : Token.Version}
     (hopen : token ≠ .parenOpen) (hunderscore : token ≠ .reserved (.general .underscore)) :
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ [.parenOpen, token]))
-      (pure () : PM H Unit) .expectedSortInner := by
+      (pure () : PM H Unit)
+      (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_sortInner <;> assumption
 
 /--
@@ -1886,7 +1888,7 @@ theorem qualifiedIdent_parser_rejects_sortEmpty {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ [.parenOpen, .symbol head, .parenClose]))
-      (pure () : PM H Unit) .emptySortApplication := by
+      (pure () : PM H Unit) (.empty .sortApplication) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_sortEmpty <;> assumption
 
 /--
@@ -1899,7 +1901,7 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortEmpty' depends on 
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, `(`, the
 tokens of a valid identifier and of valid sorts and a token that neither starts another argument
-of the sort nor ends it: it rejects that token with `expectedSort`, having made the traversal's
+of the sort nor ends it: it rejects that token with `expected #[.sort]`, having made the traversal's
 calls for the sorts. -/
 theorem qualifiedIdent_parser_rejects_sortArgument {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -1916,7 +1918,7 @@ theorem qualifiedIdent_parser_rejects_sortArgument {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ .parenOpen :: (headTokens ++ (sortTokens ++ [token]))))
-      ((fun _ => ()) <$> adaptRun (Traversal.sorts noPoints h sorts)) .expectedSort := by
+      ((fun _ => ()) <$> adaptRun (Traversal.sorts noPoints h sorts)) (.expected #[.sort]) := by
   exact Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_sortArgument hA hvalid hident
     hhead hsHead hsorts hsSorts hsymbol hopen hclose
 
@@ -1973,8 +1975,9 @@ theorem pattern_parser_rejects_first {version : Token.Version} {token : Parser.I
     (hopen : token ≠ .parenOpen) (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hwildcard : version ≥ .v2_7 → token ≠ .reserved (.general .underscore)) :
     Rejects version (PatternParser.new (H := H)) [token] (pure () : PM H Unit)
-      (if version ≥ .v2_7 then .expectedSymbolUnderscoreOrParenOpen
-        else .expectedSymbolOrParenOpen) := by
+      (if version ≥ .v2_7
+        then (.expected #[.symbol, .reserved (.general .underscore), .token .parenOpen])
+        else (.expected #[.symbol, .token .parenOpen])) := by
   apply Proofs.Parser.Category.Pattern.pattern_rejects_first <;> assumption
 
 /--
@@ -1987,7 +1990,7 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_first' depends on axioms: [pr
 theorem pattern_parser_rejects_constructor {version : Token.Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, token] (pure () : PM H Unit)
-      .expectedSymbol := by
+      (.expected #[.symbol]) := by
   apply Proofs.Parser.Category.Pattern.pattern_rejects_constructor <;> assumption
 
 /--
@@ -2000,7 +2003,7 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_constructor' depends on axiom
 arguments. -/
 theorem pattern_parser_rejects_empty {version : Token.Version} (constructor : Plain.Symbol) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, .symbol constructor, .parenClose]
-      (pure () : PM H Unit) .emptyPatternArguments := by
+      (pure () : PM H Unit) (.empty .patternArguments) := by
   apply Proofs.Parser.Category.Pattern.pattern_rejects_empty <;> assumption
 
 /--
@@ -2021,7 +2024,8 @@ theorem pattern_parser_rejects_argument {version : Token.Version} (constructor :
     (hclose : token ≠ .parenClose) :
     Rejects version (PatternParser.new (H := H))
       ([.parenOpen, .symbol constructor] ++ arguments ++ [token]) (pure () : PM H Unit)
-      (if version ≥ .v2_7 then .expectedSymbolOrUnderscore else .expectedSymbol) := by
+      (if version ≥ .v2_7 then (.expected #[.symbol, .reserved (.general .underscore)])
+        else (.expected #[.symbol])) := by
   apply Proofs.Parser.Category.Pattern.pattern_rejects_argument <;> assumption
 
 /--
@@ -2095,7 +2099,7 @@ theorem closedAttribute_parser_rejects_first {version : Token.Version}
     {token : Parser.Internal.Input}
     (htoken : ∀ name, token ≠ .keyword name) :
     Rejects version (ClosedAttributeParser.new (H := H)) [token] (pure () : PM H Unit)
-      .expectedAttribute := by
+      (.expected #[.attribute]) := by
   apply Proofs.Parser.Category.Attribute.closedAttribute_rejects_first <;> assumption
 
 /--
@@ -2109,7 +2113,7 @@ theorem closedMultipleAttribute_parser_rejects_first {version : Token.Version}
     {token : Parser.Internal.Input} (htoken : ∀ name, token ≠ .keyword name)
     (hclose : token ≠ .parenClose) :
     Rejects version (ClosedMultipleAttributeParser.new (H := H)) [token] (pure () : PM H Unit)
-      .expectedAttribute := by
+      (.expected #[.attribute]) := by
   apply Proofs.Parser.Category.Attribute.closedMultipleAttribute_rejects_first <;> assumption
 
 /--
@@ -2128,7 +2132,7 @@ theorem closedAttribute_parser_rejects_value {version : Token.Version}
     (htoken : ¬ ((∃ symbol, token = .symbol symbol) ∨ (∃ constant, token = .constant constant) ∨
       token = .parenOpen ∨ token = .parenClose ∨ (∃ name, token = .keyword name))) :
     Rejects version (ClosedAttributeParser.new (H := H)) [.keyword name, token]
-      (pure () : PM H Unit) .expectedAttribute := by
+      (pure () : PM H Unit) (.expected #[.attribute]) := by
   apply Proofs.Parser.Category.Attribute.closedAttribute_rejects_value <;> assumption
 
 /--
@@ -2145,7 +2149,7 @@ theorem closedMultipleAttribute_parser_rejects_value {version : Token.Version}
     (htoken : ¬ ((∃ symbol, token = .symbol symbol) ∨ (∃ constant, token = .constant constant) ∨
       token = .parenOpen ∨ token = .parenClose ∨ (∃ name, token = .keyword name))) :
     Rejects version (ClosedMultipleAttributeParser.new (H := H)) [.keyword name, token]
-      (pure () : PM H Unit) .expectedAttribute := by
+      (pure () : PM H Unit) (.expected #[.attribute]) := by
   apply Proofs.Parser.Category.Attribute.closedMultipleAttribute_rejects_value <;> assumption
 
 /--
@@ -2161,7 +2165,7 @@ followed by another, where its `)` is due. -/
 theorem closedAttribute_parser_rejects_keyword {version : Token.Version}
     (name name' : BSmtLib.Plain.Keyword) :
     Rejects version (ClosedAttributeParser.new (H := H)) [.keyword name, .keyword name']
-      (pure () : PM H Unit) (.expectedToken #[.parenClose]) := by
+      (pure () : PM H Unit) (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.Attribute.closedAttribute_rejects_keyword <;> assumption
 
 /--
@@ -2171,8 +2175,8 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_keyword' depends on a
 #print axioms closedAttribute_parser_rejects_keyword
 
 /-- The parser of one attribute on the tokens of a valid attribute with a value and a token
-that is not `)`: it rejects that token with `expectedToken [)]`, having made the traversal's
-calls for the attribute. -/
+that is not `)`: it rejects that token with `expected #[.token .parenClose]`, having made the
+traversal's calls for the attribute. -/
 theorem closedAttribute_parser_rejects_close {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Chars) (value : Tree.AttributeValue)
@@ -2184,7 +2188,7 @@ theorem closedAttribute_parser_rejects_close {version : Token.Version}
       ((fun _ => ()) <$> adaptRun (do
         let node ← attributeValue noPoints h value
         Traversal.call h (.handleAttribute keyword (some node))))
-      (.expectedToken #[.parenClose]) := by
+      (.expected #[.token .parenClose]) := by
   apply Proofs.Parser.Category.Attribute.closedAttribute_rejects_close <;> assumption
 
 /--
@@ -2207,7 +2211,7 @@ theorem closedMultipleAttribute_parser_rejects_after {version : Token.Version}
     Rejects version (ClosedMultipleAttributeParser.new (H := H)) (tokens ++ [token])
       ((fun _ => ()) <$> adaptRun (do
         let node ← attributeValue noPoints h value
-        Traversal.call h (.handleAttribute keyword (some node)))) .expectedAttribute := by
+        Traversal.call h (.handleAttribute keyword (some node)))) (.expected #[.attribute]) := by
   apply Proofs.Parser.Category.Attribute.closedMultipleAttribute_rejects_after <;> assumption
 
 /--
@@ -2221,7 +2225,7 @@ info: 'BSmtLib.Facts.Parser.closedMultipleAttribute_parser_rejects_after' depend
 
 /-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications and a
 token that neither starts another argument nor ends an application: it rejects that token with
-`expectedSort`, having made the traversal's calls for the applications' argument sorts. -/
+`expected #[.sort]`, having made the traversal's calls for the applications' argument sorts. -/
 theorem sortedVar_parser_rejects_sortDeepArgument {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Plain.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
@@ -2234,7 +2238,7 @@ theorem sortedVar_parser_rejects_sortDeepArgument {version : Token.Version}
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: (tokens ++ [token]))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .expectedSort := by
+      (.expected #[.sort]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_sortDeepArgument <;> assumption
 
 /--
@@ -2246,7 +2250,8 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortDeepArgument' depends o
 #print axioms sortedVar_parser_rejects_sortDeepArgument
 
 /-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications, `(` and
-a token that starts no head: it rejects that token with `expectedSortInner`, having made the
+a token that starts no head: it rejects that token with
+`expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, having made the
 traversal's calls for the applications' argument sorts. -/
 theorem sortedVar_parser_rejects_sortDeepInner {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
@@ -2260,7 +2265,7 @@ theorem sortedVar_parser_rejects_sortDeepInner {version : Token.Version}
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: (tokens ++ [.parenOpen, token]))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .expectedSortInner := by
+      (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_sortDeepInner <;> assumption
 
 /--
@@ -2270,7 +2275,7 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortDeepInner' depends on a
 #print axioms sortedVar_parser_rejects_sortDeepInner
 
 /-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications, and `(`,
-a symbol and `)`: it rejects the `)` with `emptySortApplication`, having made the traversal's
+a symbol and `)`: it rejects the `)` with `empty .sortApplication`, having made the traversal's
 calls for the applications' argument sorts. -/
 theorem sortedVar_parser_rejects_sortDeepEmpty {version : Token.Version}
     {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
@@ -2283,7 +2288,7 @@ theorem sortedVar_parser_rejects_sortDeepEmpty {version : Token.Version}
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: (tokens ++ [.parenOpen, .symbol head, .parenClose]))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .emptySortApplication := by
+      (.empty .sortApplication) := by
   apply Proofs.Parser.Category.SortedVar.sortedVar_rejects_sortDeepEmpty <;> assumption
 
 /--
@@ -2294,7 +2299,7 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortDeepEmpty' depends on a
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
 applications and a token that neither starts another argument nor ends an application: it
-rejects that token with `expectedSort`, having made the traversal's calls for the applications'
+rejects that token with `expected #[.sort]`, having made the traversal's calls for the applications'
 argument sorts. -/
 theorem qualifiedIdent_parser_rejects_sortDeepArgument {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -2311,7 +2316,7 @@ theorem qualifiedIdent_parser_rejects_sortDeepArgument {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ (tokens ++ [token])))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .expectedSort := by
+      (.expected #[.sort]) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_sortDeepArgument <;> assumption
 
 /--
@@ -2324,7 +2329,8 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortDeepArgument' depe
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
 applications, `(` and a token that starts no head: it rejects that token with
-`expectedSortInner`, having made the traversal's calls for the applications' argument sorts. -/
+`expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, having made the
+traversal's calls for the applications' argument sorts. -/
 theorem qualifiedIdent_parser_rejects_sortDeepInner {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) {identifier : Tree.Identifier}
@@ -2340,7 +2346,7 @@ theorem qualifiedIdent_parser_rejects_sortDeepInner {version : Token.Version}
     Rejects version (QualifiedIdentParser.new (H := H))
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ (tokens ++ [.parenOpen, token])))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .expectedSortInner := by
+      (.expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_sortDeepInner <;> assumption
 
 /--
@@ -2352,7 +2358,7 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortDeepInner' depends
 #print axioms qualifiedIdent_parser_rejects_sortDeepInner
 
 /-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
-applications, and `(`, a symbol and `)`: it rejects the `)` with `emptySortApplication`, having
+applications, and `(`, a symbol and `)`: it rejects the `)` with `empty .sortApplication`, having
 made the traversal's calls for the applications' argument sorts. -/
 theorem qualifiedIdent_parser_rejects_sortDeepEmpty {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -2369,7 +2375,7 @@ theorem qualifiedIdent_parser_rejects_sortDeepEmpty {version : Token.Version}
       (.parenOpen :: .reserved (.general .as) ::
         (identTokens ++ (tokens ++ [.parenOpen, .symbol head, .parenClose])))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
-      .emptySortApplication := by
+      (.empty .sortApplication) := by
   apply Proofs.Parser.Category.QualifiedIdent.qualifiedIdent_rejects_sortDeepEmpty <;> assumption
 
 /--
@@ -2408,7 +2414,7 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_parses' depends on axioms: [pr
 /--
 The parser of one attribute on a keyword, `(`, the tokens of valid items, of open lists of
 s-expressions and a token that starts no s-expression and does not end a list: it rejects that
-token with `expectedSExpr`, having made the traversal's calls for the items.
+token with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedAttribute_parser_rejects_sExpr {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -2429,7 +2435,7 @@ theorem closedAttribute_parser_rejects_sExpr {version : Token.Version}
       (.keyword name :: .parenOpen :: (itemTokens ++ (tokens ++ [token])))
       ((fun _ => ()) <$> (adaptRun (Traversal.sExprs noPoints h items) >>= fun _ =>
         adaptRun (frames.mapM fun items => Traversal.sExprs noPoints h items)))
-      .expectedSExpr := by
+      (.expected #[.sExpr]) := by
   apply Proofs.Parser.Category.Attribute.closedAttribute_rejects_sExpr <;> assumption
 
 /--
@@ -2441,7 +2447,7 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_sExpr' depends on axi
 /--
 The parser of attributes up to a `)` on a keyword, `(`, the tokens of valid items, of open lists
 of s-expressions and a token that starts no s-expression and does not end a list: it rejects that
-token with `expectedSExpr`, having made the traversal's calls for the items.
+token with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedMultipleAttribute_parser_rejects_sExpr {version : Token.Version}
     {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
@@ -2462,7 +2468,7 @@ theorem closedMultipleAttribute_parser_rejects_sExpr {version : Token.Version}
       (.keyword name :: .parenOpen :: (itemTokens ++ (tokens ++ [token])))
       ((fun _ => ()) <$> (adaptRun (Traversal.sExprs noPoints h items) >>= fun _ =>
         adaptRun (frames.mapM fun items => Traversal.sExprs noPoints h items)))
-      .expectedSExpr := by
+      (.expected #[.sExpr]) := by
   apply Proofs.Parser.Category.Attribute.closedMultipleAttribute_rejects_sExpr <;> assumption
 
 /--

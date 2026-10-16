@@ -63,7 +63,7 @@ def step (init : σ) (inner : σ → Internal.Input → PM H (Internal.Step σ �
       return .done self.items
     if let some limit := maximum then
       if limit ≤ self.items.size then
-        syntaxError (.expectedToken #[.parenClose])
+        syntaxError (.expected #[.token .parenClose])
   match ← inner self.inner token with
   | .more state => return .more { self with inner := state, outside := false }
   | .done item =>
@@ -81,18 +81,18 @@ combinator that finishes is back in its initial state too. -/
 
 namespace Internal
 
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 
 section
 
-variable {Z : Type} [Produce Z]
+variable {Z : Type} [Cursor Z]
 
 /-- The first token of a producer that has one, and the producer after it. -/
-def firstToken (producer : Z) (h : Produce.HasNext producer) :
-    Produce.Token Z × { next : Z // Produce.Consumed next producer } :=
-  match taken : Produce.next? producer with
+def firstToken (cursor : Z) (h : Cursor.HasNext cursor) :
+    Cursor.Token Z × { next : Z // Cursor.Consumed next cursor } :=
+  match taken : Cursor.next? cursor with
   | some first => first
-  | none => absurd (Produce.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
+  | none => absurd (Cursor.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
 
 end
 
@@ -104,30 +104,30 @@ def mapBreak {ε α β : Type} (f : α → β) : Except ε (ControlFlow α) → 
 
 section
 
-variable {H S R E : Type} {m : Type → Type} [Monad m] {Z : Type} [Produce Z]
+variable {H S R E : Type} {m : Type → Type} [Monad m] {Z : Type} [Cursor Z]
 
 /-- A turn of a combinator's loop on a cursor with a token: it takes at least one token, and
 gives the combinator's answer if it stops, `none` if it goes on. -/
-abbrev Turn (H S R E Z : Type) (m : Type → Type) [Produce Z] :=
-  S → ParseState H → (cursor : Z) → Produce.HasNext cursor →
+abbrev Turn (H S R E Z : Type) (m : Type → Type) [Cursor Z] :=
+  S → ParseState H → (cursor : Z) → Cursor.HasNext cursor →
     StateT H m (Option (Except (ParseError E) (ControlFlow R)) × S × ParseState H ×
-      { next : Z // Produce.Consumed next cursor })
+      { next : Z // Cursor.Consumed next cursor })
 
 /-- Has the combinator take turns on `cursor`, which comes from `origin` with tokens consumed,
 while the cursor has a token and the combinator goes on. -/
 @[specialize turn]
 def repeatTurns (turn : Turn H S R E Z m) (origin : Z) (self : S) (state : ParseState H)
-    (cursor : Z) (consumed : Produce.Consumed cursor origin) :
+    (cursor : Z) (consumed : Cursor.Consumed cursor origin) :
     StateT H m (Except (ParseError E) (ControlFlow R) × S × ParseState H ×
-      { next : Z // Produce.Consumed next origin }) :=
-  match Produce.decideHasNext cursor with
+      { next : Z // Cursor.Consumed next origin }) :=
+  match Cursor.decideHasNext cursor with
   | .isFalse _ => return (.ok .continue, self, state, ⟨cursor, consumed⟩)
   | .isTrue h => do
     match ← turn self state cursor h with
     | (some answer, self, state, ⟨next, taken⟩) =>
-      return (answer, self, state, ⟨next, Produce.consumed_trans taken consumed⟩)
+      return (answer, self, state, ⟨next, Cursor.consumed_trans taken consumed⟩)
     | (none, self, state, ⟨next, taken⟩) =>
-      repeatTurns turn origin self state next (Produce.consumed_trans taken consumed)
+      repeatTurns turn origin self state next (Cursor.consumed_trans taken consumed)
 termination_by (⟨cursor⟩ : Parser.Internal.Consuming Z)
 decreasing_by exact taken
 
@@ -136,8 +136,8 @@ the `parse` of a combinator that loops. -/
 @[inline]
 def parseByTurns (turn : Turn H S R E Z m) (self : S) (state : ParseState H) (cursor : Z) :
     StateT H m (Except (ParseError E) (ControlFlow R) × S × ParseState H ×
-      { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }) :=
-  match Produce.decideHasNext cursor with
+      { next : Z // Cursor.HasNext cursor → Cursor.Consumed next cursor }) :=
+  match Cursor.decideHasNext cursor with
   | .isFalse h => return (.ok .continue, self, state, ⟨cursor, fun hn => absurd hn h⟩)
   | .isTrue h => do
     match ← turn self state cursor h with
@@ -151,7 +151,7 @@ end
 
 end Internal
 
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 
 /--
 A parser that parses with the first parser, then with the second, and finishes with both results
@@ -180,14 +180,14 @@ section
 
 variable {H P₁ P₂ R₁ R₂ : Type} {m : Type → Type} [Monad m] [Handler H m]
   [Parse P₁ H m (Handler.Error H) R₁] [Parse P₂ H m (Handler.Error H) R₂]
-  {Z : Type} [Produce Z]
+  {Z : Type} [Cursor Z]
 
 /-- Has the second parser parse the cursor, the first having finished with `first`. -/
 private def PairParser.parseSecond (self : PairParser H P₁ P₂) (first : R₁)
     (state : ParseState H) (cursor : Z) :
     StateT H m (Except (ParseError (Handler.Error H)) (ControlFlow (R₁ × R₂)) ×
       PairParser H P₁ P₂ × ParseState H ×
-      { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }) := do
+      { next : Z // Cursor.HasNext cursor → Cursor.Consumed next cursor }) := do
   let (answer, second, state, next) ← Parse.parse self.second state cursor
   match answer with
   | .ok (.break result) =>
@@ -211,14 +211,112 @@ parser is not handed an empty cursor: it parses from the next cursor on. -/
       | .error error => return (.error error, self, state, ⟨next, consumed⟩)
       | .ok .continue => return (.ok .continue, self, state, ⟨next, consumed⟩)
       | .ok (.break result) =>
-        match Produce.decideHasNext next with
+        match Cursor.decideHasNext next with
         | .isFalse _ =>
           return (.ok .continue, { self with firstResult := some result }, state,
             ⟨next, consumed⟩)
         | .isTrue h =>
           let (answer, self, state, ⟨later, taken⟩) ← self.parseSecond result state next
           return (answer, self, state,
-            ⟨later, fun hn => Produce.consumed_trans (taken h) (consumed hn)⟩)
+            ⟨later, fun hn => Cursor.consumed_trans (taken h) (consumed hn)⟩)
+
+end
+
+/-! ## The tuple combinators
+
+The pair parsers nested to the right over three to eight parsers. A Lean tuple is pairs nested to
+the right, `R₁ × R₂ × R₃` being `R₁ × (R₂ × R₃)`, so the nested result is the tuple of the
+results. -/
+
+/- LEAN: Rust's `SmtTuple3Parser` … `SmtTuple8Parser` are structures over the nested pair
+parsers that flatten the nested result when the last parser finishes. Here each is the nested
+pair parsers themselves, whose result is already the flat tuple, so it parses as they do. -/
+
+/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple3Parser`).
+
+Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
+before returning `ControlFlow.break`. -/
+abbrev Tuple3Parser (H P₁ P₂ P₃ : Type) {m : Type → Type} {E R₁ R₂ : Type}
+    [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] :=
+  PairParser H P₁ (PairParser H P₂ P₃)
+
+/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple4Parser`).
+
+Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
+before returning `ControlFlow.break`. -/
+abbrev Tuple4Parser (H P₁ P₂ P₃ P₄ : Type) {m : Type → Type} {E R₁ R₂ R₃ : Type}
+    [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃] :=
+  PairParser H P₁ (Tuple3Parser H P₂ P₃ P₄)
+
+/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple5Parser`).
+
+Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
+before returning `ControlFlow.break`. -/
+abbrev Tuple5Parser (H P₁ P₂ P₃ P₄ P₅ : Type) {m : Type → Type} {E R₁ R₂ R₃ R₄ : Type}
+    [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃] [Parse P₄ H m E R₄] :=
+  PairParser H P₁ (Tuple4Parser H P₂ P₃ P₄ P₅)
+
+/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple6Parser`).
+
+Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
+before returning `ControlFlow.break`. -/
+abbrev Tuple6Parser (H P₁ P₂ P₃ P₄ P₅ P₆ : Type) {m : Type → Type} {E R₁ R₂ R₃ R₄ R₅ : Type}
+    [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃] [Parse P₄ H m E R₄]
+    [Parse P₅ H m E R₅] :=
+  PairParser H P₁ (Tuple5Parser H P₂ P₃ P₄ P₅ P₆)
+
+/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple7Parser`).
+
+Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
+before returning `ControlFlow.break`. -/
+abbrev Tuple7Parser (H P₁ P₂ P₃ P₄ P₅ P₆ P₇ : Type) {m : Type → Type}
+    {E R₁ R₂ R₃ R₄ R₅ R₆ : Type} [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃]
+    [Parse P₄ H m E R₄] [Parse P₅ H m E R₅] [Parse P₆ H m E R₆] :=
+  PairParser H P₁ (Tuple6Parser H P₂ P₃ P₄ P₅ P₆ P₇)
+
+/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple8Parser`).
+
+Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
+before returning `ControlFlow.break`. -/
+abbrev Tuple8Parser (H P₁ P₂ P₃ P₄ P₅ P₆ P₇ P₈ : Type) {m : Type → Type}
+    {E R₁ R₂ R₃ R₄ R₅ R₆ R₇ : Type} [Parse P₁ H m E R₁] [Parse P₂ H m E R₂]
+    [Parse P₃ H m E R₃] [Parse P₄ H m E R₄] [Parse P₅ H m E R₅] [Parse P₆ H m E R₆]
+    [Parse P₇ H m E R₇] :=
+  PairParser H P₁ (Tuple7Parser H P₂ P₃ P₄ P₅ P₆ P₇ P₈)
+
+section
+
+variable {H P₁ P₂ P₃ P₄ P₅ P₆ P₇ P₈ : Type} {m : Type → Type}
+  {E R₁ R₂ R₃ R₄ R₅ R₆ R₇ : Type} [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃]
+  [Parse P₄ H m E R₄] [Parse P₅ H m E R₅] [Parse P₆ H m E R₆] [Parse P₇ H m E R₇]
+
+/-- The parsers in turn, before the first value. -/
+def Tuple3Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) : Tuple3Parser H P₁ P₂ P₃ :=
+  PairParser.new p₁ (PairParser.new p₂ p₃)
+
+/-- The parsers in turn, before the first value. -/
+def Tuple4Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) : Tuple4Parser H P₁ P₂ P₃ P₄ :=
+  PairParser.new p₁ (Tuple3Parser.new p₂ p₃ p₄)
+
+/-- The parsers in turn, before the first value. -/
+def Tuple5Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) :
+    Tuple5Parser H P₁ P₂ P₃ P₄ P₅ :=
+  PairParser.new p₁ (Tuple4Parser.new p₂ p₃ p₄ p₅)
+
+/-- The parsers in turn, before the first value. -/
+def Tuple6Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) (p₆ : P₆) :
+    Tuple6Parser H P₁ P₂ P₃ P₄ P₅ P₆ :=
+  PairParser.new p₁ (Tuple5Parser.new p₂ p₃ p₄ p₅ p₆)
+
+/-- The parsers in turn, before the first value. -/
+def Tuple7Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) (p₆ : P₆) (p₇ : P₇) :
+    Tuple7Parser H P₁ P₂ P₃ P₄ P₅ P₆ P₇ :=
+  PairParser.new p₁ (Tuple6Parser.new p₂ p₃ p₄ p₅ p₆ p₇)
+
+/-- The parsers in turn, before the first value. -/
+def Tuple8Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) (p₆ : P₆) (p₇ : P₇)
+    (p₈ : P₈) : Tuple8Parser H P₁ P₂ P₃ P₄ P₅ P₆ P₇ P₈ :=
+  PairParser.new p₁ (Tuple7Parser.new p₂ p₃ p₄ p₅ p₆ p₇ p₈)
 
 end
 
@@ -313,7 +411,7 @@ end
 section
 
 variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
-  [Parse P H m (Handler.Error H) R] {Z : Type} [Produce Z]
+  [Parse P H m (Handler.Error H) R] {Z : Type} [Cursor Z]
 
 /-- A turn of the list: between values, a `)` ends the list; any other token goes to the inner
 parser, which parses the next value. -/
@@ -322,7 +420,7 @@ private def ClosedMultipleParser.turn :
   fun self state cursor h => do
     let (token, ⟨next, consumed⟩) := Internal.firstToken cursor h
     if self.outside then
-      if let .parenClose := Produce.syntax next token then
+      if let .parenClose := Cursor.syntax next token then
         return (some (.ok (.break self.items)), { self with items := #[] }, state,
           ⟨next, consumed⟩)
     let (answer, inner, state, ⟨later, taken⟩) ← Parse.parse self.inner state cursor
@@ -393,7 +491,7 @@ end
 section
 
 variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
-  [Parse P H m (Handler.Error H) R] {Z : Type} [Produce Z]
+  [Parse P H m (Handler.Error H) R] {Z : Type} [Cursor Z]
 
 /-- A turn of the list: between values, a `)` ends the list, and with the maximum reached any
 other token is an error; any other token goes to the inner parser, which parses the next
@@ -403,11 +501,11 @@ private def ClosedMaximumParser.turn :
   fun self state cursor h => do
     let (token, ⟨next, consumed⟩) := Internal.firstToken cursor h
     if self.outside then
-      if let .parenClose := Produce.syntax next token then
+      if let .parenClose := Cursor.syntax next token then
         return (some (.ok (.break self.results)), { self with results := #[] }, state,
           ⟨next, consumed⟩)
       if self.maximum ≤ self.results.size then
-        return (some (.error (ParseError.Internal.new (.syntax (.expectedToken #[.parenClose])))),
+        return (some (.error (ParseError.Internal.new (.syntax (.expected #[.token .parenClose])))),
           self, state, ⟨next, consumed⟩)
     let (answer, inner, state, ⟨later, taken⟩) ← Parse.parse self.inner state cursor
     let self := { self with inner, outside := false }
@@ -460,14 +558,14 @@ end
 section
 
 variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
-  [Parse P H m (Handler.Error H) R] {Z : Type} [Produce Z]
+  [Parse P H m (Handler.Error H) R] {Z : Type} [Cursor Z]
 
 /-- Has the list parse the cursor, the `(` taken. -/
 private def ParenMaximumParser.parseInner (self : ParenMaximumParser H P) (state : ParseState H)
     (cursor : Z) :
     StateT H m (Except (ParseError (Handler.Error H)) (ControlFlow (Array R)) ×
       ParenMaximumParser H P × ParseState H ×
-      { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor }) := do
+      { next : Z // Cursor.HasNext cursor → Cursor.Consumed next cursor }) := do
   let (answer, inner, state, next) ← Parse.parse self.inner state cursor
   match answer with
   | .ok (.break results) => return (.ok (.break results), { isOpened := false, inner }, state, next)
@@ -478,20 +576,20 @@ private def ParenMaximumParser.parseInner (self : ParenMaximumParser H P) (state
   parse self state cursor :=
     if self.isOpened then self.parseInner state cursor
     else
-      match taken : Produce.next? cursor with
+      match taken : Cursor.next? cursor with
       | none => return (.ok .continue, self, state,
           ⟨cursor, fun hn => absurd hn (Parser.Internal.not_hasNext taken)⟩)
       | some (token, ⟨next, consumed⟩) =>
-        match Produce.syntax next token with
+        match Cursor.syntax next token with
         | .parenOpen =>
           let self := { self with isOpened := true }
-          match Produce.decideHasNext next with
+          match Cursor.decideHasNext next with
           | .isFalse _ => return (.ok .continue, self, state, ⟨next, fun _ => consumed⟩)
           | .isTrue h => do
             let (answer, self, state, ⟨later, taken⟩) ← self.parseInner state next
             return (answer, self, state,
-              ⟨later, fun _ => Produce.consumed_trans (taken h) consumed⟩)
-        | _ => return (.error (ParseError.Internal.new (.syntax (.expectedToken #[.parenOpen]))),
+              ⟨later, fun _ => Cursor.consumed_trans (taken h) consumed⟩)
+        | _ => return (.error (ParseError.Internal.new (.syntax (.expected #[.token .parenOpen]))),
             self, state, ⟨next, fun _ => consumed⟩)
 
 end

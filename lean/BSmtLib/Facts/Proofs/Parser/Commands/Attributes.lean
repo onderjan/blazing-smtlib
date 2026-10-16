@@ -65,7 +65,7 @@ theorem setOption_payload (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tr
   refine (Runs.bind_next ((Runs.embedA (outer := payloadStep version)
       (outerArrival := Parser.Command.Internal.Standard.payloadArrive) Payload.setOption
     (fun attributes => do
-      let some option := attributes[0]? | Parser.Internal.syntaxError .expectedAttribute
+      let some option := attributes[0]? | Parser.Internal.syntaxError (.expected #[.attribute])
       Parser.Internal.call (Traits.CommandHandler.commandSetOption option)
       return .done .command)
     (by payload_step) hruns).congr rfl
@@ -106,7 +106,7 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
       (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
     (Payload.setInfo .other)
     (fun attributes => do
-      let some info := attributes[0]? | Parser.Internal.syntaxError .expectedAttribute
+      let some info := attributes[0]? | Parser.Internal.syntaxError (.expected #[.attribute])
       Parser.Internal.call (Traits.CommandHandler.commandSetInfo info)
       return .done .command)
     (by

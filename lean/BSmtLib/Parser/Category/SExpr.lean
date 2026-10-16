@@ -43,7 +43,7 @@ def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token :
     | .parenOpen => return .more (#[] :: self)
     | .parenClose =>
       match self with
-      | [] => syntaxError .expectedSExpr
+      | [] => syntaxError (.expected #[.sExpr])
       | items :: outer => do
         let list ← call (Handler.handleSExpr (.sExprs (.new items)))
         return sExprComplete outer list
@@ -51,8 +51,8 @@ def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token :
     | .symbol symbol => pure (.symbol symbol)
     | .keyword name => pure (.keyword name)
     | .reserved word =>
-      if version ≥ .v2_6 then pure (.reserved word) else syntaxError .expectedSExpr
-    | _ => syntaxError .expectedSExpr
+      if version ≥ .v2_6 then pure (.reserved word) else syntaxError (.expected #[.sExpr])
+    | _ => syntaxError (.expected #[.sExpr])
   let handled ← call (Handler.handleSExpr atom)
   return sExprComplete self handled
 

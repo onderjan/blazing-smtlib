@@ -98,8 +98,8 @@ def category : Radix → Token.TokenCategory
 
 /-- The error of a literal without digits. -/
 def emptyError : Radix → LexicalErrorKind
-  | .hexadecimal => .hexadecimalDigitExpected
-  | .binary => .binaryDigitExpected
+  | .hexadecimal => (.expected .hexadecimalDigit)
+  | .binary => (.expected .binaryDigit)
 
 end Radix
 
@@ -268,19 +268,19 @@ def advance (whitespace : Bool) (p : Pending) (location : Span.Location) (c : UI
     else delimited .numeral
   | .fraction digits =>
     if isDigit c then extend (.fraction true)
-    else if !digits then fail .fractionDigitExpected
+    else if !digits then fail (.expected .fractionDigit)
     else delimited .decimal
   | .hash =>
     if c == byte! 'x' then keep (.digits .hexadecimal)
     else if c == byte! 'b' then keep (.digits .binary)
-    else fail .baseSelectionExpected
+    else fail (.expected .base)
   | .digits radix =>
     if radix.allows c then extend (.digits radix)
     else if p.content.isEmpty then fail radix.emptyError
     else delimited radix.category
   | .keyword =>
     if isSymbolByte c then extend .keyword
-    else if p.content.isEmpty then fail .forbiddenKeywordName
+    else if p.content.isEmpty then fail .emptyKeyword
     else delimited .keyword
   | .simpleSymbol =>
     if isSymbolByte c then extend .simpleSymbol else delimited .unquotedSymbol
@@ -334,10 +334,10 @@ def finish (whitespace : Bool) (p : Pending) (location : Span.Location) : Finish
   let fail (kind : LexicalErrorKind) : Finished := .error (failAtEnd kind p.start location)
   match p.mode with
   | .numeral _ => token .numeral
-  | .fraction digits => if digits then token .decimal else fail .fractionDigitExpected
-  | .hash => fail .baseSelectionExpected
+  | .fraction digits => if digits then token .decimal else fail (.expected .fractionDigit)
+  | .hash => fail (.expected .base)
   | .digits radix => if p.content.isEmpty then fail radix.emptyError else token radix.category
-  | .keyword => if p.content.isEmpty then fail .forbiddenKeywordName else token .keyword
+  | .keyword => if p.content.isEmpty then fail .emptyKeyword else token .keyword
   | .simpleSymbol => token .unquotedSymbol
   | .quotedSymbol => fail .unclosedQuotedSymbol
   | .quotedSymbolClosed => token .quotedSymbol

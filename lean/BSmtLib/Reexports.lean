@@ -5,14 +5,16 @@ public import BSmtLib.Bytes
 public import BSmtLib.Plain
 public import BSmtLib.Span
 public import BSmtLib.Nodes
+public import BSmtLib.Multiple.MatchCasesBuf
 public import BSmtLib.Traits
 public import BSmtLib.Traits.CommandHandler
+public import BSmtLib.Traits.PartialCommandHandler
 public import BSmtLib.Traits.SyntaxChecker
 public import BSmtLib.Token
 public import BSmtLib.Token.Reserved
 public import BSmtLib.Token.SyntaxToken
 public import BSmtLib.Token.Lookahead
-public import BSmtLib.Token.Produce
+public import BSmtLib.Token.Cursor
 public import BSmtLib.Token.ConsumeFrom
 public import BSmtLib.Lexer.Error
 public import BSmtLib.Lexer.Recovery
@@ -148,6 +150,19 @@ namespace BSmtLib.MatchCases
 export BSmtLib.Multiple.MatchCases (get? instForInProdPatternOfMonad instRepr isEmpty len toArray)
 
 end BSmtLib.MatchCases
+
+-- `BSmtLib.Multiple.MatchCasesBuf`, by `pub use crate::multiple::*`
+namespace BSmtLib
+
+export BSmtLib.Multiple (MatchCasesBuf)
+
+end BSmtLib
+
+namespace BSmtLib.MatchCasesBuf
+
+export BSmtLib.Multiple.MatchCasesBuf (clear instInhabited isEmpty len new push view)
+
+end BSmtLib.MatchCasesBuf
 
 -- `BSmtLib.Multiple.Named`, by `pub use crate::multiple::*`
 namespace BSmtLib
@@ -316,6 +331,19 @@ export BSmtLib.Nodes.IndexBuf (numeral symbol)
 
 end BSmtLib.IndexBuf
 
+-- `BSmtLib.Nodes.IndicesBuf`, by `pub use crate::nodes::*`
+namespace BSmtLib
+
+export BSmtLib.Nodes (IndicesBuf)
+
+end BSmtLib
+
+namespace BSmtLib.IndicesBuf
+
+export BSmtLib.Nodes.IndicesBuf (clear instInhabited isEmpty len new push view)
+
+end BSmtLib.IndicesBuf
+
 -- `BSmtLib.Nodes.Pattern`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
@@ -426,6 +454,19 @@ namespace BSmtLib.SimplePatternBuf
 export BSmtLib.Nodes.SimplePatternBuf (symbol wildcard)
 
 end BSmtLib.SimplePatternBuf
+
+-- `BSmtLib.Nodes.SimplePatternsBuf`, by `pub use crate::nodes::*`
+namespace BSmtLib
+
+export BSmtLib.Nodes (SimplePatternsBuf)
+
+end BSmtLib
+
+namespace BSmtLib.SimplePatternsBuf
+
+export BSmtLib.Nodes.SimplePatternsBuf (clear instInhabited isEmpty len new push view)
+
+end BSmtLib.SimplePatternsBuf
 
 -- `BSmtLib.Nodes.Sorts`, by `pub use crate::nodes::*`
 namespace BSmtLib
@@ -547,8 +588,8 @@ end BSmtLib
 
 namespace BSmtLib.Decimal
 
-export BSmtLib.Plain.Decimal (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+export BSmtLib.Plain.Decimal (asSlice eqOwned eqSlice eqString fraction instBEq instHashable
+  instRepr intoOwned isEmpty len whole)
 
 end BSmtLib.Decimal
 
@@ -561,8 +602,8 @@ end BSmtLib
 
 namespace BSmtLib.DecimalBuf
 
-export BSmtLib.Plain.DecimalBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.DecimalBuf (asSlice asView eqSlice eqString eqView fraction instBEq
+  instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new whole)
 
 end BSmtLib.DecimalBuf
 
@@ -575,7 +616,7 @@ end BSmtLib
 
 namespace BSmtLib.DisallowedByteVecError
 
-export BSmtLib.Plain.DisallowedByteVecError (instRepr intoByteArray)
+export BSmtLib.Plain.DisallowedByteVecError (instBEq instHashable instRepr intoByteArray)
 
 end BSmtLib.DisallowedByteVecError
 
@@ -645,7 +686,7 @@ end BSmtLib
 namespace BSmtLib.Numeral
 
 export BSmtLib.Plain.Numeral (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+  intoOwned isEmpty len toNat toUInt32? toUInt64? toUSize?)
 
 end BSmtLib.Numeral
 
@@ -658,10 +699,24 @@ end BSmtLib
 
 namespace BSmtLib.NumeralBuf
 
-export BSmtLib.Plain.NumeralBuf (asSlice asView eqSlice eqString eqView fromNat instBEq
-  instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.NumeralBuf (asSlice asView eqSlice eqString eqView fromNat fromUInt32
+  fromUInt64 fromUSize instBEq instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty
+  len new toNat toUInt32? toUInt64? toUSize?)
 
 end BSmtLib.NumeralBuf
+
+-- `BSmtLib.Plain.NumeralOverflow`, by `pub use crate::plain::*`
+namespace BSmtLib
+
+export BSmtLib.Plain (NumeralOverflow)
+
+end BSmtLib
+
+namespace BSmtLib.NumeralOverflow
+
+export BSmtLib.Plain.NumeralOverflow (mk)
+
+end BSmtLib.NumeralOverflow
 
 -- `BSmtLib.Plain.StringContent`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -748,6 +803,32 @@ end BSmtLib.WhitespaceBuf
 
 /-! `pub use crate::span::*` in `lib.rs` -/
 
+-- `BSmtLib.Span.InvalidLocation`, by `pub use crate::span::*`
+namespace BSmtLib
+
+export BSmtLib.Span (InvalidLocation)
+
+end BSmtLib
+
+namespace BSmtLib.InvalidLocation
+
+export BSmtLib.Span.InvalidLocation (mk)
+
+end BSmtLib.InvalidLocation
+
+-- `BSmtLib.Span.InvalidSpan`, by `pub use crate::span::*`
+namespace BSmtLib
+
+export BSmtLib.Span (InvalidSpan)
+
+end BSmtLib
+
+namespace BSmtLib.InvalidSpan
+
+export BSmtLib.Span.InvalidSpan (mk)
+
+end BSmtLib.InvalidSpan
+
 -- `BSmtLib.Span.Located`, by `pub use crate::span::*`
 namespace BSmtLib
 
@@ -770,7 +851,8 @@ end BSmtLib
 
 namespace BSmtLib.Location
 
-export BSmtLib.Span.Location (afterByte afterColumn column ext initial line max min offset)
+export BSmtLib.Span.Location (afterByte afterColumn column ext initial instMax instMin line new
+  offset)
 
 end BSmtLib.Location
 
@@ -822,9 +904,44 @@ end BSmtLib
 
 namespace BSmtLib.NonstandardCommandError
 
-export BSmtLib.Traits.NonstandardCommandError (mk name)
+export BSmtLib.Traits.NonstandardCommandError (name new)
 
 end BSmtLib.NonstandardCommandError
+
+-- `BSmtLib.Traits.PartialCommandError`, by `pub use crate::traits::*`
+namespace BSmtLib
+
+export BSmtLib.Traits (PartialCommandError)
+
+end BSmtLib
+
+namespace BSmtLib.PartialCommandError
+
+export BSmtLib.Traits.PartialCommandError (handler unsupported unsupportedNonstandard)
+
+end BSmtLib.PartialCommandError
+
+-- `BSmtLib.Traits.PartialCommandHandler`, by `pub use crate::traits::*`
+namespace BSmtLib
+
+export BSmtLib.Traits (PartialCommandHandler)
+
+end BSmtLib
+
+namespace BSmtLib.PartialCommandHandler
+
+export BSmtLib.Traits.PartialCommandHandler (HandlerError NonstandardParser commandAssert
+  commandCheckSat commandCheckSatAssuming commandDeclareConst commandDeclareFun commandDeclareSort
+  commandDeclareSortParameter commandDefineConst commandEcho commandExit commandGetAssertions
+  commandGetAssignment commandGetInfo commandGetModel commandGetOption commandGetProof
+  commandGetUnsatAssumptions commandGetUnsatCore commandGetValue commandPop commandPush
+  commandReset commandResetAssertions commandSetInfo commandSetLogic commandSetOption
+  endDatatypeDeclaration endDeclareDatatype endDeclareDatatypes endDefineFun endDefineFunRec
+  endDefineFunsRec endDefineSort endRecursiveBody error_eq mk nonstandardCommand parseNonstandard
+  startDatatypeDeclaration startDeclareDatatype startDeclareDatatypes startDefineFun
+  startDefineFunRec startDefineFunsRec startDefineSort startRecursiveBody toHandler)
+
+end BSmtLib.PartialCommandHandler
 
 -- `BSmtLib.Traits.SyntaxChecker`, by `pub use crate::traits::*`
 namespace BSmtLib
@@ -873,7 +990,8 @@ export BSmtLib.Token.Reserved.GeneralReserved (all as asStr binary decimal excla
 
 end BSmtLib.Token.GeneralReserved
 
-/-! `pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind}` in `lexer.rs` -/
+/-! `pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind, SmtLexicalExpected}` in
+`lexer.rs` -/
 
 -- `BSmtLib.Lexer.Error.LexError`, by `pub use error::SmtLexError`
 namespace BSmtLib.Lexer
@@ -910,12 +1028,24 @@ end BSmtLib.Lexer
 
 namespace BSmtLib.Lexer.LexicalErrorKind
 
-export BSmtLib.Lexer.Error.LexicalErrorKind (backslashInQuotedSymbol baseSelectionExpected
-  binaryDigitExpected forbiddenCharInQuotedSymbol forbiddenCharInString forbiddenKeywordName
-  fractionDigitExpected hexadecimalDigitExpected missingDelimiter numeralLeadingZero
+export BSmtLib.Lexer.Error.LexicalErrorKind (backslashInQuotedSymbol emptyKeyword expected
+  forbiddenCharInQuotedSymbol forbiddenCharInString missingDelimiter numeralLeadingZero
   unclosedQuotedSymbol unclosedStringLiteral unexpectedCharacter unexpectedTrailingToken)
 
 end BSmtLib.Lexer.LexicalErrorKind
+
+-- `BSmtLib.Lexer.Error.LexicalExpected`, by `pub use error::SmtLexicalExpected`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Error (LexicalExpected)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexicalExpected
+
+export BSmtLib.Lexer.Error.LexicalExpected (base binaryDigit fractionDigit hexadecimalDigit)
+
+end BSmtLib.Lexer.LexicalExpected
 
 /-! `pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering}` in `lexer.rs` -/
 
@@ -1077,6 +1207,84 @@ namespace BSmtLib.Parser.Category.ParenParser
 export BSmtLib.Parser.Category.Combinator.ParenParser (new)
 
 end BSmtLib.Parser.Category.ParenParser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple3Parser`, by `pub use combinator::SmtTuple3Parser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (Tuple3Parser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.Tuple3Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple3Parser (new)
+
+end BSmtLib.Parser.Category.Tuple3Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple4Parser`, by `pub use combinator::SmtTuple4Parser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (Tuple4Parser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.Tuple4Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple4Parser (new)
+
+end BSmtLib.Parser.Category.Tuple4Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple5Parser`, by `pub use combinator::SmtTuple5Parser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (Tuple5Parser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.Tuple5Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple5Parser (new)
+
+end BSmtLib.Parser.Category.Tuple5Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple6Parser`, by `pub use combinator::SmtTuple6Parser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (Tuple6Parser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.Tuple6Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple6Parser (new)
+
+end BSmtLib.Parser.Category.Tuple6Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple7Parser`, by `pub use combinator::SmtTuple7Parser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (Tuple7Parser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.Tuple7Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple7Parser (new)
+
+end BSmtLib.Parser.Category.Tuple7Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple8Parser`, by `pub use combinator::SmtTuple8Parser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Combinator (Tuple8Parser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.Tuple8Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple8Parser (new)
+
+end BSmtLib.Parser.Category.Tuple8Parser
 
 -- `BSmtLib.Parser.Category.Ident.IdentParser`, by `pub use ident::SmtIdentParser`
 namespace BSmtLib.Parser.Category
@@ -1394,6 +1602,84 @@ namespace BSmtLib.Parser.ParenParser
 export BSmtLib.Parser.Category.Combinator.ParenParser (new)
 
 end BSmtLib.Parser.ParenParser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple3Parser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (Tuple3Parser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.Tuple3Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple3Parser (new)
+
+end BSmtLib.Parser.Tuple3Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple4Parser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (Tuple4Parser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.Tuple4Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple4Parser (new)
+
+end BSmtLib.Parser.Tuple4Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple5Parser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (Tuple5Parser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.Tuple5Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple5Parser (new)
+
+end BSmtLib.Parser.Tuple5Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple6Parser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (Tuple6Parser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.Tuple6Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple6Parser (new)
+
+end BSmtLib.Parser.Tuple6Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple7Parser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (Tuple7Parser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.Tuple7Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple7Parser (new)
+
+end BSmtLib.Parser.Tuple7Parser
+
+-- `BSmtLib.Parser.Category.Combinator.Tuple8Parser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Combinator (Tuple8Parser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.Tuple8Parser
+
+export BSmtLib.Parser.Category.Combinator.Tuple8Parser (new)
+
+end BSmtLib.Parser.Tuple8Parser
 
 -- `BSmtLib.Parser.Category.Ident.IdentParser`, by `pub use category::*`
 namespace BSmtLib.Parser

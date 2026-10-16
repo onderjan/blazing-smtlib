@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Parser
-public import BSmtLib.Token.Produce
+public import BSmtLib.Token.Cursor
 public import BSmtLib.Token.ConsumeFrom
 
 public section
@@ -161,18 +161,18 @@ def ParseAdapter.Internal.versionSetAfter {R E : Type} : Except (ParseError E) (
 /- LEAN: Rust's `impl SmtConsumeFrom<Z> for SmtParseAdapter`, for every producer. The parser
 returns the cursor with the proof that it took a token of a cursor that has one, which is the
 consumer's obligation. -/
-instance {m : Type → Type} [Monad m] [Handler H m] [Parse P H m E R] {Z : Type} [Token.Produce Z] :
+instance {m : Type → Type} [Monad m] [Handler H m] [Parse P H m E R] {Z : Type} [Token.Cursor Z] :
     Token.ConsumeFrom (ParseAdapter H P) Z m where
-  consume producer h := do
+  consume cursor h := do
     let adapter ← get
     -- the handler is told the version in force before the first token of every input
     let ((), handler) ← (show StateT H m Unit from
       if ParseAdapter.Internal.versionSet adapter then pure () else Handler.setVersion
-          (Token.Produce.version producer)).run
+          (Token.Cursor.version cursor)).run
         adapter.handler
     -- the parser parses the tokens, with the handler and the resources
     let ((answer, parser, parseState, ⟨next, consumed⟩), handler) ←
-      (Parse.parse adapter.parser (ParseAdapter.Internal.parseState adapter) producer).run handler
+      (Parse.parse adapter.parser (ParseAdapter.Internal.parseState adapter) cursor).run handler
     set (ParseAdapter.Internal.mk handler parser (ParseAdapter.Internal.versionSetAfter answer)
       parseState)
     return (answer, ⟨next, consumed h⟩)

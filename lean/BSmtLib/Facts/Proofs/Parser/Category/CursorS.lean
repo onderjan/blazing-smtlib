@@ -19,7 +19,7 @@ tokens `driveS` consumed. So every `RunsS` lemma about a parser's steps gives `F
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.CursorS
 
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Internal (ParseByToken takeOne rest parseByToken After)
@@ -41,6 +41,8 @@ def projS (tokens : List Parser.Internal.Input) :
     Res σ ρ (Traits.Handler.Error H) → Res σ ρ (Traits.Handler.Error H)
   | .done result rest => .done result (tokens.drop (tokens.length - rest.length))
   | .rejected kind rest => .rejected kind (tokens.drop (tokens.length - rest.length))
+  | .rejectedVersion kind rest =>
+    .rejectedVersion kind (tokens.drop (tokens.length - rest.length))
   | other => other
 
 omit [Monad m] [LawfulMonad m] in
@@ -56,8 +58,9 @@ theorem projS_cons (token : Parser.Internal.Input) (tokens : List Parser.Interna
     rw [show tokens.length + 1 - (tokens.length - (tokens.length - rest.length)) =
       (tokens.length - rest.length) + 1 by omega]
     rfl
-  rcases result with state | ⟨r, rest⟩ | ⟨kind, rest⟩ | error
+  rcases result with state | ⟨r, rest⟩ | ⟨kind, rest⟩ | ⟨kind, rest⟩ | error
   · rfl
+  · simp only [projS, key]
   · simp only [projS, key]
   · simp only [projS, key]
   · rfl
@@ -70,7 +73,8 @@ theorem driveS_proj (step : σ → Parser.Internal.Input → PM H (Parser.Intern
   | cons token tokens ih =>
     rw [driveS_cons, map_bind]
     refine bind_congr fun e => ?_
-    rcases e with (kind | error) | (state' | result)
+    rcases e with (kind | kind | error) | (state' | result)
+    · simp [onStep, projS]
     · simp [onStep, projS]
     · simp [onStep, projS]
     · simp only [onStep]
@@ -90,18 +94,19 @@ variable {H P R σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits
 variable [ParseByToken P H m (Traits.Handler.Error H) R]
 variable {version : Token.Version} {mk : σ → P}
   {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ R)} {fresh : P}
-variable {Z : Type} [Produce Z]
+variable {Z : Type} [Cursor Z]
 
 /-- What the loop gave, read as `outcome` reads a parse. -/
 def outcomeRest {origin : Z} :
     Except (ParseError (Traits.Handler.Error H)) (ControlFlow R) × P ×
-      { z : Z // Produce.Consumed z origin } →
+      { z : Z // Cursor.Consumed z origin } →
     Outcome R P Z (Traits.Handler.Error H)
   | (.ok (.break result), parser, next) => .finished result parser next.val
   | (.ok .continue, parser, _) => .waits parser
   | (.error error, _, next) =>
     match error.cause with
     | .syntax kind => .rejected kind next.val
+    | .version kind => .rejectedVersion kind next.val
     | .handler error => .failed error
 
 /-- What `driveS` gave back, as the loop on the cursor gives it. -/
@@ -110,12 +115,14 @@ def convS (mk : σ → P) (fresh : P) (cursor : Z) (tokens : List Parser.Interna
   | .waits state => .waits (mk state)
   | .done result rest => .finished result fresh (advance (tokens.length - rest.length) cursor)
   | .rejected kind rest => .rejected kind (advance (tokens.length - rest.length) cursor)
+  | .rejectedVersion kind rest =>
+    .rejectedVersion kind (advance (tokens.length - rest.length) cursor)
   | .failed error => .failed error
 
 omit [Monad m] [LawfulMonad m] [ParseByToken P H m (Traits.Handler.Error H) R] in
-theorem convS_proj {cursor after : Z} {raw : Produce.Token Z}
-    {consumed : Produce.Consumed after cursor}
-    (hnext : Produce.next? cursor = some (raw, ⟨after, consumed⟩))
+theorem convS_proj {cursor after : Z} {raw : Cursor.Token Z}
+    {consumed : Cursor.Consumed after cursor}
+    (hnext : Cursor.next? cursor = some (raw, ⟨after, consumed⟩))
     (token : Parser.Internal.Input) (tokens : List Parser.Internal.Input)
     (result : Res σ R (Traits.Handler.Error H)) :
     convS mk fresh after tokens (projS tokens result) =
@@ -129,8 +136,9 @@ theorem convS_proj {cursor after : Z} {raw : Produce.Token Z}
     rw [show tokens.length + 1 - (tokens.length - (tokens.length - rest.length)) =
       (tokens.length - (tokens.length - (tokens.length - rest.length))) + 1 by omega,
       advance_succ hnext]
-  rcases result with state | ⟨r, rest⟩ | ⟨kind, rest⟩ | error
+  rcases result with state | ⟨r, rest⟩ | ⟨kind, rest⟩ | ⟨kind, rest⟩ | error
   · rfl
+  · simp only [projS, convS, key]
   · simp only [projS, convS, key]
   · simp only [projS, convS, key]
   · rfl
@@ -138,10 +146,10 @@ theorem convS_proj {cursor after : Z} {raw : Produce.Token Z}
 omit [ParseByToken P H m (Traits.Handler.Error H) R] in
 /-- The step on the first token, then what the loop does after it, against `driveS`. -/
 theorem step_afterS (state : σ) {cursor after : Z}
-    {raw : Produce.Token Z} {consumed : Produce.Consumed after cursor}
-    (hnext : Produce.next? cursor = some (raw, ⟨after, consumed⟩))
+    {raw : Cursor.Token Z} {consumed : Cursor.Consumed after cursor}
+    (hnext : Cursor.next? cursor = some (raw, ⟨after, consumed⟩))
     {β : Type} (g : β → Outcome R P Z (Traits.Handler.Error H))
-    (k : After P R (Traits.Handler.Error H) × { z : Z // Produce.Consumed z cursor } →
+    (k : After P R (Traits.Handler.Error H) × { z : Z // Cursor.Consumed z cursor } →
       StateT H m β)
     (tokens : List Parser.Internal.Input)
     (hstop : ∀ answer z, g <$> k (.stop answer fresh, z) =
@@ -149,13 +157,17 @@ theorem step_afterS (state : σ) {cursor after : Z}
     (hgo : ∀ state' z, z.val = after → g <$> k (.goOn (mk state'), z) =
       convS mk fresh after tokens <$> driveS noPoints step state' tokens)
     (token : Parser.Internal.Input) :
-    ((fun e => (afterOf mk fresh e, (⟨after, consumed⟩ : { z : Z // Produce.Consumed z cursor })))
+    ((fun e => (afterOf mk fresh e, (⟨after, consumed⟩ : { z : Z // Cursor.Consumed z cursor })))
         <$> (step state token).run) >>= (fun x => g <$> k x) =
       convS mk fresh cursor (token :: tokens) <$>
         driveS noPoints step state (token :: tokens) := by
   rw [driveS_cons, tick_noPoints, pure_bind, bind_map_left, map_bind]
   refine bind_congr fun e => ?_
-  rcases e with (kind | error) | (state' | result)
+  rcases e with (kind | kind | error) | (state' | result)
+  · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS, List.length_cons,
+      Parser.ParseError.Internal.cause_new]
+    rw [show tokens.length + 1 - tokens.length = 0 + 1 by omega, advance_succ hnext]
+    rfl
   · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS, List.length_cons,
       Parser.ParseError.Internal.cause_new]
     rw [show tokens.length + 1 - tokens.length = 0 + 1 by omega, advance_succ hnext]
@@ -173,7 +185,7 @@ theorem step_afterS (state : σ) {cursor after : Z}
 
 theorem rest_driveS (sim : Simulates version mk step fresh) :
     (tokens : List Parser.Internal.Input) → (state : σ) → (origin cursor : Z) →
-    (hc : Produce.Consumed cursor origin) → Reads version cursor tokens →
+    (hc : Cursor.Consumed cursor origin) → Reads version cursor tokens →
     outcomeRest <$> rest origin (mk state) cursor hc =
       convS mk fresh cursor tokens <$> driveS noPoints step state tokens
   | [], state, origin, cursor, hc, ⟨last, hlast, hnone⟩ => by
@@ -241,7 +253,7 @@ theorem parseByToken_driveS (sim : Simulates version mk step fresh) (state : σ)
 
 /-- `driveS` over the tokens and anything after, as `RunsS` gives it, read on the cursor. -/
 theorem outcome_of_runsS [Parse P H m (Traits.Handler.Error H) R]
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh) {tokens : List Parser.Internal.Input}
     {α : Type} {program : PM H α} {next : α → PM H (Parser.Internal.Step σ R)}
@@ -262,7 +274,7 @@ theorem advance_rest {cursor last : Z} {tokens rest : List Parser.Internal.Input
 
 /-- A parser whose steps run over the tokens and finish parses them on every cursor. -/
 theorem parses_of_runsS [Parse P H m (Traits.Handler.Error H) R]
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh)
     {tokens : List Parser.Internal.Input} {program : PM H R}
@@ -271,7 +283,8 @@ theorem parses_of_runsS [Parse P H m (Traits.Handler.Error H) R]
   refine ⟨h.1, fun parseState cursor next rest htakes hreads => ?_⟩
   rw [outcome_of_runsS @hparse sim h parseState htakes hreads, map_eq_pure_bind]
   refine bind_congr fun e => ?_
-  rcases e with (kind | error) | result
+  rcases e with (kind | kind | error) | result
+  · simp [afterProgram, convS, answer, advance_takes htakes]
   · simp [afterProgram, convS, answer, advance_takes htakes]
   · simp [afterProgram, convS, answer]
   · simp [afterProgram, convS, answer, advance_takes htakes]
@@ -279,7 +292,7 @@ theorem parses_of_runsS [Parse P H m (Traits.Handler.Error H) R]
 /-- A parser whose steps run over the tokens and stay in a state wants more on every cursor that
 has exactly the tokens. -/
 theorem waits_of_runsS [Parse P H m (Traits.Handler.Error H) R]
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → σ}
@@ -289,7 +302,8 @@ theorem waits_of_runsS [Parse P H m (Traits.Handler.Error H) R]
   have hreads : Reads version last [] := ⟨last, .nil last, hnone⟩
   rw [outcome_of_runsS @hparse sim h parseState htakes hreads, map_eq_pure_bind]
   refine bind_congr fun e => ?_
-  rcases e with (kind | error) | a
+  rcases e with (kind | kind | error) | a
+  · simp [afterProgram, convS, answer, advance_takes htakes]
   · simp [afterProgram, convS, answer, advance_takes htakes]
   · simp [afterProgram, convS, answer]
   · simp [afterProgram, convS, answer, driveS_nil]
@@ -297,7 +311,7 @@ theorem waits_of_runsS [Parse P H m (Traits.Handler.Error H) R]
 /-- A parser whose steps run over the tokens and then fail with a syntax error rejects them on
 every cursor. -/
 theorem rejects_of_runsS [Parse P H m (Traits.Handler.Error H) R]
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
@@ -308,7 +322,8 @@ theorem rejects_of_runsS [Parse P H m (Traits.Handler.Error H) R]
   rw [outcome_of_runsS @hparse sim h parseState htakes hreads, ExceptT.run_map, map_eq_pure_bind,
     bind_map_left]
   refine bind_congr fun e => ?_
-  rcases e with (kind' | error) | a
+  rcases e with (kind' | kind' | error) | a
+  · simp [afterProgram, convS, answer, Except.map, advance_takes htakes]
   · simp [afterProgram, convS, answer, Except.map, advance_takes htakes]
   · simp [afterProgram, convS, answer, Except.map]
   · simp [afterProgram, convS, answer, Except.map, advance_takes htakes]
@@ -327,7 +342,7 @@ theorem RunsS.of_moves {step : σ → Parser.Internal.Input → PM H (Parser.Int
 token with a syntax error, the parser rejects the tokens and the token on every cursor, making
 no call. -/
 theorem rejects_of_movesS [Parse P H m (Traits.Handler.Error H) R]
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     (sim : Simulates version mk step fresh) {kind : SyntaxErrorKind}
     {token : Parser.Internal.Input} {state last : σ} {tokens : List Parser.Internal.Input}
@@ -367,6 +382,7 @@ def Res.mapDone {E : Type} (f : ρ → τ) : Res σ ρ E → Res σ τ E
   | .waits state => .waits state
   | .done result rest => .done (f result) rest
   | .rejected kind rest => .rejected kind rest
+  | .rejectedVersion kind rest => .rejectedVersion kind rest
   | .failed error => .failed error
 
 theorem onStep_mapDone (f : ρ → τ)
@@ -375,7 +391,8 @@ theorem onStep_mapDone (f : ρ → τ)
     (hk : ∀ state, k' state = Res.mapDone f <$> k state) (rest : List Parser.Internal.Input)
     (e : Except (ParseErrorCause (Traits.Handler.Error H)) (Parser.Internal.Step σ ρ)) :
     onStep k' rest (mapDone f <$> e) = Res.mapDone f <$> onStep k rest e := by
-  rcases e with (kind | error) | (state | result)
+  rcases e with (kind | kind | error) | (state | result)
+  · simp [onStep, Res.mapDone]; rfl
   · simp [onStep, Res.mapDone]; rfl
   · simp [onStep, Res.mapDone]; rfl
   · exact hk state
@@ -417,7 +434,8 @@ theorem RunsS.mapSteps (f : ρ → τ)
   refine ⟨h.1, fun rest => ?_⟩
   rw [driveS_mapSteps, h.2, map_bind]
   refine bind_congr fun e => ?_
-  rcases e with (kind | error) | a
+  rcases e with (kind | kind | error) | a
+  · simp [afterProgram, Res.mapDone]
   · simp [afterProgram, Res.mapDone]
   · simp [afterProgram, Res.mapDone]
   · exact (resumeS_mapSteps f step (next a) rest).symm
@@ -443,7 +461,7 @@ variable {version : Token.Version} {mk : σ → P}
 
 /-- `parses_of_runsS` for a parser whose steps' results it converts by `f`. -/
 theorem parses_of_runsS_map
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     (sim : Simulates version mk (mapSteps f step) fresh) {program : PM H ρ}
     (h : RunsS noPoints step state tokens program fun r => pure (.done r)) :
@@ -453,7 +471,7 @@ theorem parses_of_runsS_map
 
 /-- `waits_of_runsS` for a parser whose steps' results it converts by `f`. -/
 theorem waits_of_runsS_map
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     (sim : Simulates version mk (mapSteps f step) fresh) {α : Type} {program : PM H α}
     {after : α → σ} (h : RunsS noPoints step state tokens program fun a => pure (.more (after a))) :
@@ -462,7 +480,7 @@ theorem waits_of_runsS_map
 
 /-- `rejects_of_runsS` for a parser whose steps' results it converts by `f`. -/
 theorem rejects_of_runsS_map
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     (sim : Simulates version mk (mapSteps f step) fresh) {α : Type} {program : PM H α}
     {kind : SyntaxErrorKind}
@@ -472,7 +490,7 @@ theorem rejects_of_runsS_map
 
 /-- `rejects_of_movesS` for a parser whose steps' results it converts by `f`. -/
 theorem rejects_of_movesS_map
-    (hparse : ∀ {Z : Type} [Produce Z] (parser : P) (parseState : ParseState H) (cursor : Z),
+    (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     (sim : Simulates version mk (mapSteps f step) fresh) {kind : SyntaxErrorKind}
     {token : Parser.Internal.Input} {last : σ}

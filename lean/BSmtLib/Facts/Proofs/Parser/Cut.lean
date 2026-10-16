@@ -60,7 +60,7 @@ def afterProcessing (version : Token.Version) (parser : P) (token : Parser.Inter
   | .done result => pure (.inr result)
   | .switchVersion declared resume =>
     match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
-    | .error _ => throw (.syntax .unsupportedVersion)
+    | .error _ => throw (.version .unsupported)
     | .ok () =>
       match ← resume with
       | .more parser => pure (.inl (declared, parser))

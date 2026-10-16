@@ -719,7 +719,7 @@ variable (version : Token.Version) (follows : CmdEnd → Lang)
 rejection of one that names no supported version, whose item is the last before what follows
 such a declaration. -/
 def CmdFailure (rem : Lang) (item : Received) (e : Parser.ParseErrorCause Unit) : Prop :=
-  Benign e ∨ ((∃ u, rem u) → e = .syntax .unsupportedVersion ∧
+  Benign e ∨ ((∃ u, rem u) → e = .version .unsupported ∧
     ∀ w, follows .refused w → rem (item :: w))
 
 variable {token : Parser.Internal.Input} {item : Received}
@@ -742,7 +742,10 @@ theorem setInfo_quiet (declaration : Declaration) (state : AttributeState Nat Na
     split
     · refine Sound.loudly ?_
       call_step
-      split <;> first | exact Sound.pure trivial | exact Sound.syntaxError ⟨⟨trivial, id⟩, id⟩
+      split <;> first
+        | exact Sound.pure trivial
+        | exact Sound.syntaxError ⟨⟨trivial, id⟩, id⟩
+        | exact Sound.versionError ⟨⟨trivial, id⟩, id⟩
     · rename_i hnone
       exact Sound.quietly (Sound.syntaxError trivial) ⟨attributes, rfl, isEmpty_of_none hnone⟩
 
@@ -846,7 +849,7 @@ theorem payload_setInfo (declaration : Declaration) (state : AttributeState Nat 
       call_step
       simp only [push_isEmpty, Bool.true_and, Bool.false_eq_true, ite_false, pure_bind]
       call_step
-      refine Sound.syntaxError ⟨⟨?_, id⟩, id⟩
+      refine Sound.versionError ⟨⟨?_, id⟩, id⟩
       refine Or.inr fun _ => ⟨rfl, fun w hw => ⟨⟨k, rfl⟩, [closeItem], w, ?_, hw, rfl⟩⟩
       exact cat_intro' (a := []) (Or.inr rfl) (by simp [attrTail, tok]) rfl
     case keyword k' =>
@@ -902,7 +905,7 @@ theorem payload_setInfo (declaration : Declaration) (state : AttributeState Nat 
         | some declared =>
           exact Sound.pure fun _ w hw => ⟨trivial, [item], w, hr nofun, hw, rfl⟩
         | none =>
-          refine Sound.syntaxError ⟨⟨?_, id⟩, id⟩
+          refine Sound.versionError ⟨⟨?_, id⟩, id⟩
           exact Or.inr fun _ => ⟨rfl, fun w hw => ⟨trivial, [item], w, hr nofun, hw, rfl⟩⟩
       · rename_i hnone
         exact Sound.quietly (Sound.syntaxError (Or.inl trivial))

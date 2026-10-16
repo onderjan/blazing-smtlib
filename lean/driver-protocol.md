@@ -92,10 +92,10 @@ err <kind> <start> <end>
 
 The feed raised a lexer error, with this kind and span. The response ends
 here: the feeds after it are not applied and there is no closing line.
-`<kind>` is the Rust `SmtLexicalErrorKind` variant: `UnexpectedCharacter`,
-`FractionDigitExpected`, `HexadecimalDigitExpected`, `BinaryDigitExpected`,
-`BaseSelectionExpected`, `UnclosedStringLiteral`, `ForbiddenCharInString`,
-`ForbiddenKeywordName`, `BackslashInQuotedSymbol`,
+`<kind>` is the Rust `SmtLexicalErrorKind` as its `Debug` form spells it:
+`UnexpectedCharacter`, `Expected(FractionDigit)`, `Expected(HexadecimalDigit)`,
+`Expected(BinaryDigit)`, `Expected(Base)`, `UnclosedStringLiteral`,
+`ForbiddenCharInString`, `EmptyKeyword`, `BackslashInQuotedSymbol`,
 `ForbiddenCharInQuotedSymbol`, `UnclosedQuotedSymbol`, `NumeralLeadingZero`,
 `MissingDelimiter`, `UnexpectedTrailingToken`.
 
@@ -141,7 +141,7 @@ failed, so there is no `at` line.
 lex 2.7 s2861737365727420312e29 e
 t ParenOpen 0:0:0 1:0:1 - x28
 t UnquotedSymbol 1:0:1 7:0:7 command x617373657274
-err FractionDigitExpected 8:0:8 11:0:11
+err Expected(FractionDigit) 8:0:8 11:0:11
 ```
 
 Two slices that cut a quoted symbol, the end of the input, and a second input:
@@ -339,11 +339,11 @@ lex 2.7 recover rules s2861737365727420237120286620782929207920237129 e
 t ParenOpen 0:0:0 1:0:1 - x28
 t UnquotedSymbol 1:0:1 7:0:7 command x617373657274
 ab 9:0:9
-err BaseSelectionExpected 8:0:8 10:0:10 9:0:9
+err Expected(Base) 8:0:8 10:0:10 9:0:9
 rc 17:0:17
 t UnquotedSymbol 18:0:18 19:0:19 - x79
 ab 21:0:21
-err BaseSelectionExpected 20:0:20 22:0:22 21:0:21
+err Expected(Base) 20:0:20 22:0:22 21:0:21
 rc 22:0:22
 t ParenClose 22:0:22 23:0:23 - x29
 ab 23:0:23
@@ -614,10 +614,13 @@ error <start> <end> <cause>
 The span of the error and its cause:
 
 - `lexical <kind>`: a lexer error, of the kind spelled as in `err`.
-- `syntax <kind>`: a syntax error, of the kind spelled as the Rust
-  `SmtSyntaxErrorKind` variant; `ExpectedToken` is followed by its token
-  types, spelled as in `t` and separated by commas, and
-  `TooManyVersionDeclarations` by its limit.
+- `syntax <kind>`: a syntax error, of the kind spelled as the `Debug` form of
+  the Rust `SmtSyntaxErrorKind` without its spaces, as
+  `Expected([Symbol,Reserved(General(Underscore)),Token(ParenOpen)])`,
+  `Empty(SortApplication)` or `Missing(Datatype)`.
+- `version <kind>`: a version declaration that the parser rejected, of the
+  kind spelled as the `Debug` form of the Rust `SmtVersionErrorKind`:
+  `Unsupported` or `TooManyDeclarations(<limit>)`.
 - `handler <id>`: the handler's error that the Rust side answered a call with.
 - `io <hex>`: an error while reading, with its message as bytes.
 
@@ -756,7 +759,7 @@ as they are. The other lexers have no reader of their own: the driver builds
 the lexer over the library's parse adapter and does what the reader does with
 it, step for step. Where the hand-overs are cut changes nothing a parser
 request reports, with one exception: the naive lexer `v` gives an error of
-its consumer (`syntax`, `handler`) an empty span at the end of
+its consumer (`syntax`, `version`, `handler`) an empty span at the end of
 the token it failed on, where the other lexers give the span of the token.
 Under `v` the parser tests that check the span of such an error report
 themselves as not applicable on the standard error and end, as the lexer tests

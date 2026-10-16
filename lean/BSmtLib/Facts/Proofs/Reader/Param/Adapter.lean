@@ -240,7 +240,7 @@ theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
           (next.syntax token))).run.run
         events) := by
   intro r
-  have hitem' : Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token) =
+  have hitem' : Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» next token) =
       Parser.Internal.Input.ofSyntax (next.syntax token) := rfl
   generalize hitem : Parser.Internal.Input.ofSyntax (next.syntax token) = item at hr ⊢
   rw [recAfter_eq _ _ hr]
@@ -261,7 +261,7 @@ theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
   simp only at hstep hlog hpost
   have hX : ((Parser.Internal.ParseByToken.arrive (H := List Event) parser item >>= fun _ =>
       Parser.Internal.ParseByToken.step
-          (Token.Produce.version next) parser item : Parser.Quiet.RPM _).run.run
+          (Token.Cursor.version next) parser item : Parser.Quiet.RPM _).run.run
           (calls events)) =
         (res, calls log) := by
     rw [run_bind_ok (arrive_run parser item (calls events))]
@@ -323,7 +323,7 @@ theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
       try dsimp only
       split
       · rename_i heq
-        simp [Token.Produce.setVersion, Token.BatchCursor.setVersion] at heq
+        simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
       · rename_i switched heq
         have heq' : next.setVersion declared = .ok switched := heq
         have happly : applyRequests next (some (Bridge.version declared)) false = switched := by
@@ -509,13 +509,13 @@ termination_by remaining cursor
 decreasing_by exact Token.BatchCursor.Consumed.remaining_lt _taken
 
 theorem next?_hasNext {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
-    Token.Produce.next? cursor = some (cursor.next h) := by
+    Token.Cursor.next? cursor = some (cursor.next h) := by
   show Token.BatchCursor.next? cursor = _
   unfold Token.BatchCursor.next?
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
 theorem next?_not {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : ¬ cursor.HasNext) :
-    Token.Produce.next? cursor = none := by
+    Token.Cursor.next? cursor = none := by
   show Token.BatchCursor.next? cursor = _
   unfold Token.BatchCursor.next?
   rw [dite_eq_right_of_eq_false (eq_false h)]
@@ -523,7 +523,7 @@ theorem next?_not {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : ¬ cu
 /-- The adapter's loop over the rest of its producer is `paLoop`. -/
 theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
     ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
-      (consumed : Token.Produce.Consumed cursor origin)
+      (consumed : Token.Cursor.Consumed cursor origin)
           (handler : List Event), remaining cursor < n →
       let r := (Stop.rest (H := List Event) (m := Id) origin parser cursor consumed).run
         handler

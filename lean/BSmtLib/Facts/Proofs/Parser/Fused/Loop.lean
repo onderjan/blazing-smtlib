@@ -36,8 +36,8 @@ open BSmtLib.Parser.Command.Internal (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic (Cause LoopResult OutcomeOf TermContext TermModeOf)
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Produce VersionPosture)
-open BSmtLib.Token.Produce (HasNext)
+open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
+open BSmtLib.Token.Cursor (HasNext)
 
 /-! ## The adapter's token, taken from further back -/
 
@@ -45,15 +45,15 @@ section
 
 variable {H P R E : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
   [Parser.Internal.ParseByToken P H m E R]
-variable {Z : Type} [Produce Z]
+variable {Z : Type} [Cursor Z]
 
 /-- The adapter's token, with its cursors' consumption counted from a cursor further back. -/
-theorem takeOne_trans (parser : P) {origin cursor next : Z} (token : Produce.Token Z)
-    (step : Produce.Consumed next cursor) (consumed : Produce.Consumed cursor origin) :
-    Parser.Internal.takeOne parser origin token next (Produce.consumed_trans step consumed) =
-      (fun (after, (z : { z : Z // Produce.Consumed z cursor })) =>
+theorem takeOne_trans (parser : P) {origin cursor next : Z} (token : Cursor.Token Z)
+    (step : Cursor.Consumed next cursor) (consumed : Cursor.Consumed cursor origin) :
+    Parser.Internal.takeOne parser origin token next (Cursor.consumed_trans step consumed) =
+      (fun (after, (z : { z : Z // Cursor.Consumed z cursor })) =>
         (after,
-          (⟨z.1, Produce.consumed_trans z.2 consumed⟩ : { z : Z // Produce.Consumed z origin })))
+          (⟨z.1, Cursor.consumed_trans z.2 consumed⟩ : { z : Z // Cursor.Consumed z origin })))
         <$> Parser.Internal.takeOne parser cursor token next step := by
   unfold Parser.Internal.takeOne
   simp only [map_bind]
@@ -157,7 +157,7 @@ theorem rest_next {batch : BatchTag} (origin : BatchCursor batch) (parser : Scri
       portGo origin parser h (next.next hn).1 (next.next hn).2.1
         ((next.next hn).2.2.trans consumed) := by
   rw [HandOver.rest_of_none consumed hno]
-  have : Produce.next? next = some (next.next hn) := by
+  have : Cursor.next? next = some (next.next hn) := by
     show BatchCursor.next? next = _
     simp [BatchCursor.next?, hn]
   simp only [this]
@@ -183,7 +183,7 @@ theorem rest_none {batch : BatchTag} (origin : BatchCursor batch) (parser : Scri
     · rename_i has _
       exact absurd has hn
     · simp only [StateT.run_pure, pure_bind]
-  · have : Produce.next? next = none := by
+  · have : Cursor.next? next = none := by
       show BatchCursor.next? next = _
       simp [BatchCursor.next?, hn]
     simp only [this, StateT.run_pure, pure_bind]
@@ -222,7 +222,7 @@ theorem handOver?_eq {batch : BatchTag} {parser : ScriptParser H}
 abbrev RestOut (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
     (origin : BatchCursor batch) :=
   (Except (Parser.ParseError (Handler.Error H)) (ControlFlow Unit) × ScriptParser H ×
-    { z : BatchCursor batch // Produce.Consumed z origin }) × H
+    { z : BatchCursor batch // Cursor.Consumed z origin }) × H
 
 /-- The rest of a cursor that has no token, followed by anything: the parser goes on. -/
 theorem rest_none_k {batch : BatchTag} (origin : BatchCursor batch) (parser : ScriptParser H)
@@ -236,7 +236,7 @@ theorem rest_none_k {batch : BatchTag} (origin : BatchCursor batch) (parser : Sc
     · rename_i has _
       exact absurd has hn
     · simp only [StateT.run_pure, pure_bind]
-  · have : Produce.next? next = none := by
+  · have : Cursor.next? next = none := by
       show BatchCursor.next? next = _
       simp [BatchCursor.next?, hn]
     simp only [this, StateT.run_pure, pure_bind]
@@ -261,7 +261,7 @@ theorem rest_handOver {batch : BatchTag} (origin base : BatchCursor batch)
             (ScriptParser.Internal.posture parser) .awaiting
             (ScriptParser.Internal.declarations parser)) ended (toOrigin taken)).run h >>= k := by
   rw [Parser.Internal.rest, handOver?_eq hc]
-  have hd : Produce.decideHasNext cursor = isTrue has := Subsingleton.elim _ _
+  have hd : Cursor.decideHasNext cursor = isTrue has := Subsingleton.elim _ _
   simp only [hd]
   rw [handOver]
   simp only [StateT.run_bind, bind_assoc]
@@ -278,7 +278,7 @@ theorem rest_handOver {batch : BatchTag} (origin base : BatchCursor batch)
           (.nonstandard nonstandard') (ScriptParser.Internal.declarations parser))
         nonstandard' (by simp) next h' hn
         (fun step => lift (BatchCursor.Consumed.trans step (taken has))) toOrigin
-        (Produce.consumed_trans (taken has) consumed) k
+        (Cursor.consumed_trans (taken has) consumed) k
       simp only [ScriptParser.Internal.posture_mk, ScriptParser.Internal.declarations_mk] at ih
       simp only [StateT.run_pure, pure_bind]
       exact ih
@@ -389,8 +389,8 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
 termination_by remaining next
 /-- The loop from the first token of a hand-over is the port's run from it, on the parser. -/
 theorem start_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : ScriptParser H) (h : H)
-    (token : Token batch) (producer next : BatchCursor batch) (consumed : next.Consumed producer) :
-    start parser h token producer next consumed = portGo producer parser h token next consumed := by
+    (token : Token batch) (cursor next : BatchCursor batch) (consumed : next.Consumed cursor) :
+    start parser h token cursor next consumed = portGo cursor parser h token next consumed := by
   unfold start
   split <;> rw [loop_eq hstep] <;> congr 1 <;> cases parser <;>
     simp_all [assemble, withTerm, ScriptParser.Internal.mk, ScriptParser.Internal.posture,
@@ -412,18 +412,18 @@ theorem rest_next_k {batch : BatchTag} (origin : BatchCursor batch) (parser : Sc
 /-- The fused reader parses a batch cursor as the script parser's loop over single tokens does:
 the same answer, parser, parse state, cursor and handler. -/
 theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : ScriptParser H)
-    (state : Parser.ParseState H) (producer : BatchCursor batch) :
-    BSmtLib.Parser.Internal.Fused.parse (m := m) parser state producer =
-      Parser.Internal.parseByToken parser state producer := by
+    (state : Parser.ParseState H) (cursor : BatchCursor batch) :
+    BSmtLib.Parser.Internal.Fused.parse (m := m) parser state cursor =
+      Parser.Internal.parseByToken parser state cursor := by
   funext h
-  by_cases hp : producer.HasNext
+  by_cases hp : cursor.HasNext
   · by_cases hns : ∃ nonstandard, ScriptParser.Internal.command parser = .nonstandard nonstandard
     · obtain ⟨nonstandard, hcmd⟩ := hns
-      show _ = (Parser.Internal.parseByToken parser state producer).run h
+      show _ = (Parser.Internal.parseByToken parser state cursor).run h
       rw [Parser.Internal.parseByToken, handOver?_eq hcmd]
-      have hd : Produce.decideHasNext producer = isTrue hp := Subsingleton.elim _ _
+      have hd : Cursor.decideHasNext cursor = isTrue hp := Subsingleton.elim _ _
       simp only [hd]
-      simp only [BSmtLib.Parser.Internal.Fused.parse, Produce.asBatch?, hp, ↓reduceDIte, begin,
+      simp only [BSmtLib.Parser.Internal.Fused.parse, Cursor.asBatch?, hp, ↓reduceDIte, begin,
         hcmd]
       rw [handOver]
       simp only [StateT.run_bind, bind_assoc]
@@ -434,7 +434,7 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
       · simp only [pure_bind, StateT.run_pure, StateT.run_bind]
         by_cases hc : next.HasNext
         · simp only [hc, ↓reduceDIte]
-          rw [rest_next_k producer _ h' next _ hc (awaiting_handOver _ _ next)]
+          rw [rest_next_k cursor _ h' next _ hc (awaiting_handOver _ _ next)]
           obtain ⟨token', ⟨after, step⟩⟩ := next.next hc
           dsimp only
           rw [loop_eq hstep]
@@ -443,12 +443,12 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
           obtain ⟨answer, after, ⟨done, taken⟩, h''⟩ := r
           rfl
         · simp only [hc, ↓reduceDIte]
-          rw [rest_none_k producer _ h' next _ hc]
+          rw [rest_none_k cursor _ h' next _ hc]
           simp
       · simp only [StateT.run_pure, pure_bind, StateT.run_bind]
         by_cases hn : next.HasNext
         · simp only [hn, ↓reduceDIte]
-          rw [rest_handOver producer producer _ nonstandard' (by simp) next h' hn
+          rw [rest_handOver cursor cursor _ nonstandard' (by simp) next h' hn
             (fun step => BatchCursor.Consumed.trans step (taken hp)) id (taken hp)]
           simp only [ScriptParser.Internal.posture_mk, ScriptParser.Internal.declarations_mk]
           refine bind_congr fun r => ?_
@@ -457,7 +457,7 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
           · simp only
             by_cases hc : ended.HasNext
             · simp only [hc, ↓reduceDIte]
-              rw [rest_next_k producer _ h'' ended _ hc (awaiting_handOver _ _ ended)]
+              rw [rest_next_k cursor _ h'' ended _ hc (awaiting_handOver _ _ ended)]
               obtain ⟨token', ⟨after, step⟩⟩ := ended.next hc
               dsimp only
               rw [loop_eq hstep]
@@ -466,28 +466,28 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
               obtain ⟨answer, after, ⟨done, taken⟩, h'''⟩ := r
               rfl
             · simp only [hc, ↓reduceDIte]
-              rw [rest_none_k producer _ h'' ended _ hc]
+              rw [rest_none_k cursor _ h'' ended _ hc]
               simp
         · simp only [hn, ↓reduceDIte, pure_bind]
-          rw [rest_none_k producer _ h' next _ hn]
+          rw [rest_none_k cursor _ h' next _ hn]
           simp
     · have hno := HandOver.script_handOver_none (m := m)
-        (fun nonstandard hc => hns ⟨nonstandard, hc⟩) producer
+        (fun nonstandard hc => hns ⟨nonstandard, hc⟩) cursor
       rw [HandOver.parseByToken_of_none state hno]
       split
       · rename_i heq
-        have : Produce.next? producer = some (producer.next hp) := by
-          show BatchCursor.next? producer = _
+        have : Cursor.next? cursor = some (cursor.next hp) := by
+          show BatchCursor.next? cursor = _
           simp [BatchCursor.next?, hp]
         rw [this] at heq; cases heq
       · rename_i token next consumed heq
-        have hnx : producer.next hp = (token, ⟨next, consumed⟩) := by
-          have : Produce.next? producer = some (producer.next hp) := by
-            show BatchCursor.next? producer = _
+        have hnx : cursor.next hp = (token, ⟨next, consumed⟩) := by
+          have : Cursor.next? cursor = some (cursor.next hp) := by
+            show BatchCursor.next? cursor = _
             simp [BatchCursor.next?, hp]
           rw [this] at heq
           exact Option.some.inj heq
-        simp only [BSmtLib.Parser.Internal.Fused.parse, Produce.asBatch?, hp, ↓reduceDIte, begin]
+        simp only [BSmtLib.Parser.Internal.Fused.parse, Cursor.asBatch?, hp, ↓reduceDIte, begin]
         split
         · rename_i nonstandard hc
           exact absurd ⟨nonstandard, hc⟩ hns
@@ -508,14 +508,14 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
           show _ = StateT.run _ h'
           rw [StateT.run_pure, pure_bind]
           rfl
-  · have h2 : Produce.next? producer = none := by
-      show BatchCursor.next? producer = _
+  · have h2 : Cursor.next? cursor = none := by
+      show BatchCursor.next? cursor = _
       simp [BatchCursor.next?, hp]
-    have hd : Produce.decideHasNext producer = isFalse hp := Subsingleton.elim _ _
-    cases hh : Parser.Internal.ParseByToken.handOver? (m := m) parser producer with
+    have hd : Cursor.decideHasNext cursor = isFalse hp := Subsingleton.elim _ _
+    cases hh : Parser.Internal.ParseByToken.handOver? (m := m) parser cursor with
     | none =>
-      have e : Parser.Internal.parseByToken (m := m) parser state producer =
-          pure (.ok .continue, parser, state, ⟨producer, fun has => absurd has hp⟩) := by
+      have e : Parser.Internal.parseByToken (m := m) parser state cursor =
+          pure (.ok .continue, parser, state, ⟨cursor, fun has => absurd has hp⟩) := by
         rw [HandOver.parseByToken_of_none state hh]
         split
         · rfl
@@ -523,11 +523,11 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
           rw [h2] at heq
           cases heq
       rw [e]
-      simp only [BSmtLib.Parser.Internal.Fused.parse, Produce.asBatch?, hp, ↓reduceDIte]
+      simp only [BSmtLib.Parser.Internal.Fused.parse, Cursor.asBatch?, hp, ↓reduceDIte]
       rfl
     | some _ =>
       rw [Parser.Internal.parseByToken, hh]
-      simp only [BSmtLib.Parser.Internal.Fused.parse, Produce.asBatch?, hp, ↓reduceDIte, hd]
+      simp only [BSmtLib.Parser.Internal.Fused.parse, Cursor.asBatch?, hp, ↓reduceDIte, hd]
       rfl
 
 end

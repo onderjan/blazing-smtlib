@@ -329,11 +329,11 @@ end
 
 /--
 A failure of the traversal as a failure of the parser: a rejected version declaration is the
-syntax error of the same name.
+version error of the same kind.
 -/
 def causeOf {ε : Type} : Cause ε → Parser.ParseErrorCause ε
-  | .syntax .unsupportedVersion => .syntax .unsupportedVersion
-  | .syntax (.tooManyDeclarations limit) => .syntax (.tooManyVersionDeclarations limit)
+  | .syntax .unsupportedVersion => .version .unsupported
+  | .syntax (.tooManyDeclarations limit) => .version (.tooManyDeclarations limit)
   | .handler error => .handler error
 
 

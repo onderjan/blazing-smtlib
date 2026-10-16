@@ -23,10 +23,11 @@ public import Protocol
 public section
 
 open BSmtLib
-open BSmtLib.Token (Version VersionPosture VersionPostureBuilder Consume ConsumeFrom Produce
+open BSmtLib.Token (Version VersionPosture VersionPostureBuilder Consume ConsumeFrom Cursor
   SyntaxToken BatchCursor)
 open BSmtLib.Lexer (LexError)
-open BSmtLib.Parser (Parse ParseState ParseAdapter ParseError SyntaxErrorKind ScriptParser
+open BSmtLib.Parser (Parse ParseState ParseAdapter ParseError SyntaxErrorKind SyntaxExpected
+  NonEmptyList VersionErrorKind ScriptParser
   CommandParser SortParser TermParser SExprParser CommandOutcome SymbolParser KeywordParser
   StringParser NumeralParser OpenParenParser CloseParenParser IdentParser QualifiedIdentParser
   ClosedAttributeParser ClosedMultipleAttributeParser PatternParser SortedVarParser PairParser
@@ -234,13 +235,15 @@ structure NonstandardRule where
 instance : Parser.CommandRule NonstandardRule Remote where
   Parser := ClosedParser Remote (TermParser Remote)
   Result := Nat
-  handle term := callUnit s!"nonstandard_term {idField term}"
+  handle self term := do
+    callUnit s!"nonstandard_term {idField term}"
+    return self
 
 instance : CommandHandler Remote IO where
   NonstandardParser := Parser.CommandPayloadParser Remote NonstandardRule
   nonstandardCommand symbol := do
     callUnit s!"nonstandard_command {symbolField symbol}"
-    return .new (.new .new)
+    return .new {} (.new .new)
   commandAssert term := callUnit s!"command_assert {idField term}"
   commandCheckSat := callUnit "command_check_sat"
   commandCheckSatAssuming terms := callUnit s!"command_check_sat_assuming {idsField terms.asSlice}"
@@ -351,46 +354,102 @@ instance : BufRead RemoteBuf IO where
 
 /-! ## The response lines -/
 
-/-- The syntax error kind, spelled as the Rust variant. -/
+/-- The general reserved word, spelled as the Rust variant. -/
+def generalReservedName : Token.Reserved.GeneralReserved → String
+  | .binary => "Binary"
+  | .decimal => "Decimal"
+  | .hexadecimal => "Hexadecimal"
+  | .numeral => "Numeral"
+  | .string => "String"
+  | .underscore => "Underscore"
+  | .exclamationMark => "ExclamationMark"
+  | .as => "As"
+  | .lambda => "Lambda"
+  | .let => "Let"
+  | .exists => "Exists"
+  | .forall => "Forall"
+  | .match => "Match"
+  | .par => "Par"
+
+/-- The command name, spelled as the Rust variant. -/
+def commandNameReservedName : Token.Reserved.CommandNameReserved → String
+  | .assert => "Assert"
+  | .checkSat => "CheckSat"
+  | .checkSatAssuming => "CheckSatAssuming"
+  | .declareConst => "DeclareConst"
+  | .declareDatatype => "DeclareDatatype"
+  | .declareDatatypes => "DeclareDatatypes"
+  | .declareFun => "DeclareFun"
+  | .declareSort => "DeclareSort"
+  | .declareSortParameter => "DeclareSortParameter"
+  | .defineConst => "DefineConst"
+  | .defineFun => "DefineFun"
+  | .defineFunRec => "DefineFunRec"
+  | .defineFunsRec => "DefineFunsRec"
+  | .defineSort => "DefineSort"
+  | .echo => "Echo"
+  | .exit => "Exit"
+  | .getAssertions => "GetAssertions"
+  | .getAssignment => "GetAssignment"
+  | .getInfo => "GetInfo"
+  | .getModel => "GetModel"
+  | .getOption => "GetOption"
+  | .getProof => "GetProof"
+  | .getUnsatAssumptions => "GetUnsatAssumptions"
+  | .getUnsatCore => "GetUnsatCore"
+  | .getValue => "GetValue"
+  | .pop => "Pop"
+  | .push => "Push"
+  | .reset => "Reset"
+  | .resetAssertions => "ResetAssertions"
+  | .setInfo => "SetInfo"
+  | .setLogic => "SetLogic"
+  | .setOption => "SetOption"
+
+/-- The item a syntax error expected, spelled as its Rust `Debug` form without spaces. -/
+def syntaxExpectedName : SyntaxExpected → String
+  | .token category => s!"Token({tokenTypeName category})"
+  | .reserved (.general word) => s!"Reserved(General({generalReservedName word}))"
+  | .reserved (.commandName word) => s!"Reserved(CommandName({commandNameReservedName word}))"
+  | .symbol => "Symbol"
+  | .index => "Index"
+  | .ident => "Ident"
+  | .sort => "Sort"
+  | .term => "Term"
+  | .sExpr => "SExpr"
+  | .attribute => "Attribute"
+  | .operator => "Operator"
+  | .commandName => "CommandName"
+  | .propositionalLiteral => "PropositionalLiteral"
+
+/-- The list that must not be empty, spelled as the Rust variant. -/
+def nonEmptyListName : NonEmptyList → String
+  | .identIndices => "IdentIndices"
+  | .sortApplication => "SortApplication"
+  | .termApplication => "TermApplication"
+  | .letBindings => "LetBindings"
+  | .annotation => "Annotation"
+  | .quantifierBindings => "QuantifierBindings"
+  | .lambdaBindings => "LambdaBindings"
+  | .functionSignatures => "FunctionSignatures"
+  | .datatypeIntroductions => "DatatypeIntroductions"
+  | .datatypeParameters => "DatatypeParameters"
+  | .datatypeConstructors => "DatatypeConstructors"
+  | .patternArguments => "PatternArguments"
+  | .matchCases => "MatchCases"
+  | .getValueTerms => "GetValueTerms"
+
+/-- The syntax error kind, spelled as the Rust `Debug` form of the kind without spaces. -/
 def syntaxKindName : SyntaxErrorKind → String
-  | .expectedToken categories =>
-    "ExpectedToken " ++ ",".intercalate (categories.toList.map tokenTypeName)
-  | .expectedSymbol => "ExpectedSymbol"
-  | .expectedUnderscore => "ExpectedUnderscore"
-  | .expectedSymbolOrUnderscore => "ExpectedSymbolOrUnderscore"
-  | .expectedSymbolOrParenOpen => "ExpectedSymbolOrParenOpen"
-  | .expectedSymbolUnderscoreOrParenOpen => "ExpectedSymbolUnderscoreOrParenOpen"
-  | .expectedUnderscoreOrAs => "ExpectedUnderscoreOrAs"
-  | .emptyIdentIndices => "EmptyIdentIndices"
-  | .emptySortApplication => "EmptySortApplication"
-  | .emptyTermApplication => "EmptyTermApplication"
-  | .emptyLetBindings => "EmptyLetBindings"
-  | .emptyAnnotation => "EmptyAnnotation"
-  | .emptyQuantifierBindings => "EmptyQuantifierBindings"
-  | .emptyLambdaBindings => "EmptyLambdaBindings"
-  | .expectedIndexOrCloseParen => "ExpectedIndexOrCloseParen"
-  | .expectedOperator => "ExpectedOperator"
-  | .expectedSExpr => "ExpectedSExpr"
-  | .expectedIdent => "ExpectedIdent"
-  | .expectedSort => "ExpectedSort"
-  | .expectedSortInner => "ExpectedSortInner"
-  | .expectedTerm => "ExpectedTerm"
-  | .expectedAttribute => "ExpectedAttribute"
-  | .expectedCommand => "ExpectedCommand"
-  | .expectedCommandName => "ExpectedCommandName"
-  | .expectedDatatype => "ExpectedDatatype"
-  | .expectedDatatypeKind => "ExpectedDatatypeKind"
-  | .expectedFunctionBody => "ExpectedFunctionBody"
-  | .expectedPropositionalLiteral => "ExpectedPropositionalLiteral"
-  | .emptyFunctionSignatures => "EmptyFunctionSignatures"
-  | .emptyDatatypeIntroductions => "EmptyDatatypeIntroductions"
-  | .emptyDatatypeParameters => "EmptyDatatypeParameters"
-  | .emptyDatatypeConstructors => "EmptyDatatypeConstructors"
-  | .emptyPatternArguments => "EmptyPatternArguments"
-  | .emptyMatchCases => "EmptyMatchCases"
-  | .emptyGetValueTerms => "EmptyGetValueTerms"
-  | .unsupportedVersion => "UnsupportedVersion"
-  | .tooManyVersionDeclarations limit => s!"TooManyVersionDeclarations {limit}"
+  | .expected items => s!"Expected([{",".intercalate (items.toList.map syntaxExpectedName)}])"
+  | .empty list => s!"Empty({nonEmptyListName list})"
+  | .missing .functionBody => "Missing(FunctionBody)"
+  | .missing .datatype => "Missing(Datatype)"
+
+/-- The version error kind, spelled as the Rust `Debug` form of the kind. -/
+def versionKindName : VersionErrorKind → String
+  | .unsupported => "Unsupported"
+  | .tooManyDeclarations limit => s!"TooManyDeclarations({limit})"
 
 /-- The line of an error that ended a request. -/
 def errorLine (err : ReadError RemoteError) : String :=
@@ -398,6 +457,7 @@ def errorLine (err : ReadError RemoteError) : String :=
     | .io error => s!"io {hex (toString error).toUTF8.toByteSlice}"
     | .lexical kind => s!"lexical {errorKindName kind}"
     | .syntax kind => s!"syntax {syntaxKindName kind}"
+    | .version kind => s!"version {versionKindName kind}"
     | .handler (.rust id) => s!"handler {id}"
   s!"error {location err.span.start} {location err.span.end} {cause}"
 
@@ -678,26 +738,26 @@ instance {P R E : Type} [Parse P Remote IO E R] : Consume (Drive P R) Unit (Pars
 
 namespace Drive
 
-variable {P R E Z : Type} [Parse P Remote IO E R] [Produce Z]
+variable {P R E Z : Type} [Parse P Remote IO E R] [Cursor Z]
 
 /-- The first token of a producer that has one. -/
-def first (producer : Z) (h : Produce.HasNext producer) :
-    Produce.Token Z × { next : Z // Produce.Consumed next producer } :=
-  match taken : Produce.next? producer with
+def first (cursor : Z) (h : Cursor.HasNext cursor) :
+    Cursor.Token Z × { next : Z // Cursor.Consumed next cursor } :=
+  match taken : Cursor.next? cursor with
   | some first => first
-  | none => absurd (Produce.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
+  | none => absurd (Cursor.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
 
 /-- Takes tokens of the cursor, which has one: counts one after the wanted results, or has the
 parser parse the cursor. Gives the answer to the producer if the consumer stops, `none` if it goes
 on. A parser that finished has its result written. -/
-def take (drive : Drive P R) (cursor : Z) (h : Produce.HasNext cursor) :
+def take (drive : Drive P R) (cursor : Z) (h : Cursor.HasNext cursor) :
     IO (Option (Except (ParseError E) (ControlFlow Unit)) × Drive P R ×
-      { next : Z // Produce.Consumed next cursor }) := do
+      { next : Z // Cursor.Consumed next cursor }) := do
   if drive.remaining == 0 then
     -- count the tokens left after the wanted results, and break at the end of the input, as
     -- every consumer must
     let (token, next) := first cursor h
-    if Produce.syntax next.val token matches .endOfFile then
+    if Cursor.syntax next.val token matches .endOfFile then
       return (some (.ok (.break ())), drive, next)
     drive.unconsumed.modify (· + 1)
     return (none, drive, next)
@@ -713,37 +773,37 @@ def take (drive : Drive P R) (cursor : Z) (h : Produce.HasNext cursor) :
 
 /-- A producer, ordered by its consumption: the loop over its tokens descends by it. -/
 structure Consuming (Z : Type) where
-  producer : Z
+  cursor : Z
 
 instance : WellFoundedRelation (Consuming Z) :=
-  invImage Consuming.producer ⟨Produce.Consumed, Produce.consumed_wf⟩
+  invImage Consuming.cursor ⟨Cursor.Consumed, Cursor.consumed_wf⟩
 
 /-- Takes the tokens of `cursor`, which comes from `origin` with tokens consumed, while there are
 any and the consumer goes on. -/
-def rest (origin : Z) (drive : Drive P R) (cursor : Z) (consumed : Produce.Consumed cursor origin) :
+def rest (origin : Z) (drive : Drive P R) (cursor : Z) (consumed : Cursor.Consumed cursor origin) :
     IO (Except (ParseError E) (ControlFlow Unit) × Drive P R ×
-      { z : Z // Produce.Consumed z origin }) :=
-  match Produce.decideHasNext cursor with
+      { z : Z // Cursor.Consumed z origin }) :=
+  match Cursor.decideHasNext cursor with
   | .isFalse _ => return (.ok .continue, drive, ⟨cursor, consumed⟩)
   | .isTrue h => do
     match ← drive.take cursor h with
     | (some answer, drive, ⟨next, taken⟩) =>
-      return (answer, drive, ⟨next, Produce.consumed_trans taken consumed⟩)
-    | (none, drive, ⟨next, taken⟩) => rest origin drive next (Produce.consumed_trans taken consumed)
+      return (answer, drive, ⟨next, Cursor.consumed_trans taken consumed⟩)
+    | (none, drive, ⟨next, taken⟩) => rest origin drive next (Cursor.consumed_trans taken consumed)
 termination_by (⟨cursor⟩ : Consuming Z)
 decreasing_by exact taken
 
 end Drive
 
-instance {P R E Z : Type} [Parse P Remote IO E R] [Produce Z] : ConsumeFrom (Drive P R) Z IO where
-  consume producer h := do
+instance {P R E Z : Type} [Parse P Remote IO E R] [Cursor Z] : ConsumeFrom (Drive P R) Z IO where
+  consume cursor h := do
     let drive ← get
-    match ← (drive.take producer h : IO _) with
+    match ← (drive.take cursor h : IO _) with
     | (some answer, drive, next) =>
       set drive
       return (answer, next)
     | (none, drive, ⟨next, consumed⟩) =>
-      let (answer, drive, done) ← (Drive.rest producer drive next consumed : IO _)
+      let (answer, drive, done) ← (Drive.rest cursor drive next consumed : IO _)
       set drive
       return (answer, done)
 

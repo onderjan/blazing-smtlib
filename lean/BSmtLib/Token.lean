@@ -3,6 +3,7 @@ module
 public import Std.Data.ByteSlice
 public import BSmtLib.ControlFlow
 public import BSmtLib.Span
+public import BSmtLib.Plain
 
 public section
 
@@ -27,7 +28,7 @@ inductive TokenCategory where
   | whitespace
   | comment
   | endOfFile
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Hashable, Repr, Inhabited
 
 /-- Version of the SMT-LIB standard. -/
 inductive Version where
@@ -35,7 +36,7 @@ inductive Version where
   | v2_5
   | v2_6
   | v2_7
-  deriving BEq, Repr
+  deriving BEq, Hashable, Repr
 
 namespace Version
 
@@ -70,12 +71,22 @@ instance (a b : Version) : Decidable (a < b) :=
 agrees with `≤` and `<` as it compares the ranks too. -/
 instance : Ord Version := ⟨fun a b => compare (Internal.rank a) (Internal.rank b)⟩
 
+/-- The version that the decimal names, if any. -/
 def fromDecimal? (decimal : ByteSlice) : Option Version :=
   if decimal == "2.0".toUTF8.toByteSlice then some .v2_0
   else if decimal == "2.5".toUTF8.toByteSlice then some .v2_5
   else if decimal == "2.6".toUTF8.toByteSlice then some .v2_6
   else if decimal == "2.7".toUTF8.toByteSlice then some .v2_7
   else none
+
+/-- The decimal that names the version, as in `:smt-lib-version`. -/
+def asDecimal (self : Version) : Plain.Decimal :=
+  let decimal : String := match self with
+    | .v2_0 => "2.0"
+    | .v2_5 => "2.5"
+    | .v2_6 => "2.6"
+    | .v2_7 => "2.7"
+  Plain.Decimal.Internal.newUnchecked decimal.toUTF8.toByteSlice
 
 end Version
 
@@ -838,7 +849,7 @@ end Internal.TokenBatch
 /- LEAN: Rust's `SmtVersionRefused`, without the prefix. -/
 /-- Producer refused to switch to a requested version. -/
 structure VersionRefused where
-  deriving BEq, Repr, Inhabited
+  deriving BEq, Hashable, Repr, Inhabited
 
 /--
 A cursor into a batch of tokens, from which elements are consumed sequentially.
@@ -937,7 +948,7 @@ def Internal.single (self : BatchCursor batch) (version : Version) (token : Toke
     bounded := ⟨Nat.le_refl _, Nat.le_succ _, self.lt_len token⟩ }
 
 /-- Whether a token remains to be consumed. -/
-/- LEAN: not in Rust. That a token remains is the producer's law `Produce.HasNext` for the
+/- LEAN: not in Rust. That a token remains is the producer's law `Cursor.HasNext` for the
 cursor, which the consumers take as a proof; Rust's `is_empty` is its negation. -/
 def HasNext (self : BatchCursor batch) : Prop :=
   self.nextIndex < self.stop
@@ -963,7 +974,7 @@ def Internal.Follows (self origin : BatchCursor batch) : Prop :=
 Whether `self` comes from `origin` through the consumer's operations, with at
 least one more token consumed than `origin` has.
 -/
-/- LEAN: not in Rust. That a cursor took a token is the producer's law `Produce.Consumed` for
+/- LEAN: not in Rust. That a cursor took a token is the producer's law `Cursor.Consumed` for
 the cursor, by which the loops of the consumers end. -/
 def Consumed (self origin : BatchCursor batch) : Prop :=
   (Internal.Follows self) origin ∧ origin.nextIndex < self.nextIndex
@@ -1529,7 +1540,7 @@ end Internal
 
 /- LEAN: a class is Lean's trait. The Rust associated types `Result` and `Error` are parameters
 marked `outParam`: the consumer type determines them, as an `impl` determines associated types.
-The method `consume` is in `ConsumeFrom` (`BSmtLib.Token.Produce`), which is stated for a
+The method `consume` is in `ConsumeFrom` (`BSmtLib.Token.Cursor`), which is stated for a
 producer. The Rust blanket `impl SmtConsume for &mut T` has no counterpart, as Lean has no
 references. -/
 /--

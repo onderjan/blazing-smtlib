@@ -6,22 +6,22 @@ public import BSmtLib.Token.Lookahead
 
 public section
 
-/- LEAN: in Rust, `SmtProduce` and `SmtConsumeFrom` are in `token` with the cursor. The producer
+/- LEAN: in Rust, `SmtCursor` and `SmtConsumeFrom` are in `token` with the cursor. The producer
 views its tokens as `SyntaxToken`s, whose module imports `BSmtLib.Token`, so the two classes
 have modules of their own here; the root module `BSmtLib` imports them. -/
 
-namespace BSmtLib.Token.Produce
+namespace BSmtLib.Token.Cursor
 /--
 A producer seen as a cursor of a batch of the library's lexer: the cursor, which is the producer
 itself, and the producer that a cursor after it stands for, which is that cursor itself.
 -/
 /- LEAN: not in Rust. The library's fused script reader reads a batch cursor directly; a
-producer that is one gives itself as one through `Produce.asBatch?`. The proofs that the
+producer that is one gives itself as one through `Cursor.asBatch?`. The proofs that the
 producer's type is the batch cursor's and that `cursor` and `back` are the producer and the
 cursor themselves make sure that no producer can give the reader tokens other than its own;
 being proofs, they take no room in the view. -/
 structure Internal.BatchView (Z : Type) (HasNext : Z → Prop) (Consumed : Z → Z → Prop)
-    (producer : Z) where
+    (z : Z) where
   /-- The tag of the cursor's batch. -/
   tag : BatchTag
   /-- The producer as a cursor. -/
@@ -31,40 +31,40 @@ structure Internal.BatchView (Z : Type) (HasNext : Z → Prop) (Consumed : Z →
   /-- The producer's type is the batch cursor's. -/
   isCursor : Z = BatchCursor tag
   /-- The cursor is the producer itself. -/
-  cursor_eq : cursor = cast isCursor producer
+  cursor_eq : cursor = cast isCursor z
   /-- A cursor after `cursor` stands for itself. -/
   back_eq (next : BatchCursor tag) : back next = cast isCursor.symm next
   /-- The cursor has a token if the producer has. -/
-  hasNext : HasNext producer → cursor.HasNext
+  hasNext : HasNext z → cursor.HasNext
   /-- A cursor that consumed tokens of `cursor` stands for a producer that consumed tokens. -/
-  consumed {next : BatchCursor tag} : next.Consumed cursor → Consumed (back next) producer
+  consumed {next : BatchCursor tag} : next.Consumed cursor → Consumed (back next) z
 
 /-- A producer, ordered by consumption with the relation `Consumed`, which `wf` shows to be
 well-founded: a loop over its tokens descends by it. -/
 structure Internal.Draining {Z : Type} (Consumed : Z → Z → Prop) (wf : WellFounded Consumed) where
-  producer : Z
+  cursor : Z
 
 instance {Z : Type} {Consumed : Z → Z → Prop} {wf : WellFounded Consumed} :
     WellFoundedRelation (Internal.Draining Consumed wf) :=
-  invImage Internal.Draining.producer ⟨Consumed, wf⟩
+  invImage Internal.Draining.cursor ⟨Consumed, wf⟩
 
 /--
 Consumes the tokens of `producer` with `next?` until it gives none: the default of
-`Produce.consumeAll`, over the producer's operations and laws. The producer it leaves has no
+`Cursor.consumeAll`, over the producer's operations and laws. The producer it leaves has no
 token left, and is `producer` itself or comes from it by consuming tokens.
 -/
 def Internal.drain {Z T : Type} {HasNext : Z → Prop} {Consumed : Z → Z → Prop}
-    (next? : (producer : Z) → Option (T × { next : Z // Consumed next producer }))
-    (isSome : ∀ {producer : Z}, HasNext producer → (next? producer).isSome)
+    (next? : (cursor : Z) → Option (T × { next : Z // Consumed next cursor }))
+    (isSome : ∀ {cursor : Z}, HasNext cursor → (next? cursor).isSome)
     (trans : ∀ {a b c : Z}, Consumed a b → Consumed b c → Consumed a c)
-    (wf : WellFounded Consumed) (producer : Z) :
-    { next : Z // ¬ HasNext next ∧ (next = producer ∨ Consumed next producer) } :=
-  match h : next? producer with
-  | none => ⟨producer, fun hn => by simpa [h] using isSome hn, .inl rfl⟩
+    (wf : WellFounded Consumed) (cursor : Z) :
+    { next : Z // ¬ HasNext next ∧ (next = cursor ∨ Consumed next cursor) } :=
+  match h : next? cursor with
+  | none => ⟨cursor, fun hn => by simpa [h] using isSome hn, .inl rfl⟩
   | some (_, ⟨next, consumed⟩) =>
     let ⟨last, empty, after⟩ := drain next? isSome trans wf next
     ⟨last, empty, .inr (after.elim (fun e => e ▸ consumed) (fun d => trans d consumed))⟩
-termination_by (⟨producer⟩ : Internal.Draining Consumed wf)
+termination_by (⟨cursor⟩ : Internal.Draining Consumed wf)
 decreasing_by exact consumed
 
 /- LEAN: a class is Lean's trait; the Rust associated types `Token` and `Lookahead` are fields,
@@ -75,7 +75,7 @@ fields with defaults: `isEmpty`, with the law that it is true exactly if no toke
 `consumeAll`, with the proof that it leaves no token, which comes after the laws its default
 needs. -/
 /-- A sequential producer of tokens. -/
-class _root_.BSmtLib.Token.Produce (Z : Type) where
+class _root_.BSmtLib.Token.Cursor (Z : Type) where
   /--
   The user type of the token.
 
@@ -87,7 +87,7 @@ class _root_.BSmtLib.Token.Produce (Z : Type) where
   /-- Whether a token remains to be consumed. -/
   HasNext : Z → Prop
   /-- Whether a token remains to be consumed, decided. -/
-  decideHasNext : (producer : Z) → Decidable (HasNext producer)
+  decideHasNext : (cursor : Z) → Decidable (HasNext cursor)
   /--
   Whether the first producer comes from the second one by consuming at least one more token.
   -/
@@ -100,7 +100,7 @@ class _root_.BSmtLib.Token.Produce (Z : Type) where
   -/
   peek? : Z → Option Token
   /-- Consumes the next token (if any). -/
-  next? : (producer : Z) → Option (Token × { next : Z // Consumed next producer })
+  next? : (cursor : Z) → Option (Token × { next : Z // Consumed next cursor })
   /- LEAN: Rust's default is `peek().is_none()`. Lean's `peek?` has no law that ties it to the
   tokens that remain, so the default decides `HasNext`, which `next?_isSome` ties to `next?`;
   `isEmpty_iff` is the law of a producer that gives its own. -/
@@ -109,7 +109,7 @@ class _root_.BSmtLib.Token.Produce (Z : Type) where
 
   This must be true exactly if `peek?` or `next?` would produce `none`.
   -/
-  isEmpty : Z → Bool := fun producer => !@decide (HasNext producer) (decideHasNext producer)
+  isEmpty : Z → Bool := fun cursor => !@decide (HasNext cursor) (decideHasNext cursor)
   /-- The lookahead window of `attempt`. -/
   Lookahead : Type := Unit
   /-- The window takes tokens of the producer's type. -/
@@ -129,11 +129,11 @@ class _root_.BSmtLib.Token.Produce (Z : Type) where
   Use standard `next?` processing unless
   absolutely necessary and supported by measurements.
   -/
-  attempt {α : Type} : (producer : Z) →
+  attempt {α : Type} : (cursor : Z) →
     ((window : Lookahead) →
       Option (α × { next : Lookahead //
         _root_.BSmtLib.Token.Lookahead.Consumed (T := Token) next window })) →
-    Option (α × { next : Z // Consumed next producer }) := fun _ _ => none
+    Option (α × { next : Z // Consumed next cursor }) := fun _ _ => none
   /--
   The SMT-LIB version that applies for currently consumed tokens.
 
@@ -173,40 +173,40 @@ class _root_.BSmtLib.Token.Produce (Z : Type) where
 
   Leave it at its default, `none`.
   -/
-  asBatch? : (producer : Z) → Option (Internal.BatchView Z HasNext Consumed producer) :=
+  asBatch? : (cursor : Z) → Option (Internal.BatchView Z HasNext Consumed cursor) :=
     fun _ => none
   /- LEAN: not in Rust. The facts that a consumer generic in its producer needs to take a token
   of a producer that has one, to give back the proof that it consumed a token after it took
   more or acted on the producer, and to take tokens until none remains. Rust states all but the
   last in words, and needs no proof that a loop ends. -/
   /-- A producer that has a token gives it. -/
-  next?_isSome {producer : Z} : HasNext producer → (next? producer).isSome
+  next?_isSome {cursor : Z} : HasNext cursor → (next? cursor).isSome
   /-- Consuming more tokens after some were consumed consumes those too. -/
   consumed_trans {a b c : Z} : Consumed a b → Consumed b c → Consumed a c
   /-- A producer cannot consume tokens without end. -/
   consumed_wf : WellFounded Consumed
   /-- A switch of the version keeps the tokens consumed. -/
-  setVersion_consumed {producer origin next : Z} {version : Version} :
-    Consumed producer origin → setVersion producer version = .ok next → Consumed next origin
+  setVersion_consumed {cursor origin next : Z} {version : Version} :
+    Consumed cursor origin → setVersion cursor version = .ok next → Consumed next origin
   /-- Discarding keeps the tokens consumed. -/
-  discardRest_consumed {producer origin : Z} :
-    Consumed producer origin → Consumed (discardRest producer) origin
+  discardRest_consumed {cursor origin : Z} :
+    Consumed cursor origin → Consumed (discardRest cursor) origin
   /- LEAN: not in Rust, which states it in words: the law of `isEmpty`. -/
   /-- Whether the producer has no tokens left is whether no token remains. -/
-  isEmpty_iff (producer : Z) : isEmpty producer = true ↔ ¬ HasNext producer := by
-    intro producer; simp
+  isEmpty_iff (cursor : Z) : isEmpty cursor = true ↔ ¬ HasNext cursor := by
+    intro cursor; simp
   /- LEAN: Rust's `consume_all(&mut self)`, which returns the updated producer with the proof that
   no token is left, and that it consumed the tokens if there were any. Its default, Rust's loop
   over `next`, needs the laws above, so it comes after them. -/
   /-- Consumes all tokens the producer has left to hand over. -/
-  consumeAll : (producer : Z) →
-      { next : Z // ¬ HasNext next ∧ (HasNext producer → Consumed next producer) } :=
-    fun producer =>
+  consumeAll : (cursor : Z) →
+      { next : Z // ¬ HasNext next ∧ (HasNext cursor → Consumed next cursor) } :=
+    fun cursor =>
       let ⟨next, empty, after⟩ :=
-        Internal.drain next? next?_isSome consumed_trans consumed_wf producer
+        Internal.drain next? next?_isSome consumed_trans consumed_wf cursor
       ⟨next, empty, fun has => after.elim (fun e => absurd (e ▸ has) empty) id⟩
 
-instance {batch : BatchTag} : Produce (BatchCursor batch) where
+instance {batch : BatchTag} : Cursor (BatchCursor batch) where
   Token := BSmtLib.Token batch
   «syntax» := BatchCursor.«syntax»
   HasNext := BatchCursor.HasNext
@@ -235,4 +235,4 @@ instance {batch : BatchTag} : Produce (BatchCursor batch) where
   consumeAll cursor :=
     ⟨cursor.consumeAll, cursor.not_hasNext_consumeAll, BatchCursor.consumeAll_consumed⟩
 
-end BSmtLib.Token.Produce
+end BSmtLib.Token.Cursor

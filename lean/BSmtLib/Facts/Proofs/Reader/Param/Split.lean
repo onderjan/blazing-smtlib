@@ -42,7 +42,7 @@ section Loops
 open BSmtLib.Parser.Internal (After ParseByToken takeOne rest parseByToken)
 
 variable {H P R E : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [ParseByToken P H m E R]
-variable {Z : Type} [Token.Produce Z]
+variable {Z : Type} [Token.Cursor Z]
 
 /-- What the parser did with a token, read as the loop that goes on with its cursor reads it: a
 parser that stopped going on goes on. -/
@@ -51,8 +51,8 @@ def fixAfter : After P R E → After P R E
   | after => after
 
 /-- The loop's token is that of the loop that stops, a stop going on read as going on. -/
-theorem takeOne_eq (parser : P) (cursor : Z) (token : Token.Produce.Token Z) (next : Z)
-    (consumed : Token.Produce.Consumed next cursor) :
+theorem takeOne_eq (parser : P) (cursor : Z) (token : Token.Cursor.Token Z) (next : Z)
+    (consumed : Token.Cursor.Consumed next cursor) :
     takeOne (m := m) parser cursor token next consumed =
       (fun x => (fixAfter x.1, x.2)) <$> Stop.takeOne parser cursor token next consumed := by
   unfold takeOne Stop.takeOne
@@ -95,22 +95,22 @@ theorem takeOne_eq (parser : P) (cursor : Z) (token : Token.Produce.Token Z) (ne
 /-- How the loop goes on after the loop that stops has stopped: on with the cursor if the parser
 went on, else with the answer. -/
 def resume (origin : Z) :
-    Except (ParseError E) (ControlFlow R) × P × { z : Z // Token.Produce.Consumed z origin } →
+    Except (ParseError E) (ControlFlow R) × P × { z : Z // Token.Cursor.Consumed z origin } →
       StateT H m (Except (ParseError E) (ControlFlow R) × P ×
-        { z : Z // Token.Produce.Consumed z origin })
+        { z : Z // Token.Cursor.Consumed z origin })
   | (.ok .continue, parser, ⟨cursor, consumed⟩) => rest origin parser cursor consumed
   | x => pure x
 
 /-- The loop over single tokens is the loop that stops, then itself from where that stopped. -/
 theorem rest_eq (hno : NoHandOver P) (origin : Z) :
-    ∀ (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin),
+    ∀ (parser : P) (cursor : Z) (consumed : Token.Cursor.Consumed cursor origin),
       rest (m := m) origin parser cursor consumed =
         Stop.rest origin parser cursor consumed >>= resume origin := by
   intro parser cursor consumed
-  induction cursor using (Token.Produce.consumed_wf (Z := Z)).induction generalizing parser with
+  induction cursor using (Token.Cursor.consumed_wf (Z := Z)).induction generalizing parser with
   | _ cursor ih =>
   rw [rest_of_none consumed (hno _ _), Stop.rest]
-  rcases hn : Token.Produce.next? cursor with _ | ⟨token, ⟨next, step⟩⟩
+  rcases hn : Token.Cursor.next? cursor with _ | ⟨token, ⟨next, step⟩⟩
   · simp only [pure_bind, resume]
     rw [rest_of_none consumed (hno _ _), hn]
   · dsimp only
@@ -131,15 +131,15 @@ theorem rest_eq (hno : NoHandOver P) (origin : Z) :
 
 /-- The loop's values do not depend on where its cursor came from. -/
 theorem rest_origin (hno : NoHandOver P) (o o' : Z) :
-    ∀ (parser : P) (cursor : Z) (hc : Token.Produce.Consumed cursor o)
-      (hc' : Token.Produce.Consumed cursor o'),
+    ∀ (parser : P) (cursor : Z) (hc : Token.Cursor.Consumed cursor o)
+      (hc' : Token.Cursor.Consumed cursor o'),
       (fun x => (x.1, x.2.1, x.2.2.val)) <$> rest (m := m) o parser cursor hc =
         (fun x => (x.1, x.2.1, x.2.2.val)) <$> rest (m := m) o' parser cursor hc' := by
   intro parser cursor hc hc'
-  induction cursor using (Token.Produce.consumed_wf (Z := Z)).induction generalizing parser with
+  induction cursor using (Token.Cursor.consumed_wf (Z := Z)).induction generalizing parser with
   | _ cursor ih =>
   rw [rest_of_none hc (hno _ _), rest_of_none hc' (hno _ _)]
-  rcases hn : Token.Produce.next? cursor with _ | ⟨token, ⟨next, step⟩⟩
+  rcases hn : Token.Cursor.next? cursor with _ | ⟨token, ⟨next, step⟩⟩
   · simp
   · dsimp only
     simp only [map_bind]
@@ -169,7 +169,7 @@ theorem id_map {α β : Type} (x : α) (f : α → β) : (f <$> (x : Id α) : Id
 theorem id_pure {α : Type} (x : α) : (pure x : Id α) = x := rfl
 
 theorem syntax_alike {x y : BatchCursor b} (h : Alike x y) (t : BSmtLib.Token b) :
-    Token.Produce.«syntax» x t = Token.Produce.«syntax» y t := by
+    Token.Cursor.«syntax» x t = Token.Cursor.«syntax» y t := by
   show BatchCursor.«syntax» x t = BatchCursor.«syntax» y t
   simp only [BatchCursor.«syntax», Token.SyntaxToken.fromToken, h.category, h.content, h.version]
 
@@ -181,14 +181,14 @@ theorem takeOne_alike (parser : P) {c c' n n' : BatchCursor b} (t : BSmtLib.Toke
       Alike ((takeOne parser c t n k).run h).1.2.val ((takeOne parser c' t n' k').run h).1.2.val ∧
       ((takeOne parser c t n k).run h).2 = ((takeOne parser c' t n' k').run h).2 := by
   have hs := syntax_alike hn t
-  have hv : Token.Produce.version n = Token.Produce.version n' := hn.version
+  have hv : Token.Cursor.version n = Token.Cursor.version n' := hn.version
   unfold takeOne
   simp only [StateT.run_bind]
   rw [hs, hv]
   generalize (ExceptT.run (do
-      ParseByToken.arrive parser (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» n' t))
-      ParseByToken.step (Token.Produce.version n') parser
-        (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» n' t)))).run h = r
+      ParseByToken.arrive parser (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» n' t))
+      ParseByToken.step (Token.Cursor.version n') parser
+        (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» n' t)))).run h = r
   obtain ⟨r, h₁⟩ := r
   rcases r with e | flow
   · exact ⟨rfl, hn, rfl⟩
@@ -199,11 +199,11 @@ theorem takeOne_alike (parser : P) {c c' n n' : BatchCursor b} (t : BSmtLib.Toke
       simp only [id_bind]
       split
       · rename_i a e1
-        exact absurd e1 (by simp [Token.Produce.setVersion, BatchCursor.setVersion])
+        exact absurd e1 (by simp [Token.Cursor.setVersion, BatchCursor.setVersion])
       · rename_i s1 e1
         split
         · rename_i a e2
-          exact absurd e2 (by simp [Token.Produce.setVersion, BatchCursor.setVersion])
+          exact absurd e2 (by simp [Token.Cursor.setVersion, BatchCursor.setVersion])
         · rename_i s2 e2
           have hal : Alike s1 s2 := hn.setVersion declared e1 e2
           simp only [StateT.run_bind]
@@ -221,11 +221,11 @@ theorem takeOne_alike (parser : P) {c c' n n' : BatchCursor b} (t : BSmtLib.Toke
       · exact ⟨rfl, hn.discardRest, rfl⟩
 
 theorem next?_some {x : BatchCursor b} (hx : x.HasNext) :
-    Token.Produce.next? x = some (x.next hx) := by
+    Token.Cursor.next? x = some (x.next hx) := by
   show BatchCursor.next? x = _
   simp [BatchCursor.next?, hx]
 
-theorem next?_none {x : BatchCursor b} (hx : ¬ x.HasNext) : Token.Produce.next? x = none := by
+theorem next?_none {x : BatchCursor b} (hx : ¬ x.HasNext) : Token.Cursor.next? x = none := by
   show BatchCursor.next? x = _
   simp [BatchCursor.next?, hx]
 
@@ -422,9 +422,9 @@ theorem takeOneS_fresh (parser : P) {c n : BatchCursor b} (t : BSmtLib.Token b)
   unfold Stop.takeOne
   simp only [StateT.run_bind]
   generalize (ExceptT.run (do
-      ParseByToken.arrive parser (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» n t))
-      ParseByToken.step (Token.Produce.version n) parser
-        (Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» n t)))).run h = r
+      ParseByToken.arrive parser (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» n t))
+      ParseByToken.step (Token.Cursor.version n) parser
+        (Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» n t)))).run h = r
   obtain ⟨r, h₁⟩ := r
   rcases r with e | flow
   · exact fun _ => hn
@@ -548,7 +548,7 @@ theorem outN_alike {c c' : BatchCursor b} (hal : Alike c c') (h : c.HasNext) (h'
     (A : ParseAdapter H P) : AlikeOut (outN c h A) (outN c' h' A) := by
   rw [outN_eq hp, outN_eq hp]
   have ht : Stop.told A c = Stop.told A c' := by
-    unfold Stop.told; rw [show Token.Produce.version c = Token.Produce.version c' from hal.version]
+    unfold Stop.told; rw [show Token.Cursor.version c = Token.Cursor.version c' from hal.version]
   rw [ht]
   obtain ⟨e1, e2, e3, e4⟩ :=
     parseByToken_alike hno A.parser (ParseAdapter.Internal.parseState A) hal (Stop.told A c')

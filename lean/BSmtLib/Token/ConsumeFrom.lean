@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Token.Produce
+public import BSmtLib.Token.Cursor
 
 public section
 
@@ -12,7 +12,7 @@ The class of the consumers that take the tokens of a producer (`SmtConsumeFrom`)
 
 namespace BSmtLib.Token.ConsumeFrom
 
-/- LEAN: Rust's `SmtConsumeFrom<Z: SmtProduce>: SmtConsume`. The supertrait is the instance
+/- LEAN: Rust's `SmtConsumeFrom<Z: SmtCursor>: SmtConsume`. The supertrait is the instance
 argument `Consume H R E`, which fixes the result and the error; the monad `m` is a parameter
 marked `outParam`, as the consumer type determines it. A lexer requires the class for the
 cursors of all its batches, as Rust requires `for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>`. The
@@ -21,7 +21,7 @@ references. -/
 /-- A sequential consumer of tokens for given producers. -/
 class _root_.BSmtLib.Token.ConsumeFrom (H Z : Type) (m : outParam (Type → Type))
     {R E : outParam Type} [Consume H R E]
-    [Produce Z] where
+    [Cursor Z] where
   /- LEAN: Rust's `consume(&mut self, cursor: &mut Z)`. The consumer's state is the state of the
   monad, and the producer is handed over with the proof that it has a token and given back with
   the proof that the consumer consumed at least one token of it: the two obligations that Rust
@@ -46,8 +46,8 @@ class _root_.BSmtLib.Token.ConsumeFrom (H Z : Type) (m : outParam (Type → Type
   If the consumer returns an error, it has failed at the last
   consumed token. The state of the consumer is unspecified.
   -/
-  consume : (producer : Z) → Produce.HasNext producer →
-    StateT H m (Except E (ControlFlow R) × { next : Z // Produce.Consumed next producer })
+  consume : (cursor : Z) → Cursor.HasNext cursor →
+    StateT H m (Except E (ControlFlow R) × { next : Z // Cursor.Consumed next cursor })
 
 
 end BSmtLib.Token.ConsumeFrom

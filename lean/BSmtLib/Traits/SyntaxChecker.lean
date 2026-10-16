@@ -44,7 +44,7 @@ instance : Handler SyntaxChecker Id where
 instance : CommandHandler SyntaxChecker Id where
   NonstandardParser := Empty
   -- reject nonstandard command
-  nonstandardCommand name := throw ⟨name.intoOwned⟩
+  nonstandardCommand name := throw (NonstandardCommandError.new name.intoOwned)
   commandAssert _ := pure ()
   commandCheckSat := pure ()
   commandCheckSatAssuming _ := pure ()

@@ -96,12 +96,29 @@ class Handler (H : Type) (m : outParam (Type → Type)) where
   /-- The end of a `match`: its scrutinee and its cases, at its `)`. -/
   endMatch : Term → MatchCases Term → ExceptT Error (StateT H m) Term
 
-/- LEAN: Rust's `NonstandardCommandError(pub SmtSymbolBuf)`, a tuple struct, whose one field is
-named here. Rust derives `Debug` and `Clone`; a Lean value is copied freely. -/
+/- LEAN: Rust's `SmtNonstandardCommandError`, a tuple struct with a private field, which is named
+here. The constructor is private, as Rust's field is; the name is readable as `error.name`,
+replacing the getters `name` and `into_name`. Rust derives `Debug` and `Clone`; a Lean value is
+copied freely. -/
 /-- The error of `SyntaxChecker`: the name of the non-standard command it rejected. -/
 structure NonstandardCommandError where
+  private mk ::
   /-- The command's name. -/
   name : SymbolBuf
+  deriving Repr
+
+/-- The error of the non-standard command of the name. -/
+def NonstandardCommandError.new (name : SymbolBuf) : NonstandardCommandError :=
+  { name }
+
+/-- Error of a `PartialCommandHandler`. -/
+inductive PartialCommandError (E : Type) where
+  /-- The handler does not implement the standard command. -/
+  | unsupported (command : Token.Reserved.CommandNameReserved)
+  /-- The handler does not implement the nonstandard command with the given name. -/
+  | unsupportedNonstandard (name : SymbolBuf)
+  /-- The handler failed. -/
+  | handler (error : E)
   deriving Repr
 
 end BSmtLib.Traits

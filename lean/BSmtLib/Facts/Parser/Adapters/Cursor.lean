@@ -7,7 +7,7 @@ public import BSmtLib.Facts.Parser.Adapters.Run
 /-!
 # A cursor against a list of tokens
 
-A parser of the library parses a cursor, an instance of `Token.Produce`; what it does is stated
+A parser of the library parses a cursor, an instance of `Token.Cursor`; what it does is stated
 against the tokens the cursor gives, as the parser takes them (`Parser.Internal.Input`).
 
 - `Takes version cursor tokens next`: taking the tokens one by one from `cursor`, each in the
@@ -25,11 +25,11 @@ spec.
 
 namespace BSmtLib.Facts.Parser.Adapters.Cursor
 
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 
 section
 
-variable {Z : Type} [Produce Z]
+variable {Z : Type} [Cursor Z]
 
 /--
 `Takes version cursor tokens next`: the cursor has the tokens first, each viewed in the version
@@ -37,16 +37,16 @@ in force after it is taken, which is `version`, and taking them leaves `next`.
 -/
 inductive Takes (version : Token.Version) : Z → List Parser.Internal.Input → Z → Prop where
   | nil (cursor : Z) : Takes version cursor [] cursor
-  | cons {cursor after next : Z} {token : Produce.Token Z} {consumed : Produce.Consumed after cursor}
+  | cons {cursor after next : Z} {token : Cursor.Token Z} {consumed : Cursor.Consumed after cursor}
       {tokens : List Parser.Internal.Input} :
-      Produce.HasNext cursor → Produce.next? cursor = some (token, ⟨after, consumed⟩) →
-      Produce.version after = version → Takes version after tokens next →
-      Takes version cursor (Parser.Internal.Input.ofSyntax (Produce.syntax after token) :: tokens)
+      Cursor.HasNext cursor → Cursor.next? cursor = some (token, ⟨after, consumed⟩) →
+      Cursor.version after = version → Takes version after tokens next →
+      Takes version cursor (Parser.Internal.Input.ofSyntax (Cursor.syntax after token) :: tokens)
         next
 
 /-- The cursor gives exactly the tokens, each in the version. -/
 def Reads (version : Token.Version) (cursor : Z) (tokens : List Parser.Internal.Input) : Prop :=
-  ∃ last, Takes version cursor tokens last ∧ Produce.next? last = none
+  ∃ last, Takes version cursor tokens last ∧ Cursor.next? last = none
 
 end
 

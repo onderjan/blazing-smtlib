@@ -153,28 +153,28 @@ def AfterB : Internal.After (ScriptParser H) Unit (Handler.Error H) →
 
 section
 
-variable {Z : Type} [Token.Produce Z]
+variable {Z : Type} [Token.Cursor Z]
 
 theorem takeOne_blank [NoFails H] (p : ScriptParser H) (cursor : Z)
-    (token : Token.Produce.Token Z) (next : Z) (consumed : Token.Produce.Consumed next cursor)
+    (token : Token.Cursor.Token Z) (next : Z) (consumed : Token.Cursor.Consumed next cursor)
     (h : H) :
     AfterB ((Stop.takeOne (m := Id) p cursor token next consumed).run h).1.1
         ((Stop.takeOne (m := Id) (blank p) cursor token next consumed).run {}).1.1 ∧
       ((Stop.takeOne (m := Id) p cursor token next consumed).run h).1.2.val =
         ((Stop.takeOne (m := Id) (blank p) cursor token next consumed).run {}).1.2.val := by
-  have hb := block_blank (H := H) (Token.Produce.version next) p
-    (Internal.Input.ofSyntax (Token.Produce.«syntax» next token)) h
+  have hb := block_blank (H := H) (Token.Cursor.version next) p
+    (Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)) h
   unfold Stop.takeOne
   simp only [StateT.run_bind, id_bind]
   generalize hB₁ : ((Internal.ParseByToken.arrive p
-      (Internal.Input.ofSyntax (Token.Produce.«syntax» next token)) >>= fun _ =>
-    Internal.ParseByToken.step (Token.Produce.version next) p
-      (Internal.Input.ofSyntax (Token.Produce.«syntax» next token)) : PM H _).run.run h) = B₁
+      (Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)) >>= fun _ =>
+    Internal.ParseByToken.step (Token.Cursor.version next) p
+      (Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)) : PM H _).run.run h) = B₁
     at hb
   generalize hB₂ : ((Internal.ParseByToken.arrive (blank p)
-      (Internal.Input.ofSyntax (Token.Produce.«syntax» next token)) >>= fun _ =>
-    Internal.ParseByToken.step (Token.Produce.version next) (blank p)
-      (Internal.Input.ofSyntax (Token.Produce.«syntax» next token)) : PM Shell _).run.run {}) = B₂
+      (Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)) >>= fun _ =>
+    Internal.ParseByToken.step (Token.Cursor.version next) (blank p)
+      (Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)) : PM Shell _).run.run {}) = B₂
     at hb
   obtain ⟨b₁, h₁⟩ := B₁
   obtain ⟨b₂, h₂⟩ := B₂
@@ -225,13 +225,13 @@ open BSmtLib.Facts.Proofs.Reader.Param (Stop.consume Stop.finish Stop.told)
 variable {b : Token.BatchTag}
 
 theorem next?_hasNext (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
-    Token.Produce.next? cursor = some (cursor.next h) := by
+    Token.Cursor.next? cursor = some (cursor.next h) := by
   show Token.BatchCursor.next? cursor = _
   unfold Token.BatchCursor.next?
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
 theorem next?_not (cursor : Token.BatchCursor b) (h : ¬ cursor.HasNext) :
-    Token.Produce.next? cursor = none := by
+    Token.Cursor.next? cursor = none := by
   show Token.BatchCursor.next? cursor = _
   unfold Token.BatchCursor.next?
   rw [dite_eq_right_of_eq_false (eq_false h)]
@@ -240,7 +240,7 @@ theorem next?_not (cursor : Token.BatchCursor b) (h : ¬ cursor.HasNext) :
 cursor, and blanked parsers. -/
 theorem rest_blank [NoFails H] (origin : Token.BatchCursor b) :
     ∀ (n : Nat) (p : ScriptParser H) (cursor : Token.BatchCursor b)
-      (consumed : Token.Produce.Consumed cursor origin) (h : H), remaining cursor < n →
+      (consumed : Token.Cursor.Consumed cursor origin) (h : H), remaining cursor < n →
       ((Stop.rest (m := Id) origin (blank p) cursor consumed).run {}).1.1 =
           blankAnswer ((Stop.rest (m := Id) origin p cursor consumed).run h).1.1 ∧
         ((Stop.rest (m := Id) origin (blank p) cursor consumed).run {}).1.2.1 =

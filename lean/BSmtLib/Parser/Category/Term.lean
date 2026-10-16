@@ -185,8 +185,8 @@ def termOpened (self : TermStateOf H) (token : Internal.Input) :
     | .exclamationMark => enter .annotation
     | .underscore => into (.qualIdent (.indexed .afterUnderscore))
     | .as => into (.qualIdent (.qualifiedIdent .start))
-    | _ => syntaxError .expectedOperator
-  | _ => syntaxError .expectedOperator
+    | _ => syntaxError (.expected #[.operator])
+  | _ => syntaxError (.expected #[.operator])
 
 /--
 A step of the term parser.
@@ -207,17 +207,17 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     | .parenClose =>
       match self.levels with
       | .application function sort arguments :: outer =>
-        if arguments.isEmpty then syntaxError .emptyTermApplication
+        if arguments.isEmpty then syntaxError (.empty .termApplication)
         let term ← call (Handler.handleTerm (.application function sort (.new arguments)))
         termComplete outer term
-      | _ => syntaxError .expectedTerm
+      | _ => syntaxError (.expected #[.term])
     | .symbol symbol =>
       let term ← call (Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none))
       termComplete self.levels term
     | .constant constant =>
       let term ← call (Handler.handleTerm (.specialConstant constant))
       termComplete self.levels term
-    | _ => syntaxError .expectedTerm
+    | _ => syntaxError (.expected #[.term])
   | .opened => termOpened self token
   | .qualIdent state =>
     match ← qualIdentStep version state token with
@@ -237,10 +237,10 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     match token with
     | .parenOpen => into (.letBindingSymbol bindings)
     | .parenClose =>
-      if bindings.isEmpty then syntaxError .emptyLetBindings
+      if bindings.isEmpty then syntaxError (.empty .letBindings)
       let scope ← call (Handler.startLet (Multiple.Named.Internal.new bindings))
       return .more { mode := .start, levels := .binder .let scope :: self.levels }
-    | _ => syntaxError (.expectedToken #[.parenOpen, .parenClose])
+    | _ => syntaxError (.expected #[.token .parenOpen, .token .parenClose])
   | .letBindingSymbol bindings =>
     let symbol ← expectSymbol token
     return .more { mode := .start, levels := .letBinding bindings symbol :: self.levels }
@@ -253,8 +253,8 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     | .done variables =>
       if variables.isEmpty then
         syntaxError (match binder with
-          | .lambda => .emptyLambdaBindings
-          | _ => .emptyQuantifierBindings)
+          | .lambda => (.empty .lambdaBindings)
+          | _ => (.empty .quantifierBindings))
       let scope ← startBinder binder variables
       return .more { mode := .start, levels := .binder (.sorted binder) scope :: self.levels }
   | .binderClose kind scope body =>
@@ -268,9 +268,9 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     match token with
     | .parenOpen => into (.matchPattern scrutinee cases .start)
     | .parenClose =>
-      if cases.isEmpty then syntaxError .emptyMatchCases
+      if cases.isEmpty then syntaxError (.empty .matchCases)
       into (.matchClose scrutinee cases)
-    | _ => syntaxError (.expectedToken #[.parenOpen, .parenClose])
+    | _ => syntaxError (.expected #[.token .parenOpen, .token .parenClose])
   | .matchPattern scrutinee cases state =>
     match ← state.step version token with
     | .more state => into (.matchPattern scrutinee cases state)
@@ -290,7 +290,7 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     match ← attributeStep false version state token with
     | .more state => into (.annotating term state)
     | .done attributes =>
-      if attributes.isEmpty then syntaxError .emptyAnnotation
+      if attributes.isEmpty then syntaxError (.empty .annotation)
       let annotated ← call (Handler.annotateTerm term (.new attributes))
       termComplete self.levels annotated
 

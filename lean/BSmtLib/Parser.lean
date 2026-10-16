@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Traits
 public import BSmtLib.Token.SyntaxToken
-public import BSmtLib.Token.Produce
+public import BSmtLib.Token.Cursor
 
 public section
 
@@ -28,56 +28,88 @@ open BSmtLib.Plain (Keyword Symbol)
 open BSmtLib.Token (TokenCategory Version SyntaxToken)
 open BSmtLib.Token.Reserved (GeneralReserved)
 
+
+/-- An item that a parser expected, in `SyntaxErrorKind.expected`. -/
+inductive SyntaxExpected where
+  /-- A token of the category. -/
+  | token (category : TokenCategory)
+  /-- The reserved word. -/
+  | reserved (word : Token.Reserved)
+  /-- A symbol, simple or quoted. -/
+  | symbol
+  /-- An index of an identifier: a numeral or a symbol. -/
+  | index
+  | ident
+  | sort
+  | term
+  | sExpr
+  | attribute
+  /-- What follows the opening parenthesis of a compound term. -/
+  | operator
+  /-- The name of a command. -/
+  | commandName
+  /-- A propositional literal: a symbol or its negation. -/
+  | propositionalLiteral
+  deriving BEq, Hashable, Repr
+
+/-- A list that must not be empty, in `SyntaxErrorKind.empty`. -/
+inductive NonEmptyList where
+  | identIndices
+  | sortApplication
+  | termApplication
+  | letBindings
+  | annotation
+  | quantifierBindings
+  | lambdaBindings
+  | functionSignatures
+  | datatypeIntroductions
+  | datatypeParameters
+  | datatypeConstructors
+  | patternArguments
+  | matchCases
+  | getValueTerms
+  deriving BEq, Hashable, Repr
+
+/-- An item of which fewer arrived than were announced, in `SyntaxErrorKind.missing`. -/
+inductive MissingItem where
+  /-- A body of a function of `define-funs-rec`. -/
+  | functionBody
+  /-- A datatype of `declare-datatypes`. -/
+  | datatype
+  deriving BEq, Hashable, Repr
+
 /-- What a syntax error expected or found wrong. -/
-/- LEAN: Rust's `SmtSyntaxErrorKind`, with the same variants. -/
+/- LEAN: Rust's `SmtSyntaxErrorKind`. Rust's `Expected` holds a static slice; here it is an
+array, which the library builds from literals. -/
 inductive SyntaxErrorKind where
-  | expectedToken (categories : Array TokenCategory)
-  | expectedSymbol
-  | expectedUnderscore
-  | expectedSymbolOrUnderscore
-  | expectedSymbolOrParenOpen
-  | expectedSymbolUnderscoreOrParenOpen
-  | expectedUnderscoreOrAs
-  | emptyIdentIndices
-  | emptySortApplication
-  | emptyTermApplication
-  | emptyLetBindings
-  | emptyAnnotation
-  | emptyQuantifierBindings
-  | emptyLambdaBindings
-  | expectedIndexOrCloseParen
-  | expectedOperator
-  | expectedSExpr
-  | expectedIdent
-  | expectedSort
-  | expectedSortInner
-  | expectedTerm
-  | expectedAttribute
-  | expectedCommand
-  | expectedCommandName
-  | expectedDatatype
-  | expectedDatatypeKind
-  | expectedFunctionBody
-  | expectedPropositionalLiteral
-  | emptyFunctionSignatures
-  | emptyDatatypeIntroductions
-  | emptyDatatypeParameters
-  | emptyDatatypeConstructors
-  | emptyPatternArguments
-  | emptyMatchCases
-  | emptyGetValueTerms
-  | unsupportedVersion
-  | tooManyVersionDeclarations (limit : Nat)
-  deriving BEq, Repr
+  /-- One of the items was expected here. -/
+  | expected (items : Array SyntaxExpected)
+  /-- A list that must not be empty is empty. -/
+  | empty (list : NonEmptyList)
+  /-- Fewer items arrived than were announced. -/
+  | missing (item : MissingItem)
+  deriving BEq, Hashable, Repr
+
+/-- What is wrong with the version a script declares. -/
+inductive VersionErrorKind where
+  /-- The version is not one that can be switched to. -/
+  | unsupported
+  /-- The script declares its version more times than the limit allows. -/
+  | tooManyDeclarations (limit : Nat)
+  deriving BEq, Hashable, Repr
 
 /--
 The party that failed when a parse failed: the input's syntax, or the handler. The error has no
 location: it is at the last token the parser consumed, which its driver knows.
 -/
 inductive ParseErrorCause (ε : Type) where
+  /-- The tokens do not form the syntax the parser accepts. -/
   | syntax (kind : SyntaxErrorKind)
+  /-- The script declares a version that cannot be used. -/
+  | version (kind : VersionErrorKind)
+  /-- The handler failed. -/
   | handler (error : ε)
-  deriving Repr
+  deriving BEq, Repr
 
 /- LEAN: Rust's `SmtParseError`, which boxes its cause so that parser results stay small. A
 structure of one field is represented by the field, so no box is needed. The constructor is
@@ -88,7 +120,7 @@ structure ParseError (E : Type) where
   private mk ::
   /-- Why the parse failed. -/
   cause : ParseErrorCause E
-  deriving Repr
+  deriving BEq, Repr
 
 /-- The error with the given cause. -/
 @[inline]
@@ -114,6 +146,21 @@ theorem ParseError.Internal.new_inj {E : Type} {cause cause' : ParseErrorCause E
     exact congrArg ParseError.cause h
   · rintro rfl
     rfl
+
+/-- The error of the handler's error. -/
+@[inline]
+def ParseError.handler {E : Type} (error : E) : ParseError E :=
+  ParseError.Internal.new (.handler error)
+
+/-- The syntax error of the kind. -/
+@[inline]
+def ParseError.syntax {E : Type} (kind : SyntaxErrorKind) : ParseError E :=
+  ParseError.Internal.new (.syntax kind)
+
+/-- The version error of the kind. -/
+@[inline]
+def ParseError.version {E : Type} (kind : VersionErrorKind) : ParseError E :=
+  ParseError.Internal.new (.version kind)
 
 /- LEAN: Rust's `SmtParseState` holds the arena and the slots that the standard parsers share,
 all crate-private. The parsers of the port keep their state in themselves, so this one holds
@@ -162,9 +209,9 @@ class Parse (P : Type) (H : Type) (m : outParam (Type → Type)) (E R : outParam
   The parse state holds the resources shared by the parsers of one input; it is given back with
   the parser.
   -/
-  parse {Z : Type} [Token.Produce Z] : P → ParseState H → (cursor : Z) →
+  parse {Z : Type} [Token.Cursor Z] : P → ParseState H → (cursor : Z) →
     StateT H m (Except (ParseError E) (ControlFlow R) × P × ParseState H ×
-      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor })
+      { next : Z // Token.Cursor.HasNext cursor → Token.Cursor.Consumed next cursor })
 
 /- LEAN: Rust's `impl<H: SmtCommandHandler> SmtParse<H> for Infallible`: `Empty` is Lean's type
 without values. It asks only for a `Handler`, so that a `CommandHandler` instance can name it as
@@ -191,6 +238,11 @@ def call {α : Type} (action : ExceptT (Handler.Error H) (StateT H m) α) : PM H
 @[inline]
 def syntaxError {α : Type} (kind : SyntaxErrorKind) : PM H α :=
   throw (.syntax kind)
+
+/-- A version error. -/
+@[inline]
+def versionError {α : Type} (kind : VersionErrorKind) : PM H α :=
+  throw (.version kind)
 
 end
 
@@ -276,32 +328,32 @@ def Input.toSyntax : Input → SyntaxToken
 theorem Input.ofSyntax_toSyntax (token : Input) : Input.ofSyntax token.toSyntax = token := by
   rcases token with _ | _ | (_ | _ | _ | _ | _) | _ | _ | _ | _ | _ <;> rfl
 
-/- LEAN: Rust's `SingleTokenProducer`, with which a parser hands a token it took on to a parser
+/- LEAN: Rust's `SingleTokenCursor`, with which a parser hands a token it took on to a parser
 it holds. A parser stepped by single tokens has the token as an `Input`, so this producer gives
 one; as Rust's, it refuses every switch of the version, and its consumer does not call
 `discardRest` on it (Rust's panics), which here drops the token. -/
 /-- A producer of one token, in a version. -/
-structure InputProducer where
+structure InputCursor where
   /-- The version in force. -/
   version : Version
   /-- The token, if it was not consumed yet. -/
   token : Option Input
 
-instance : Token.Produce InputProducer where
+instance : Token.Cursor InputCursor where
   Token := Input
   «syntax» _ token := token.toSyntax
-  HasNext producer := producer.token.isSome
+  HasNext cursor := cursor.token.isSome
   decideHasNext _ := inferInstance
-  Consumed next producer := producer.token.isSome ∧ next.token = none
-  peek? producer := producer.token
+  Consumed next cursor := cursor.token.isSome ∧ next.token = none
+  peek? cursor := cursor.token
   next?
     | ⟨version, some token⟩ => some (token, ⟨⟨version, none⟩, ⟨rfl, rfl⟩⟩)
     | ⟨_, none⟩ => none
-  version producer := producer.version
+  version cursor := cursor.version
   setVersion _ _ := .error ⟨⟩
-  discardRest producer := { producer with token := none }
-  next?_isSome {producer} h := by
-    rcases producer with ⟨_, _ | _⟩
+  discardRest cursor := { cursor with token := none }
+  next?_isSome {cursor} h := by
+    rcases cursor with ⟨_, _ | _⟩
     · exact absurd h (by simp)
     · rfl
   consumed_trans hab hbc := ⟨hbc.1, hab.2⟩
@@ -322,7 +374,7 @@ inductive Flow (μ : Type → Type) (σ ρ : Type) where
   /-- The parser finished, with its result. -/
   | done (result : ρ)
   /-- Switch the cursor to the version, then go on as `resume` says. The cursor may refuse,
-  which fails the parse with `unsupportedVersion`. -/
+  which fails the parse with `VersionErrorKind.unsupported`. -/
   | switchVersion (version : Version) (resume : μ (Step σ ρ))
   /-- Make the cursor discard the rest of its input, up to the end of the input, then go on as
   `resume` says. -/
@@ -358,9 +410,9 @@ class ParseByToken (P : Type) (H : outParam Type) (m : outParam (Type → Type))
   one. It gives back what the parser does after, and the cursor the held parser gave back, which
   took a token if the cursor had one.
   -/
-  handOver? {Z : Type} [Token.Produce Z] : P → (cursor : Z) →
+  handOver? {Z : Type} [Token.Cursor Z] : P → (cursor : Z) →
     Option (StateT H m (After P R E ×
-      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor })) :=
+      { next : Z // Token.Cursor.HasNext cursor → Token.Cursor.Consumed next cursor })) :=
     fun _ _ => none
 
 /-- What the parser's step asks after the cursor did what the step asked. A parser that
@@ -372,7 +424,7 @@ def resumed {P R E : Type} (fresh : P) : Step P R → After P R E
 section
 
 variable {H P R E : Type} {m : Type → Type} [Monad m] [ParseByToken P H m E R]
-variable {Z : Type} [Token.Produce Z]
+variable {Z : Type} [Token.Cursor Z]
 
 /- LEAN: as Rust's script parser, the step acts on the cursor and the parser goes on with it. An
 action stands when the step fails after it, as in Rust, where the cursor is changed in place.
@@ -384,85 +436,85 @@ in no state it promises. -/
 /--
 Has the parser take the token, taken from `cursor` and leaving `next`: its arrival, its step, and
 what the step asks of the cursor. A refused switch of the version fails with
-`unsupportedVersion`.
+`VersionErrorKind.unsupported`.
 -/
 @[inline]
-def takeOne (parser : P) (cursor : Z) (token : Token.Produce.Token Z) (next : Z)
-    (consumed : Token.Produce.Consumed next cursor) :
-    StateT H m (After P R E × { z : Z // Token.Produce.Consumed z cursor }) := do
+def takeOne (parser : P) (cursor : Z) (token : Token.Cursor.Token Z) (next : Z)
+    (consumed : Token.Cursor.Consumed next cursor) :
+    StateT H m (After P R E × { z : Z // Token.Cursor.Consumed z cursor }) := do
   let fresh := ParseByToken.reset parser
-  let input := Input.ofSyntax (Token.Produce.«syntax» next token)
+  let input := Input.ofSyntax (Token.Cursor.«syntax» next token)
   match ← (do
       ParseByToken.arrive parser input
-      ParseByToken.step (Token.Produce.version next) parser input).run with
+      ParseByToken.step (Token.Cursor.version next) parser input).run with
   | .error error =>
     return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨next, consumed⟩)
   | .ok (.more parser) => return (.goOn parser, ⟨next, consumed⟩)
   | .ok (.done result) =>
     return (.stop (.ok (.break result)) fresh, ⟨next, consumed⟩)
   | .ok (.switchVersion declared resume) =>
-    match switch : Token.Produce.setVersion next declared with
+    match switch : Token.Cursor.setVersion next declared with
     | .error _ =>
-      return (.stop (.error (ParseError.Internal.new (.syntax .unsupportedVersion))) fresh,
+      return (.stop (.error (ParseError.Internal.new (.version .unsupported))) fresh,
         ⟨next, consumed⟩)
     | .ok switched =>
-      let after := Token.Produce.setVersion_consumed consumed switch
+      let after := Token.Cursor.setVersion_consumed consumed switch
       match ← resume.run with
       | .error error =>
         return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨switched, after⟩)
       | .ok step => return (resumed fresh step, ⟨switched, after⟩)
   | .ok (.discardRest resume) =>
-    let after := Token.Produce.discardRest_consumed consumed
+    let after := Token.Cursor.discardRest_consumed consumed
     match ← resume.run with
     | .error error =>
       return (.stop (.error (ParseError.Internal.new error)) fresh,
-        ⟨Token.Produce.discardRest next, after⟩)
-    | .ok step => return (resumed fresh step, ⟨Token.Produce.discardRest next, after⟩)
+        ⟨Token.Cursor.discardRest next, after⟩)
+    | .ok step => return (resumed fresh step, ⟨Token.Cursor.discardRest next, after⟩)
 
 /- LEAN: the loop is the recursion, which ends as every token taken is consumed, by the
 producer's well-founded consumption. -/
 /-- A producer, ordered by its consumption: the loop over its tokens descends by it. -/
 structure Consuming (Z : Type) where
-  producer : Z
+  cursor : Z
 
 instance : WellFoundedRelation (Consuming Z) :=
-  invImage Consuming.producer ⟨Token.Produce.Consumed, Token.Produce.consumed_wf⟩
+  invImage Consuming.cursor ⟨Token.Cursor.Consumed, Token.Cursor.consumed_wf⟩
 
 /--
 Has the parser take the tokens of `cursor`, which comes from `origin` with tokens consumed, one
 by one, or hand the cursor over where it asks to, until there are none or the parser stops.
 -/
-def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin) :
+def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Cursor.Consumed cursor origin) :
     StateT H m (Except (ParseError E) (ControlFlow R) × P ×
-      { z : Z // Token.Produce.Consumed z origin }) :=
+      { z : Z // Token.Cursor.Consumed z origin }) :=
   match ParseByToken.handOver? parser cursor with
   | some handOver =>
-    match Token.Produce.decideHasNext cursor with
+    match Token.Cursor.decideHasNext cursor with
     | isTrue has => do
       match ← handOver with
       | (.goOn parser, ⟨later, taken⟩) =>
-        rest origin parser later (Token.Produce.consumed_trans (taken has) consumed)
+        rest origin parser later (Token.Cursor.consumed_trans (taken has) consumed)
       | (.stop answer parser, ⟨later, taken⟩) =>
-        return (answer, parser, ⟨later, Token.Produce.consumed_trans (taken has) consumed⟩)
+        return (answer, parser, ⟨later, Token.Cursor.consumed_trans (taken has) consumed⟩)
     | isFalse _ => return (.ok .continue, parser, ⟨cursor, consumed⟩)
   | none =>
-    match Token.Produce.next? cursor with
+    match Token.Cursor.next? cursor with
     | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
     | some (token, ⟨next, step⟩) => do
       match ← takeOne parser cursor token next step with
       | (.goOn parser, ⟨later, taken⟩) =>
-        rest origin parser later (Token.Produce.consumed_trans taken consumed)
+        rest origin parser later (Token.Cursor.consumed_trans taken consumed)
       | (.stop answer parser, ⟨later, taken⟩) =>
-        return (answer, parser, ⟨later, Token.Produce.consumed_trans taken consumed⟩)
+        return (answer, parser, ⟨later, Token.Cursor.consumed_trans taken consumed⟩)
 termination_by (⟨cursor⟩ : Consuming Z)
 decreasing_by
   · exact taken has
   · exact taken
 
 /-- A producer that gives no token has none. -/
-theorem not_hasNext {producer : Z} (h : Token.Produce.next? producer = none) :
-    ¬ Token.Produce.HasNext producer := fun hn =>
-  absurd (Token.Produce.next?_isSome hn) (by rw [h]; exact Bool.false_ne_true)
+theorem not_hasNext {cursor : Z} (h : Token.Cursor.next? cursor = none) :
+    ¬ Token.Cursor.HasNext cursor := fun hn =>
+  absurd (Token.Cursor.next?_isSome hn) (by rw [h]; exact Bool.false_ne_true)
 
 /- LEAN: Rust's `parse_by_token`, which takes the step as a closure. -/
 /--
@@ -472,10 +524,10 @@ by single tokens.
 -/
 def parseByToken (parser : P) (state : ParseState H) (cursor : Z) :
     StateT H m (Except (ParseError E) (ControlFlow R) × P × ParseState H ×
-      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor }) :=
+      { next : Z // Token.Cursor.HasNext cursor → Token.Cursor.Consumed next cursor }) :=
   match ParseByToken.handOver? parser cursor with
   | some handOver =>
-    match Token.Produce.decideHasNext cursor with
+    match Token.Cursor.decideHasNext cursor with
     | isTrue has => do
       match ← handOver with
       | (.goOn parser, ⟨later, taken⟩) =>
@@ -485,7 +537,7 @@ def parseByToken (parser : P) (state : ParseState H) (cursor : Z) :
     | isFalse empty =>
       return (.ok .continue, parser, state, ⟨cursor, fun hn => absurd hn empty⟩)
   | none =>
-    match h : Token.Produce.next? cursor with
+    match h : Token.Cursor.next? cursor with
     | none => return (.ok .continue, parser, state, ⟨cursor, fun hn => absurd hn (not_hasNext h)⟩)
     | some (token, ⟨next, consumed⟩) => do
       match ← takeOne parser cursor token next consumed with

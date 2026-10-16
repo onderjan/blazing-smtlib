@@ -17,7 +17,7 @@ state when it finishes. The loop over single tokens against those steps is in
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Cursor
 
-open BSmtLib.Token (Produce)
+open BSmtLib.Token (Cursor)
 open BSmtLib.Parser (Parse ParseErrorCause ParseState)
 open BSmtLib.Parser.Internal (PM ParseByToken takeOne rest parseByToken After)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
@@ -28,14 +28,14 @@ open BSmtLib.Facts.Proofs.Parser.Drive
 
 section
 
-variable {Z : Type} [Produce Z] {version : Token.Version}
+variable {Z : Type} [Cursor Z] {version : Token.Version}
 
 theorem Takes.cons_inv {cursor next : Z} {token : Parser.Internal.Input}
     {tokens : List Parser.Internal.Input} (h : Takes version cursor (token :: tokens) next) :
-    ∃ (after : Z) (raw : Produce.Token Z) (consumed : Produce.Consumed after cursor),
-      Produce.HasNext cursor ∧ Produce.next? cursor = some (raw, ⟨after, consumed⟩) ∧
-      Produce.version after = version ∧
-      Parser.Internal.Input.ofSyntax (Produce.syntax after raw) = token ∧
+    ∃ (after : Z) (raw : Cursor.Token Z) (consumed : Cursor.Consumed after cursor),
+      Cursor.HasNext cursor ∧ Cursor.next? cursor = some (raw, ⟨after, consumed⟩) ∧
+      Cursor.version after = version ∧
+      Parser.Internal.Input.ofSyntax (Cursor.syntax after raw) = token ∧
       Takes version after tokens next := by
   generalize hl : token :: tokens = l at h
   cases h with
@@ -71,18 +71,18 @@ theorem Takes.split {cursor next : Z} :
 
 theorem Takes.consumed {cursor next : Z} :
     {token : Parser.Internal.Input} → {tokens : List Parser.Internal.Input} →
-    Takes version cursor (token :: tokens) next → Produce.Consumed next cursor
+    Takes version cursor (token :: tokens) next → Cursor.Consumed next cursor
   | _, [], h => by
     obtain ⟨_, _, consumed, _, _, _, _, htail⟩ := Takes.cons_inv h
     rw [Takes.nil_inv htail]
     exact consumed
   | _, _ :: _, h => by
     obtain ⟨_, _, consumed, _, _, _, _, htail⟩ := Takes.cons_inv h
-    exact Produce.consumed_trans (Takes.consumed htail) consumed
+    exact Cursor.consumed_trans (Takes.consumed htail) consumed
 
 theorem Takes.hasNext {cursor next : Z} {token : Parser.Internal.Input}
     {tokens : List Parser.Internal.Input} (h : Takes version cursor (token :: tokens) next) :
-    Produce.HasNext cursor := by
+    Cursor.HasNext cursor := by
   obtain ⟨_, _, _, hn, _⟩ := Takes.cons_inv h
   exact hn
 
@@ -96,13 +96,13 @@ theorem Reads.of_takes {cursor next : Z} {first rest : List Parser.Internal.Inpu
 def advance : Nat → Z → Z
   | 0, cursor => cursor
   | count + 1, cursor =>
-    match Produce.next? cursor with
+    match Cursor.next? cursor with
     | some (_, ⟨after, _⟩) => advance count after
     | none => cursor
 
-theorem advance_succ {cursor after : Z} {raw : Produce.Token Z}
-    {consumed : Produce.Consumed after cursor}
-    (h : Produce.next? cursor = some (raw, ⟨after, consumed⟩)) (count : Nat) :
+theorem advance_succ {cursor after : Z} {raw : Cursor.Token Z}
+    {consumed : Cursor.Consumed after cursor}
+    (h : Cursor.next? cursor = some (raw, ⟨after, consumed⟩)) (count : Nat) :
     advance (count + 1) cursor = advance count after := by
   simp only [advance, h]
 
@@ -155,7 +155,7 @@ structure Simulates (version : Token.Version) (mk : σ → P)
   step : ∀ (state : σ) (token : Parser.Internal.Input),
     ParseByToken.step version (mk state) token = flowOf mk <$> step state token
   reset : ∀ state : σ, ParseByToken.reset (mk state) = fresh
-  handOver : ∀ {Z : Type} [Produce Z] (state : σ) (cursor : Z),
+  handOver : ∀ {Z : Type} [Cursor Z] (state : σ) (cursor : Z),
     ParseByToken.handOver? (mk state) cursor = none
 
 variable {version : Token.Version} {mk : σ → P}
@@ -169,14 +169,14 @@ def afterOf (mk : σ → P) (fresh : P) :
   | .ok (.more state) => .goOn (mk state)
   | .ok (.done result) => .stop (.ok (.break result)) fresh
 
-variable {Z : Type} [Produce Z]
+variable {Z : Type} [Cursor Z]
 
 theorem takeOne_sim (sim : Simulates version mk step fresh) (state : σ) (cursor : Z)
-    (raw : Produce.Token Z) (after : Z) (consumed : Produce.Consumed after cursor)
-    (hver : Produce.version after = version) :
+    (raw : Cursor.Token Z) (after : Z) (consumed : Cursor.Consumed after cursor)
+    (hver : Cursor.version after = version) :
     takeOne (mk state) cursor raw after consumed =
-      (fun e => (afterOf mk fresh e, (⟨after, consumed⟩ : { z : Z // Produce.Consumed z cursor })))
-        <$> (step state (Parser.Internal.Input.ofSyntax (Produce.syntax after raw))).run := by
+      (fun e => (afterOf mk fresh e, (⟨after, consumed⟩ : { z : Z // Cursor.Consumed z cursor })))
+        <$> (step state (Parser.Internal.Input.ofSyntax (Cursor.syntax after raw))).run := by
   unfold takeOne
   simp only [hver, sim.reset, sim.arrive, sim.step, pure_bind, map_eq_pure_bind,
     ExceptT.run_bind, bind_assoc]

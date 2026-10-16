@@ -54,11 +54,11 @@ def qualIdentStep (version : Version) (self : QualIdentState (Handler.«Sort» H
     match token with
     | .symbol symbol => return .done (⟨symbol, #[]⟩, none)
     | .parenOpen => return .more .opened
-    | _ => syntaxError .expectedIdent
+    | _ => syntaxError (.expected #[.ident])
   | .opened =>
     if token.isWord .underscore then return .more (.indexed .afterUnderscore)
     else if token.isWord .as then return .more (.qualifiedIdent .start)
-    else syntaxError .expectedUnderscoreOrAs
+    else syntaxError (.expected #[.reserved (.general .underscore), .reserved (.general .as)])
   | .indexed ident =>
     match ← ident.step version token with
     | .more ident => return .more (.indexed ident)

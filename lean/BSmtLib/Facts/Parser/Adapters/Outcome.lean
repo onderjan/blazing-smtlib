@@ -34,8 +34,8 @@ the spec.
 
 namespace BSmtLib.Facts.Parser.Adapters.Outcome
 
-open BSmtLib.Token (Produce)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Token (Cursor)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Facts.Parser.Adapters.Cursor (Takes Reads)
 
 /-- What a parse answered, read with the parser and the cursor it gave back. -/
@@ -46,22 +46,25 @@ inductive Outcome (R P Z E : Type) where
   | waits (parser : P)
   /-- It failed with a syntax error of the kind, at the cursor. -/
   | rejected (kind : SyntaxErrorKind) (next : Z)
+  /-- It failed with a version error of the kind, at the cursor. -/
+  | rejectedVersion (kind : VersionErrorKind) (next : Z)
   /-- It failed with the handler's error. -/
   | failed (error : E)
 
 section
 
-variable {P H R E : Type} {Z : Type} [Produce Z] {cursor : Z}
+variable {P H R E : Type} {Z : Type} [Cursor Z] {cursor : Z}
 
 /-- What a parse answered, as an `Outcome`. -/
 def outcome : Except (ParseError E) (ControlFlow R) × P × ParseState H ×
-      { next : Z // Produce.HasNext cursor → Produce.Consumed next cursor } →
+      { next : Z // Cursor.HasNext cursor → Cursor.Consumed next cursor } →
     Outcome R P Z E
   | (.ok (.break result), parser, _, next) => .finished result parser next.val
   | (.ok .continue, parser, _, _) => .waits parser
   | (.error error, _, _, next) =>
     match error.cause with
     | .syntax kind => .rejected kind next.val
+    | .version kind => .rejectedVersion kind next.val
     | .handler error => .failed error
 
 end
@@ -80,6 +83,7 @@ def answer {α Z : Type} (onResult : α → Outcome R P Z E) (next : Z) :
   | .ok result => onResult result
   | .error (.handler error) => .failed error
   | .error (.syntax kind) => .rejected kind next
+  | .error (.version kind) => .rejectedVersion kind next
 
 variable [Parse P H m E R]
 
@@ -92,7 +96,7 @@ fails.
 def Finishes (version : Token.Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) R) (back : P) : Prop :=
   HandlerOnly program ∧
-  ∀ {Z : Type} [Produce Z] (state : ParseState H) (cursor next : Z)
+  ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor next : Z)
     (rest : List Parser.Internal.Input),
     Takes version cursor tokens next → Reads version next rest →
     outcome <$> Parse.parse parser state cursor =
@@ -107,8 +111,8 @@ fails.
 def Waits {α : Type} (version : Token.Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) α) (after : α → P) : Prop :=
   HandlerOnly program ∧
-  ∀ {Z : Type} [Produce Z] (state : ParseState H) (cursor last : Z),
-    Takes version cursor tokens last → Produce.next? last = none →
+  ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor last : Z),
+    Takes version cursor tokens last → Cursor.next? last = none →
     outcome <$> Parse.parse parser state cursor =
       answer (fun result => .waits (after result)) last <$> program.run
 
@@ -121,7 +125,7 @@ the program fails.
 def Rejects (version : Token.Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) Unit) (kind : SyntaxErrorKind) : Prop :=
   HandlerOnly program ∧
-  ∀ {Z : Type} [Produce Z] (state : ParseState H) (cursor next : Z)
+  ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor next : Z)
     (rest : List Parser.Internal.Input),
     Takes version cursor tokens next → Reads version next rest →
     outcome <$> Parse.parse parser state cursor =

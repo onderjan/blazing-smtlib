@@ -25,8 +25,9 @@ loses the prefix `Smt`, so that a view takes the plain name and an owned type ke
 (`plain::SmtSymbol` is `BSmtLib.Plain.Symbol`, `plain::SmtSymbolBuf` is `BSmtLib.Plain.SymbolBuf`);
 a type named like its module is the module's own name
 (`lexer::SmtLexer` is `BSmtLib.Lexer`); a function or method is written in lower camel case, with
-`?` for a result that may be absent (`from_decimal_opt` is `fromDecimal?`, and `peek` may also be
-`peek?`).
+`?` for a result that may be absent (`from_decimal` may be `fromDecimal?`, as `peek` may be
+`peek?`, and a suffix `_opt` becomes the `?`), and with the Lean names of the Rust types it names
+(`to_u32` is `toUInt32`, `into_vec` is `intoByteArray`).
 
 A `LEAN:` comment counts for a declaration when it is in the declaration's header (between its
 documentation comment and its name), or is the block comment right above the paragraph (the lines
@@ -89,8 +90,15 @@ def memberNames (s : String) : List String :=
   -- an associated type keeps its name
   else if isTypeName s then [s]
   else
-    -- the words of the Rust types: a vector of bytes is a `ByteArray`
-    let ws := (words s).flatMap fun w => if w == "vec" then ["byte", "array"] else [w]
+    -- the words of the Rust types: a vector of bytes is a `ByteArray`, an unsigned integer
+    -- type is Lean's of its width
+    let ws := (words s).flatMap fun w => match w with
+      | "vec" => ["byte", "array"]
+      | "u32" => ["u", "int32"]
+      | "u64" => ["u", "int64"]
+      | "u128" => ["u", "int128"]
+      | "usize" => ["u", "size"]
+      | w => [w]
     if ws.getLast? == some "opt" then [camel ("_".intercalate ws.dropLast) ++ "?"]
     else
       let c := camel ("_".intercalate ws)

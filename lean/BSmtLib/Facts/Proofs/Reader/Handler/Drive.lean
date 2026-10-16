@@ -114,7 +114,7 @@ theorem processAt_null (token : Internal.Input) :
 /-- The reader proofs' adapter takes a token of a batch cursor as the driver's step does. -/
 theorem takeOne_drive {b : Token.BatchTag} (parser : ScriptParser H)
     (cursor next : Token.BatchCursor b) (token : BSmtLib.Token b)
-    (consumed : Token.Produce.Consumed next cursor) (s : H) :
+    (consumed : Token.Cursor.Consumed next cursor) (s : H) :
     (tokenStep next.version parser (Internal.Input.ofSyntax (next.syntax token))).run.run s =
       (afterOf (((Stop.takeOne (m := Id) parser cursor token next consumed).run s).1.1,
           ((Stop.takeOne (m := Id) parser cursor token next consumed).run s).1.2.val),
@@ -123,8 +123,8 @@ theorem takeOne_drive {b : Token.BatchTag} (parser : ScriptParser H)
   simp only [arriveAt_null, processAt_null, ExceptT.lift_pure, pure_bind]
   unfold Stop.takeOne
   simp only [ExceptT.run_bind, StateT.run_bind, id_bind]
-  have hsy : Token.Produce.syntax next token = next.syntax token := rfl
-  have hve : Token.Produce.version next = next.version := rfl
+  have hsy : Token.Cursor.syntax next token = next.syntax token := rfl
+  have hve : Token.Cursor.version next = next.version := rfl
   simp only [hsy, hve]
   generalize Internal.Input.ofSyntax (next.syntax token) = input
   generalize (Internal.ParseByToken.arrive parser input).run.run s = A
@@ -144,11 +144,11 @@ theorem takeOne_drive {b : Token.BatchTag} (parser : ScriptParser H)
         dsimp only
         split
         · rename_i heq
-          simp [Token.Produce.setVersion, Token.BatchCursor.setVersion] at heq
+          simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
         · rename_i switched hsw
           simp only [nullProducer, ExceptT.run_bind, StateT.run_bind, id_bind]
           have hv : switched.version = declared := by
-            unfold Token.Produce.setVersion at hsw
+            unfold Token.Cursor.setVersion at hsw
             change Token.BatchCursor.setVersion next declared = _ at hsw
             unfold Token.BatchCursor.setVersion at hsw
             injection hsw with hsw

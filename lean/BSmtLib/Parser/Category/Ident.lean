@@ -43,21 +43,21 @@ def step (version : Version) (self : IdentState) (token : Internal.Input) :
   match self, token with
   | .start, .symbol symbol => pure (.done ⟨symbol, #[]⟩)
   | .start, .parenOpen => pure (.more .opened)
-  | .start, _ => syntaxError .expectedIdent
+  | .start, _ => syntaxError (.expected #[.ident])
   | .opened, token =>
     if token.isWord .underscore then pure (.more .afterUnderscore)
-    else syntaxError .expectedUnderscore
+    else syntaxError (.expected #[.reserved (.general .underscore)])
   | .afterUnderscore, .symbol symbol => pure (.more (.indices symbol #[]))
-  | .afterUnderscore, _ => syntaxError .expectedSymbol
+  | .afterUnderscore, _ => syntaxError (.expected #[.symbol])
   | .indices symbol found, .parenClose =>
-    if found.isEmpty then syntaxError .emptyIdentIndices
+    if found.isEmpty then syntaxError (.empty .identIndices)
     else pure (.done ⟨symbol, found⟩)
   | .indices symbol found, .constant (.numeral digits) =>
     pure (.more (.indices symbol (found.push (.numeral digits))))
   | .indices symbol found, .symbol index =>
     if version ≥ .v2_5 then pure (.more (.indices symbol (found.push (.symbol index))))
-    else syntaxError .expectedIndexOrCloseParen
-  | .indices _ _, _ => syntaxError .expectedIndexOrCloseParen
+    else syntaxError (.expected #[.index, .token .parenClose])
+  | .indices _ _, _ => syntaxError (.expected #[.index, .token .parenClose])
 
 end IdentState
 

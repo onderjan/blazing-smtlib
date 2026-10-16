@@ -15,7 +15,7 @@ namespace BSmtLib.Parser.Script
 
 open BSmtLib.Parser.Command BSmtLib.Traits
 open BSmtLib.Parser.Command.Internal
-open BSmtLib.Parser.Internal (PM call syntaxError)
+open BSmtLib.Parser.Internal (PM call syntaxError versionError)
 
 /--
 The parser of a script (`SmtScriptParser`).
@@ -129,12 +129,12 @@ script made before it: first the number, then the version.
 -/
 def Internal.VersionPosture.check (self : Token.VersionPosture) (declarations : Nat)
     (version : Token.Version) :
-    Option SyntaxErrorKind :=
+    Option VersionErrorKind :=
   match self.maxDeclarations with
   | some limit =>
-    if limit ≤ declarations then some (.tooManyVersionDeclarations limit)
-    else if self.allowed.contains version then none else some .unsupportedVersion
-  | none => if self.allowed.contains version then none else some .unsupportedVersion
+    if limit ≤ declarations then some (.tooManyDeclarations limit)
+    else if self.allowed.contains version then none else some .unsupported
+  | none => if self.allowed.contains version then none else some .unsupported
 
 /-- The step of the script parser. -/
 @[inline]
@@ -146,7 +146,7 @@ def ScriptParser.Internal.step (version : Token.Version) (parser : ScriptParser 
   | .done .command => return .more (mk (posture parser) .awaiting (declarations parser))
   | .done (.setVersion declared) =>
     match (Internal.VersionPosture.check (posture parser)) (declarations parser) declared with
-    | some kind => syntaxError kind
+    | some kind => versionError kind
     | none =>
       return .switchVersion declared (do
         ExceptT.lift (Handler.setVersion (H := H) declared)
@@ -165,10 +165,10 @@ In a non-standard command, the script parser hands the cursor to the handler's p
 command's payload; after the command, it awaits the next one.
 -/
 @[inline]
-def ScriptParser.Internal.handOver? {Z : Type} [Token.Produce Z] (parser : ScriptParser H)
+def ScriptParser.Internal.handOver? {Z : Type} [Token.Cursor Z] (parser : ScriptParser H)
     (cursor : Z) :
     Option (StateT H m (Internal.After (ScriptParser H) Unit (Handler.Error H) ×
-      { next : Z // Token.Produce.HasNext cursor → Token.Produce.Consumed next cursor })) :=
+      { next : Z // Token.Cursor.HasNext cursor → Token.Cursor.Consumed next cursor })) :=
   match command parser with
   | .nonstandard nonstandard => some do
     let (answer, next) ← Command.Internal.nonstandardParse nonstandard cursor

@@ -29,7 +29,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (ParseErrorCause SyntaxErrorKind)
+open BSmtLib.Parser (ParseErrorCause SyntaxErrorKind VersionErrorKind)
 
 /-! ## Sets of item lists -/
 
@@ -180,8 +180,7 @@ open Lang
 
 /-- The failure is no rejection of a version declaration. -/
 def Benign : ParseErrorCause Unit → Prop
-  | .syntax .unsupportedVersion => False
-  | .syntax (.tooManyVersionDeclarations _) => False
+  | .version _ => False
   | _ => True
 
 /-- The failures that `Q` allows and that are rejections of a version declaration. -/
@@ -217,6 +216,10 @@ theorem Sound.throw {e : ParseErrorCause Unit} (h : Q e) : Sound P Q (throw e : 
 
 theorem Sound.syntaxError {kind : SyntaxErrorKind} (h : Q (.syntax kind)) :
     Sound P Q (Parser.Internal.syntaxError kind : Quiet.RPM α) :=
+  Sound.throw h
+
+theorem Sound.versionError {kind : VersionErrorKind} (h : Q (.version kind)) :
+    Sound P Q (Parser.Internal.versionError kind : Quiet.RPM α) :=
   Sound.throw h
 
 theorem SilentOk.pure {a : α} : SilentOk (Pure.pure a : Quiet.RPM α) := fun _ _ _ hrun => by

@@ -34,69 +34,69 @@ def resumed (fresh : P) : Parser.Internal.Step P R → After P R E
   | .more parser => .stop (.ok .continue) parser
   | .done result => .stop (.ok (.break result)) fresh
 
-variable {Z : Type} [Token.Produce Z]
+variable {Z : Type} [Token.Cursor Z]
 
 /--
 Has the parser take the token, taken from `cursor` and leaving `next`: its arrival, its step, and
 what the step asks of the producer, after which the handover stops. A refused switch of the
-version fails with `unsupportedVersion`.
+version fails with `VersionErrorKind.unsupported`.
 -/
-def takeOne (parser : P) (cursor : Z) (token : Token.Produce.Token Z) (next : Z)
-    (consumed : Token.Produce.Consumed next cursor) :
-    StateT H m (After P R E × { z : Z // Token.Produce.Consumed z cursor }) := do
+def takeOne (parser : P) (cursor : Z) (token : Token.Cursor.Token Z) (next : Z)
+    (consumed : Token.Cursor.Consumed next cursor) :
+    StateT H m (After P R E × { z : Z // Token.Cursor.Consumed z cursor }) := do
   let fresh := ParseByToken.reset parser
-  let input := Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token)
+  let input := Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» next token)
   match ← (do
       ParseByToken.arrive parser input
-      ParseByToken.step (Token.Produce.version next) parser input).run with
+      ParseByToken.step (Token.Cursor.version next) parser input).run with
   | .error error =>
     return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨next, consumed⟩)
   | .ok (.more parser) => return (.goOn parser, ⟨next, consumed⟩)
   | .ok (.done result) =>
     return (.stop (.ok (.break result)) fresh, ⟨next, consumed⟩)
   | .ok (.switchVersion declared resume) =>
-    match switch : Token.Produce.setVersion next declared with
+    match switch : Token.Cursor.setVersion next declared with
     | .error _ =>
-      return (.stop (.error (ParseError.Internal.new (.syntax .unsupportedVersion))) fresh,
+      return (.stop (.error (ParseError.Internal.new (.version .unsupported))) fresh,
         ⟨next, consumed⟩)
     | .ok switched =>
-      let after := Token.Produce.setVersion_consumed consumed switch
+      let after := Token.Cursor.setVersion_consumed consumed switch
       match ← resume.run with
       | .error error =>
         return (.stop (.error (ParseError.Internal.new error)) fresh, ⟨switched, after⟩)
       | .ok step => return (resumed fresh step, ⟨switched, after⟩)
   | .ok (.discardRest resume) =>
-    let after := Token.Produce.discardRest_consumed consumed
+    let after := Token.Cursor.discardRest_consumed consumed
     match ← resume.run with
     | .error error =>
       return (.stop (.error (ParseError.Internal.new error)) fresh,
-        ⟨Token.Produce.discardRest next, after⟩)
-    | .ok step => return (resumed fresh step, ⟨Token.Produce.discardRest next, after⟩)
+        ⟨Token.Cursor.discardRest next, after⟩)
+    | .ok step => return (resumed fresh step, ⟨Token.Cursor.discardRest next, after⟩)
 
 /--
 Has the parser take the tokens of `cursor`, which comes from `origin` with tokens consumed, one
 by one, until there are none or the handover stops.
 -/
-def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Produce.Consumed cursor origin) :
+def rest (origin : Z) (parser : P) (cursor : Z) (consumed : Token.Cursor.Consumed cursor origin) :
     StateT H m (Except (ParseError E) (ControlFlow R) × P ×
-      { z : Z // Token.Produce.Consumed z origin }) :=
-  match Token.Produce.next? cursor with
+      { z : Z // Token.Cursor.Consumed z origin }) :=
+  match Token.Cursor.next? cursor with
   | none => return (.ok .continue, parser, ⟨cursor, consumed⟩)
   | some (token, ⟨next, step⟩) => do
     match ← takeOne parser cursor token next step with
     | (.goOn parser, ⟨later, taken⟩) =>
-      rest origin parser later (Token.Produce.consumed_trans taken consumed)
+      rest origin parser later (Token.Cursor.consumed_trans taken consumed)
     | (.stop answer parser, ⟨later, taken⟩) =>
-      return (answer, parser, ⟨later, Token.Produce.consumed_trans taken consumed⟩)
+      return (answer, parser, ⟨later, Token.Cursor.consumed_trans taken consumed⟩)
 termination_by (⟨cursor⟩ : Consuming Z)
 decreasing_by exact taken
 
 /-- The first token of a producer that has one. -/
-def first (producer : Z) (h : Token.Produce.HasNext producer) :
-    Token.Produce.Token Z × { next : Z // Token.Produce.Consumed next producer } :=
-  match taken : Token.Produce.next? producer with
+def first (cursor : Z) (h : Token.Cursor.HasNext cursor) :
+    Token.Cursor.Token Z × { next : Z // Token.Cursor.Consumed next cursor } :=
+  match taken : Token.Cursor.next? cursor with
   | some first => first
-  | none => absurd (Token.Produce.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
+  | none => absurd (Token.Cursor.next?_isSome h) (by rw [taken]; exact Bool.false_ne_true)
 
 end
 
@@ -107,7 +107,7 @@ variable {H P R E : Type} [Handler H Id] [ParseByToken P H Id E R] [Parse P H Id
 already. -/
 def told (adapter : ParseAdapter H P) (cursor : Token.BatchCursor b) : H :=
   ((show StateT H Id Unit from if (ParseAdapter.Internal.versionSet adapter) then pure ()
-    else Handler.setVersion (Token.Produce.version cursor)).run adapter.handler).2
+    else Handler.setVersion (Token.Cursor.version cursor)).run adapter.handler).2
 
 /-- What a call of the consumer gives after its first token: the answer and the cursor, and the
 adapter with the handler, the parser and the resources. -/

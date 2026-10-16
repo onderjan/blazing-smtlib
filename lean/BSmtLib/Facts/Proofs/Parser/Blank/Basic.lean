@@ -212,6 +212,7 @@ instance {σ σ' ρ ρ' : Type} [Blanks σ σ'] [Blanks ρ ρ'] :
 /-- The cause of a failure with the handler's error replaced by `()`. -/
 def blankCause {ε : Type} : ParseErrorCause ε → ParseErrorCause Unit
   | .syntax kind => .syntax kind
+  | .version kind => .version kind
   | .handler _ => .handler ()
 
 /-- A result of a run, blanked. -/

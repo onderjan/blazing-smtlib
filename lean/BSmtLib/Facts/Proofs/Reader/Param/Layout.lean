@@ -296,11 +296,11 @@ theorem takeOne_layout {b : Token.BatchTag} (parser : ScriptParser LH)
       parser cursor token next consumed).run events =
         ((.stop (.error e) (Parser.Internal.ParseByToken.reset parser), ⟨next, consumed⟩),
             events') := by
-  have hitem' : Parser.Internal.Input.ofSyntax (Token.Produce.«syntax» next token) =
+  have hitem' : Parser.Internal.Input.ofSyntax (Token.Cursor.«syntax» next token) =
       Parser.Internal.Input.ofSyntax (next.syntax token) := rfl
   obtain ⟨e, events',
       hX⟩ := fails_bind_right (Parser.Internal.ParseByToken.arrive (H := LH) parser .layout)
-    (fun _ => scriptStep_layout (Token.Produce.version next) parser) events
+    (fun _ => scriptStep_layout (Token.Cursor.version next) parser) events
   refine ⟨⟨e⟩, events', ?_⟩
   simp only [Stop.takeOne, StateT.run_bind]
   rw [hitem', hl]

@@ -19,8 +19,8 @@ continuation when it goes on. Both the first turn and the later ones are read so
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Maximum
 
-open BSmtLib.Token (Produce)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Token (Cursor)
+open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Token.Internal
@@ -36,13 +36,13 @@ open BSmtLib.Facts.Proofs.Parser.Category.Multiple
 
 section
 
-variable {H S R E : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {Z : Type} [Produce Z]
+variable {H S R E : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {Z : Type} [Cursor Z]
 
 /-- A turn, read as `outcomeAny` reads its answer when it stops, and as `k` says when it goes
 on. -/
 def turnThen (turn : Internal.Turn H S R E Z m) (self : S) (state : ParseState H) (cursor : Z)
-    (h : Produce.HasNext cursor)
-    (k : S → ParseState H → (next : Z) → Produce.Consumed next cursor →
+    (h : Cursor.HasNext cursor)
+    (k : S → ParseState H → (next : Z) → Cursor.Consumed next cursor →
       StateT H m (Outcome R S Z E)) : StateT H m (Outcome R S Z E) :=
   turn self state cursor h >>= fun r => match r with
   | (some a, s, st, next) => pure (outcomeAny (a, s, st, next))
@@ -50,7 +50,7 @@ def turnThen (turn : Internal.Turn H S R E Z m) (self : S) (state : ParseState H
 
 /-- A loop's first turn, on a cursor with a token. -/
 theorem parseByTurns_turnThen (turn : Internal.Turn H S R E Z m) (self : S)
-    (state : ParseState H) (cursor : Z) (h : Produce.HasNext cursor) :
+    (state : ParseState H) (cursor : Z) (h : Cursor.HasNext cursor) :
     outcome <$> Internal.parseByTurns turn self state cursor =
       turnThen turn self state cursor h fun s st next taken =>
         outcomeAny <$> Internal.repeatTurns turn cursor s st next taken := by
@@ -74,12 +74,12 @@ theorem parseByTurns_turnThen (turn : Internal.Turn H S R E Z m) (self : S)
 
 /-- A loop's later turn, on a cursor with a token. -/
 theorem repeatTurns_turnThen (turn : Internal.Turn H S R E Z m) (origin : Z) (self : S)
-    (state : ParseState H) (cursor : Z) (hc : Produce.Consumed cursor origin)
-    (h : Produce.HasNext cursor) :
+    (state : ParseState H) (cursor : Z) (hc : Cursor.Consumed cursor origin)
+    (h : Cursor.HasNext cursor) :
     outcomeAny <$> Internal.repeatTurns turn origin self state cursor hc =
       turnThen turn self state cursor h fun s st next taken =>
         outcomeAny <$> Internal.repeatTurns turn origin s st next
-          (Produce.consumed_trans taken hc) := by
+          (Cursor.consumed_trans taken hc) := by
   rw [Internal.repeatTurns]
   split
   · rename_i hn _
@@ -95,7 +95,7 @@ theorem repeatTurns_turnThen (turn : Internal.Turn H S R E Z m) (origin : Z) (se
 
 /-- A loop's first turn on a cursor without a token: it wants more, as it is. -/
 theorem parseByTurns_end (turn : Internal.Turn H S R E Z m) (self : S) (state : ParseState H)
-    {cursor : Z} (hnone : Produce.next? cursor = none) :
+    {cursor : Z} (hnone : Cursor.next? cursor = none) :
     outcome <$> Internal.parseByTurns turn self state cursor = pure (.waits self) := by
   simp only [Internal.parseByTurns]
   split
@@ -106,8 +106,8 @@ theorem parseByTurns_end (turn : Internal.Turn H S R E Z m) (self : S) (state : 
 
 /-- A loop's later turn on a cursor without a token: it wants more, as it is. -/
 theorem repeatTurns_end (turn : Internal.Turn H S R E Z m) (origin : Z) (self : S)
-    (state : ParseState H) {cursor : Z} (hc : Produce.Consumed cursor origin)
-    (hnone : Produce.next? cursor = none) :
+    (state : ParseState H) {cursor : Z} (hc : Cursor.Consumed cursor origin)
+    (hnone : Cursor.next? cursor = none) :
     outcomeAny <$> Internal.repeatTurns turn origin self state cursor hc =
       pure (.waits self) := by
   rw [Internal.repeatTurns]
@@ -131,22 +131,22 @@ private abbrev between (p : P) (maximum : Nat) (results : Array R) : ClosedMaxim
   { maximum, outside := true, results, inner := p }
 
 /-- The first token of the cursor, taken by the tokens. -/
-private theorem first_of_takes {version : Token.Version} {Z : Type} [Produce Z] {cursor next : Z}
+private theorem first_of_takes {version : Token.Version} {Z : Type} [Cursor Z] {cursor next : Z}
     {token : Parser.Internal.Input} {tokens : List Parser.Internal.Input}
     (htakes : Takes version cursor (token :: tokens) next) :
-    ∃ (h : Produce.HasNext cursor) (raw : Produce.Token Z) (after : Z)
-      (consumed : Produce.Consumed after cursor),
+    ∃ (h : Cursor.HasNext cursor) (raw : Cursor.Token Z) (after : Z)
+      (consumed : Cursor.Consumed after cursor),
       Internal.firstToken cursor h = (raw, ⟨after, consumed⟩) ∧
-      Parser.Internal.Input.ofSyntax (Produce.syntax after raw) = token ∧
+      Parser.Internal.Input.ofSyntax (Cursor.syntax after raw) = token ∧
       Takes version after tokens next := by
   obtain ⟨after, raw, consumed, hn, hnext, hver, htoken, htail⟩ := Takes.cons_inv htakes
   have h := Takes.hasNext htakes
   exact ⟨h, raw, after, consumed, firstToken_eq hnext h, htoken, htail⟩
 
 /-- A turn between values on a `)`: the list finishes with its results. -/
-private theorem turn_close {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Produce Z]
+private theorem turn_close {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor next : Z} (results : Array R) (state : ParseState H)
-    (htakes : Takes version cursor [.parenClose] next) (h : Produce.HasNext cursor) (k) :
+    (htakes : Takes version cursor [.parenClose] next) (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn (between (H := H) p maximum results) state cursor h k =
       pure (.finished results (ClosedMaximumParser.new (H := H) p maximum) next) := by
   obtain ⟨h', raw, after, consumed, hfirst, htoken, htail⟩ := first_of_takes htakes
@@ -156,12 +156,12 @@ private theorem turn_close {version : Token.Version} {p : P} {maximum : Nat} {Z 
   simp [outcomeAny, ClosedMaximumParser.new]
 
 /-- A turn between values at the maximum on a token that is not `)`: the list rejects it. -/
-private theorem turn_beyond {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Produce Z]
+private theorem turn_beyond {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor next : Z} {token : Parser.Internal.Input} (results : Array R)
     (hsize : maximum ≤ results.size) (htoken : token ≠ .parenClose) (state : ParseState H)
-    (htakes : Takes version cursor [token] next) (h : Produce.HasNext cursor) (k) :
+    (htakes : Takes version cursor [token] next) (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn (between (H := H) p maximum results) state cursor h k =
-      pure (.rejected (.expectedToken #[.parenClose]) next) := by
+      pure (.rejected (.expected #[.token .parenClose]) next) := by
   obtain ⟨h', raw, after, consumed, hfirst, htoken', htail⟩ := first_of_takes htakes
   rw [Takes.nil_inv htail]
   simp only [turnThen, ClosedMaximumParser.turn, between, ite_true, hfirst, hsize]
@@ -174,21 +174,21 @@ private theorem turn_beyond {version : Token.Version} {p : P} {maximum : Nat} {Z
 
 /-- What a turn between values below the maximum does on tokens of the inner parser, which do
 not start with `)`: it has the inner parser parse them. -/
-private theorem turn_inner {p : P} {maximum : Nat} {Z : Type} [Produce Z] {cursor : Z}
+private theorem turn_inner {p : P} {maximum : Nat} {Z : Type} [Cursor Z] {cursor : Z}
     {token : Parser.Internal.Input} {tokens : List Parser.Internal.Input} {version : Token.Version}
     {last : Z} (htakes : Takes version cursor (token :: tokens) last)
     (htok : token ≠ .parenClose) (results : Array R) (hsize : results.size < maximum)
-    (state : ParseState H) (h : Produce.HasNext cursor) (k) :
+    (state : ParseState H) (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn (between (H := H) p maximum results) state cursor h k =
       Parse.parse p state cursor >>= fun x => match x with
         | (.error error, inner, state, ⟨later, taken⟩) =>
           pure (outcomeAny (.error error, ({ maximum, outside := false, results, inner } :
             ClosedMaximumParser H P), state, (⟨later, taken h⟩ :
-              { z : Z // Produce.Consumed z cursor })))
+              { z : Z // Cursor.Consumed z cursor })))
         | (.ok .continue, inner, state, ⟨later, taken⟩) =>
           pure (outcomeAny (.ok .continue, ({ maximum, outside := false, results, inner } :
             ClosedMaximumParser H P), state, (⟨later, taken h⟩ :
-              { z : Z // Produce.Consumed z cursor })))
+              { z : Z // Cursor.Consumed z cursor })))
         | (.ok (.break item), inner, state, ⟨later, taken⟩) =>
           k { maximum, outside := true, results := results.push item, inner } state later
             (taken h) := by
@@ -206,19 +206,20 @@ private theorem turn_inner {p : P} {maximum : Nat} {Z : Type} [Produce Z] {curso
 
 /-- A turn between values below the maximum on a value that does not start with `)`: the inner
 parser's program, then the continuation with the result added. -/
-private theorem turn_value {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Produce Z]
+private theorem turn_value {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor last : Z} {tokens : List Parser.Internal.Input} {program : PM H R}
     (hp : Outcome.Finishes version p tokens program p)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
     (rest : List Parser.Internal.Input) (htakes : Takes version cursor tokens last)
     (hreads : Reads version last rest) (results : Array R) (hsize : results.size < maximum)
-    (state : ParseState H) (h : Produce.HasNext cursor) (k) :
+    (state : ParseState H) (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn (between (H := H) p maximum results) state cursor h k =
       program.run >>= fun e => match e with
         | .ok item => k (between p maximum (results.push item)) .new last (Takes.consumed_of_ne
             htakes (by obtain ⟨_, _, rfl, _⟩ := hfirst; simp) h)
         | .error (.handler error) => pure (.failed error)
-        | .error (.syntax kind) => pure (.rejected kind last) := by
+        | .error (.syntax kind) => pure (.rejected kind last)
+        | .error (.version kind) => pure (.rejectedVersion kind last) := by
   obtain ⟨token, tokens', rfl, htok⟩ := hfirst
   obtain ⟨calls, hcalls⟩ := handler_run hp.1
   have hc := Takes.consumed htakes
@@ -229,6 +230,9 @@ private theorem turn_value {version : Token.Version} {p : P} {maximum : Nat} {Z 
       answer_cases a
       · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
             .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
+        rfl
+      · rw [show outcome (.error (ParseError.Internal.new (.version kind)), p', s, ⟨z, hz⟩) =
+            .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
         rfl
       · rfl
       · rfl
@@ -245,13 +249,13 @@ private theorem turn_value {version : Token.Version} {p : P} {maximum : Nat} {Z 
 /-- A turn between values below the maximum on tokens that the inner parser rejects, not
 starting with `)`: the list rejects them. -/
 private theorem turn_rejects {version : Token.Version} {p : P} {maximum : Nat} {Z : Type}
-    [Produce Z]
+    [Cursor Z]
     {cursor next : Z} {tokens : List Parser.Internal.Input} {program : PM H Unit}
     {kind : SyntaxErrorKind} (hp : Outcome.Rejects version p tokens program kind)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
     (rest : List Parser.Internal.Input) (htakes : Takes version cursor tokens next)
     (hreads : Reads version next rest) (results : Array R) (hsize : results.size < maximum)
-    (state : ParseState H) (h : Produce.HasNext cursor) (k) :
+    (state : ParseState H) (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn (between (H := H) p maximum results) state cursor h k =
       answer (fun () => .rejected kind next) next <$> program.run := by
   obtain ⟨token, tokens', rfl, htok⟩ := hfirst
@@ -264,6 +268,9 @@ private theorem turn_rejects {version : Token.Version} {p : P} {maximum : Nat} {
       answer_cases a
       · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
             .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
+        rfl
+      · rw [show outcome (.error (ParseError.Internal.new (.version kind)), p', s, ⟨z, hz⟩) =
+            .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
         rfl
       · rfl
       · rfl
@@ -280,13 +287,13 @@ private theorem turn_rejects {version : Token.Version} {p : P} {maximum : Nat} {
 
 /-- A turn between values below the maximum on tokens on which the inner parser wants more, not
 starting with `)`: the list wants more, within a value. -/
-private theorem turn_waits {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Produce Z]
+private theorem turn_waits {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor final : Z} {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
     {after : α → P} (hp : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
-    (htakes : Takes version cursor tokens final) (hnone : Produce.next? final = none)
+    (htakes : Takes version cursor tokens final) (hnone : Cursor.next? final = none)
     (results : Array R) (hsize : results.size < maximum) (state : ParseState H)
-    (h : Produce.HasNext cursor) (k) :
+    (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn (between (H := H) p maximum results) state cursor h k =
       answer (fun a => .waits ({ maximum, outside := false, results, inner := after a } :
         ClosedMaximumParser H P)) final <$> program.run := by
@@ -300,6 +307,9 @@ private theorem turn_waits {version : Token.Version} {p : P} {maximum : Nat} {Z 
       answer_cases a
       · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
             .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
+        rfl
+      · rw [show outcome (.error (ParseError.Internal.new (.version kind)), p', s, ⟨z, hz⟩) =
+            .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
         rfl
       · rfl
       · rfl
@@ -322,16 +332,16 @@ private theorem value_ne {value : List Parser.Internal.Input × PM H R}
 
 /-- The values, then what the loop does at the cursor after them, with the results it has. -/
 private theorem maximum_loop {version : Token.Version} {p : P} {maximum target : Nat}
-    {Z : Type} [Produce Z] {origin last : Z}
+    {Z : Type} [Cursor Z] {origin last : Z}
     (finale : Array R →
       StateT H m (Outcome (Array R) (ClosedMaximumParser H P) Z (Traits.Handler.Error H)))
-    (hfinale : ∀ (results : Array R) (state : ParseState H) (hc : Produce.Consumed last origin),
+    (hfinale : ∀ (results : Array R) (state : ParseState H) (hc : Cursor.Consumed last origin),
       results.size = target →
       outcomeAny <$> Internal.repeatTurns ClosedMaximumParser.turn origin
           (between (H := H) p maximum results) state last hc = finale results) :
     (values : List (List Parser.Internal.Input × PM H R)) → ValuesParse version p values →
     (results : Array R) → results.size + values.length = target → target ≤ maximum →
-    (state : ParseState H) → (cursor : Z) → (hc : Produce.Consumed cursor origin) →
+    (state : ParseState H) → (cursor : Z) → (hc : Cursor.Consumed cursor origin) →
     (rest : List Parser.Internal.Input) →
     Takes version cursor (valuesTokens values) last → Reads version last rest →
     outcomeAny <$> Internal.repeatTurns ClosedMaximumParser.turn origin
@@ -341,6 +351,7 @@ private theorem maximum_loop {version : Token.Version} {p : P} {maximum target :
         | .ok found => finale (results ++ found.toArray)
         | .error (.handler error) => pure (.failed error)
         | .error (.syntax kind) => pure (.rejected kind last)
+        | .error (.version kind) => pure (.rejectedVersion kind last)
   | [], _, results, hsize, _, state, cursor, hc, rest, htakes, hreads => by
     have e := Takes.nil_inv htakes
     subst e
@@ -365,15 +376,15 @@ private theorem maximum_loop {version : Token.Version} {p : P} {maximum target :
         ParseState.new middle _ rest ht₂ hreads]
       simp only [ExceptT.run_bind, ExceptT.run_pure, bind_assoc]
       refine bind_congr fun e => ?_
-      rcases e with (kind | error) | found <;> simp
+      rcases e with (kind | kind | error) | found <;> simp
 
 /-- The parse of a list with a maximum that has a first value: the values, then what the loop
 does at the cursor after them. -/
 private theorem maximum_first {version : Token.Version} {p : P} {maximum target : Nat}
-    {Z : Type} [Produce Z] {cursor last : Z}
+    {Z : Type} [Cursor Z] {cursor last : Z}
     (finale : Array R →
       StateT H m (Outcome (Array R) (ClosedMaximumParser H P) Z (Traits.Handler.Error H)))
-    (hfinale : ∀ (results : Array R) (state : ParseState H) (hc : Produce.Consumed last cursor),
+    (hfinale : ∀ (results : Array R) (state : ParseState H) (hc : Cursor.Consumed last cursor),
       results.size = target →
       outcomeAny <$> Internal.repeatTurns ClosedMaximumParser.turn cursor
           (between (H := H) p maximum results) state last hc = finale results)
@@ -389,7 +400,8 @@ private theorem maximum_first {version : Token.Version} {p : P} {maximum target 
         fun e => match e with
         | .ok found => finale (results ++ found.toArray)
         | .error (.handler error) => pure (.failed error)
-        | .error (.syntax kind) => pure (.rejected kind last) := by
+        | .error (.syntax kind) => pure (.rejected kind last)
+        | .error (.version kind) => pure (.rejectedVersion kind last) := by
   obtain ⟨hparses, hfirst⟩ := hvalues value (List.mem_cons_self ..)
   obtain ⟨calls, hcalls⟩ := handler_run hparses.1
   simp only [valuesTokens, List.flatMap_cons] at htakes
@@ -409,11 +421,11 @@ private theorem maximum_first {version : Token.Version} {p : P} {maximum target 
       (by simp only [Array.size_push]; omega) hmax ParseState.new middle _ rest ht₂ hreads]
     simp only [ExceptT.run_bind, ExceptT.run_pure, bind_assoc]
     refine bind_congr fun e => ?_
-    rcases e with (kind | error) | found <;> simp
+    rcases e with (kind | kind | error) | found <;> simp
 
 omit [LawfulMonad m] in
 private theorem between_parse_eq (p : P) (maximum : Nat) (results : Array R) {Z : Type}
-    [Produce Z] (state : ParseState H) (cursor : Z) :
+    [Cursor Z] (state : ParseState H) (cursor : Z) :
     Parse.parse (between (H := H) p maximum results) state cursor =
       Internal.parseByTurns ClosedMaximumParser.turn (between (H := H) p maximum results) state
         cursor := rfl
@@ -455,7 +467,7 @@ private theorem results_rejects_beyond {version : Token.Version} {p : P} {maximu
     (results : Array R) (hlength : results.size + values.length = maximum)
     {token : Parser.Internal.Input} (htoken : token ≠ .parenClose) :
     Outcome.Rejects version (between (H := H) p maximum results) (valuesTokens values ++ [token])
-      (do let _ ← values.mapM fun value => value.2; pure ()) (.expectedToken #[.parenClose]) := by
+      (do let _ ← values.mapM fun value => value.2; pure ()) (.expected #[.token .parenClose]) := by
   have hho := values_handlerOnly hvalues
   refine ⟨handlerOnly_bind hho fun _ => by handler_only,
     fun state cursor next rest htakes hreads => ?_⟩
@@ -468,7 +480,7 @@ private theorem results_rejects_beyond {version : Token.Version} {p : P} {maximu
       turn_beyond results (by simp at hlength; omega) htoken state ht₂]
     simp [answer]
   | cons value values =>
-    rw [maximum_first (fun _ => pure (.rejected (.expectedToken #[.parenClose]) next))
+    rw [maximum_first (fun _ => pure (.rejected (.expected #[.token .parenClose]) next))
       (fun results' state hc hsize => by
         rw [repeatTurns_turnThen _ _ _ _ _ hc (Takes.hasNext ht₂),
           turn_beyond results' (by simp only [List.length_cons] at hlength; omega) htoken
@@ -559,7 +571,7 @@ theorem closedMaximum_rejects_beyond {version : Token.Version} {p : P} {maximum 
     (htoken : token ≠ .parenClose) :
     Outcome.Rejects version (ClosedMaximumParser.new (H := H) p maximum)
       (valuesTokens values ++ [token])
-      (do let _ ← values.mapM fun value => value.2; pure ()) (.expectedToken #[.parenClose]) :=
+      (do let _ ← values.mapM fun value => value.2; pure ()) (.expected #[.token .parenClose]) :=
   results_rejects_beyond hvalues #[] (by simpa using hlength) htoken
 
 /-- The closed list parser with a maximum on fewer values than the maximum and then tokens that
@@ -599,7 +611,7 @@ theorem closedMaximum_waits_between {version : Token.Version} {p : P}
         token ≠ .parenClose →
         Outcome.Rejects version (after maximum found) (valuesTokens values' ++ [token])
           (do let _ ← values'.mapM fun value => value.2; pure ())
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   refine ⟨fun maximum found => between p maximum found.toArray, fun _ _ _ => rfl,
     fun maximum hlength => ?_, fun maximum found _ hv hlength => ?_,
     fun maximum found _ _ hv hlength htoken => ?_⟩
@@ -677,8 +689,8 @@ private theorem results_waits_inner {version : Token.Version} {p : P} {maximum :
       rcases e with error | a <;> simp [answer]
 
 /-- A turn within a value: the inner parser parses on. -/
-private theorem turn_resume {q : P} {maximum : Nat} {Z : Type} [Produce Z] {cursor : Z}
-    (results : Array R) (state : ParseState H) (h : Produce.HasNext cursor) (k) :
+private theorem turn_resume {q : P} {maximum : Nat} {Z : Type} [Cursor Z] {cursor : Z}
+    (results : Array R) (state : ParseState H) (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn
         ({ maximum, outside := false, results, inner := q } : ClosedMaximumParser H P) state
         cursor h k =
@@ -686,11 +698,11 @@ private theorem turn_resume {q : P} {maximum : Nat} {Z : Type} [Produce Z] {curs
         | (.error error, inner, state, ⟨later, taken⟩) =>
           pure (outcomeAny (.error error, ({ maximum, outside := false, results, inner } :
             ClosedMaximumParser H P), state, (⟨later, taken h⟩ :
-              { z : Z // Produce.Consumed z cursor })))
+              { z : Z // Cursor.Consumed z cursor })))
         | (.ok .continue, inner, state, ⟨later, taken⟩) =>
           pure (outcomeAny (.ok .continue, ({ maximum, outside := false, results, inner } :
             ClosedMaximumParser H P), state, (⟨later, taken h⟩ :
-              { z : Z // Produce.Consumed z cursor })))
+              { z : Z // Cursor.Consumed z cursor })))
         | (.ok (.break item), inner, state, ⟨later, taken⟩) =>
           k { maximum, outside := true, results := results.push item, inner } state later
             (taken h) := by
@@ -703,11 +715,11 @@ private theorem turn_resume {q : P} {maximum : Nat} {Z : Type} [Produce Z] {curs
 /-- A turn within a value that the inner parser finishes, back as `p`: the inner parser's
 program, then the continuation with the result added. -/
 private theorem turn_resume_value {version : Token.Version} {p q : P} {maximum : Nat} {Z : Type}
-    [Produce Z] {cursor last : Z} {tokens : List Parser.Internal.Input} {program : PM H R}
+    [Cursor Z] {cursor last : Z} {tokens : List Parser.Internal.Input} {program : PM H R}
     (hq : Outcome.Finishes version q tokens program p) (hne : tokens ≠ [])
     (rest : List Parser.Internal.Input) (htakes : Takes version cursor tokens last)
     (hreads : Reads version last rest) (results : Array R) (state : ParseState H)
-    (h : Produce.HasNext cursor) (k) :
+    (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn
         ({ maximum, outside := false, results, inner := q } : ClosedMaximumParser H P) state
         cursor h k =
@@ -715,7 +727,8 @@ private theorem turn_resume_value {version : Token.Version} {p q : P} {maximum :
         | .ok item => k (between p maximum (results.push item)) .new last
             (Takes.consumed_of_ne htakes hne h)
         | .error (.handler error) => pure (.failed error)
-        | .error (.syntax kind) => pure (.rejected kind last) := by
+        | .error (.syntax kind) => pure (.rejected kind last)
+        | .error (.version kind) => pure (.rejectedVersion kind last) := by
   obtain ⟨calls, hcalls⟩ := handler_run hq.1
   have hc := Takes.consumed_of_ne htakes hne
   rw [turn_resume results state h k,
@@ -725,6 +738,9 @@ private theorem turn_resume_value {version : Token.Version} {p q : P} {maximum :
       answer_cases a
       · rw [show outcome (.error (ParseError.Internal.new (.syntax kind)), p', s, ⟨z, hz⟩) =
             .rejected kind z from rfl, onOutcome_rejected _ _ _ hz]
+        rfl
+      · rw [show outcome (.error (ParseError.Internal.new (.version kind)), p', s, ⟨z, hz⟩) =
+            .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
         rfl
       · rfl
       · rfl
@@ -831,20 +847,21 @@ private def parenF {Z : Type} :
   | .finished results q next => .finished results ⟨false, q⟩ next
   | .waits q => .waits ⟨true, q⟩
   | .rejected kind next => .rejected kind next
+  | .rejectedVersion kind next => .rejectedVersion kind next
   | .failed error => .failed error
 
 /-- The parse of a list with a maximum and its own `(`, the `(` taken, as the parse of the list
 that the `(` opens. -/
-private theorem parenMaximum_open (q : ClosedMaximumParser H P) {Z : Type} [Produce Z]
-    (state : ParseState H) {cursor after : Z} {raw : Produce.Token Z}
-    {consumed : Produce.Consumed after cursor}
-    (hnext : Produce.next? cursor = some (raw, ⟨after, consumed⟩))
-    (hopen : Parser.Internal.Input.ofSyntax (Produce.syntax after raw) = .parenOpen)
-    (hn : Produce.HasNext after) :
+private theorem parenMaximum_open (q : ClosedMaximumParser H P) {Z : Type} [Cursor Z]
+    (state : ParseState H) {cursor after : Z} {raw : Cursor.Token Z}
+    {consumed : Cursor.Consumed after cursor}
+    (hnext : Cursor.next? cursor = some (raw, ⟨after, consumed⟩))
+    (hopen : Parser.Internal.Input.ofSyntax (Cursor.syntax after raw) = .parenOpen)
+    (hn : Cursor.HasNext after) :
     outcome <$> Parse.parse (⟨false, q⟩ : ParenMaximumParser H P) state cursor =
       parenF <$> (outcome <$> Parse.parse q state after) := by
-  have hsyntax : Produce.syntax after raw = .parenOpen := by
-    cases h : Produce.syntax after raw <;> rw [h] at hopen <;> first | rfl | cases hopen
+  have hsyntax : Cursor.syntax after raw = .parenOpen := by
+    cases h : Cursor.syntax after raw <;> rw [h] at hopen <;> first | rfl | cases hopen
   simp only [Parse.parse, Bool.false_eq_true, ite_false]
   split
   · rename_i heq
@@ -874,7 +891,7 @@ private theorem paren_finishes {version : Token.Version} {q b : ClosedMaximumPar
     h.2 state after next rest htail hreads, Functor.map_map]
   congr 1
   funext e
-  rcases e with (_ | _) | _ <;> rfl
+  rcases e with (_ | _ | _) | _ <;> rfl
 
 private theorem paren_rejects {version : Token.Version} {q : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
@@ -887,7 +904,7 @@ private theorem paren_rejects {version : Token.Version} {q : ClosedMaximumParser
     h.2 state after next rest htail hreads, Functor.map_map]
   congr 1
   funext e
-  rcases e with (_ | _) | _ <;> rfl
+  rcases e with (_ | _ | _) | _ <;> rfl
 
 /-- The list parser with a maximum and its own `(` on the `(`, at most the maximum of values
 and the `)`. -/
@@ -904,7 +921,7 @@ theorem parenMaximum_parses {version : Token.Version} {p : P} {maximum : Nat}
 theorem parenMaximum_rejects_open {version : Token.Version} {p : P} {maximum : Nat}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
     Outcome.Rejects version (ParenMaximumParser.new (H := H) p maximum) [token]
-      (pure () : PM H Unit) (.expectedToken #[.parenOpen]) := by
+      (pure () : PM H Unit) (.expected #[.token .parenOpen]) := by
   refine ⟨handlerOnly_pure _, fun state cursor next rest htakes hreads => ?_⟩
   obtain ⟨after, raw, consumed, hn, hnext, hver, htoken', htail⟩ := Takes.cons_inv htakes
   rw [Takes.nil_inv htail]
@@ -930,7 +947,7 @@ theorem parenMaximum_rejects_beyond {version : Token.Version} {p : P} {maximum :
     (htoken : token ≠ .parenClose) :
     Outcome.Rejects version (ParenMaximumParser.new (H := H) p maximum)
       (.parenOpen :: (valuesTokens values ++ [token]))
-      (do let _ ← values.mapM fun value => value.2; pure ()) (.expectedToken #[.parenClose]) :=
+      (do let _ ← values.mapM fun value => value.2; pure ()) (.expected #[.token .parenClose]) :=
   paren_rejects (closedMaximum_rejects_beyond hvalues hlength htoken) (by simp)
 
 /-- The list parser with a maximum and its own `(` on the `(`, fewer values than the maximum and
@@ -965,7 +982,7 @@ theorem parenMaximum_maxElements_new (p : P) (maximum : Nat) :
 
 /-- The parse of a list with a maximum and its own `(`, the `(` taken before: the parse of the
 list. -/
-private theorem parenMaximum_opened (q : ClosedMaximumParser H P) {Z : Type} [Produce Z]
+private theorem parenMaximum_opened (q : ClosedMaximumParser H P) {Z : Type} [Cursor Z]
     (state : ParseState H) (cursor : Z) :
     outcome <$> Parse.parse (⟨true, q⟩ : ParenMaximumParser H P) state cursor =
       parenF <$> (outcome <$> Parse.parse q state cursor) := by
@@ -984,7 +1001,7 @@ private theorem opened_finishes {version : Token.Version} {q b : ClosedMaximumPa
     Functor.map_map]
   congr 1
   funext e
-  rcases e with (_ | _) | _ <;> rfl
+  rcases e with (_ | _ | _) | _ <;> rfl
 
 private theorem opened_rejects {version : Token.Version} {q : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
@@ -995,7 +1012,7 @@ private theorem opened_rejects {version : Token.Version} {q : ClosedMaximumParse
     Functor.map_map]
   congr 1
   funext e
-  rcases e with (_ | _) | _ <;> rfl
+  rcases e with (_ | _ | _) | _ <;> rfl
 
 private theorem paren_waits {version : Token.Version} {q : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
@@ -1009,7 +1026,7 @@ private theorem paren_waits {version : Token.Version} {q : ClosedMaximumParser H
     h.2 state after' last htail hnone, Functor.map_map]
   congr 1
   funext e
-  rcases e with (_ | _) | _ <;> rfl
+  rcases e with (_ | _ | _) | _ <;> rfl
 
 /-- The list parser with a maximum and its own `(` on no token: it wants more, as it is. -/
 theorem parenMaximum_waits_open {version : Token.Version} {p : P} {maximum : Nat} :
@@ -1044,7 +1061,7 @@ theorem parenMaximum_waits_after_open {version : Token.Version} {p : P} :
         ValuesParse version p values → values.length = maximum → token ≠ .parenClose →
         Outcome.Rejects version (after maximum) (valuesTokens values ++ [token])
           (do let _ ← values.mapM fun value => value.2; pure ())
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   refine ⟨fun maximum => ⟨true, ClosedMaximumParser.new p maximum⟩, fun _ _ => rfl,
     fun maximum => ⟨handlerOnly_pure _, fun state cursor last htakes hnone => ?_⟩,
     fun maximum _ hv hlength => opened_finishes (closedMaximum_parses hv hlength),
@@ -1052,8 +1069,8 @@ theorem parenMaximum_waits_after_open {version : Token.Version} {p : P} :
       opened_rejects (closedMaximum_rejects_beyond hv hlength htoken)⟩
   obtain ⟨after, raw, consumed, hn, hnext, hver, hopen, htail⟩ := Takes.cons_inv htakes
   rw [Takes.nil_inv htail] at hnone
-  have hsyntax : Produce.syntax after raw = .parenOpen := by
-    cases h : Produce.syntax after raw <;> rw [h] at hopen <;> first | rfl | cases hopen
+  have hsyntax : Cursor.syntax after raw = .parenOpen := by
+    cases h : Cursor.syntax after raw <;> rw [h] at hopen <;> first | rfl | cases hopen
   simp only [Parse.parse, ParenMaximumParser.new, Bool.false_eq_true, ite_false]
   split
   · rename_i heq
@@ -1093,7 +1110,7 @@ theorem parenMaximum_waits_between {version : Token.Version} {p : P}
         token ≠ .parenClose →
         Outcome.Rejects version (after maximum found) (valuesTokens values' ++ [token])
           (do let _ ← values'.mapM fun value => value.2; pure ())
-          (.expectedToken #[.parenClose])) := by
+          (.expected #[.token .parenClose])) := by
   have htok : valuesTokens values ≠ [] := by
     obtain ⟨value, values', rfl⟩ := List.exists_cons_of_ne_nil hne
     obtain ⟨_, token, tokens, hvalue, _⟩ := hvalues value (List.mem_cons_self ..)

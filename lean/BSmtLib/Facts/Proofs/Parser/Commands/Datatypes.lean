@@ -121,7 +121,7 @@ local notation "Ctor" T => Plain.Symbol × Multiple.SortedVars T
 /-- What the datatype parser does when its constructors end. -/
 def constructorsDone (parametric : Bool) (constructors : Array (Ctor S)) :
     PM H (Parser.Internal.Step (DatatypeState S) (Array (Ctor S))) := do
-  if constructors.isEmpty then Parser.Internal.syntaxError .emptyDatatypeConstructors
+  if constructors.isEmpty then Parser.Internal.syntaxError (.empty .datatypeConstructors)
   if parametric then return .more (.close constructors)
   else return .done constructors
 
@@ -129,7 +129,7 @@ def constructorsDone (parametric : Bool) (constructors : Array (Ctor S)) :
 def parametersDone (start : Array Plain.Symbol → PM H Unit)
     (parameters : Array Plain.Symbol) :
     PM H (Parser.Internal.Step (DatatypeState S) (Array (Ctor S))) := do
-  if parameters.isEmpty then Parser.Internal.syntaxError .emptyDatatypeParameters
+  if parameters.isEmpty then Parser.Internal.syntaxError (.empty .datatypeParameters)
   start parameters
   return .more .constructorsOpen
 

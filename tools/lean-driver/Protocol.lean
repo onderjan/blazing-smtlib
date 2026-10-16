@@ -48,16 +48,16 @@ def tokenTypeName : TokenCategory → String
   | .comment => "Comment"
   | .endOfFile => "EndOfFile"
 
-/-- The lexer error kind, spelled as the Rust variant. -/
+/-- The lexer error kind, spelled as the Rust `Debug` form of the kind. -/
 def errorKindName : LexicalErrorKind → String
   | .unexpectedCharacter => "UnexpectedCharacter"
-  | .fractionDigitExpected => "FractionDigitExpected"
-  | .hexadecimalDigitExpected => "HexadecimalDigitExpected"
-  | .binaryDigitExpected => "BinaryDigitExpected"
-  | .baseSelectionExpected => "BaseSelectionExpected"
+  | .expected .fractionDigit => "Expected(FractionDigit)"
+  | .expected .hexadecimalDigit => "Expected(HexadecimalDigit)"
+  | .expected .binaryDigit => "Expected(BinaryDigit)"
+  | .expected .base => "Expected(Base)"
   | .unclosedStringLiteral => "UnclosedStringLiteral"
   | .forbiddenCharInString => "ForbiddenCharInString"
-  | .forbiddenKeywordName => "ForbiddenKeywordName"
+  | .emptyKeyword => "EmptyKeyword"
   | .backslashInQuotedSymbol => "BackslashInQuotedSymbol"
   | .forbiddenCharInQuotedSymbol => "ForbiddenCharInQuotedSymbol"
   | .unclosedQuotedSymbol => "UnclosedQuotedSymbol"

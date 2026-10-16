@@ -22,7 +22,7 @@ open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Produce VersionPosture)
+open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
 open BSmtLib.Facts.Proofs.Parser.Fused.Loop
 open BSmtLib.Facts.Proofs.Parser.Fused.Adapter
 open BSmtLib.Facts.Proofs.Parser.Fused.Term
@@ -54,9 +54,9 @@ theorem stepSimulates : StepSimulates H m := by
 the same answer, parser, parse state, cursor and handler, in every lawful monad, with every
 handler, on every cursor. -/
 theorem parse_eq {batch : BatchTag} (parser : ScriptParser H) (state : Parser.ParseState H)
-    (producer : BatchCursor batch) :
+    (cursor : BatchCursor batch) :
     Parse.parse
-        (m := m) parser state producer = Parser.Internal.parseByToken parser state producer :=
-  Loop.parse_eq stepSimulates parser state producer
+        (m := m) parser state cursor = Parser.Internal.parseByToken parser state cursor :=
+  Loop.parse_eq stepSimulates parser state cursor
 
 end BSmtLib.Facts.Proofs.Parser.Fused.Step
