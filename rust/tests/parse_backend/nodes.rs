@@ -107,10 +107,20 @@ impl<'a, S> Signature<'a, S> {
 /// The signatures of `define-funs-rec`, in order.
 pub type Signatures<'a, S> = Vec<Signature<'a, S>>;
 
-/// What the handler accepts a nonstandard command with: its payload is one
-/// term, then the closing parenthesis, and the term is handed to
-/// `CommandHandler::nonstandard_term`.
-pub struct NonstandardTerm;
+/// The payload the handler accepts a nonstandard command with, which selects
+/// the parser of the payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NonstandardPayload {
+    /// One term, then the closing parenthesis; the term is handed to
+    /// `CommandHandler::nonstandard_term`.
+    Term,
+    /// The closing parenthesis, after which the parser switches the cursor
+    /// to the version (`SmtCursor::set_version`).
+    SwitchVersion(SmtVersion),
+    /// The closing parenthesis, after which the parser has the cursor
+    /// discard the rest of the input (`SmtCursor::discard_rest`).
+    DiscardRest,
+}
 
 /// The handler of the categories that terms are built from (`SmtHandler`).
 pub trait Handler {
@@ -178,11 +188,14 @@ pub trait Handler {
 
 /// The handler of commands and scripts (`SmtCommandHandler`).
 ///
-/// A nonstandard command is accepted with a term as its payload, the only
-/// payload the tests give one; the Rust library hands the payload to a
-/// parser that the handler chooses.
+/// A nonstandard command is accepted with one of the payloads of
+/// `NonstandardPayload`; the Rust library hands the payload to a parser that
+/// the handler chooses.
 pub trait CommandHandler: Handler {
-    fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error>;
+    fn nonstandard_command(
+        &mut self,
+        name: SmtSymbolBuf,
+    ) -> Result<NonstandardPayload, Self::Error>;
     fn nonstandard_term(&mut self, term: Self::Term) -> Result<(), Self::Error>;
     fn command_echo(&mut self, value: SmtStringContentBuf) -> Result<(), Self::Error>;
     fn command_get_option(&mut self, option: SmtKeywordBuf) -> Result<(), Self::Error>;

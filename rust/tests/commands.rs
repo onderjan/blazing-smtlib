@@ -13,8 +13,9 @@ use blazing_smtlib::{
 };
 use common::{assert_error_span, assert_parser_error, parse_with};
 use parse_backend::{
-    AttributeValue, Bindings, CommandHandler, Constructors, Handler, MatchCases, NonstandardTerm,
-    ReadErrorCause, SExpr, Signature, Signatures, Sort, SortArities, SortedVars, Symbols, Term,
+    AttributeValue, Bindings, CommandHandler, Constructors, Handler, MatchCases,
+    NonstandardPayload, ReadErrorCause, SExpr, Signature, Signatures, Sort, SortArities,
+    SortedVars, Symbols, Term,
 };
 
 use blazing_smtlib::{
@@ -352,7 +353,7 @@ impl Handler for Resolving {
 }
 
 impl CommandHandler for Resolving {
-    fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, String> {
+    fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardPayload, String> {
         Err(format!("nonstandard command {:?}", text(name.as_slice())))
     }
 

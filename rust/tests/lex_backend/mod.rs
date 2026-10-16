@@ -24,7 +24,6 @@
 
 pub mod driver;
 
-use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::cell::RefCell;
 use std::convert::Infallible;
 use std::ffi::OsString;
@@ -34,7 +33,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
     SmtLocation,
-    lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind, SmtLexicalExpected},
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
         SmtTokenCategory, SmtVersion,
@@ -346,69 +345,22 @@ const TOKEN_TYPES: [SmtTokenCategory; 13] = [
     SmtTokenCategory::EndOfFile,
 ];
 
-/// The lexical error kinds, by the names the Lean driver sends for them.
-const ERROR_KINDS: [(&str, SmtLexicalErrorKind); 14] = [
-    (
-        "UnexpectedCharacter",
-        SmtLexicalErrorKind::UnexpectedCharacter,
-    ),
-    (
-        "FractionDigitExpected",
-        SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
-    ),
-    (
-        "HexadecimalDigitExpected",
-        SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
-    ),
-    (
-        "BinaryDigitExpected",
-        SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
-    ),
-    (
-        "BaseSelectionExpected",
-        SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
-    ),
-    (
-        "UnclosedStringLiteral",
-        SmtLexicalErrorKind::UnclosedStringLiteral,
-    ),
-    (
-        "ForbiddenCharInString",
-        SmtLexicalErrorKind::ForbiddenCharInString,
-    ),
-    ("ForbiddenKeywordName", SmtLexicalErrorKind::EmptyKeyword),
-    (
-        "BackslashInQuotedSymbol",
-        SmtLexicalErrorKind::BackslashInQuotedSymbol,
-    ),
-    (
-        "ForbiddenCharInQuotedSymbol",
-        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
-    ),
-    (
-        "UnclosedQuotedSymbol",
-        SmtLexicalErrorKind::UnclosedQuotedSymbol,
-    ),
-    (
-        "NumeralLeadingZero",
-        SmtLexicalErrorKind::NumeralLeadingZero,
-    ),
-    ("MissingDelimiter", SmtLexicalErrorKind::MissingDelimiter),
-    (
-        "UnexpectedTrailingToken",
-        SmtLexicalErrorKind::UnexpectedTrailingToken,
-    ),
+const ERROR_KINDS: [SmtLexicalErrorKind; 14] = [
+    SmtLexicalErrorKind::UnexpectedCharacter,
+    SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
+    SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
+    SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
+    SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
+    SmtLexicalErrorKind::UnclosedStringLiteral,
+    SmtLexicalErrorKind::ForbiddenCharInString,
+    SmtLexicalErrorKind::EmptyKeyword,
+    SmtLexicalErrorKind::BackslashInQuotedSymbol,
+    SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+    SmtLexicalErrorKind::UnclosedQuotedSymbol,
+    SmtLexicalErrorKind::NumeralLeadingZero,
+    SmtLexicalErrorKind::MissingDelimiter,
+    SmtLexicalErrorKind::UnexpectedTrailingToken,
 ];
-
-/// Finds the value by the name the Lean driver sends for it, or by its debug
-/// spelling.
-fn by_lean_name<T: Copy + std::fmt::Debug>(values: &[(&str, T)], name: &str, line: &str) -> T {
-    values
-        .iter()
-        .find(|(spelling, value)| *spelling == name || format!("{value:?}") == name)
-        .map(|(_, value)| *value)
-        .unwrap_or_else(|| panic!("the Lean driver sent an unknown name {name:?}: {line:?}"))
-}
 
 fn version_name(version: SmtVersion) -> &'static str {
     std::str::from_utf8(version.as_decimal().as_slice()).expect("a version decimal is ASCII")
@@ -561,7 +513,7 @@ fn lex_with_driver(path: &OsString, version: SmtVersion, feeds: &[Feed<'_>]) -> 
                 ["ok"] => return lexed,
                 ["err", kind, start, end] => {
                     lexed.error = Some(LexedError {
-                        kind: by_lean_name(&ERROR_KINDS, kind, line),
+                        kind: by_name(&ERROR_KINDS, kind, line),
                         start: parse_loc(start, line),
                         end: parse_loc(end, line),
                     });
@@ -798,7 +750,7 @@ pub fn run(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> Vec<Li
             }
             ["err", kind, start, end, rest @ ..] => lines.push(Line::LexicalError {
                 error: LexedError {
-                    kind: by_lean_name(&ERROR_KINDS, kind, line),
+                    kind: by_name(&ERROR_KINDS, kind, line),
                     start: parse_loc(start, line),
                     end: parse_loc(end, line),
                 },

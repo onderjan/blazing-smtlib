@@ -330,7 +330,10 @@ impl Handler for SyntaxChecker {
 }
 
 impl CommandHandler for SyntaxChecker {
-    fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error> {
+    fn nonstandard_command(
+        &mut self,
+        name: SmtSymbolBuf,
+    ) -> Result<NonstandardPayload, Self::Error> {
         Err(SmtNonstandardCommandError::new(name))
     }
     fn nonstandard_term(&mut self, _term: ()) -> Result<(), Self::Error> {

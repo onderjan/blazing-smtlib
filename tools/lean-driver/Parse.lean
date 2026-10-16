@@ -239,11 +239,56 @@ instance : Parser.CommandRule NonstandardRule Remote where
     callUnit s!"nonstandard_term {idField term}"
     return self
 
+/-- The parser of a non-standard command's payload that the Rust side chose in its answer to
+`nonstandard_command`, as the Rust tests' handler chooses (`parse_backend::rust::
+NonstandardParser`). -/
+inductive NonstandardParser where
+  /-- One term, then the closing parenthesis. -/
+  | term (parser : Parser.CommandPayloadParser Remote NonstandardRule)
+  /-- The closing parenthesis, after which the parser switches the cursor to the version. -/
+  | switchVersion (version : Version)
+  /-- The closing parenthesis, after which the parser has the cursor discard the rest of the
+  input. -/
+  | discardRest
+
+instance : Parse NonstandardParser Remote IO RemoteError Unit where
+  parse self state cursor := do
+    match self with
+    | .term parser =>
+      let (answer, parser, state, next) ← Parse.parse parser state cursor
+      return (answer, .term parser, state, next)
+    | .switchVersion version =>
+      let (answer, _, state, next) ← Parse.parse CloseParenParser.new state cursor
+      match answer with
+      | .ok (.break ()) =>
+        match switched : Cursor.setVersion next.1 version with
+        | .ok after =>
+          return (.ok (.break ()), self, state,
+            ⟨after, fun has => Cursor.setVersion_consumed (next.2 has) switched⟩)
+        | .error _ => return (.error (ParseError.version .unsupported), self, state, next)
+      | answer => return (answer, self, state, next)
+    | .discardRest =>
+      let (answer, _, state, next) ← Parse.parse CloseParenParser.new state cursor
+      match answer with
+      | .ok (.break ()) =>
+        return (.ok (.break ()), self, state,
+          ⟨Cursor.discardRest next.1, fun has => Cursor.discardRest_consumed (next.2 has)⟩)
+      | answer => return (answer, self, state, next)
+
 instance : CommandHandler Remote IO where
-  NonstandardParser := Parser.CommandPayloadParser Remote NonstandardRule
+  NonstandardParser := NonstandardParser
   nonstandardCommand symbol := do
-    callUnit s!"nonstandard_command {symbolField symbol}"
-    return .new {} (.new .new)
+    let call := s!"nonstandard_command {symbolField symbol}"
+    let answer ← (← get).ask call
+    match answer.splitOn " " with
+    | ["ok"] => return .term (.new {} (.new .new))
+    | ["ok", "switch", version] =>
+      match readVersion version with
+      | .ok version => return .switchVersion version
+      | .error _ => badAnswer call answer
+    | ["ok", "discard"] => return .discardRest
+    | ["err", id] => throwThe RemoteError (.rust (← answerId call answer id))
+    | _ => badAnswer call answer
   commandAssert term := callUnit s!"command_assert {idField term}"
   commandCheckSat := callUnit "command_check_sat"
   commandCheckSatAssuming terms := callUnit s!"command_check_sat_assuming {idsField terms.asSlice}"

@@ -724,14 +724,24 @@ names the parameter sorts, then the result sort. No command call makes a
 value.
 
 A command named by a symbol is a non-standard one: `nonstandard_command` asks
-whether the handler accepts it. If it does, the command's payload is one term,
-then its `)`, as the Rust tests' handler accepts it, and `nonstandard_term`
-hands the term over at that `)`.
+whether the handler accepts it, and with which payload, which its answer says:
+
+- `ok`: the payload is one term, then its `)`, and `nonstandard_term` hands
+  the term over at that `)`;
+- `ok switch <version>`: the payload is the `)`, after which the parser
+  switches the cursor to the version, as `set_version` of the Rust
+  `SmtCursor`;
+- `ok discard`: the payload is the `)`, after which the parser has the cursor
+  discard the rest of the input, as `discard_rest` of the Rust `SmtCursor`.
+
+These are the parsers the Rust tests' handler chooses from.
 
 The answer is one of:
 
 - `ok <id>`: the call made the value of that number;
 - `ok`: the call succeeded, for a call that makes no value;
+- `ok switch <version>`, `ok discard`: the answers of `nonstandard_command`
+  above;
 - `err <id>`: the call failed with the handler's error of that number.
 
 ### Calls of the buffered reader

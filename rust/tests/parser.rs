@@ -13,7 +13,7 @@ use std::ops::ControlFlow;
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 use parse_backend::{
     Adapt, AttributeValue, Bindings, CommandHandler, CommandParser, Constructors, Handler,
-    MatchCases, NonstandardTerm, ReadErrorCause, Reader, SExpr, Signature, Signatures, Sort,
+    MatchCases, NonstandardPayload, ReadErrorCause, Reader, SExpr, Signature, Signatures, Sort,
     SortArities, SortedVars, Symbols, Term,
 };
 
@@ -158,7 +158,9 @@ fn reserved_word_other_than_a_command_name_is_no_command_name() {
     );
 }
 
-/// Handler accepting the nonstandard command `(my-assert <term>)`
+/// Handler accepting the nonstandard commands `(my-assert <term>)`,
+/// `(my-version-2.0)`, which switches the cursor to 2.0, and `(my-discard)`,
+/// which has the cursor discard the rest of the input,
 /// and recording every command it sees.
 #[derive(Default)]
 struct Recording {
@@ -272,9 +274,20 @@ impl Handler for Recording {
 }
 
 impl CommandHandler for Recording {
-    fn nonstandard_command(&mut self, name: SmtSymbolBuf) -> Result<NonstandardTerm, Self::Error> {
+    fn nonstandard_command(
+        &mut self,
+        name: SmtSymbolBuf,
+    ) -> Result<NonstandardPayload, Self::Error> {
         match name.as_slice() {
-            b"my-assert" => Ok(NonstandardTerm),
+            b"my-assert" => Ok(NonstandardPayload::Term),
+            b"my-version-2.0" => {
+                self.commands.push("my-version-2.0");
+                Ok(NonstandardPayload::SwitchVersion(SmtVersion::V2_0))
+            }
+            b"my-discard" => {
+                self.commands.push("my-discard");
+                Ok(NonstandardPayload::DiscardRest)
+            }
             _ => Err(SmtNonstandardCommandError::new(name)),
         }
     }
@@ -1060,6 +1073,126 @@ fn a_command_parser_outside_a_script_switches_nothing() {
     );
     // only the version in force at the start of the input
     assert_eq!(handler.commands, ["set-version 2.7", "set-info"]);
+}
+
+// --- What a nonstandard parser may do with the cursor ---
+//
+// The command parser hands the parser of a nonstandard command the cursor it
+// holds, and the script parser does not check what that parser does with it.
+
+/// Reads the input as a script in two pieces, split at the offset, then the
+/// end of the input. Returns the version in force after each piece, the
+/// location where discarding began after each piece and the location of the
+/// end.
+fn read_split(
+    handler: &mut Recording,
+    input: &[u8],
+    at: usize,
+) -> (
+    [(SmtVersion, Option<parse_backend::Location>); 2],
+    parse_backend::Location,
+) {
+    let (first, second) = input.split_at(at);
+    let mut reader = Reader::script(handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+    let mut after = Vec::new();
+    for piece in [first, second] {
+        reader
+            .read_slice(piece)
+            .unwrap_or_else(|err| panic!("error {:?} at {:?}", err.cause(), err.span()));
+        after.push((reader.version(), reader.discarded_from()));
+    }
+    let end = reader
+        .read_eof()
+        .unwrap_or_else(|err| panic!("error {:?} at {:?}", err.cause(), err.span()));
+    assert_eq!(
+        reader.version(),
+        SmtVersion::V2_7,
+        "the end resets the version"
+    );
+    assert_eq!(
+        reader.discarded_from(),
+        None,
+        "the end resets the discarding"
+    );
+    (
+        after.try_into().expect("two pieces were read"),
+        end.location(),
+    )
+}
+
+#[test]
+fn a_nonstandard_parser_may_switch_the_version_unchecked() {
+    // the parser of `(my-version-2.0)` switches the cursor to 2.0 after its
+    // closing parenthesis: the commands after it are read under 2.0, where
+    // `lambda` is a symbol and a backslash escapes a quote in a string,
+    // although the default posture does not allow 2.0; the switch is no
+    // declaration, so the one declaration the posture allows is still
+    // available; and the handler is not told the version
+    let input: &[u8] = b"(my-version-2.0)(declare-fun lambda () Bool)(set-option :x \"a\\\"b\")\
+        (set-info :smt-lib-version 2.6)(assert lambda)";
+    let switched = b"(my-version-2.0)".len();
+    let declaration = b"(set-info :smt-lib-version 2.6)";
+    let declared = input
+        .windows(declaration.len())
+        .position(|window| window == declaration)
+        .expect("the input declares a version")
+        + declaration.len();
+    for at in 0..=input.len() {
+        let mut handler = recording_versions();
+        let (after, _) = read_split(&mut handler, input, at);
+        assert_eq!(
+            handler.commands,
+            [
+                "set-version 2.7",
+                "my-version-2.0",
+                "declare-fun",
+                "set-option",
+                "set-info",
+                "set-version 2.6",
+                "assert",
+            ],
+            "split at {at}"
+        );
+        let first = if at < switched {
+            SmtVersion::V2_7
+        } else if at < declared {
+            SmtVersion::V2_0
+        } else {
+            SmtVersion::V2_6
+        };
+        assert_eq!(
+            after,
+            [(first, None), (SmtVersion::V2_6, None)],
+            "split at {at}"
+        );
+    }
+}
+
+#[test]
+fn a_nonstandard_parser_may_discard_the_rest() {
+    // the parser of `(my-discard)` has the cursor discard the rest of the
+    // input after its closing parenthesis: nothing after it is read, not even
+    // lexed, and the script ends at the end of the input, located where the
+    // discarding began
+    let input: &[u8] = b"(my-assert x)(my-discard) x ) ( 1 (check-sat \"open";
+    let discarded = b"(my-assert x)(my-discard)".len() as u64;
+    for at in 0..=input.len() {
+        let mut handler = Recording::default();
+        let (after, end) = read_split(&mut handler, input, at);
+        assert_eq!(
+            handler.commands,
+            ["my-assert", "my-discard"],
+            "split at {at}"
+        );
+        let from = parse_backend::Location::new(discarded, 0, discarded);
+        let first = (at >= discarded as usize).then_some(from);
+        assert_eq!(
+            after,
+            [(SmtVersion::V2_7, first), (SmtVersion::V2_7, Some(from))],
+            "split at {at}"
+        );
+        assert_eq!(end, from, "split at {at}");
+    }
 }
 
 // --- A token-observing consumer built by a user ---

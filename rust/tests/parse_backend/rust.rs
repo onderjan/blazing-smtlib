@@ -1,18 +1,23 @@
 //! The Rust backend: the library's parser calls a test handler through an
 //! adapter that turns the views it hands over into owned values.
 
+use std::ops::ControlFlow;
+
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
     SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtKeyword, SmtMatchCases,
     SmtMultiple, SmtNumeral, SmtPattern, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort,
     SmtSortArities, SmtSortedVars, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
-    parser::{SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtTermParser},
-    token::SmtVersion,
+    parser::{
+        SmtCloseParenParser, SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtParse,
+        SmtParseError, SmtParseState, SmtTermParser, SmtVersionErrorKind,
+    },
+    token::{SmtCursor, SmtVersion, SmtVersionRefused},
 };
 
 use super::nodes::{
-    Application, AttributeValue, CommandHandler, Handler, QualifiedIdent, SExpr, Signature, Sort,
-    SortedVars, Term,
+    Application, AttributeValue, CommandHandler, Handler, NonstandardPayload, QualifiedIdent,
+    SExpr, Signature, Sort, SortedVars, Term,
 };
 
 /// A test handler as the library's handler.
@@ -199,8 +204,52 @@ impl<'h, H: CommandHandler> SmtCommandRule<Adapt<'h, H>> for NonstandardRule {
     }
 }
 
+/// The parser of a nonstandard command's payload that the test handler
+/// chose (`NonstandardPayload`).
+pub enum NonstandardParser<'h, H: CommandHandler> {
+    /// One term, then the closing parenthesis.
+    Term(SmtCommandPayloadParser<Adapt<'h, H>, NonstandardRule>),
+    /// The closing parenthesis, after which the parser switches the cursor
+    /// to the version.
+    SwitchVersion(SmtVersion),
+    /// The closing parenthesis, after which the parser has the cursor
+    /// discard the rest of the input.
+    DiscardRest,
+}
+
+impl<'h, H: CommandHandler> SmtParse<Adapt<'h, H>> for NonstandardParser<'h, H> {
+    type Result = ();
+
+    fn parse<Z: SmtCursor>(
+        &mut self,
+        handler: &mut Adapt<'h, H>,
+        parse_state: &mut SmtParseState<Adapt<'h, H>>,
+        cursor: &mut Z,
+    ) -> Result<ControlFlow<()>, SmtParseError<H::Error>> {
+        let version = match self {
+            NonstandardParser::Term(parser) => return parser.parse(handler, parse_state, cursor),
+            NonstandardParser::SwitchVersion(version) => Some(*version),
+            NonstandardParser::DiscardRest => None,
+        };
+        if SmtCloseParenParser::new()
+            .parse(handler, parse_state, cursor)?
+            .is_continue()
+        {
+            return Ok(ControlFlow::Continue(()));
+        }
+        // the closing parenthesis is taken: act on the cursor
+        match version {
+            Some(version) => cursor.set_version(version).map_err(|SmtVersionRefused| {
+                SmtParseError::version(SmtVersionErrorKind::Unsupported)
+            })?,
+            None => cursor.discard_rest(),
+        }
+        Ok(ControlFlow::Break(()))
+    }
+}
+
 impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
-    type NonstandardParser = SmtCommandPayloadParser<Self, NonstandardRule>;
+    type NonstandardParser = NonstandardParser<'h, H>;
 
     fn nonstandard_command(
         &mut self,
@@ -208,7 +257,15 @@ impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
     ) -> Result<Self::NonstandardParser, H::Error> {
         self.0
             .nonstandard_command(name.into_owned())
-            .map(|_| SmtCommandPayloadParser::default())
+            .map(|payload| match payload {
+                NonstandardPayload::Term => {
+                    NonstandardParser::Term(SmtCommandPayloadParser::default())
+                }
+                NonstandardPayload::SwitchVersion(version) => {
+                    NonstandardParser::SwitchVersion(version)
+                }
+                NonstandardPayload::DiscardRest => NonstandardParser::DiscardRest,
+            })
     }
 
     fn command_echo(&mut self, value: SmtStringContent<'_>) -> Result<(), H::Error> {
