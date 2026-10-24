@@ -14,8 +14,10 @@ use crate::{
 };
 
 mod reserved;
+mod writer;
 
 pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved};
+pub use writer::{SmtCompactTokenWriter, SmtLayoutTokenWriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtTokenCategory {
@@ -1191,7 +1193,9 @@ pub trait SmtConsume {
     /// it can reconstruct the byte stream precisely thanks
     /// to the whitespace and comments. The caller must hand
     /// over the whitespace and comment tokens present between
-    /// true syntactic tokens.
+    /// true syntactic tokens (unless the consumer specifically
+    /// allows them to be omitted, as e.g. [`SmtLayoutTokenWriter`]
+    /// and [`SmtCompactTokenWriter`] do).
     ///
     /// If false, the consumer operates over abstract tokens:
     /// it is not interested in whitespace and comments,
