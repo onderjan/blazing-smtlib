@@ -15,6 +15,8 @@
 //! modules can also be used on their own.
 
 use std::{
+    error::Error,
+    fmt,
     fs::File,
     io::{BufRead, BufReader},
     path::Path,
@@ -77,6 +79,16 @@ impl<E> SmtReadError<E> {
         self.span
     }
 
+    /// The most useful location for deciphering the error.
+    ///
+    /// Guaranteed to be within the span.
+    pub fn location(&self) -> SmtLocation {
+        match &self.cause {
+            SmtReadErrorCause::Lexical(kind) => kind.location_in(self.span),
+            _ => self.span.start(),
+        }
+    }
+
     /// Convert into the enumeration that determines why reading has failed.
     pub fn into_cause(self) -> SmtReadErrorCause<E> {
         self.cause
@@ -89,6 +101,43 @@ impl<E> SmtReadError<E> {
             SmtParseErrorCause::Handler(err) => SmtReadErrorCause::Handler(err),
         };
         SmtReadError::new(cause, span)
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtReadErrorCause<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "I/O: {err}"),
+            Self::Lexical(kind) => kind.fmt(f),
+            Self::Syntax(kind) => kind.fmt(f),
+            Self::Version(kind) => kind.fmt(f),
+            Self::Handler(err) => err.fmt(f),
+        }
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtReadError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let location = self.location();
+        write!(
+            f,
+            "{} at line {}, column {}",
+            self.cause,
+            location.line() + 1,
+            location.column() + 1
+        )
+    }
+}
+
+impl<E: Error + 'static> Error for SmtReadError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.cause {
+            SmtReadErrorCause::Io(err) => err.source(),
+            SmtReadErrorCause::Handler(err) => err.source(),
+            SmtReadErrorCause::Lexical(_)
+            | SmtReadErrorCause::Syntax(_)
+            | SmtReadErrorCause::Version(_) => None,
+        }
     }
 }
 

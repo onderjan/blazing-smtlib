@@ -21,6 +21,14 @@ pub struct SmtLocation {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtInvalidLocation;
 
+impl std::fmt::Display for SmtInvalidLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("invalid location")
+    }
+}
+
+impl std::error::Error for SmtInvalidLocation {}
+
 impl SmtLocation {
     #[inline]
     pub fn new(offset: u64, line: u64, column: u64) -> Result<Self, SmtInvalidLocation> {
@@ -143,6 +151,14 @@ pub struct SmtSpan {
 /// The end location is not at or after the start location.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtInvalidSpan;
+
+impl std::fmt::Display for SmtInvalidSpan {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("invalid span")
+    }
+}
+
+impl std::error::Error for SmtInvalidSpan {}
 
 impl SmtSpan {
     #[inline]

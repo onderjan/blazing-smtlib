@@ -348,6 +348,14 @@ impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtEmptyArgumentsError;
 
+impl std::fmt::Display for SmtEmptyArgumentsError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("no arguments provided where at least one is required")
+    }
+}
+
+impl std::error::Error for SmtEmptyArgumentsError {}
+
 impl<H: SmtHandler + ?Sized> Debug for SmtApplication<'_, H>
 where
     H::Sort: Debug,

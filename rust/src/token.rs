@@ -1,4 +1,6 @@
 use std::{
+    error::Error,
+    fmt,
     io::{self, Write},
     ops::ControlFlow,
 };
@@ -372,6 +374,36 @@ impl From<io::Error> for SmtWriteError {
     }
 }
 
+impl fmt::Display for SmtWriteErrorCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "I/O: {err}"),
+            Self::NotInVersion(reserved) => {
+                write!(
+                    f,
+                    "`{}` is not reserved in written version",
+                    reserved.as_str()
+                )
+            }
+        }
+    }
+}
+
+impl fmt::Display for SmtWriteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Error for SmtWriteError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.0 {
+            SmtWriteErrorCause::Io(err) => err.source(),
+            SmtWriteErrorCause::NotInVersion(_) => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmtToken<'a> {
     /// Entry where End of File is kept as None.
@@ -418,6 +450,14 @@ impl<'a> SmtToken<'a> {
 /// Producer refused to switch to a requested version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtVersionRefused;
+
+impl fmt::Display for SmtVersionRefused {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("version switch refused")
+    }
+}
+
+impl Error for SmtVersionRefused {}
 
 /// A sequential producer of tokens.
 pub trait SmtCursor {

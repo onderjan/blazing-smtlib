@@ -1,4 +1,4 @@
-use std::{convert::Infallible, fmt::Debug};
+use std::{convert::Infallible, error::Error, fmt, fmt::Debug};
 
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
@@ -464,6 +464,41 @@ pub enum SmtPartialCommandError<E> {
     Handler(E),
 }
 
+impl<E: fmt::Display> fmt::Display for SmtPartialCommandError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unsupported(command) => write!(f, "unsupported command `{}`", command.as_str()),
+            Self::UnsupportedNonstandard(name) => {
+                f.write_str("unsupported nonstandard command ")?;
+                write_symbol(f, name)
+            }
+            Self::Handler(err) => err.fmt(f),
+        }
+    }
+}
+
+impl<E: Error + 'static> Error for SmtPartialCommandError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Handler(err) => err.source(),
+            Self::Unsupported(_) | Self::UnsupportedNonstandard(_) => None,
+        }
+    }
+}
+
+/// Writes the symbol for an error message.
+///
+/// It is converted to UTF-8 via lossy conversion and enclosed in backticks.
+/// If quoted, the pipes are retained.
+fn write_symbol(f: &mut fmt::Formatter<'_>, symbol: &SmtSymbolBuf) -> fmt::Result {
+    let name = String::from_utf8_lossy(symbol.as_slice());
+    if symbol.is_quoted() {
+        write!(f, "`|{name}|`")
+    } else {
+        write!(f, "`{name}`")
+    }
+}
+
 fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCommandError<E>> {
     Err(SmtPartialCommandError::Unsupported(command))
 }
@@ -912,6 +947,15 @@ impl SmtNonstandardCommandError {
         self.0
     }
 }
+
+impl fmt::Display for SmtNonstandardCommandError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("unsupported nonstandard command ")?;
+        write_symbol(f, &self.0)
+    }
+}
+
+impl Error for SmtNonstandardCommandError {}
 
 impl SmtHandler for SmtSyntaxChecker {
     type Error = SmtNonstandardCommandError;

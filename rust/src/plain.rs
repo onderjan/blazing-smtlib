@@ -463,8 +463,24 @@ impl SmtDisallowedByteVecError {
     }
 }
 
+impl std::fmt::Display for SmtDisallowedByteVecError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("given byte vector is not allowed")
+    }
+}
+
+impl std::error::Error for SmtDisallowedByteVecError {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtDisallowedBytesError;
+
+impl std::fmt::Display for SmtDisallowedBytesError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("given bytes are not allowed")
+    }
+}
+
+impl std::error::Error for SmtDisallowedBytesError {}
 
 macro_rules! string8_newtype {
     ($buf:ident, $view:ident) => {

@@ -4,7 +4,7 @@ mod command;
 mod script;
 mod state;
 
-use std::ops::ControlFlow;
+use std::{error::Error, fmt, ops::ControlFlow};
 
 pub use adapter::*;
 pub use category::*;
@@ -204,6 +204,140 @@ impl<E> SmtParseError<E> {
 
     pub fn into_cause(self) -> SmtParseErrorCause<E> {
         *self.0
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtParseError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl<E: Error + 'static> Error for SmtParseError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &*self.0 {
+            SmtParseErrorCause::Handler(err) => err.source(),
+            SmtParseErrorCause::Syntax(_) | SmtParseErrorCause::Version(_) => None,
+        }
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtParseErrorCause<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Syntax(kind) => kind.fmt(f),
+            Self::Version(kind) => kind.fmt(f),
+            Self::Handler(err) => err.fmt(f),
+        }
+    }
+}
+
+impl fmt::Display for SmtSyntaxErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Expected(expected) => {
+                let Some((last, rest)) = expected.split_last() else {
+                    return f.write_str("unexpected token");
+                };
+                f.write_str("expected ")?;
+                if let Some((first, middle)) = rest.split_first() {
+                    first.write_name(f)?;
+                    for item in middle {
+                        f.write_str(", ")?;
+                        item.write_name(f)?;
+                    }
+                    // two items are joined by "or" alone, more with a serial comma
+                    f.write_str(if middle.is_empty() { " or " } else { ", or " })?;
+                }
+                last.write_name(f)
+            }
+            Self::Empty(list) => list.fmt(f),
+            Self::Missing(item) => item.fmt(f),
+        }
+    }
+}
+
+impl SmtSyntaxExpected {
+    /// Writes the name of the item in a message.
+    fn write_name(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self {
+            Self::Token(category) => match category {
+                SmtTokenCategory::ParenOpen => "`(`",
+                SmtTokenCategory::ParenClose => "`)`",
+                SmtTokenCategory::Numeral => "numeral",
+                SmtTokenCategory::Decimal => "decimal",
+                SmtTokenCategory::Hexadecimal => "hexadecimal",
+                SmtTokenCategory::Binary => "binary",
+                SmtTokenCategory::String => "string literal",
+                SmtTokenCategory::Keyword => "keyword",
+                SmtTokenCategory::UnquotedSymbol => "simple symbol",
+                SmtTokenCategory::QuotedSymbol => "quoted symbol",
+                SmtTokenCategory::Whitespace => "whitespace",
+                SmtTokenCategory::Comment => "comment",
+                SmtTokenCategory::EndOfFile => "end of input",
+            },
+            Self::Reserved(reserved) => return write!(f, "`{}`", reserved.as_str()),
+            Self::Symbol => "symbol",
+            Self::Index => "index",
+            Self::Ident => "identifier",
+            Self::Sort => "sort",
+            Self::Term => "term",
+            Self::SExpr => "s-expression",
+            Self::Attribute => "attribute",
+            Self::Operator => "operator",
+            Self::CommandName => "command name",
+            Self::PropositionalLiteral => "propositional literal",
+        };
+        f.write_str(name)
+    }
+}
+
+impl fmt::Display for SmtSyntaxExpected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("expected ")?;
+        self.write_name(f)
+    }
+}
+
+impl fmt::Display for SmtNonEmptyList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let list = match self {
+            Self::IdentIndices => "indices of identifier",
+            Self::SortApplication => "arguments of sort",
+            Self::TermApplication => "arguments of application",
+            Self::LetBindings => "bindings of `let`",
+            Self::Annotation => "attributes of annotation",
+            Self::QuantifierBindings => "variables of quantifier",
+            Self::LambdaBindings => "variables of `lambda`",
+            Self::FunctionSignatures => "functions of `define-funs-rec`",
+            Self::DatatypeIntroductions => "sorts of `declare-datatypes`",
+            Self::DatatypeParameters => "parameters of datatype",
+            Self::DatatypeConstructors => "constructors of datatype",
+            Self::PatternArguments => "arguments of constructor pattern",
+            Self::MatchCases => "cases of `match`",
+            Self::GetValueTerms => "terms of `get-value`",
+        };
+        write!(f, "{list} must not be empty")
+    }
+}
+
+impl fmt::Display for SmtMissingItem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::FunctionBody => "too few function bodies for `define-funs-rec`",
+            Self::Datatype => "too few datatypes for `declare-datatypes`",
+        })
+    }
+}
+
+impl fmt::Display for SmtVersionErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unsupported => f.write_str("unsupported version"),
+            Self::TooManyDeclarations(max) => {
+                write!(f, "too many version declarations (at most {max})")
+            }
+        }
     }
 }
 

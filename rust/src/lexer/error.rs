@@ -1,3 +1,5 @@
+use std::{error::Error, fmt};
+
 use crate::{SmtLocation, SmtSpan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -81,6 +83,16 @@ impl<E> SmtLexError<E> {
         self.span
     }
 
+    /// The most useful location for deciphering the error.
+    ///
+    /// Guaranteed to be within the span.
+    pub fn location(&self) -> SmtLocation {
+        match &self.cause {
+            SmtLexErrorCause::Lexical(kind) => kind.location_in(self.span),
+            SmtLexErrorCause::Consumer(_) => self.span.start(),
+        }
+    }
+
     /// Where the rest of the input is to be fed from if the lexer continues (EXPERIMENTAL).
     ///
     /// If present, the lexer is recovering: it expects the input from this
@@ -94,5 +106,92 @@ impl<E> SmtLexError<E> {
     #[doc(hidden)]
     pub fn continues_from(&self) -> Option<SmtLocation> {
         self.continues_from
+    }
+}
+
+impl SmtLexicalErrorKind {
+    /// The most useful location for deciphering the error of this kind given the span.
+    ///
+    /// The location is within the span.
+    pub(crate) fn location_in(self, span: SmtSpan) -> SmtLocation {
+        let location = match self {
+            // the span ends after the offending byte, which is not a line feed:
+            // a line feed is allowed in both literals and delimits a token
+            SmtLexicalErrorKind::ForbiddenCharInString
+            | SmtLexicalErrorKind::BackslashInQuotedSymbol
+            | SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol
+            | SmtLexicalErrorKind::MissingDelimiter => {
+                let end = span.end();
+                SmtLocation::new_unchecked(end.offset() - 1, end.line(), end.column() - 1)
+            }
+            _ => span.start(),
+        };
+        debug_assert!(
+            location == span.start() || (span.start() < location && location < span.end()),
+            "error location {location:?} of {self:?} is not within its span {span:?}"
+        );
+        location
+    }
+}
+
+impl fmt::Display for SmtLexicalErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedCharacter => f.write_str("unexpected character"),
+            Self::Expected(expected) => expected.fmt(f),
+            Self::UnclosedStringLiteral => f.write_str("unclosed string literal"),
+            Self::ForbiddenCharInString => f.write_str("forbidden character in string literal"),
+            Self::EmptyKeyword => f.write_str("colon without keyword name"),
+            Self::BackslashInQuotedSymbol => f.write_str("backslash in quoted symbol"),
+            Self::ForbiddenCharInQuotedSymbol => {
+                f.write_str("forbidden character in quoted symbol")
+            }
+            Self::UnclosedQuotedSymbol => f.write_str("unclosed quoted symbol"),
+            Self::NumeralLeadingZero => f.write_str("numeral with leading zero"),
+            Self::MissingDelimiter => f.write_str("missing delimiter after token"),
+            Self::UnexpectedTrailingToken => f.write_str("unexpected trailing token"),
+        }
+    }
+}
+
+impl fmt::Display for SmtLexicalExpected {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::FractionDigit => "expected fractional digit",
+            Self::HexadecimalDigit => "expected hexadecimal digit",
+            Self::BinaryDigit => "expected binary digit",
+            Self::Base => "expected base (`x` or `b`) after `#`",
+        })
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtLexErrorCause<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Lexical(kind) => kind.fmt(f),
+            Self::Consumer(err) => err.fmt(f),
+        }
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtLexError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let location = self.location();
+        write!(
+            f,
+            "{} at line {}, column {}",
+            self.cause,
+            location.line() + 1,
+            location.column() + 1
+        )
+    }
+}
+
+impl<E: Error + 'static> Error for SmtLexError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.cause {
+            SmtLexErrorCause::Lexical(_) => None,
+            SmtLexErrorCause::Consumer(err) => err.source(),
+        }
     }
 }
