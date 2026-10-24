@@ -8,6 +8,7 @@ use std::{
 use crate::{
     SmtHandler, SmtNumeral, SmtPattern, SmtSymbol,
     parser::{Arena, ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle, TextHandle},
+    token::{SmtAppendTokens, SmtSyntaxToken, SmtTokensCursor},
 };
 
 /// Multiple values to be handled.
@@ -1126,5 +1127,45 @@ impl<S> SmtConstructorsBuf<S> {
 impl<S> Default for SmtConstructorsBuf<S> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Appends the values in order, without enclosing parentheses.
+impl<T: SmtAppendTokens> SmtAppendTokens for SmtMultiple<'_, T> {
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        for value in self.iter() {
+            value.append_tokens(tokens);
+        }
+    }
+}
+
+/// Appends each named value as ( name value ).
+fn append_named<'a, V: SmtAppendTokens + 'a>(
+    named: impl Iterator<Item = (SmtSymbol<'a>, &'a V)>,
+    tokens: &mut SmtTokensCursor<'a>,
+) {
+    for (name, value) in named {
+        tokens.push(SmtSyntaxToken::ParenOpen);
+        tokens.push(SmtSyntaxToken::Symbol(name));
+        value.append_tokens(tokens);
+        tokens.push(SmtSyntaxToken::ParenClose);
+    }
+}
+
+/// Appends each name with its value as `(name value)`, in order, without
+/// enclosing parentheses.
+impl<V: SmtAppendTokens> SmtAppendTokens for SmtNamed<'_, V> {
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        append_named(self.iter(), tokens);
+    }
+}
+
+/// Appends each name with its value as `(name value)`, in order, without
+/// enclosing parentheses.
+impl<V: SmtAppendTokens> SmtAppendTokens for SmtNamedBuf<V> {
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        let text = self.text.as_slice();
+        let names = self.names.iter().map(|name| name.symbol_view(text));
+        append_named(names.zip(self.values.iter()), tokens);
     }
 }
