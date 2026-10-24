@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     error::Error,
     fmt,
     io::{self, Write},
@@ -6,8 +7,10 @@ use std::{
 };
 
 use crate::{
-    SmtBinDigits, SmtComment, SmtDecimal, SmtHexDigits, SmtKeyword, SmtLocation, SmtNumeral,
-    SmtSpan, SmtStringContent, SmtSymbol, SmtWhitespace,
+    SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
+    SmtHexDigits, SmtHexDigitsBuf, SmtKeyword, SmtKeywordBuf, SmtLocation, SmtNumeral,
+    SmtNumeralBuf, SmtSpan, SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
+    SmtWhitespace, SmtWhitespaceBuf,
 };
 
 mod reserved;
@@ -340,6 +343,209 @@ impl<'a> SmtSyntaxToken<'a> {
             SmtSyntaxToken::EndOfFile => {}
         }
         Ok(())
+    }
+}
+
+/// An owned token, from which [`SmtSyntaxToken`] is viewed.
+#[derive(Debug, Clone)]
+pub enum SmtSyntaxTokenBuf {
+    ParenOpen,
+    ParenClose,
+    Numeral(SmtNumeralBuf),
+    Decimal(SmtDecimalBuf),
+    Hexadecimal(SmtHexDigitsBuf),
+    Binary(SmtBinDigitsBuf),
+    String(SmtStringContentBuf),
+    Keyword(SmtKeywordBuf),
+    Symbol(SmtSymbolBuf),
+    Reserved(SmtReserved),
+    Whitespace(SmtWhitespaceBuf),
+    Comment(SmtCommentBuf),
+    EndOfFile,
+}
+
+impl SmtSyntaxTokenBuf {
+    pub fn view(&self) -> SmtSyntaxToken<'_> {
+        match self {
+            Self::ParenOpen => SmtSyntaxToken::ParenOpen,
+            Self::ParenClose => SmtSyntaxToken::ParenClose,
+            Self::Numeral(value) => SmtSyntaxToken::Numeral(value.view()),
+            Self::Decimal(value) => SmtSyntaxToken::Decimal(value.view()),
+            Self::Hexadecimal(value) => SmtSyntaxToken::Hexadecimal(value.view()),
+            Self::Binary(value) => SmtSyntaxToken::Binary(value.view()),
+            Self::String(value) => SmtSyntaxToken::String(value.view()),
+            Self::Keyword(value) => SmtSyntaxToken::Keyword(value.view()),
+            Self::Symbol(value) => SmtSyntaxToken::Symbol(value.view()),
+            Self::Reserved(reserved) => SmtSyntaxToken::Reserved(*reserved),
+            Self::Whitespace(value) => SmtSyntaxToken::Whitespace(value.view()),
+            Self::Comment(value) => SmtSyntaxToken::Comment(value.view()),
+            Self::EndOfFile => SmtSyntaxToken::EndOfFile,
+        }
+    }
+}
+
+impl SmtSyntaxToken<'_> {
+    pub fn into_owned(self) -> SmtSyntaxTokenBuf {
+        match self {
+            Self::ParenOpen => SmtSyntaxTokenBuf::ParenOpen,
+            Self::ParenClose => SmtSyntaxTokenBuf::ParenClose,
+            Self::Numeral(value) => SmtSyntaxTokenBuf::Numeral(value.into_owned()),
+            Self::Decimal(value) => SmtSyntaxTokenBuf::Decimal(value.into_owned()),
+            Self::Hexadecimal(value) => SmtSyntaxTokenBuf::Hexadecimal(value.into_owned()),
+            Self::Binary(value) => SmtSyntaxTokenBuf::Binary(value.into_owned()),
+            Self::String(value) => SmtSyntaxTokenBuf::String(value.into_owned()),
+            Self::Keyword(value) => SmtSyntaxTokenBuf::Keyword(value.into_owned()),
+            Self::Symbol(value) => SmtSyntaxTokenBuf::Symbol(value.into_owned()),
+            Self::Reserved(reserved) => SmtSyntaxTokenBuf::Reserved(reserved),
+            Self::Whitespace(value) => SmtSyntaxTokenBuf::Whitespace(value.into_owned()),
+            Self::Comment(value) => SmtSyntaxTokenBuf::Comment(value.into_owned()),
+            Self::EndOfFile => SmtSyntaxTokenBuf::EndOfFile,
+        }
+    }
+}
+
+/// What a token of [`SmtTokensBuf`] is, its bytes aside.
+#[derive(Debug, Clone, Copy)]
+enum TokenKind {
+    ParenOpen,
+    ParenClose,
+    Numeral,
+    Decimal,
+    Hexadecimal,
+    Binary,
+    String,
+    Keyword,
+    UnquotedSymbol,
+    QuotedSymbol,
+    Reserved(SmtReserved),
+    Whitespace,
+    Comment,
+    EndOfFile,
+}
+
+/// A token of [`SmtTokensBuf`]: its kind and where its bytes are in the text.
+#[derive(Debug, Clone, Copy)]
+struct TokenHandle {
+    kind: TokenKind,
+    start: usize,
+    end: usize,
+}
+
+impl TokenHandle {
+    /// Pushes the bytes of the token into `text`.
+    fn create_by_push(text: &mut Vec<u8>, token: SmtSyntaxToken) -> TokenHandle {
+        let (kind, bytes): (TokenKind, &[u8]) = match token {
+            SmtSyntaxToken::ParenOpen => (TokenKind::ParenOpen, &[]),
+            SmtSyntaxToken::ParenClose => (TokenKind::ParenClose, &[]),
+            SmtSyntaxToken::Numeral(value) => (TokenKind::Numeral, value.as_slice()),
+            SmtSyntaxToken::Decimal(value) => (TokenKind::Decimal, value.as_slice()),
+            SmtSyntaxToken::Hexadecimal(value) => (TokenKind::Hexadecimal, value.as_slice()),
+            SmtSyntaxToken::Binary(value) => (TokenKind::Binary, value.as_slice()),
+            SmtSyntaxToken::String(value) => (TokenKind::String, value.as_slice()),
+            SmtSyntaxToken::Keyword(value) => (TokenKind::Keyword, value.as_slice()),
+            SmtSyntaxToken::Symbol(value) if value.is_quoted() => {
+                (TokenKind::QuotedSymbol, value.as_slice())
+            }
+            SmtSyntaxToken::Symbol(value) => (TokenKind::UnquotedSymbol, value.as_slice()),
+            SmtSyntaxToken::Reserved(reserved) => (TokenKind::Reserved(reserved), &[]),
+            SmtSyntaxToken::Whitespace(value) => (TokenKind::Whitespace, value.as_slice()),
+            SmtSyntaxToken::Comment(value) => (TokenKind::Comment, value.as_slice()),
+            SmtSyntaxToken::EndOfFile => (TokenKind::EndOfFile, &[]),
+        };
+        let start = text.len();
+        text.extend_from_slice(bytes);
+        TokenHandle {
+            kind,
+            start,
+            end: text.len(),
+        }
+    }
+
+    /// Views the token.
+    #[inline]
+    fn view(self, text: &[u8]) -> SmtSyntaxToken<'_> {
+        // the bytes were pushed from a view of the same kind, so they are allowed
+        let bytes = &text[self.start..self.end];
+        match self.kind {
+            TokenKind::ParenOpen => SmtSyntaxToken::ParenOpen,
+            TokenKind::ParenClose => SmtSyntaxToken::ParenClose,
+            TokenKind::Numeral => SmtSyntaxToken::Numeral(SmtNumeral::new_unchecked(bytes)),
+            TokenKind::Decimal => SmtSyntaxToken::Decimal(SmtDecimal::new_unchecked(bytes)),
+            TokenKind::Hexadecimal => {
+                SmtSyntaxToken::Hexadecimal(SmtHexDigits::new_unchecked(bytes))
+            }
+            TokenKind::Binary => SmtSyntaxToken::Binary(SmtBinDigits::new_unchecked(bytes)),
+            TokenKind::String => SmtSyntaxToken::String(SmtStringContent::new_unchecked(bytes)),
+            TokenKind::Keyword => SmtSyntaxToken::Keyword(SmtKeyword::new_unchecked(bytes)),
+            TokenKind::UnquotedSymbol => {
+                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(false, bytes))
+            }
+            TokenKind::QuotedSymbol => {
+                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(true, bytes))
+            }
+            TokenKind::Reserved(reserved) => SmtSyntaxToken::Reserved(reserved),
+            TokenKind::Whitespace => {
+                SmtSyntaxToken::Whitespace(SmtWhitespace::new_unchecked(bytes))
+            }
+            TokenKind::Comment => SmtSyntaxToken::Comment(SmtComment::new_unchecked(bytes)),
+            TokenKind::EndOfFile => SmtSyntaxToken::EndOfFile,
+        }
+    }
+}
+
+/// A dynamic array of owned tokens.
+#[derive(Clone)]
+pub struct SmtTokensBuf {
+    text: Vec<u8>,
+    handles: Vec<TokenHandle>,
+}
+
+impl SmtTokensBuf {
+    pub fn new() -> Self {
+        Self {
+            text: Vec::new(),
+            handles: Vec::new(),
+        }
+    }
+
+    /// Copies the token after the others.
+    pub fn push(&mut self, token: SmtSyntaxToken) {
+        let token = TokenHandle::create_by_push(&mut self.text, token);
+        self.handles.push(token);
+    }
+
+    pub fn clear(&mut self) {
+        self.text.clear();
+        self.handles.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.handles.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.handles.is_empty()
+    }
+
+    pub fn get(&self, index: usize) -> Option<SmtSyntaxToken<'_>> {
+        Some(self.handles.get(index)?.view(&self.text))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSyntaxToken<'_>> {
+        let text = self.text.as_slice();
+        self.handles.iter().map(move |handle| handle.view(text))
+    }
+}
+
+impl Default for SmtTokensBuf {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Debug for SmtTokensBuf {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self.iter()).finish()
     }
 }
 
@@ -793,6 +999,185 @@ impl<'a> SmtLookahead<SmtToken<'a>> for SmtTokenWindow<'a> {
         SmtSyntaxToken::from_token(*token, self.version)
     }
 }
+
+/// A cursor over a dynamic array of tokens.
+///
+/// The cursor is consumed under a given version and refuses
+/// version switch requests. If the consumer requests discarding,
+/// currently present tokens are discarded up to before the first EOF.
+/// If no EOF is currently present, the cursor switches to a discarding mode
+/// and no new tokens are pushed until a pushed EOF token resets
+/// the discarding mode. EOF tokens are never discarded themselves.
+#[derive(Debug, Clone)]
+pub struct SmtTokensCursor<'a> {
+    tokens: VecDeque<SmtSyntaxToken<'a>>,
+    /// Whether the tokens are discarded until an end-of-file token is pushed.
+    discarding: bool,
+    version: SmtVersion,
+}
+
+impl<'a> SmtTokensCursor<'a> {
+    /// Constructs an empty cursor.
+    pub fn new(version: SmtVersion) -> Self {
+        Self {
+            tokens: VecDeque::new(),
+            discarding: false,
+            version,
+        }
+    }
+
+    /// Pushes a new token to the end of the cursor.
+    ///
+    /// If the cursor is currently discarding, any token
+    /// other than EOF is silently dropped, so the cursor
+    /// remains empty.
+    #[inline]
+    pub fn push(&mut self, token: SmtSyntaxToken<'a>) {
+        if self.discarding {
+            if matches!(token, SmtSyntaxToken::EndOfFile) {
+                // the end-of-file token ends discarding
+                // and it is not discarded
+                self.discarding = false;
+            } else {
+                // discard the token
+                return;
+            }
+        }
+        self.tokens.push_back(token);
+    }
+
+    /// Removes all tokens and resets discarding mode.
+    pub fn clear(&mut self) {
+        self.tokens.clear();
+        self.discarding = false;
+    }
+}
+
+impl<'a> SmtCursor for SmtTokensCursor<'a> {
+    type Token = SmtSyntaxToken<'a>;
+    type Lookahead = ();
+
+    #[inline]
+    fn syntax<'t>(&self, token: &'t SmtSyntaxToken<'a>) -> SmtSyntaxToken<'t> {
+        *token
+    }
+
+    #[allow(clippy::should_implement_trait)]
+    #[inline]
+    fn next(&mut self) -> Option<SmtSyntaxToken<'a>> {
+        self.tokens.pop_front()
+    }
+
+    #[inline]
+    fn peek(&self) -> Option<SmtSyntaxToken<'a>> {
+        self.tokens.front().copied()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.tokens.is_empty()
+    }
+
+    #[inline]
+    fn consume_all(&mut self) {
+        self.tokens.clear();
+    }
+
+    fn version(&self) -> SmtVersion {
+        self.version
+    }
+
+    fn set_version(&mut self, _version: SmtVersion) -> Result<(), SmtVersionRefused> {
+        // the tokens were put in already classified, so they cannot be read anew
+        Err(SmtVersionRefused)
+    }
+
+    fn discard_rest(&mut self) {
+        // drop the tokens before the next end-of-file token, which stays there
+        while let Some(token) = self.tokens.front() {
+            if matches!(token, SmtSyntaxToken::EndOfFile) {
+                // stop discarding, keep EOF
+                return;
+            }
+            self.tokens.pop_front();
+        }
+        // no EOF encountered, switch to discarding mode
+        self.discarding = true;
+    }
+}
+
+/// A value whose tokens can be put into a cursor.
+pub trait SmtAppendTokens {
+    /// Puts the tokens of the value after those in the cursor.
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>);
+}
+
+impl SmtAppendTokens for SmtSyntaxToken<'_> {
+    #[inline]
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        tokens.push(*self);
+    }
+}
+
+impl SmtAppendTokens for SmtSyntaxTokenBuf {
+    #[inline]
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        tokens.push(self.view());
+    }
+}
+
+impl SmtAppendTokens for SmtTokensBuf {
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        for token in self.iter() {
+            tokens.push(token);
+        }
+    }
+}
+
+impl<T: SmtAppendTokens> SmtAppendTokens for [T] {
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        for value in self {
+            value.append_tokens(tokens);
+        }
+    }
+}
+
+impl SmtAppendTokens for SmtReserved {
+    #[inline]
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        tokens.push(SmtSyntaxToken::Reserved(*self));
+    }
+}
+
+/// Defines the appending of a plain value, viewed or owned, as the token of
+/// its variant.
+macro_rules! plain_append_tokens {
+    ($view:ident, $buf:ident, $variant:ident) => {
+        impl SmtAppendTokens for $view<'_> {
+            #[inline]
+            fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+                tokens.push(SmtSyntaxToken::$variant(*self));
+            }
+        }
+
+        impl SmtAppendTokens for $buf {
+            #[inline]
+            fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+                tokens.push(SmtSyntaxToken::$variant(self.view()));
+            }
+        }
+    };
+}
+
+plain_append_tokens!(SmtNumeral, SmtNumeralBuf, Numeral);
+plain_append_tokens!(SmtDecimal, SmtDecimalBuf, Decimal);
+plain_append_tokens!(SmtHexDigits, SmtHexDigitsBuf, Hexadecimal);
+plain_append_tokens!(SmtBinDigits, SmtBinDigitsBuf, Binary);
+plain_append_tokens!(SmtStringContent, SmtStringContentBuf, String);
+plain_append_tokens!(SmtKeyword, SmtKeywordBuf, Keyword);
+plain_append_tokens!(SmtSymbol, SmtSymbolBuf, Symbol);
+plain_append_tokens!(SmtWhitespace, SmtWhitespaceBuf, Whitespace);
+plain_append_tokens!(SmtComment, SmtCommentBuf, Comment);
 
 /// A sequential consumer of tokens.
 pub trait SmtConsume {
