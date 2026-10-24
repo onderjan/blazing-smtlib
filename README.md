@@ -7,8 +7,10 @@ Under construction.
 Generative AI (currently only Claude Code) is used for code review and help.
 It makes no design decisions.
 
-The main Rust library code is human-written, with generative AI
-used only for mechanical changes (when explicitly prompted to do them).
+The main Rust library code is human-written, with the shape of its API
+decided by the maintainer. Generative AI is used only for experiments and
+for carefully reviewed changes where the semantic shape is clear but
+implementing them by hand is cumbersome (when explicitly prompted to do them).
 Generative AI is used to write benchmarks and tests (including unit tests).
 
 The Lean library code is a port of the Rust library,

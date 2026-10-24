@@ -39,17 +39,21 @@ are how agents follow it.
   An enum that says which party failed is a `Cause`; one that classifies a
   defect is a `Kind`.
 - Every panic carries a message.
-- What is matched by text is in American English, for compatibility with other APIs:
-  identifiers, the names of files and options, and output that programs or tests match (such
-  as `Debug`). Everything else is in British English: comments, documentation and other prose,
-  and messages for people, such as `Display` implementations, which are not to be matched.
+- What is matched by text is in American English, for compatibility with
+  other APIs: identifiers, the names of files and options, and output that
+  programs or tests match (such as `Debug`). Everything else is in British
+  English: comments, documentation and other prose, and messages for people,
+  such as `Display` implementations, which are not to be matched.
 - The tree stays free of compiler and linter warnings.
 - Tools and test harnesses are written in Rust or Lean, not in Python.
 
 ## Rust (`rust/`)
 
-- The library code under `rust/src` is written by the maintainer. Make only
-  mechanical changes to it, only when asked to, and only as far as asked.
+- The library code under `rust/src` is written by the maintainer, who decides
+  the shape of its API. Change it only when asked to, and only as far as asked,
+  and only where the semantic shape of the change is clear but implementing it
+  by hand is cumbersome. Experiments are done in scratch copies, not in
+  `rust/src`.
 - The examples under `rust/examples` are the public view of the library's
   contract and are written by the maintainer too. The same rule applies.
 - Tests and benchmarks are written by agents when asked.
