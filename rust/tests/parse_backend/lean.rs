@@ -9,9 +9,9 @@ use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
-    SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtIdentBuf, SmtIndexBuf, SmtKeywordBuf,
-    SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf, SmtSpecialConstantBuf,
-    SmtStringContentBuf, SmtSymbolBuf,
+    SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtIdentBuf, SmtIndexBuf, SmtIndicesBuf,
+    SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf,
+    SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf,
     lexer::{SmtLexicalErrorKind, SmtLexicalExpected},
     parser::{
         SmtCommandOutcome, SmtMissingItem, SmtNonEmptyList, SmtSyntaxErrorKind, SmtSyntaxExpected,
@@ -290,20 +290,20 @@ impl<'l> Fields<'l> {
     pub fn ident(&mut self) -> SmtIdentBuf {
         let name = self.symbol();
         let count = self.count();
-        let indices = (0..count)
-            .map(|_| {
-                let field = self.next();
-                match field.strip_prefix('n') {
-                    Some(digits) => SmtIndexBuf::Numeral(
-                        SmtNumeralBuf::new(unhex(digits, self.line))
-                            .unwrap_or_else(|_| self.bad("index")),
-                    ),
-                    None => SmtIndexBuf::Symbol(
-                        self.symbol_of(field).unwrap_or_else(|| self.bad("index")),
-                    ),
+        let mut indices = SmtIndicesBuf::new();
+        for _ in 0..count {
+            let field = self.next();
+            let index = match field.strip_prefix('n') {
+                Some(digits) => SmtIndexBuf::Numeral(
+                    SmtNumeralBuf::new(unhex(digits, self.line))
+                        .unwrap_or_else(|_| self.bad("index")),
+                ),
+                None => {
+                    SmtIndexBuf::Symbol(self.symbol_of(field).unwrap_or_else(|| self.bad("index")))
                 }
-            })
-            .collect();
+            };
+            indices.push(index.view());
+        }
         SmtIdentBuf { name, indices }
     }
 

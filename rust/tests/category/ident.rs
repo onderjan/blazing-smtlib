@@ -9,10 +9,11 @@ use blazing_smtlib::{
 fn indices(ident: &SmtIdentBuf) -> Vec<String> {
     ident
         .indices
+        .view()
         .iter()
         .map(|index| match index {
-            SmtIndexBuf::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
-            SmtIndexBuf::Symbol(s) => {
+            SmtIndex::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
+            SmtIndex::Symbol(s) => {
                 format!("'{}", String::from_utf8(s.as_slice().to_vec()).unwrap())
             }
         })

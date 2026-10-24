@@ -235,15 +235,16 @@ impl IdentSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtIndexBuf, SmtSyntaxChecker, parser::category::tests::parse_all_with};
+    use crate::{SmtIndex, SmtSyntaxChecker, parser::category::tests::parse_all_with};
 
     fn index_texts(ident: &SmtIdentBuf) -> Vec<String> {
         ident
             .indices
+            .view()
             .iter()
             .map(|index| match index {
-                SmtIndexBuf::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
-                SmtIndexBuf::Symbol(s) => {
+                SmtIndex::Numeral(n) => String::from_utf8(n.as_slice().to_vec()).unwrap(),
+                SmtIndex::Symbol(s) => {
                     format!("'{}", String::from_utf8(s.as_slice().to_vec()).unwrap())
                 }
             })

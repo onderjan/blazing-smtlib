@@ -19,7 +19,7 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtIndexBuf, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind,
+    SmtIdentBuf, SmtIndex, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind,
     SmtSimplePatternBuf, SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf,
     lexer::SmtLexicalErrorKind,
     parser::SmtSyntaxErrorKind,
@@ -160,10 +160,11 @@ fn ident_view_text(ident: SmtIdentBuf) -> String {
     }
     let indices: Vec<String> = ident
         .indices
+        .view()
         .iter()
         .map(|index| match index {
-            SmtIndexBuf::Numeral(numeral) => text(numeral.as_slice()),
-            SmtIndexBuf::Symbol(symbol) => text(symbol.as_slice()),
+            SmtIndex::Numeral(numeral) => text(numeral.as_slice()),
+            SmtIndex::Symbol(symbol) => text(symbol.as_slice()),
         })
         .collect();
     format!("(_ {} {})", name, indices.join(" "))

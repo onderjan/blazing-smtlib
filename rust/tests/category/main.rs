@@ -37,8 +37,8 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtIndexBuf, SmtKeywordBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf,
-    SmtSpecialConstantBuf, SmtSymbolBuf, parser::SmtSyntaxErrorKind, token::SmtVersion,
+    SmtIdentBuf, SmtIndex, SmtKeywordBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf,
+    SmtSpecialConstantBuf, SmtSymbol, SmtSymbolBuf, parser::SmtSyntaxErrorKind, token::SmtVersion,
 };
 
 // --- Test handler rendering everything it receives back into text ---
@@ -110,6 +110,15 @@ impl SymbolText for SmtSymbolBuf {
     }
 }
 
+impl SymbolText for SmtSymbol<'_> {
+    fn is_quoted(&self) -> bool {
+        SmtSymbol::is_quoted(self)
+    }
+    fn as_slice(&self) -> &[u8] {
+        SmtSymbol::as_slice(self)
+    }
+}
+
 /// Renders a symbol as it was written: in pipes when it was quoted, so that
 /// the rendering also shows that the quoting reached the handler.
 fn render_symbol(symbol: &impl SymbolText) -> String {
@@ -127,11 +136,11 @@ fn render_ident(ident: &SmtIdentBuf) -> String {
         return name;
     }
     let mut out = format!("(_ {name}");
-    for index in &ident.indices {
+    for index in ident.indices.view().iter() {
         out.push(' ');
         match index {
-            SmtIndexBuf::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
-            SmtIndexBuf::Symbol(symbol) => out.push_str(&render_symbol(&symbol)),
+            SmtIndex::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),
+            SmtIndex::Symbol(symbol) => out.push_str(&render_symbol(&symbol)),
         }
     }
     out.push(')');

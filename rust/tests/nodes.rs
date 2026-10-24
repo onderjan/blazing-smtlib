@@ -4,13 +4,14 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 use blazing_smtlib::{
-    SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors,
-    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIdentBuf, SmtIndex,
-    SmtIndexBuf, SmtIndices, SmtIndicesBuf, SmtKeyword, SmtMatchCases, SmtMatchCasesBuf,
-    SmtMultiple, SmtNumeralBuf, SmtPattern, SmtQualifiedIdent, SmtQualifiedIdentBuf,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns,
-    SmtSimplePatternsBuf, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant,
-    SmtSpecialConstantBuf, SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, token::SmtVersion,
+    SmtApplication, SmtAttributeValue, SmtAttributes, SmtBinDigitsBuf, SmtBindings,
+    SmtConstructors, SmtDecimalBuf, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler,
+    SmtHexDigitsBuf, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices, SmtIndicesBuf,
+    SmtKeyword, SmtMatchCases, SmtMatchCasesBuf, SmtMultiple, SmtNumeralBuf, SmtPattern,
+    SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
+    SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort, SmtSortArities,
+    SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbol,
+    SmtSymbolBuf, SmtSymbols, SmtTerm, token::SmtVersion,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -123,6 +124,7 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtQualifiedIdentBuf<OpaqueHandler>>();
     assert_debug_and_clone::<SmtIndex<'static>>();
     assert_debug_and_clone::<SmtIndices<'static>>();
+    assert_debug_and_clone::<SmtIndicesBuf>();
     assert_debug_and_clone::<SmtIdent<'static>>();
     assert_debug_and_clone::<SmtQualifiedIdent<'static, OpaqueHandler>>();
     // the nodes handing values over cannot be cloned, but must still be debuggable
@@ -319,17 +321,11 @@ fn owned_indices_view_back_what_was_pushed() {
         SmtIndexBuf::Symbol(symbol_buf(b"", true)),
         SmtIndexBuf::Numeral(numeral_buf(b"0")),
     ];
-    fn as_view(index: &SmtIndexBuf) -> SmtIndex<'_> {
-        match index {
-            SmtIndexBuf::Numeral(numeral) => SmtIndex::Numeral(numeral.view()),
-            SmtIndexBuf::Symbol(symbol) => SmtIndex::Symbol(symbol.view()),
-        }
-    }
     let expected = ["32", "x", "|x|", "|a b|", "||", "0"];
     // twice, the second time after clearing, which must leave nothing behind
     for round in 0..2 {
         for index in &pushed {
-            indices.push(as_view(index));
+            indices.push(index.view());
         }
         assert_eq!(indices.len(), pushed.len(), "round {round}");
         assert!(!indices.is_empty(), "round {round}");
@@ -349,6 +345,84 @@ fn owned_indices_view_back_what_was_pushed() {
         );
         assert_eq!(indices.len(), 0, "round {round}");
     }
+}
+
+/// Each owned node views back what it holds, in every variant, and an
+/// identifier viewed and made owned again keeps its name and indices.
+#[test]
+fn owned_nodes_view_back_what_they_hold() {
+    let numeral = SmtIndexBuf::Numeral(numeral_buf(b"32"));
+    assert_eq!(render_index(numeral.view()), "32");
+    let symbol = SmtIndexBuf::Symbol(symbol_buf(b"a b", true));
+    assert_eq!(render_index(symbol.view()), "|a b|");
+
+    let simple = SmtIdentBuf::new_simple(symbol_buf(b"x", false));
+    assert!(simple.indices.is_empty());
+    assert_eq!(render_ident(simple.view()), "x");
+    let mut indexed = SmtIdentBuf::new_simple(symbol_buf(b"extract", false));
+    indexed
+        .indices
+        .push(SmtIndex::Numeral(numeral_buf(b"7").view()));
+    indexed
+        .indices
+        .push(SmtIndex::Symbol(symbol_buf(b"y", true).view()));
+    assert_eq!(render_ident(indexed.view()), "(_ extract 7 |y|)");
+    let again = indexed.view().into_owned();
+    assert_eq!(render_ident(again.view()), "(_ extract 7 |y|)");
+
+    let constants = [
+        SmtSpecialConstantBuf::Numeral(numeral_buf(b"10")),
+        SmtSpecialConstantBuf::Decimal(SmtDecimalBuf::new(b"1.5".to_vec()).expect("a decimal")),
+        SmtSpecialConstantBuf::Hexadecimal(
+            SmtHexDigitsBuf::new(b"1F".to_vec()).expect("hexadecimal digits"),
+        ),
+        SmtSpecialConstantBuf::Binary(SmtBinDigitsBuf::new(b"01".to_vec()).expect("binary digits")),
+        SmtSpecialConstantBuf::String(
+            SmtStringContentBuf::new(b"a b".to_vec()).expect("string content"),
+        ),
+    ];
+    for constant in &constants {
+        assert_eq!(&constant.view().into_owned(), constant);
+    }
+
+    let pattern = SmtSimplePatternBuf::Symbol(symbol_buf(b"h", false));
+    assert_eq!(render_simple_pattern(pattern.view()), "h");
+    assert_eq!(
+        render_simple_pattern(SmtSimplePatternBuf::Wildcard.view()),
+        "_"
+    );
+}
+
+/// The empty indices hold nothing and stand for the indices of a simple
+/// identifier built outside the library.
+#[test]
+fn empty_indices_hold_nothing() {
+    let empty = SmtIndices::empty();
+    assert!(empty.is_empty());
+    assert_eq!(empty.len(), 0);
+    assert!(empty.get(0).is_none());
+    assert_eq!(empty.iter().count(), 0);
+    let x = symbol_buf(b"x", false);
+    let ident = SmtIdent {
+        name: x.view(),
+        indices: SmtIndices::empty(),
+    };
+    assert_eq!(render_ident(ident), "x");
+}
+
+/// Owned indices are debugged as their view, the list of indices, and a
+/// clone keeps its indices when the original is cleared.
+#[test]
+fn owned_indices_debug_as_their_view_and_clone_apart() {
+    let mut indices = SmtIndicesBuf::new();
+    indices.push(SmtIndex::Numeral(numeral_buf(b"32").view()));
+    indices.push(SmtIndex::Symbol(symbol_buf(b"x", false).view()));
+    assert_eq!(format!("{indices:?}"), format!("{:?}", indices.view()));
+    let copy = indices.clone();
+    indices.clear();
+    assert!(indices.is_empty());
+    let rendered: Vec<String> = copy.view().iter().map(render_index).collect();
+    assert_eq!(rendered, ["32", "x"]);
 }
 
 #[test]
