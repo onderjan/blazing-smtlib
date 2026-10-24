@@ -1,4 +1,5 @@
 name = "blazing-smtlib"
+version = "0.1.0-alpha.0"
 defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecFacts", "BSmtLibFacts"]
 
 # the library
