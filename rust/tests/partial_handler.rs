@@ -109,13 +109,21 @@ impl<const LEVEL: u8> SmtHandler for Solver<LEVEL> {
     }
 }
 
+/// Checks a logic as the handler's own code would: with the handler's own
+/// error, which `?` turns into the partial handler's.
+fn check_logic(logic: SmtSymbol<'_>) -> Result<(), Refused> {
+    if logic.as_slice() == b"BAD" {
+        Err(Refused)
+    } else {
+        Ok(())
+    }
+}
+
 /// The callbacks every level implements: the logic `BAD` is refused.
 macro_rules! base_commands {
     () => {
         fn command_set_logic(&mut self, logic: SmtSymbol<'_>) -> Result<(), Error> {
-            if logic.as_slice() == b"BAD" {
-                return Err(SmtPartialCommandError::Handler(Refused));
-            }
+            check_logic(logic)?;
             self.log.push("set-logic");
             Ok(())
         }

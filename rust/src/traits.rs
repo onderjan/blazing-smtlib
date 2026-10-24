@@ -464,6 +464,12 @@ pub enum SmtPartialCommandError<E> {
     Handler(E),
 }
 
+impl<E> From<E> for SmtPartialCommandError<E> {
+    fn from(err: E) -> Self {
+        Self::Handler(err)
+    }
+}
+
 impl<E: fmt::Display> fmt::Display for SmtPartialCommandError<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

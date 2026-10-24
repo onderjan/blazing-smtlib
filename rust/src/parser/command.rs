@@ -223,6 +223,14 @@ impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtCommandPayloadParser<H, R> {
     pub fn new(rule: R, parser: R::Parser) -> Self {
         Self { rule, parser }
     }
+
+    /// Creates the parser with the rule and its default payload parser.
+    pub fn with_rule(rule: R) -> Self
+    where
+        R::Parser: Default,
+    {
+        Self::new(rule, R::Parser::default())
+    }
 }
 
 impl<H: SmtCommandHandler, R: SmtCommandRule<H>> Default for SmtCommandPayloadParser<H, R>

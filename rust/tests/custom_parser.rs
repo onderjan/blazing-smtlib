@@ -361,10 +361,7 @@ impl SmtPartialCommandHandler for Optimizer {
             direction,
             name: Some(name.into_owned()),
         };
-        Ok(SmtCommandPayloadParser::new(
-            rule,
-            SmtClosedParser::default(),
-        ))
+        Ok(SmtCommandPayloadParser::with_rule(rule))
     }
 }
 
