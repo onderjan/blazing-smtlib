@@ -1,6 +1,10 @@
 use std::fmt::{Debug, Write};
 
-use crate::{SmtBytes, SmtBytesBuf, lexer::CharClass};
+use crate::{
+    SmtBytes, SmtBytesBuf,
+    lexer::CharClass,
+    token::{SmtReserved, SmtVersion},
+};
 
 /// SMT-LIB string content.
 ///
@@ -55,9 +59,31 @@ impl SmtSymbolBuf {
             .all(|c| CharClass::from(c).is_printable_or_whitespace() && c != b'|' && c != b'\\')
     }
 
+    /// Whether the bytes are allowed in a simple symbol and are not a reserved
+    /// word of the given version.
+    pub fn is_unquoted_allowed_in(value: &[u8], version: SmtVersion) -> bool {
+        Self::is_unquoted_allowed(value) && SmtReserved::from_bytes(value, version).is_none()
+    }
+
     /// Whether this is a quoted symbol enclosed in pipes, e.g. `|x|`, or a simple symbol, e.g. `x`.
     pub fn is_quoted(&self) -> bool {
         self.is_quoted
+    }
+
+    /// Whether the symbol reads back as itself in the given version: it is
+    /// quoted, or it is simple and not a reserved word of the version.
+    pub fn is_allowed_in(&self, version: SmtVersion) -> bool {
+        self.view().is_allowed_in(version)
+    }
+
+    /// Quotes the symbol if it is simple and a reserved word of the given
+    /// version; any other symbol is returned as it is.
+    pub fn into_versioned(self, version: SmtVersion) -> Self {
+        Self {
+            is_quoted: self.is_quoted
+                || SmtReserved::from_bytes(self.as_slice(), version).is_some(),
+            value: self.value,
+        }
     }
 
     pub fn new_unquoted(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
@@ -81,6 +107,18 @@ impl SmtSymbolBuf {
             })
         } else {
             Err(SmtDisallowedByteVecError(value))
+        }
+    }
+
+    /// Creates a symbol that reads back as itself in the given version.
+    ///
+    /// The symbol is simple if its bytes are allowed in a simple symbol and are
+    /// not a reserved word of the version, and quoted otherwise.
+    pub fn new(value: Vec<u8>, version: SmtVersion) -> Result<Self, SmtDisallowedByteVecError> {
+        if Self::is_unquoted_allowed_in(&value, version) {
+            Self::new_unquoted(value)
+        } else {
+            Self::new_quoted(value)
         }
     }
 
@@ -161,8 +199,58 @@ impl<'a> SmtSymbol<'a> {
         }
     }
 
+    pub fn new_unquoted(value: &'a [u8]) -> Result<Self, SmtDisallowedBytesError> {
+        if SmtSymbolBuf::is_unquoted_allowed(value) {
+            Ok(Self {
+                is_quoted: false,
+                value: SmtBytes::new(value),
+            })
+        } else {
+            Err(SmtDisallowedBytesError)
+        }
+    }
+
+    pub fn new_quoted(value: &'a [u8]) -> Result<Self, SmtDisallowedBytesError> {
+        if SmtSymbolBuf::is_quoted_allowed(value) {
+            Ok(Self {
+                is_quoted: true,
+                value: SmtBytes::new(value),
+            })
+        } else {
+            Err(SmtDisallowedBytesError)
+        }
+    }
+
+    /// Creates a symbol that reads back as itself in the given version.
+    ///
+    /// The symbol is simple if its bytes are allowed in a simple symbol and are
+    /// not a reserved word of the version, and quoted otherwise.
+    pub fn new(value: &'a [u8], version: SmtVersion) -> Result<Self, SmtDisallowedBytesError> {
+        if SmtSymbolBuf::is_unquoted_allowed_in(value, version) {
+            Self::new_unquoted(value)
+        } else {
+            Self::new_quoted(value)
+        }
+    }
+
     pub fn is_quoted(&self) -> bool {
         self.is_quoted
+    }
+
+    /// Whether the symbol reads back as itself in the given version: it is
+    /// quoted, or it is simple and not a reserved word of the version.
+    pub fn is_allowed_in(&self, version: SmtVersion) -> bool {
+        self.is_quoted || SmtReserved::from_bytes(self.as_slice(), version).is_none()
+    }
+
+    /// Quotes the symbol if it is simple and a reserved word of the given
+    /// version; any other symbol is returned as it is.
+    pub fn into_versioned(self, version: SmtVersion) -> Self {
+        Self {
+            is_quoted: self.is_quoted
+                || SmtReserved::from_bytes(self.as_slice(), version).is_some(),
+            value: self.value,
+        }
     }
 
     pub fn bytes(&self) -> SmtBytes<'a> {
@@ -375,6 +463,9 @@ impl SmtDisallowedByteVecError {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SmtDisallowedBytesError;
+
 macro_rules! string8_newtype {
     ($buf:ident, $view:ident) => {
         impl $buf {
@@ -464,6 +555,14 @@ macro_rules! string8_newtype {
                     value
                 );
                 Self(value)
+            }
+
+            pub fn new(value: &'a [u8]) -> Result<Self, SmtDisallowedBytesError> {
+                if $buf::is_allowed(value) {
+                    Ok(Self(value))
+                } else {
+                    Err(SmtDisallowedBytesError)
+                }
             }
 
             #[inline]
