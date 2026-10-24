@@ -810,7 +810,7 @@ impl<H: SmtHandler> TermSlot<H> {
                 }
                 // construct and handle the term, the head and the arguments are consumed
                 arena.hand_over_application(function, arena_args_start, |function, args| {
-                    let term = SmtTerm::Application(SmtApplication { function, args });
+                    let term = SmtTerm::Application(SmtApplication::new_unchecked(function, args));
                     handle_err(handler.handle_term(term))
                 })?
             }

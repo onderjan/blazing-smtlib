@@ -472,10 +472,11 @@ impl<H: SmtHandler + ?Sized> SmtMatchCasesBuf<H> {
             SmtPattern::Simple(simple) => PatternHandleBuf::Simple(
                 SimplePatternHandle::create_by_push(&mut self.text, simple),
             ),
-            SmtPattern::Application { constructor, args } => {
-                let constructor = SymbolHandle::create_by_push(&mut self.text, constructor);
+            SmtPattern::Application(application) => {
+                let constructor =
+                    SymbolHandle::create_by_push(&mut self.text, application.constructor());
                 let args_start = self.simple_patterns.len();
-                for arg in args.iter() {
+                for arg in application.args().iter() {
                     let arg = SimplePatternHandle::create_by_push(&mut self.text, arg);
                     self.simple_patterns.push(arg);
                 }

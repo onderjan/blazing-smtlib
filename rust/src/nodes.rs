@@ -192,6 +192,15 @@ impl SmtIndicesBuf {
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
+
+    pub fn get(&self, index: usize) -> Option<SmtIndex<'_>> {
+        Some(self.handles.get(index)?.view(&self.text))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtIndex<'_>> {
+        let text = self.text.as_slice();
+        self.handles.iter().map(move |handle| handle.view(text))
+    }
 }
 
 impl Default for SmtIndicesBuf {
@@ -293,9 +302,51 @@ pub type SmtTerms<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Term>;
 ///
 /// It is guaranteed that `args` are nonempty.
 pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
-    pub function: SmtQualifiedIdent<'a, H>,
-    pub args: SmtTerms<'a, H>,
+    function: SmtQualifiedIdent<'a, H>,
+    args: SmtTerms<'a, H>,
 }
+
+impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
+    pub fn new(
+        function: SmtQualifiedIdent<'a, H>,
+        args: SmtTerms<'a, H>,
+    ) -> Result<Self, SmtEmptyArgumentsError> {
+        if args.is_empty() {
+            return Err(SmtEmptyArgumentsError);
+        }
+        Ok(Self { function, args })
+    }
+
+    #[inline]
+    pub(crate) fn new_unchecked(function: SmtQualifiedIdent<'a, H>, args: SmtTerms<'a, H>) -> Self {
+        debug_assert!(!args.is_empty(), "an application without arguments");
+        Self { function, args }
+    }
+
+    pub fn function(&self) -> &SmtQualifiedIdent<'a, H> {
+        &self.function
+    }
+
+    pub fn function_mut(&mut self) -> &mut SmtQualifiedIdent<'a, H> {
+        &mut self.function
+    }
+
+    pub fn args(&self) -> &SmtTerms<'a, H> {
+        &self.args
+    }
+
+    pub fn args_mut(&mut self) -> &mut SmtTerms<'a, H> {
+        &mut self.args
+    }
+
+    pub fn into_parts(self) -> (SmtQualifiedIdent<'a, H>, SmtTerms<'a, H>) {
+        (self.function, self.args)
+    }
+}
+
+/// An application or a constructor pattern was to be built without arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SmtEmptyArgumentsError;
 
 impl<H: SmtHandler + ?Sized> Debug for SmtApplication<'_, H>
 where
@@ -435,10 +486,55 @@ pub enum SmtPatternBuf {
     /// A simple match pattern, either a symbol or a wildcard.
     Simple(SmtSimplePatternBuf),
     /// A constructor applied to at least one variable or wildcard.
-    Application {
+    Application(SmtPatternApplicationBuf),
+}
+
+impl SmtPatternBuf {
+    pub fn view(&self) -> SmtPattern<'_> {
+        match self {
+            Self::Simple(simple) => SmtPattern::Simple(simple.view()),
+            Self::Application(application) => SmtPattern::Application(application.view()),
+        }
+    }
+}
+
+/// A constructor applied to at least one variable or wildcard, from which
+/// [`SmtPatternApplication`] is viewed.
+#[derive(Debug, Clone)]
+pub struct SmtPatternApplicationBuf {
+    constructor: SmtSymbolBuf,
+    args: SmtSimplePatternsBuf,
+}
+
+impl SmtPatternApplicationBuf {
+    pub fn new(
         constructor: SmtSymbolBuf,
-        args: Vec<SmtSimplePatternBuf>,
-    },
+        args: SmtSimplePatternsBuf,
+    ) -> Result<Self, SmtEmptyArgumentsError> {
+        if args.is_empty() {
+            return Err(SmtEmptyArgumentsError);
+        }
+        Ok(Self { constructor, args })
+    }
+
+    pub fn constructor(&self) -> &SmtSymbolBuf {
+        &self.constructor
+    }
+
+    pub fn args(&self) -> &SmtSimplePatternsBuf {
+        &self.args
+    }
+
+    pub fn into_parts(self) -> (SmtSymbolBuf, SmtSimplePatternsBuf) {
+        (self.constructor, self.args)
+    }
+
+    pub fn view(&self) -> SmtPatternApplication<'_> {
+        SmtPatternApplication {
+            constructor: self.constructor.view(),
+            args: self.args.view(),
+        }
+    }
 }
 
 pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
@@ -524,6 +620,7 @@ impl Debug for SmtSimplePatterns<'_> {
 }
 
 /// Owned arguments of a constructor pattern, from which [`SmtSimplePatterns`] is viewed.
+#[derive(Clone)]
 pub struct SmtSimplePatternsBuf {
     text: Vec<u8>,
     handles: Vec<SimplePatternHandle>,
@@ -561,11 +658,26 @@ impl SmtSimplePatternsBuf {
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
+
+    pub fn get(&self, index: usize) -> Option<SmtSimplePattern<'_>> {
+        Some(self.handles.get(index)?.view(&self.text))
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSimplePattern<'_>> {
+        let text = self.text.as_slice();
+        self.handles.iter().map(move |handle| handle.view(text))
+    }
 }
 
 impl Default for SmtSimplePatternsBuf {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Debug for SmtSimplePatternsBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.view().iter()).finish()
     }
 }
 
@@ -575,20 +687,59 @@ pub enum SmtPattern<'a> {
     /// A simple match pattern, either a symbol or a wildcard.
     Simple(SmtSimplePattern<'a>),
     /// A constructor applied to at least one variable or wildcard.
-    Application {
-        constructor: SmtSymbol<'a>,
-        args: SmtSimplePatterns<'a>,
-    },
+    Application(SmtPatternApplication<'a>),
 }
 
 impl SmtPattern<'_> {
     pub fn into_owned(self) -> SmtPatternBuf {
         match self {
             Self::Simple(simple) => SmtPatternBuf::Simple(simple.into_owned()),
-            Self::Application { constructor, args } => SmtPatternBuf::Application {
-                constructor: constructor.into_owned(),
-                args: args.iter().map(SmtSimplePattern::into_owned).collect(),
-            },
+            Self::Application(application) => SmtPatternBuf::Application(application.into_owned()),
+        }
+    }
+}
+
+/// A constructor applied to at least one variable or wildcard, as a match pattern
+/// to be handled.
+#[derive(Debug, Clone, Copy)]
+pub struct SmtPatternApplication<'a> {
+    constructor: SmtSymbol<'a>,
+    args: SmtSimplePatterns<'a>,
+}
+
+impl<'a> SmtPatternApplication<'a> {
+    pub fn new(
+        constructor: SmtSymbol<'a>,
+        args: SmtSimplePatterns<'a>,
+    ) -> Result<Self, SmtEmptyArgumentsError> {
+        if args.is_empty() {
+            return Err(SmtEmptyArgumentsError);
+        }
+        Ok(Self { constructor, args })
+    }
+
+    #[inline]
+    pub(crate) fn new_unchecked(constructor: SmtSymbol<'a>, args: SmtSimplePatterns<'a>) -> Self {
+        debug_assert!(!args.is_empty(), "a constructor pattern without arguments");
+        Self { constructor, args }
+    }
+
+    pub fn constructor(&self) -> SmtSymbol<'a> {
+        self.constructor
+    }
+
+    pub fn args(&self) -> SmtSimplePatterns<'a> {
+        self.args
+    }
+
+    pub fn into_owned(self) -> SmtPatternApplicationBuf {
+        let mut args = SmtSimplePatternsBuf::new();
+        for arg in self.args.iter() {
+            args.push(arg);
+        }
+        SmtPatternApplicationBuf {
+            constructor: self.constructor.into_owned(),
+            args,
         }
     }
 }

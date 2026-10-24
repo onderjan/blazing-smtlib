@@ -1,7 +1,7 @@
 use crate::{
     SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtIndices, SmtKeyword, SmtMatchCases,
-    SmtMultiple, SmtNamed, SmtNumeral, SmtPattern, SmtQualifiedIdent, SmtSimplePattern,
-    SmtSimplePatterns, SmtSort, SmtSortedVars, SmtSymbol,
+    SmtMultiple, SmtNamed, SmtNumeral, SmtPattern, SmtPatternApplication, SmtQualifiedIdent,
+    SmtSimplePattern, SmtSimplePatterns, SmtSort, SmtSortedVars, SmtSymbol,
     parser::{
         AttributeSlot, IdentSlot, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot,
@@ -401,14 +401,14 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
                 args_start,
                 args_end,
             } => {
-                let pattern = SmtPattern::Application {
-                    constructor: constructor.symbol_view(&self.text),
-                    args: SmtSimplePatterns::new(
+                let pattern = SmtPattern::Application(SmtPatternApplication::new_unchecked(
+                    constructor.symbol_view(&self.text),
+                    SmtSimplePatterns::new(
                         ArenaAccess { _priv: () },
                         &self.text,
                         &self.simple_patterns[args_start..args_end],
                     ),
-                };
+                ));
                 let result = f(pattern);
                 self.simple_patterns.truncate(args_start);
                 self.text.truncate(constructor.start());
@@ -430,14 +430,14 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
                 constructor,
                 args_start,
                 args_end,
-            } => SmtPattern::Application {
-                constructor: constructor.symbol_view(text),
-                args: SmtSimplePatterns::new(
+            } => SmtPattern::Application(SmtPatternApplication::new_unchecked(
+                constructor.symbol_view(text),
+                SmtSimplePatterns::new(
                     ArenaAccess { _priv: () },
                     text,
                     &simple_patterns[*args_start..*args_end],
                 ),
-            },
+            )),
         }
     }
 }
