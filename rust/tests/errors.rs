@@ -16,8 +16,8 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtEmptyArgumentsError, SmtInvalidLocation,
-    SmtInvalidSpan, SmtLocation, SmtNonstandardCommandError, SmtPartialCommandError, SmtSymbolBuf,
-    SmtSyntaxChecker,
+    SmtInvalidSpan, SmtLocation, SmtNonstandardCommandError, SmtNumericOverflow,
+    SmtPartialCommandError, SmtSymbolBuf, SmtSyntaxChecker,
     lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind, SmtLexicalExpected},
     parser::{
         SmtMissingItem, SmtNonEmptyList, SmtParseError, SmtSyntaxErrorKind, SmtSyntaxExpected,
@@ -78,6 +78,7 @@ fn the_returned_error_types_are_errors() {
     assert_error::<SmtEmptyArgumentsError>();
     assert_error::<SmtInvalidLocation>();
     assert_error::<SmtInvalidSpan>();
+    assert_error::<SmtNumericOverflow>();
 }
 
 /// A location as zero-based `(line, column)`.

@@ -653,9 +653,17 @@ string8_newtype!(SmtDecimalBuf, SmtDecimal);
 string8_newtype!(SmtWhitespaceBuf, SmtWhitespace);
 string8_newtype!(SmtCommentBuf, SmtComment);
 
-/// The numeral does not fit into the integer type it is converted to.
+/// The numeric value does not fit into the integer type it is converted to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SmtNumeralOverflow;
+pub struct SmtNumericOverflow;
+
+impl std::fmt::Display for SmtNumericOverflow {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("value does not fit into integer type")
+    }
+}
+
+impl std::error::Error for SmtNumericOverflow {}
 
 impl<'a> SmtNumeral<'a> {
     /// The value as `u32`, or `None` if it does not fit.
@@ -741,30 +749,40 @@ impl SmtNumeralBuf {
     }
 }
 
-macro_rules! numeral_try_from {
-    ($int:ty, $method:ident) => {
-        impl TryFrom<SmtNumeral<'_>> for $int {
-            type Error = SmtNumeralOverflow;
+/// Defines the fallible conversion of a numeric value, viewed or owned, into an
+/// integer type by the method that converts it.
+macro_rules! numeric_try_from {
+    ($view:ident, $buf:ident, $int:ty, $method:ident) => {
+        impl TryFrom<$view<'_>> for $int {
+            type Error = SmtNumericOverflow;
 
-            fn try_from(numeral: SmtNumeral<'_>) -> Result<Self, Self::Error> {
-                numeral.$method().ok_or(SmtNumeralOverflow)
+            fn try_from(value: $view<'_>) -> Result<Self, Self::Error> {
+                value.$method().ok_or(SmtNumericOverflow)
             }
         }
 
-        impl TryFrom<&SmtNumeralBuf> for $int {
-            type Error = SmtNumeralOverflow;
+        impl TryFrom<&$buf> for $int {
+            type Error = SmtNumericOverflow;
 
-            fn try_from(numeral: &SmtNumeralBuf) -> Result<Self, Self::Error> {
-                numeral.$method().ok_or(SmtNumeralOverflow)
+            fn try_from(value: &$buf) -> Result<Self, Self::Error> {
+                value.$method().ok_or(SmtNumericOverflow)
             }
         }
     };
 }
 
-numeral_try_from!(u32, to_u32);
-numeral_try_from!(u64, to_u64);
-numeral_try_from!(u128, to_u128);
-numeral_try_from!(usize, to_usize);
+numeric_try_from!(SmtNumeral, SmtNumeralBuf, u32, to_u32);
+numeric_try_from!(SmtNumeral, SmtNumeralBuf, u64, to_u64);
+numeric_try_from!(SmtNumeral, SmtNumeralBuf, u128, to_u128);
+numeric_try_from!(SmtNumeral, SmtNumeralBuf, usize, to_usize);
+numeric_try_from!(SmtHexDigits, SmtHexDigitsBuf, u32, to_u32);
+numeric_try_from!(SmtHexDigits, SmtHexDigitsBuf, u64, to_u64);
+numeric_try_from!(SmtHexDigits, SmtHexDigitsBuf, u128, to_u128);
+numeric_try_from!(SmtHexDigits, SmtHexDigitsBuf, usize, to_usize);
+numeric_try_from!(SmtBinDigits, SmtBinDigitsBuf, u32, to_u32);
+numeric_try_from!(SmtBinDigits, SmtBinDigitsBuf, u64, to_u64);
+numeric_try_from!(SmtBinDigits, SmtBinDigitsBuf, u128, to_u128);
+numeric_try_from!(SmtBinDigits, SmtBinDigitsBuf, usize, to_usize);
 
 macro_rules! numeral_from {
     ($int:ty, $method:ident) => {
@@ -780,6 +798,89 @@ numeral_from!(u32, from_u32);
 numeral_from!(u64, from_u64);
 numeral_from!(u128, from_u128);
 numeral_from!(usize, from_usize);
+
+/// The value of an allowed hexadecimal digit.
+fn hex_digit_value(digit: u8) -> u8 {
+    match digit {
+        b'0'..=b'9' => digit - b'0',
+        b'a'..=b'f' => digit - b'a' + 10,
+        // only the upper-case letters are left
+        _ => digit - b'A' + 10,
+    }
+}
+
+/// The value of an allowed binary digit.
+fn bin_digit_value(digit: u8) -> u8 {
+    digit - b'0'
+}
+
+/// Defines the conversions of digits of the radix into integers by their value.
+macro_rules! digits_to_int {
+    ($view:ident, $buf:ident, $radix:literal, $digit_value:ident) => {
+        impl $view<'_> {
+            /// The value as `u32`, or `None` if it does not fit.
+            pub fn to_u32(&self) -> Option<u32> {
+                u32::try_from(self.to_u64()?).ok()
+            }
+
+            /// The value as `u64`, or `None` if it does not fit.
+            pub fn to_u64(&self) -> Option<u64> {
+                let mut value: u64 = 0;
+                for digit in self.iter() {
+                    value = value
+                        .checked_mul($radix)?
+                        .checked_add(u64::from($digit_value(digit)))?;
+                }
+                Some(value)
+            }
+
+            /// The value as `u128`, or `None` if it does not fit.
+            pub fn to_u128(&self) -> Option<u128> {
+                let mut value: u128 = 0;
+                for digit in self.iter() {
+                    value = value
+                        .checked_mul($radix)?
+                        .checked_add(u128::from($digit_value(digit)))?;
+                }
+                Some(value)
+            }
+
+            /// The value as `usize`, or `None` if it does not fit.
+            ///
+            /// Whether a value fits depends on the platform.
+            pub fn to_usize(&self) -> Option<usize> {
+                usize::try_from(self.to_u64()?).ok()
+            }
+        }
+
+        impl $buf {
+            /// The value as `u32`, or `None` if it does not fit.
+            pub fn to_u32(&self) -> Option<u32> {
+                self.view().to_u32()
+            }
+
+            /// The value as `u64`, or `None` if it does not fit.
+            pub fn to_u64(&self) -> Option<u64> {
+                self.view().to_u64()
+            }
+
+            /// The value as `u128`, or `None` if it does not fit.
+            pub fn to_u128(&self) -> Option<u128> {
+                self.view().to_u128()
+            }
+
+            /// The value as `usize`, or `None` if it does not fit.
+            ///
+            /// Whether a value fits depends on the platform.
+            pub fn to_usize(&self) -> Option<usize> {
+                self.view().to_usize()
+            }
+        }
+    };
+}
+
+digits_to_int!(SmtHexDigits, SmtHexDigitsBuf, 16, hex_digit_value);
+digits_to_int!(SmtBinDigits, SmtBinDigitsBuf, 2, bin_digit_value);
 
 impl<'a> SmtDecimal<'a> {
     /// The whole part, before the dot.

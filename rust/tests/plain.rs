@@ -3,7 +3,7 @@
 use blazing_smtlib::{
     SmtBinDigits, SmtBinDigitsBuf, SmtBytesBuf, SmtComment, SmtCommentBuf, SmtDecimal,
     SmtDecimalBuf, SmtDisallowedBytesError, SmtHexDigits, SmtHexDigitsBuf, SmtKeyword,
-    SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumeralOverflow, SmtStringContent,
+    SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumericOverflow, SmtStringContent,
     SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace, SmtWhitespaceBuf,
     token::SmtVersion,
 };
@@ -401,8 +401,8 @@ struct NumeralConversions {
     max: u128,
     buf_to: fn(&SmtNumeralBuf) -> Option<u128>,
     view_to: fn(SmtNumeral<'_>) -> Option<u128>,
-    buf_try_from: fn(&SmtNumeralBuf) -> Result<u128, SmtNumeralOverflow>,
-    view_try_from: fn(SmtNumeral<'_>) -> Result<u128, SmtNumeralOverflow>,
+    buf_try_from: fn(&SmtNumeralBuf) -> Result<u128, SmtNumericOverflow>,
+    view_try_from: fn(SmtNumeral<'_>) -> Result<u128, SmtNumericOverflow>,
     from_method: fn(u128) -> SmtNumeralBuf,
     from_trait: fn(u128) -> SmtNumeralBuf,
 }
@@ -460,13 +460,13 @@ fn convert(conversions: &NumeralConversions, digits: &str) -> Option<u128> {
     );
     assert_eq!(
         (conversions.buf_try_from)(&owned),
-        by_method.ok_or(SmtNumeralOverflow),
+        by_method.ok_or(SmtNumericOverflow),
         "{} TryFrom of the owned {digits}",
         conversions.name
     );
     assert_eq!(
         (conversions.view_try_from)(owned.view()),
-        by_method.ok_or(SmtNumeralOverflow),
+        by_method.ok_or(SmtNumericOverflow),
         "{} TryFrom of the viewed {digits}",
         conversions.name
     );
@@ -550,5 +550,147 @@ fn a_decimal_splits_at_its_dot_into_a_whole_numeral_and_fraction_digits() {
             Some(whole.parse().expect("the whole part is a number")),
             "{decimal}"
         );
+    }
+}
+
+/// The conversions of hexadecimal and binary digits into one integer type,
+/// owned and viewed, by method and by `TryFrom`, widened to `u128`.
+struct DigitConversions {
+    name: &'static str,
+    max: u128,
+    hex_buf: fn(&SmtHexDigitsBuf) -> Option<u128>,
+    hex_view: fn(SmtHexDigits<'_>) -> Option<u128>,
+    hex_buf_try_from: fn(&SmtHexDigitsBuf) -> Result<u128, SmtNumericOverflow>,
+    hex_view_try_from: fn(SmtHexDigits<'_>) -> Result<u128, SmtNumericOverflow>,
+    bin_buf: fn(&SmtBinDigitsBuf) -> Option<u128>,
+    bin_view: fn(SmtBinDigits<'_>) -> Option<u128>,
+    bin_buf_try_from: fn(&SmtBinDigitsBuf) -> Result<u128, SmtNumericOverflow>,
+    bin_view_try_from: fn(SmtBinDigits<'_>) -> Result<u128, SmtNumericOverflow>,
+}
+
+macro_rules! digit_conversions {
+    ($int:ty, $to:ident) => {
+        DigitConversions {
+            name: stringify!($int),
+            max: widen(<$int>::MAX),
+            hex_buf: |digits| digits.$to().map(widen),
+            hex_view: |digits| digits.$to().map(widen),
+            hex_buf_try_from: |digits| <$int>::try_from(digits).map(widen),
+            hex_view_try_from: |digits| <$int>::try_from(digits).map(widen),
+            bin_buf: |digits| digits.$to().map(widen),
+            bin_view: |digits| digits.$to().map(widen),
+            bin_buf_try_from: |digits| <$int>::try_from(digits).map(widen),
+            bin_view_try_from: |digits| <$int>::try_from(digits).map(widen),
+        }
+    };
+}
+
+fn all_digit_conversions() -> [DigitConversions; 4] {
+    [
+        digit_conversions!(u32, to_u32),
+        digit_conversions!(u64, to_u64),
+        digit_conversions!(u128, to_u128),
+        digit_conversions!(usize, to_usize),
+    ]
+}
+
+/// Converts the hexadecimal digits owned and viewed, by method and by
+/// `TryFrom`; all must agree.
+fn convert_hex(conversions: &DigitConversions, digits: &str) -> Option<u128> {
+    let owned = SmtHexDigitsBuf::new(digits.as_bytes().to_vec())
+        .expect("test hexadecimal digits should be allowed");
+    let value = (conversions.hex_buf)(&owned);
+    let name = conversions.name;
+    assert_eq!(
+        (conversions.hex_view)(owned.view()),
+        value,
+        "{name} view of #x{digits}"
+    );
+    let by_try_from = value.ok_or(SmtNumericOverflow);
+    assert_eq!(
+        (conversions.hex_buf_try_from)(&owned),
+        by_try_from,
+        "{name} TryFrom of the owned #x{digits}"
+    );
+    assert_eq!(
+        (conversions.hex_view_try_from)(owned.view()),
+        by_try_from,
+        "{name} TryFrom of the viewed #x{digits}"
+    );
+    value
+}
+
+/// Converts the binary digits owned and viewed, by method and by `TryFrom`;
+/// all must agree.
+fn convert_bin(conversions: &DigitConversions, digits: &str) -> Option<u128> {
+    let owned = SmtBinDigitsBuf::new(digits.as_bytes().to_vec())
+        .expect("test binary digits should be allowed");
+    let value = (conversions.bin_buf)(&owned);
+    let name = conversions.name;
+    assert_eq!(
+        (conversions.bin_view)(owned.view()),
+        value,
+        "{name} view of #b{digits}"
+    );
+    let by_try_from = value.ok_or(SmtNumericOverflow);
+    assert_eq!(
+        (conversions.bin_buf_try_from)(&owned),
+        by_try_from,
+        "{name} TryFrom of the owned #b{digits}"
+    );
+    assert_eq!(
+        (conversions.bin_view_try_from)(owned.view()),
+        by_try_from,
+        "{name} TryFrom of the viewed #b{digits}"
+    );
+    value
+}
+
+/// Digits convert by their value: leading zeros add nothing, and the
+/// conversion fails exactly when the value does not fit, however many
+/// digits spell it.
+#[test]
+fn digits_convert_into_an_integer_type_exactly_when_their_value_fits() {
+    let zeros = "0".repeat(200);
+    for conversions in all_digit_conversions() {
+        let name = conversions.name;
+        let max = conversions.max;
+        for value in [0, 1, 9, 10, 15, 16, 42, 255, max - 1, max] {
+            let lower = format!("{value:x}");
+            let upper = format!("{value:X}");
+            let binary = format!("{value:b}");
+            for hex in [&lower, &upper, &format!("{zeros}{lower}")] {
+                assert_eq!(
+                    convert_hex(&conversions, hex),
+                    Some(value),
+                    "{name} of #x{hex}"
+                );
+            }
+            for bin in [&binary, &format!("{zeros}{binary}")] {
+                assert_eq!(
+                    convert_bin(&conversions, bin),
+                    Some(value),
+                    "{name} of #b{bin}"
+                );
+            }
+        }
+        // one more than the largest value, and one more than the largest u128
+        let above_hex = max
+            .checked_add(1)
+            .map_or(format!("1{}", "0".repeat(32)), |above| format!("{above:x}"));
+        let above_bin = max
+            .checked_add(1)
+            .map_or(format!("1{}", "0".repeat(128)), |above| {
+                format!("{above:b}")
+            });
+        // a mixed-case spelling has its value too
+        assert_eq!(convert_hex(&conversions, "fF"), Some(255), "{name} of #xfF");
+        for hex in [above_hex.as_str(), "1abcdef0123456789abcdef0123456789"] {
+            assert_eq!(convert_hex(&conversions, hex), None, "{name} of #x{hex}");
+        }
+        let above_u128 = format!("1{}", "0".repeat(128));
+        for bin in [above_bin.as_str(), above_u128.as_str()] {
+            assert_eq!(convert_bin(&conversions, bin), None, "{name} of #b{bin}");
+        }
     }
 }
