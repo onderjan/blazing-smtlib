@@ -14,17 +14,33 @@ pub enum SmtIndexBuf {
     Symbol(SmtSymbolBuf),
 }
 
+impl SmtIndexBuf {
+    pub fn view(&self) -> SmtIndex<'_> {
+        match self {
+            SmtIndexBuf::Numeral(numeral) => SmtIndex::Numeral(numeral.view()),
+            SmtIndexBuf::Symbol(symbol) => SmtIndex::Symbol(symbol.view()),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SmtIdentBuf {
     pub name: SmtSymbolBuf,
-    pub indices: Vec<SmtIndexBuf>,
+    pub indices: SmtIndicesBuf,
 }
 
 impl SmtIdentBuf {
     pub fn new_simple(name: SmtSymbolBuf) -> SmtIdentBuf {
         SmtIdentBuf {
             name,
-            indices: Vec::new(),
+            indices: SmtIndicesBuf::new(),
+        }
+    }
+
+    pub fn view(&self) -> SmtIdent<'_> {
+        SmtIdent {
+            name: self.name.view(),
+            indices: self.indices.view(),
         }
     }
 }
@@ -103,6 +119,13 @@ impl<'a> SmtIndices<'a> {
         Self { text, handles }
     }
 
+    pub fn empty() -> Self {
+        Self {
+            text: &[],
+            handles: &[],
+        }
+    }
+
     #[inline]
     pub fn len(&self) -> usize {
         self.handles.len()
@@ -131,6 +154,7 @@ impl Debug for SmtIndices<'_> {
 }
 
 /// Owned indices of an identifier, from which [`SmtIndices`] is viewed.
+#[derive(Clone)]
 pub struct SmtIndicesBuf {
     text: Vec<u8>,
     handles: Vec<IndexHandle>,
@@ -176,6 +200,12 @@ impl Default for SmtIndicesBuf {
     }
 }
 
+impl Debug for SmtIndicesBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.view().iter()).finish()
+    }
+}
+
 /// Identifier to be handled.
 #[derive(Debug, Clone, Copy)]
 pub struct SmtIdent<'a> {
@@ -185,9 +215,13 @@ pub struct SmtIdent<'a> {
 
 impl SmtIdent<'_> {
     pub fn into_owned(self) -> SmtIdentBuf {
+        let mut indices = SmtIndicesBuf::new();
+        for index in self.indices.iter() {
+            indices.push(index);
+        }
         SmtIdentBuf {
             name: self.name.into_owned(),
-            indices: self.indices.iter().map(SmtIndex::into_owned).collect(),
+            indices,
         }
     }
 }
@@ -285,6 +319,18 @@ pub enum SmtSpecialConstantBuf {
     String(SmtStringContentBuf),
 }
 
+impl SmtSpecialConstantBuf {
+    pub fn view(&self) -> SmtSpecialConstant<'_> {
+        match self {
+            Self::Numeral(value) => SmtSpecialConstant::Numeral(value.view()),
+            Self::Decimal(value) => SmtSpecialConstant::Decimal(value.view()),
+            Self::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value.view()),
+            Self::Binary(value) => SmtSpecialConstant::Binary(value.view()),
+            Self::String(value) => SmtSpecialConstant::String(value.view()),
+        }
+    }
+}
+
 /// A special constant to be handled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSpecialConstant<'a> {
@@ -372,6 +418,15 @@ pub enum SmtSimplePatternBuf {
     Symbol(SmtSymbolBuf),
     /// A wildcard (reserved word underscore `_`) as a pattern.
     Wildcard,
+}
+
+impl SmtSimplePatternBuf {
+    pub fn view(&self) -> SmtSimplePattern<'_> {
+        match self {
+            Self::Symbol(symbol) => SmtSimplePattern::Symbol(symbol.view()),
+            Self::Wildcard => SmtSimplePattern::Wildcard,
+        }
+    }
 }
 
 /// Match pattern: a symbol, a wildcard, or a constructor application.
