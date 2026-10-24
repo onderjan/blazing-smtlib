@@ -85,14 +85,14 @@ impl SmtSymbolBuf {
     }
 
     pub fn bytes(&self) -> SmtBytes<'_> {
-        self.value.as_view()
+        self.value.view()
     }
 
     pub fn as_slice(&self) -> &[u8] {
         self.bytes().as_slice()
     }
 
-    pub fn as_view(&self) -> SmtSymbol<'_> {
+    pub fn view(&self) -> SmtSymbol<'_> {
         SmtSymbol {
             is_quoted: self.is_quoted,
             value: self.bytes(),
@@ -117,7 +117,7 @@ impl SmtSymbolBuf {
 
 impl Debug for SmtSymbolBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.as_view(), f)
+        Debug::fmt(&self.view(), f)
     }
 }
 
@@ -390,7 +390,7 @@ macro_rules! string8_newtype {
             pub fn as_slice(&self) -> &[u8] {
                 self.0.as_slice()
             }
-            pub fn as_view(&self) -> $view<'_> {
+            pub fn view(&self) -> $view<'_> {
                 $view(self.0.as_slice())
             }
             pub fn into_bytes_buf(self) -> SmtBytesBuf {
@@ -605,24 +605,24 @@ impl SmtNumeralBuf {
 
     /// The value as `u32`, or `None` if it does not fit.
     pub fn to_u32(&self) -> Option<u32> {
-        self.as_view().to_u32()
+        self.view().to_u32()
     }
 
     /// The value as `u64`, or `None` if it does not fit.
     pub fn to_u64(&self) -> Option<u64> {
-        self.as_view().to_u64()
+        self.view().to_u64()
     }
 
     /// The value as `u128`, or `None` if it does not fit.
     pub fn to_u128(&self) -> Option<u128> {
-        self.as_view().to_u128()
+        self.view().to_u128()
     }
 
     /// The value as `usize`, or `None` if it does not fit.
     ///
     /// Whether a value fits depends on the platform.
     pub fn to_usize(&self) -> Option<usize> {
-        self.as_view().to_usize()
+        self.view().to_usize()
     }
 }
 
@@ -690,13 +690,13 @@ impl<'a> SmtDecimal<'a> {
 impl SmtDecimalBuf {
     /// The whole part, before the dot.
     pub fn whole(&self) -> SmtNumeral<'_> {
-        self.as_view().whole()
+        self.view().whole()
     }
 
     /// The digits of the fractional part, after the dot.
     ///
     /// They may have leading zeros, so they are not a numeral.
     pub fn fraction(&self) -> &[u8] {
-        self.as_view().fraction()
+        self.view().fraction()
     }
 }

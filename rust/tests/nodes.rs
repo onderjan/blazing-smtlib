@@ -321,8 +321,8 @@ fn owned_indices_view_back_what_was_pushed() {
     ];
     fn as_view(index: &SmtIndexBuf) -> SmtIndex<'_> {
         match index {
-            SmtIndexBuf::Numeral(numeral) => SmtIndex::Numeral(numeral.as_view()),
-            SmtIndexBuf::Symbol(symbol) => SmtIndex::Symbol(symbol.as_view()),
+            SmtIndexBuf::Numeral(numeral) => SmtIndex::Numeral(numeral.view()),
+            SmtIndexBuf::Symbol(symbol) => SmtIndex::Symbol(symbol.view()),
         }
     }
     let expected = ["32", "x", "|x|", "|a b|", "||", "0"];
@@ -360,11 +360,11 @@ fn owned_simple_patterns_view_back_what_was_pushed() {
     let spaced = symbol_buf(b"a b", true);
     let empty = symbol_buf(b"", true);
     let pushed = [
-        SmtSimplePattern::Symbol(x.as_view()),
+        SmtSimplePattern::Symbol(x.view()),
         SmtSimplePattern::Wildcard,
-        SmtSimplePattern::Symbol(quoted_x.as_view()),
-        SmtSimplePattern::Symbol(empty.as_view()),
-        SmtSimplePattern::Symbol(spaced.as_view()),
+        SmtSimplePattern::Symbol(quoted_x.view()),
+        SmtSimplePattern::Symbol(empty.view()),
+        SmtSimplePattern::Symbol(spaced.view()),
         SmtSimplePattern::Wildcard,
     ];
     let expected = ["x", "_", "|x|", "||", "|a b|", "_"];
@@ -399,11 +399,11 @@ fn owned_match_cases_view_back_what_was_pushed() {
     let t = symbol_buf(b"t q", true);
     let nil = symbol_buf(b"nil", true);
     let mut args = SmtSimplePatternsBuf::new();
-    args.push(SmtSimplePattern::Symbol(h.as_view()));
-    args.push(SmtSimplePattern::Symbol(t.as_view()));
+    args.push(SmtSimplePattern::Symbol(h.view()));
+    args.push(SmtSimplePattern::Symbol(t.view()));
     args.push(SmtSimplePattern::Wildcard);
     let mut cases = SmtMatchCasesBuf::<RenderHandler>::new();
-    assert!(cases.is_empty() && cases.view().is_empty());
+    assert!(cases.is_empty() && cases.view_mut().is_empty());
     let expected = [
         ("(cons h |t q| _)", "h"),
         ("|nil|", "x"),
@@ -413,13 +413,13 @@ fn owned_match_cases_view_back_what_was_pushed() {
     for round in 0..2 {
         cases.push(
             SmtPattern::Application {
-                constructor: cons.as_view(),
+                constructor: cons.view(),
                 args: args.view(),
             },
             "h".to_string(),
         );
         cases.push(
-            SmtPattern::Simple(SmtSimplePattern::Symbol(nil.as_view())),
+            SmtPattern::Simple(SmtSimplePattern::Symbol(nil.view())),
             "x".to_string(),
         );
         cases.push(
@@ -430,14 +430,14 @@ fn owned_match_cases_view_back_what_was_pushed() {
         wildcard.push(SmtSimplePattern::Wildcard);
         cases.push(
             SmtPattern::Application {
-                constructor: cons.as_view(),
+                constructor: cons.view(),
                 args: wildcard.view(),
             },
             "z".to_string(),
         );
         assert_eq!(cases.len(), expected.len(), "round {round}");
         assert!(!cases.is_empty(), "round {round}");
-        let view = cases.view();
+        let view = cases.view_mut();
         assert_eq!(view.len(), expected.len(), "round {round}");
         for (i, (pattern, body)) in expected.iter().enumerate() {
             let (viewed, viewed_body) = view.get(i).expect("a pushed case");
@@ -455,7 +455,10 @@ fn owned_match_cases_view_back_what_was_pushed() {
             .collect();
         assert_eq!(rendered, expected_owned, "round {round}");
         cases.clear();
-        assert!(cases.is_empty() && cases.view().is_empty(), "round {round}");
+        assert!(
+            cases.is_empty() && cases.view_mut().is_empty(),
+            "round {round}"
+        );
         assert_eq!(cases.len(), 0, "round {round}");
     }
 }
@@ -469,12 +472,12 @@ fn a_handler_takes_an_indexed_sort_and_a_match_built_outside_the_library() {
     let bit_vec = symbol_buf(b"BitVec", false);
     let width = numeral_buf(b"32");
     let mut indices = SmtIndicesBuf::new();
-    indices.push(SmtIndex::Numeral(width.as_view()));
+    indices.push(SmtIndex::Numeral(width.view()));
     let mut applied = Vec::new();
     let sort = handler
         .handle_sort(SmtSort {
             ident: SmtIdent {
-                name: bit_vec.as_view(),
+                name: bit_vec.view(),
                 indices: indices.view(),
             },
             applied: SmtMultiple::new(&mut applied),
@@ -487,7 +490,7 @@ fn a_handler_takes_an_indexed_sort_and_a_match_built_outside_the_library() {
     let scrutinee = handler
         .handle_term(SmtTerm::QualifiedIdent(SmtQualifiedIdent {
             ident: SmtIdent {
-                name: x.as_view(),
+                name: x.view(),
                 indices: no_indices.view(),
             },
             sort: None,
@@ -499,12 +502,12 @@ fn a_handler_takes_an_indexed_sort_and_a_match_built_outside_the_library() {
     let h = symbol_buf(b"h", false);
     let t = symbol_buf(b"t", false);
     let mut args = SmtSimplePatternsBuf::new();
-    args.push(SmtSimplePattern::Symbol(h.as_view()));
-    args.push(SmtSimplePattern::Symbol(t.as_view()));
+    args.push(SmtSimplePattern::Symbol(h.view()));
+    args.push(SmtSimplePattern::Symbol(t.view()));
     let mut cases = SmtMatchCasesBuf::<RenderHandler>::new();
     cases.push(
         SmtPattern::Application {
-            constructor: cons.as_view(),
+            constructor: cons.view(),
             args: args.view(),
         },
         scrutinee.clone(),
@@ -514,7 +517,7 @@ fn a_handler_takes_an_indexed_sort_and_a_match_built_outside_the_library() {
         scrutinee.clone(),
     );
     let term = handler
-        .end_match(scrutinee, cases.view())
+        .end_match(scrutinee, cases.view_mut())
         .unwrap_or_else(|never| match never {});
     assert_eq!(term, "(match x (((cons h t) x) (_ x)))");
 }

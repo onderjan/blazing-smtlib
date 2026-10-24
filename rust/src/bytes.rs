@@ -45,7 +45,7 @@ impl SmtBytesBuf {
     }
 
     #[inline]
-    pub fn as_view<'a>(&'a self) -> SmtBytes<'a> {
+    pub fn view<'a>(&'a self) -> SmtBytes<'a> {
         SmtBytes(&self.0)
     }
 
@@ -80,7 +80,7 @@ impl Default for SmtBytesBuf {
 
 impl Debug for SmtBytesBuf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.as_view(), f)
+        Debug::fmt(&self.view(), f)
     }
 }
 

@@ -66,15 +66,15 @@ fn unquoted_symbol_accepts_only_nonempty_simple_symbol_bytes_not_starting_with_a
 #[test]
 fn a_symbol_is_built_quoted_or_unquoted_under_its_own_rule() {
     let quoted = SmtSymbolBuf::new_quoted(b"quoted name".to_vec()).expect("a quoted symbol");
-    assert!(quoted.is_quoted() && quoted.as_view().is_quoted());
+    assert!(quoted.is_quoted() && quoted.view().is_quoted());
     let unquoted = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("an unquoted symbol");
-    assert!(!unquoted.is_quoted() && !unquoted.as_view().is_quoted());
+    assert!(!unquoted.is_quoted() && !unquoted.view().is_quoted());
     assert!(SmtSymbolBuf::new_quoted(b"".to_vec()).is_ok());
     assert!(SmtSymbolBuf::new_unquoted(b"quoted name".to_vec()).is_err());
     assert!(SmtSymbolBuf::new_unquoted(b"".to_vec()).is_err());
     // the flag survives into the view and back
-    assert!(quoted.as_view().into_owned().is_quoted());
-    assert!(!unquoted.as_view().into_owned().is_quoted());
+    assert!(quoted.view().into_owned().is_quoted());
+    assert!(!unquoted.view().into_owned().is_quoted());
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn a_symbol_prints_its_pipes_when_debugged() {
     let quoted = SmtSymbolBuf::new_quoted(b"a b".to_vec()).expect("a quoted symbol");
     let unquoted = SmtSymbolBuf::new_unquoted(b"ab".to_vec()).expect("an unquoted symbol");
     assert_eq!(format!("{quoted:?}"), "|\"a b\"|");
-    assert_eq!(format!("{:?}", quoted.as_view()), "|\"a b\"|");
+    assert_eq!(format!("{:?}", quoted.view()), "|\"a b\"|");
     assert_eq!(format!("{unquoted:?}"), "\"ab\"");
 }
 
@@ -216,19 +216,19 @@ fn symbols_key_maps_by_their_bytes_whether_quoted_or_not() {
     map.insert(name.into_bytes_buf(), 2);
     let quoted_x = SmtSymbolBuf::new_quoted(b"x".to_vec()).expect("a symbol");
     assert_eq!(map.get(quoted_x.as_slice()), Some(&1));
-    assert_eq!(map.get(quoted_x.as_view().as_slice()), Some(&1));
+    assert_eq!(map.get(quoted_x.view().as_slice()), Some(&1));
     assert_eq!(map.get(b"quoted name".as_slice()), Some(&2));
     assert_eq!(map.get(b"y".as_slice()), None);
     // and the bytes compare equal across the two spellings
     let unquoted_x = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("a symbol");
     assert_eq!(quoted_x.bytes(), unquoted_x.bytes());
-    assert_eq!(quoted_x.as_view().bytes(), unquoted_x.as_view().bytes());
+    assert_eq!(quoted_x.view().bytes(), unquoted_x.view().bytes());
 }
 
 #[test]
 fn newtypes_compare_with_bytes_strings_and_each_other() {
     let owned = SmtNumeralBuf::new(b"32".to_vec()).expect("a numeral");
-    let view = owned.as_view();
+    let view = owned.view();
     assert!(owned == "32" && owned == b"32"[..] && owned == b"32".as_slice());
     assert!(view == "32" && view == b"32"[..] && view == b"32".as_slice());
     assert!(owned == view);
@@ -295,7 +295,7 @@ fn convert(conversions: &NumeralConversions, digits: &str) -> Option<u128> {
     let owned = numeral(digits);
     let by_method = (conversions.buf_to)(&owned);
     assert_eq!(
-        (conversions.view_to)(owned.as_view()),
+        (conversions.view_to)(owned.view()),
         by_method,
         "{} view of {digits}",
         conversions.name
@@ -307,7 +307,7 @@ fn convert(conversions: &NumeralConversions, digits: &str) -> Option<u128> {
         conversions.name
     );
     assert_eq!(
-        (conversions.view_try_from)(owned.as_view()),
+        (conversions.view_try_from)(owned.view()),
         by_method.ok_or(SmtNumeralOverflow),
         "{} TryFrom of the viewed {digits}",
         conversions.name
@@ -373,7 +373,7 @@ fn a_decimal_splits_at_its_dot_into_a_whole_numeral_and_fraction_digits() {
         ("123.0001", "123", b"0001"),
     ] {
         let owned = SmtDecimalBuf::new(decimal.as_bytes().to_vec()).expect("a decimal");
-        let view = owned.as_view();
+        let view = owned.view();
         assert_eq!(owned.whole(), whole, "whole part of the owned {decimal}");
         assert_eq!(view.whole(), whole, "whole part of the viewed {decimal}");
         assert_eq!(

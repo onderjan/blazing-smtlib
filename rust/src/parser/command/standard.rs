@@ -155,21 +155,21 @@ macro_rules! standard_commands {
 standard_commands! {
     set_logic: SetLogic(
         SmtClosedParser<H, SmtSymbolParser>,
-        |handler, logic| handler.command_set_logic(logic.as_view())),
+        |handler, logic| handler.command_set_logic(logic.view())),
     declare_sort: DeclareSort(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser, SmtNumeralParser>>,
-        |handler, (name, arity)| handler.command_declare_sort(name.as_view(), arity.as_view())),
+        |handler, (name, arity)| handler.command_declare_sort(name.view(), arity.view())),
     declare_sort_parameter: DeclareSortParameter(
         SmtClosedParser<H, SmtSymbolParser>,
-        |handler, name| handler.command_declare_sort_parameter(name.as_view())),
+        |handler, name| handler.command_declare_sort_parameter(name.view())),
     declare_const: DeclareConst(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser, SmtSortParser<H>>>,
-        |handler, (name, sort)| handler.command_declare_const(name.as_view(), sort)),
+        |handler, (name, sort)| handler.command_declare_const(name.view(), sort)),
     declare_fun: DeclareFun(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser,
             SmtPairParser<H, SmtParenMultipleParser<H, SmtSortParser<H>>, SmtSortParser<H>>>>,
         |handler, (name, (mut param_sorts, result_sort))|
-            handler.command_declare_fun(name.as_view(), SmtMultiple::new(&mut param_sorts), result_sort)),
+            handler.command_declare_fun(name.view(), SmtMultiple::new(&mut param_sorts), result_sort)),
     declare_datatype: DeclareDatatype(
         SmtClosedParser<H, DeclareDatatypeParser<H>>,
         |handler, constructors| hand_over_constructors(&mut SmtConstructorsBuf::new(), constructors,
@@ -183,7 +183,7 @@ standard_commands! {
     define_const: DefineConst(
         SmtClosedParser<H, SmtPairParser<H, SmtSymbolParser,
             SmtPairParser<H, SmtSortParser<H>, SmtTermParser<H>>>>,
-        |handler, (name, (sort, body))| handler.command_define_const(name.as_view(), sort, body)),
+        |handler, (name, (sort, body))| handler.command_define_const(name.view(), sort, body)),
     define_fun: DefineFun(
         SmtClosedParser<H, DefinitionParser<H, DefineFun>>,
         |handler, body| handler.end_define_fun(body)),
@@ -207,25 +207,25 @@ standard_commands! {
         |handler, ()| handler.command_exit()),
     push: Push(
         SmtClosedParser<H,SmtNumeralParser>,
-        |handler, amount| handler.command_push(amount.as_view())),
+        |handler, amount| handler.command_push(amount.view())),
     pop: Pop(
         SmtClosedParser<H,SmtNumeralParser>,
-        |handler, amount| handler.command_pop(amount.as_view())),
+        |handler, amount| handler.command_pop(amount.view())),
     set_info: SetInfo(
         SetInfoParser,
         |handler, attribute| handler.command_set_info(attribute)),
     echo: Echo(
         SmtClosedParser<H, SmtStringParser>,
-        |handler, value| handler.command_echo(value.as_view())),
+        |handler, value| handler.command_echo(value.view())),
     get_option: GetOption(
         SmtClosedParser<H, SmtKeywordParser>,
-        |handler, option| handler.command_get_option(option.as_view())),
+        |handler, option| handler.command_get_option(option.view())),
     set_option: SetOption(
         SmtClosedAttributeParser<H>,
         |handler, option| handler.command_set_option(option)),
     get_info: GetInfo(
         SmtClosedParser<H, SmtKeywordParser>,
-        |handler, keyword| handler.command_get_info(keyword.as_view())),
+        |handler, keyword| handler.command_get_info(keyword.view())),
     get_value: GetValue(
         SmtClosedParser<H,GetValueParser<H>>,
         |handler, mut terms| handler.command_get_value(SmtMultiple::new(&mut terms))),
@@ -291,9 +291,9 @@ impl<H: SmtCommandHandler> Definition<H> for DefineSort {
         let (name, params) = signature;
         buf.clear();
         for param in &params {
-            buf.push(param.as_view());
+            buf.push(param.view());
         }
-        handler.start_define_sort(name.as_view(), buf.view())
+        handler.start_define_sort(name.view(), buf.view())
     }
 }
 

@@ -184,7 +184,7 @@ fn a_symbol_spelling_a_word_reserved_in_the_version_is_written_quoted() {
         for word in reserved_words::reserved_words() {
             let symbol = SmtSymbolBuf::new_unquoted(word.as_bytes().to_vec())
                 .expect("a reserved word is a simple symbol");
-            let text = written(SmtSyntaxToken::Symbol(symbol.as_view()), version)
+            let text = written(SmtSyntaxToken::Symbol(symbol.view()), version)
                 .expect("a symbol is written in every version");
             let reserved = SmtReserved::from_bytes(word.as_bytes(), SmtVersion::V2_7)
                 .expect("the word is reserved in the latest version");
@@ -222,7 +222,7 @@ fn words_reserved_in_later_versions_are_quoted_only_from_those_on() {
         ("echo", SmtVersion::V2_0, SmtVersion::V2_5),
     ] {
         let symbol = SmtSymbolBuf::new_unquoted(word.as_bytes().to_vec()).expect("a symbol");
-        let token = SmtSyntaxToken::Symbol(symbol.as_view());
+        let token = SmtSyntaxToken::Symbol(symbol.view());
         let before = written(token, unquoted_until).expect("a symbol is written");
         assert_eq!(String::from_utf8_lossy(&before), word);
         let from = written(token, quoted_from).expect("a symbol is written");
@@ -232,10 +232,10 @@ fn words_reserved_in_later_versions_are_quoted_only_from_those_on() {
     // written quoted even when it need not be
     for version in VERSIONS {
         let plain = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("a symbol");
-        let text = written(SmtSyntaxToken::Symbol(plain.as_view()), version);
+        let text = written(SmtSyntaxToken::Symbol(plain.view()), version);
         assert_eq!(text.expect("a symbol is written"), b"x");
         let quoted = SmtSymbolBuf::new_quoted(b"x".to_vec()).expect("a symbol");
-        let text = written(SmtSyntaxToken::Symbol(quoted.as_view()), version);
+        let text = written(SmtSyntaxToken::Symbol(quoted.view()), version);
         assert_eq!(text.expect("a symbol is written"), b"|x|");
     }
 }
@@ -294,18 +294,18 @@ fn a_failure_of_the_writer_is_an_io_error() {
     let tokens = [
         SmtSyntaxToken::ParenOpen,
         SmtSyntaxToken::ParenClose,
-        SmtSyntaxToken::Numeral(numeral.as_view()),
-        SmtSyntaxToken::Decimal(decimal.as_view()),
-        SmtSyntaxToken::Hexadecimal(hex.as_view()),
-        SmtSyntaxToken::Binary(bin.as_view()),
-        SmtSyntaxToken::String(string.as_view()),
-        SmtSyntaxToken::String(empty_string.as_view()),
-        SmtSyntaxToken::Keyword(keyword.as_view()),
-        SmtSyntaxToken::Symbol(symbol.as_view()),
-        SmtSyntaxToken::Symbol(quoted.as_view()),
+        SmtSyntaxToken::Numeral(numeral.view()),
+        SmtSyntaxToken::Decimal(decimal.view()),
+        SmtSyntaxToken::Hexadecimal(hex.view()),
+        SmtSyntaxToken::Binary(bin.view()),
+        SmtSyntaxToken::String(string.view()),
+        SmtSyntaxToken::String(empty_string.view()),
+        SmtSyntaxToken::Keyword(keyword.view()),
+        SmtSyntaxToken::Symbol(symbol.view()),
+        SmtSyntaxToken::Symbol(quoted.view()),
         SmtSyntaxToken::Reserved(let_word),
-        SmtSyntaxToken::Whitespace(whitespace.as_view()),
-        SmtSyntaxToken::Comment(comment.as_view()),
+        SmtSyntaxToken::Whitespace(whitespace.view()),
+        SmtSyntaxToken::Comment(comment.view()),
     ];
     for version in VERSIONS {
         for token in tokens {

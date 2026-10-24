@@ -303,7 +303,7 @@ impl<V> SmtNamedBuf<V> {
         self.values.clear();
     }
 
-    pub fn view(&mut self) -> SmtNamed<'_, V> {
+    pub fn view_mut(&mut self) -> SmtNamed<'_, V> {
         SmtNamed::new(
             &self.text,
             SmtMultiple::new(&mut self.names),
@@ -497,7 +497,7 @@ impl<H: SmtHandler + ?Sized> SmtMatchCasesBuf<H> {
         self.terms.clear();
     }
 
-    pub fn view(&mut self) -> SmtMatchCases<'_, H> {
+    pub fn view_mut(&mut self) -> SmtMatchCases<'_, H> {
         SmtMatchCases {
             text: &self.text,
             simple_patterns: &self.simple_patterns,
@@ -1034,7 +1034,7 @@ impl<'a, S> Iterator for SmtConstructorsIter<'a, S> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let name = self.names.next()?.symbol_view(self.text);
-        let selectors = self.selectors.next()?.view();
+        let selectors = self.selectors.next()?.view_mut();
         Some((name, selectors))
     }
 
@@ -1104,7 +1104,7 @@ impl<S> SmtConstructorsBuf<S> {
         self.names.clear();
     }
 
-    pub fn view(&mut self) -> SmtConstructors<'_, S> {
+    pub fn view_mut(&mut self) -> SmtConstructors<'_, S> {
         let len = self.names.len();
         SmtConstructors {
             text: &self.text,

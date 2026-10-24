@@ -27,12 +27,12 @@ pub(crate) fn hand_over_constructors<S, R>(
     f: impl FnOnce(SmtConstructors<'_, S>) -> R,
 ) -> R {
     for (name, selectors) in constructors {
-        buf.push(name.as_view());
+        buf.push(name.view());
         for (selector, sort) in selectors {
-            buf.push_selector(selector.as_view(), sort);
+            buf.push_selector(selector.view(), sort);
         }
     }
-    let result = f(buf.view());
+    let result = f(buf.view_mut());
     // do not keep the handled sorts past the call
     buf.clear();
     result
@@ -113,12 +113,12 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
     ) -> Result<(), SmtParseError<H::Error>> {
         self.params_buf.clear();
         for param in &params {
-            self.params_buf.push(param.as_view());
+            self.params_buf.push(param.view());
         }
         match &mut self.mode {
             DatatypeMode::Single(name) => {
                 let name = name.take().expect("datatype should be only started once");
-                handle_err(handler.start_declare_datatype(name.as_view(), self.params_buf.view()))
+                handle_err(handler.start_declare_datatype(name.view(), self.params_buf.view()))
             }
             DatatypeMode::Multiple => {
                 handle_err(handler.start_datatype_declaration(self.params_buf.view()))
@@ -378,7 +378,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     // start datatype declarations
                     self.arities_buf.clear();
                     for (name, arity) in &introductions {
-                        self.arities_buf.push(name.as_view(), arity.as_view());
+                        self.arities_buf.push(name.view(), arity.view());
                     }
                     handle_err(handler.start_declare_datatypes(self.arities_buf.view()))?;
                     self.state = DeclareDatatypesState::Declarations;

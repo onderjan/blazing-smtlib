@@ -21,9 +21,9 @@ pub(crate) struct FunctionSignature<S> {
 impl<S> FunctionSignature<S> {
     /// Pushes the signature into `signatures`, from which it is viewed.
     pub(crate) fn push_into(self, signatures: &mut SmtFunctionSignaturesBuf<S>) {
-        signatures.push(self.name.as_view(), self.result_sort);
+        signatures.push(self.name.view(), self.result_sort);
         for (name, sort) in self.params {
-            signatures.push_param(name.as_view(), sort);
+            signatures.push_param(name.view(), sort);
         }
     }
 }
