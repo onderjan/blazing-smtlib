@@ -1,8 +1,11 @@
 //! Public-API tests of the plain string-like value types.
 
 use blazing_smtlib::{
-    SmtBinDigitsBuf, SmtBytesBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeral,
-    SmtNumeralBuf, SmtNumeralOverflow, SmtStringContentBuf, SmtSymbolBuf,
+    SmtBinDigits, SmtBinDigitsBuf, SmtBytesBuf, SmtComment, SmtCommentBuf, SmtDecimal,
+    SmtDecimalBuf, SmtDisallowedBytesError, SmtHexDigits, SmtHexDigitsBuf, SmtKeyword,
+    SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumeralOverflow, SmtStringContent,
+    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace, SmtWhitespaceBuf,
+    token::SmtVersion,
 };
 
 #[test]
@@ -84,6 +87,161 @@ fn a_symbol_prints_its_pipes_when_debugged() {
     assert_eq!(format!("{quoted:?}"), "|\"a b\"|");
     assert_eq!(format!("{:?}", quoted.view()), "|\"a b\"|");
     assert_eq!(format!("{unquoted:?}"), "\"ab\"");
+}
+
+/// Bytes that every check below is tried on: some allowed by each plain type,
+/// some by none.
+const SAMPLES: &[&[u8]] = &[
+    b"", b"0", b"00", b"12", b"1.5", b"1F", b"01", b"x", b"let", b"a b", b"a|b", b"a\\b", b"\xFF",
+    b"a\x7Fb", b" \n", b"; c\n", b"\r\n", b"-",
+];
+
+/// Each plain view is built from borrowed bytes exactly when its owned type
+/// allows them, and then borrows those very bytes.
+#[test]
+fn a_plain_view_is_built_from_borrowed_bytes_under_its_owned_rule() {
+    macro_rules! check {
+        ($view:ident, $buf:ident) => {
+            for &sample in SAMPLES {
+                match $view::new(sample) {
+                    Ok(view) => {
+                        assert!($buf::is_allowed(sample), "{} {sample:?}", stringify!($view));
+                        assert!(std::ptr::eq(view.as_slice(), sample));
+                    }
+                    Err(SmtDisallowedBytesError) => {
+                        assert!(
+                            !$buf::is_allowed(sample),
+                            "{} {sample:?}",
+                            stringify!($view)
+                        );
+                    }
+                }
+            }
+        };
+    }
+    check!(SmtStringContent, SmtStringContentBuf);
+    check!(SmtKeyword, SmtKeywordBuf);
+    check!(SmtNumeral, SmtNumeralBuf);
+    check!(SmtHexDigits, SmtHexDigitsBuf);
+    check!(SmtBinDigits, SmtBinDigitsBuf);
+    check!(SmtDecimal, SmtDecimalBuf);
+    check!(SmtWhitespace, SmtWhitespaceBuf);
+    check!(SmtComment, SmtCommentBuf);
+}
+
+/// A symbol view is built quoted or unquoted from borrowed bytes exactly when
+/// the owned symbol's rule for that form allows them.
+#[test]
+fn a_symbol_view_is_built_quoted_or_unquoted_under_its_own_rule() {
+    for &sample in SAMPLES {
+        match SmtSymbol::new_unquoted(sample) {
+            Ok(symbol) => {
+                assert!(SmtSymbolBuf::is_unquoted_allowed(sample), "{sample:?}");
+                assert!(!symbol.is_quoted() && std::ptr::eq(symbol.as_slice(), sample));
+            }
+            Err(SmtDisallowedBytesError) => {
+                assert!(!SmtSymbolBuf::is_unquoted_allowed(sample), "{sample:?}")
+            }
+        }
+        match SmtSymbol::new_quoted(sample) {
+            Ok(symbol) => {
+                assert!(SmtSymbolBuf::is_quoted_allowed(sample), "{sample:?}");
+                assert!(symbol.is_quoted() && std::ptr::eq(symbol.as_slice(), sample));
+            }
+            Err(SmtDisallowedBytesError) => {
+                assert!(!SmtSymbolBuf::is_quoted_allowed(sample), "{sample:?}")
+            }
+        }
+    }
+}
+
+const VERSIONS: [SmtVersion; 4] = [
+    SmtVersion::V2_0,
+    SmtVersion::V2_5,
+    SmtVersion::V2_6,
+    SmtVersion::V2_7,
+];
+
+/// Whether `match`, `lambda` and `_` are reserved words of each version.
+fn reserved_in(word: &[u8], version: SmtVersion) -> bool {
+    match word {
+        b"match" => matches!(version, SmtVersion::V2_6 | SmtVersion::V2_7),
+        b"lambda" => version == SmtVersion::V2_7,
+        b"_" => true,
+        _ => false,
+    }
+}
+
+/// A symbol built for a version is simple if its bytes are allowed in a simple
+/// symbol and are not a reserved word of the version, quoted if they are
+/// allowed only quoted, and refused if they are allowed in neither.
+#[test]
+fn a_symbol_built_for_a_version_is_simple_unless_it_would_not_read_back() {
+    for version in VERSIONS {
+        for word in [&b"x"[..], b"match", b"lambda", b"_"] {
+            let simple = !reserved_in(word, version);
+            assert_eq!(
+                SmtSymbolBuf::is_unquoted_allowed_in(word, version),
+                simple,
+                "{word:?} in {version:?}"
+            );
+            let view = SmtSymbol::new(word, version).expect("allowed bytes");
+            let owned = SmtSymbolBuf::new(word.to_vec(), version).expect("allowed bytes");
+            assert_eq!(view.is_quoted(), !simple, "{word:?} in {version:?}");
+            assert_eq!(owned.is_quoted(), !simple, "{word:?} in {version:?}");
+            assert!(view.as_slice() == word && owned.as_slice() == word);
+        }
+        // allowed only quoted
+        for word in [&b"1x"[..], b"a b", b""] {
+            assert!(!SmtSymbolBuf::is_unquoted_allowed_in(word, version));
+            assert!(SmtSymbol::new(word, version).expect("quotable").is_quoted());
+            let owned = SmtSymbolBuf::new(word.to_vec(), version).expect("quotable");
+            assert!(owned.is_quoted());
+        }
+        // allowed in neither form
+        assert_eq!(
+            SmtSymbol::new(b"a|b", version).err(),
+            Some(SmtDisallowedBytesError)
+        );
+        let refused = SmtSymbolBuf::new(b"a|b".to_vec(), version).expect_err("not quotable");
+        assert_eq!(refused.into_vec(), b"a|b");
+    }
+}
+
+/// A symbol is allowed in a version unless it is simple and a reserved word
+/// there; making it versioned quotes exactly such a symbol and never unquotes.
+#[test]
+fn a_versioned_symbol_is_quoted_exactly_where_it_would_not_read_back() {
+    for version in VERSIONS {
+        for word in [&b"x"[..], b"match", b"lambda", b"_"] {
+            let reserved = reserved_in(word, version);
+            let simple = SmtSymbol::new_unquoted(word).expect("a simple symbol");
+            let quoted = SmtSymbol::new_quoted(word).expect("a quoted symbol");
+            assert_eq!(
+                simple.is_allowed_in(version),
+                !reserved,
+                "{word:?} in {version:?}"
+            );
+            assert!(quoted.is_allowed_in(version), "{word:?} in {version:?}");
+            assert_eq!(simple.into_versioned(version).is_quoted(), reserved);
+            assert!(quoted.into_versioned(version).is_quoted());
+            assert!(simple.into_versioned(version).is_allowed_in(version));
+            assert_eq!(simple.into_versioned(version).as_slice(), word);
+
+            let simple = simple.into_owned();
+            let quoted = quoted.into_owned();
+            assert_eq!(
+                simple.is_allowed_in(version),
+                !reserved,
+                "{word:?} in {version:?}"
+            );
+            assert!(quoted.is_allowed_in(version), "{word:?} in {version:?}");
+            let versioned = simple.into_versioned(version);
+            assert_eq!(versioned.is_quoted(), reserved, "{word:?} in {version:?}");
+            assert!(versioned.is_allowed_in(version) && versioned.as_slice() == word);
+            assert!(quoted.into_versioned(version).is_quoted());
+        }
+    }
 }
 
 #[test]
