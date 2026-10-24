@@ -37,7 +37,7 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtIndex, SmtKeywordBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf,
+    SmtIdentBuf, SmtIndex, SmtKeywordBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePattern,
     SmtSpecialConstantBuf, SmtSymbol, SmtSymbolBuf, parser::SmtSyntaxErrorKind, token::SmtVersion,
 };
 
@@ -55,19 +55,19 @@ struct Printing {
     scrutinees: Vec<String>,
 }
 
-fn render_simple_pattern(pattern: &SmtSimplePatternBuf) -> String {
+fn render_simple_pattern(pattern: SmtSimplePattern<'_>) -> String {
     match pattern {
-        SmtSimplePatternBuf::Symbol(symbol) => render_symbol(&symbol),
-        SmtSimplePatternBuf::Wildcard => "_".into(),
+        SmtSimplePattern::Symbol(symbol) => render_symbol(&symbol),
+        SmtSimplePattern::Wildcard => "_".into(),
     }
 }
 
 fn render_pattern(pattern: &SmtPatternBuf) -> String {
     match pattern {
-        SmtPatternBuf::Simple(simple) => render_simple_pattern(simple),
-        SmtPatternBuf::Application { constructor, args } => {
-            let mut items = vec![render_symbol(&constructor)];
-            items.extend(args.iter().map(render_simple_pattern));
+        SmtPatternBuf::Simple(simple) => render_simple_pattern(simple.view()),
+        SmtPatternBuf::Application(application) => {
+            let mut items = vec![render_symbol(application.constructor())];
+            items.extend(application.args().iter().map(render_simple_pattern));
             render_list(&items)
         }
     }
@@ -136,7 +136,7 @@ fn render_ident(ident: &SmtIdentBuf) -> String {
         return name;
     }
     let mut out = format!("(_ {name}");
-    for index in ident.indices.view().iter() {
+    for index in ident.indices.iter() {
         out.push(' ');
         match index {
             SmtIndex::Numeral(numeral) => out.push_str(&text(numeral.as_slice())),

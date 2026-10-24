@@ -10,8 +10,9 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
     SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtIdentBuf, SmtIndexBuf, SmtIndicesBuf,
-    SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePatternBuf,
-    SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf,
+    SmtKeywordBuf, SmtNumeralBuf, SmtPatternApplicationBuf, SmtPatternBuf, SmtQuantifierKind,
+    SmtSimplePatternBuf, SmtSimplePatternsBuf, SmtSpecialConstantBuf, SmtStringContentBuf,
+    SmtSymbolBuf,
     lexer::{SmtLexicalErrorKind, SmtLexicalExpected},
     parser::{
         SmtCommandOutcome, SmtMissingItem, SmtNonEmptyList, SmtSyntaxErrorKind, SmtSyntaxExpected,
@@ -322,8 +323,13 @@ impl<'l> Fields<'l> {
             "c" => {
                 let constructor = self.symbol();
                 let count = self.count();
-                let args = (0..count).map(|_| self.simple_pattern()).collect();
-                SmtPatternBuf::Application { constructor, args }
+                let mut args = SmtSimplePatternsBuf::new();
+                for _ in 0..count {
+                    args.push(self.simple_pattern().view());
+                }
+                let application = SmtPatternApplicationBuf::new(constructor, args)
+                    .unwrap_or_else(|_| self.bad("pattern"));
+                SmtPatternBuf::Application(application)
             }
             _ => self.bad("pattern"),
         }

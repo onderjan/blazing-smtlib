@@ -344,10 +344,10 @@ fn simple_pattern(out: &mut Vec<u8>, pattern: SmtSimplePattern<'_>) {
 fn pattern(out: &mut Vec<u8>, pattern: SmtPattern<'_>) {
     match pattern {
         SmtPattern::Simple(simple) => simple_pattern(out, simple),
-        SmtPattern::Application { constructor, args } => {
+        SmtPattern::Application(application) => {
             out.push(b'(');
-            symbol(out, constructor);
-            for arg in args.iter() {
+            symbol(out, application.constructor());
+            for arg in application.args().iter() {
                 out.push(b' ');
                 simple_pattern(out, arg);
             }
@@ -497,8 +497,8 @@ impl SmtHandler for Reprint {
             SmtTerm::QualifiedIdent(qualified_ident) => qualified(&mut out, &qualified_ident),
             SmtTerm::Application(application) => {
                 out.push(b'(');
-                qualified(&mut out, &application.function);
-                for arg in application.args.iter() {
+                qualified(&mut out, application.function());
+                for arg in application.args().iter() {
                     out.push(b' ');
                     out.extend_from_slice(arg);
                 }

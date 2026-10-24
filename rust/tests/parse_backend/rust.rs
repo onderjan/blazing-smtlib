@@ -82,10 +82,13 @@ impl<H: Handler> SmtHandler for Adapt<'_, H> {
         let term = match term {
             SmtTerm::SpecialConstant(constant) => Term::SpecialConstant(constant.into_owned()),
             SmtTerm::QualifiedIdent(ident) => Term::QualifiedIdent(qualified_ident(ident)),
-            SmtTerm::Application(application) => Term::Application(Application {
-                function: qualified_ident(application.function),
-                args: application.args.into_iter().collect(),
-            }),
+            SmtTerm::Application(application) => {
+                let (function, args) = application.into_parts();
+                Term::Application(Application {
+                    function: qualified_ident(function),
+                    args: args.into_iter().collect(),
+                })
+            }
         };
         self.0.handle_term(term)
     }

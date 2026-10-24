@@ -20,7 +20,8 @@ use parse_backend::{
 
 use blazing_smtlib::{
     SmtIdentBuf, SmtIndex, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind,
-    SmtSimplePatternBuf, SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf,
+    SmtSimplePattern, SmtSimplePatternBuf, SmtSpecialConstantBuf, SmtStringContentBuf,
+    SmtSymbolBuf,
     lexer::SmtLexicalErrorKind,
     parser::SmtSyntaxErrorKind,
     token::{SmtTokenCategory, SmtVersion},
@@ -69,20 +70,24 @@ struct ResolvingMatch {
     case_vars: Option<Vec<String>>,
 }
 
-fn simple_pattern_text(pattern: &SmtSimplePatternBuf) -> String {
+fn simple_pattern_text(pattern: SmtSimplePattern<'_>) -> String {
     match pattern {
-        SmtSimplePatternBuf::Symbol(symbol) => text(symbol.as_slice()),
-        SmtSimplePatternBuf::Wildcard => "_".into(),
+        SmtSimplePattern::Symbol(symbol) => text(symbol.as_slice()),
+        SmtSimplePattern::Wildcard => "_".into(),
     }
 }
 
 /// Renders a pattern as written, so that the events show it unclassified.
 fn pattern_text(pattern: &SmtPatternBuf) -> String {
     match pattern {
-        SmtPatternBuf::Simple(simple) => simple_pattern_text(simple),
-        SmtPatternBuf::Application { constructor, args } => {
-            let args: Vec<String> = args.iter().map(simple_pattern_text).collect();
-            format!("({} {})", text(constructor.as_slice()), args.join(" "))
+        SmtPatternBuf::Simple(simple) => simple_pattern_text(simple.view()),
+        SmtPatternBuf::Application(application) => {
+            let args: Vec<String> = application.args().iter().map(simple_pattern_text).collect();
+            format!(
+                "({} {})",
+                text(application.constructor().as_slice()),
+                args.join(" ")
+            )
         }
     }
 }
@@ -160,7 +165,6 @@ fn ident_view_text(ident: SmtIdentBuf) -> String {
     }
     let indices: Vec<String> = ident
         .indices
-        .view()
         .iter()
         .map(|index| match index {
             SmtIndex::Numeral(numeral) => text(numeral.as_slice()),
@@ -292,14 +296,16 @@ impl Handler for Resolving {
                 vec![text(symbol.as_slice())]
             }
             SmtPatternBuf::Simple(SmtSimplePatternBuf::Wildcard) => Vec::new(),
-            SmtPatternBuf::Application { constructor, args } => {
-                if constructor.as_slice() == b"unstartable" {
+            SmtPatternBuf::Application(application) => {
+                if application.constructor().as_slice() == b"unstartable" {
                     return Err("unstartable case".into());
                 }
-                args.iter()
+                application
+                    .args()
+                    .iter()
                     .filter_map(|arg| match arg {
-                        SmtSimplePatternBuf::Symbol(symbol) => Some(text(symbol.as_slice())),
-                        SmtSimplePatternBuf::Wildcard => None,
+                        SmtSimplePattern::Symbol(symbol) => Some(text(symbol.as_slice())),
+                        SmtSimplePattern::Wildcard => None,
                     })
                     .collect()
             }

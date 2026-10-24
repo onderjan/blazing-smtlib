@@ -5,13 +5,14 @@ use std::fmt::Debug;
 
 use blazing_smtlib::{
     SmtApplication, SmtAttributeValue, SmtAttributes, SmtBinDigitsBuf, SmtBindings,
-    SmtConstructors, SmtDecimalBuf, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler,
-    SmtHexDigitsBuf, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices, SmtIndicesBuf,
-    SmtKeyword, SmtMatchCases, SmtMatchCasesBuf, SmtMultiple, SmtNumeralBuf, SmtPattern,
-    SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
-    SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort, SmtSortArities,
-    SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbol,
-    SmtSymbolBuf, SmtSymbols, SmtTerm, token::SmtVersion,
+    SmtConstructors, SmtDecimalBuf, SmtEmptyArgumentsError, SmtFunctionSignature,
+    SmtFunctionSignatures, SmtHandler, SmtHexDigitsBuf, SmtIdent, SmtIdentBuf, SmtIndex,
+    SmtIndexBuf, SmtIndices, SmtIndicesBuf, SmtKeyword, SmtMatchCases, SmtMatchCasesBuf,
+    SmtMultiple, SmtNumeralBuf, SmtPattern, SmtPatternApplication, SmtPatternApplicationBuf,
+    SmtPatternBuf, SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort,
+    SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtStringContentBuf,
+    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, token::SmtVersion,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,
@@ -147,6 +148,10 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtSimplePattern<'static>>();
     assert_debug_and_clone::<SmtSimplePatterns<'static>>();
     assert_debug_and_clone::<SmtPattern<'static>>();
+    assert_debug_and_clone::<SmtPatternApplication<'static>>();
+    assert_debug_and_clone::<SmtSimplePatternsBuf>();
+    assert_debug_and_clone::<SmtPatternBuf>();
+    assert_debug_and_clone::<SmtPatternApplicationBuf>();
 }
 
 fn symbol_buf(bytes: &[u8], quoted: bool) -> SmtSymbolBuf {
@@ -160,6 +165,15 @@ fn symbol_buf(bytes: &[u8], quoted: bool) -> SmtSymbolBuf {
 
 fn numeral_buf(digits: &[u8]) -> SmtNumeralBuf {
     SmtNumeralBuf::new(digits.to_vec()).expect("test numeral should be allowed")
+}
+
+fn constructor_pattern<'a>(
+    constructor: SmtSymbol<'a>,
+    args: SmtSimplePatterns<'a>,
+) -> SmtPattern<'a> {
+    let application = SmtPatternApplication::new(constructor, args)
+        .expect("test constructor pattern has arguments");
+    SmtPattern::Application(application)
 }
 
 /// Writes a symbol as SMT-LIB text, with pipes if it is quoted.
@@ -197,9 +211,17 @@ fn render_simple_pattern(pattern: SmtSimplePattern<'_>) -> String {
 fn render_pattern(pattern: SmtPattern<'_>) -> String {
     match pattern {
         SmtPattern::Simple(simple) => render_simple_pattern(simple),
-        SmtPattern::Application { constructor, args } => {
-            let args: Vec<String> = args.iter().map(render_simple_pattern).collect();
-            format!("({} {})", render_symbol(constructor), args.join(" "))
+        SmtPattern::Application(application) => {
+            let args: Vec<String> = application
+                .args()
+                .iter()
+                .map(render_simple_pattern)
+                .collect();
+            format!(
+                "({} {})",
+                render_symbol(application.constructor()),
+                args.join(" ")
+            )
         }
     }
 }
@@ -338,6 +360,15 @@ fn owned_indices_view_back_what_was_pushed() {
             assert_eq!(render_index(index), *rendered, "round {round}");
         }
         assert!(view.get(pushed.len()).is_none(), "round {round}");
+        // the owned indices read the same as their view
+        let rendered: Vec<String> = indices.iter().map(render_index).collect();
+        assert_eq!(rendered, expected, "round {round}");
+        assert_eq!(indices.iter().len(), pushed.len(), "round {round}");
+        for (i, rendered) in expected.iter().enumerate() {
+            let index = indices.get(i).expect("a pushed index");
+            assert_eq!(render_index(index), *rendered, "round {round}");
+        }
+        assert!(indices.get(pushed.len()).is_none(), "round {round}");
         indices.clear();
         assert!(
             indices.is_empty() && indices.view().is_empty(),
@@ -421,7 +452,7 @@ fn owned_indices_debug_as_their_view_and_clone_apart() {
     let copy = indices.clone();
     indices.clear();
     assert!(indices.is_empty());
-    let rendered: Vec<String> = copy.view().iter().map(render_index).collect();
+    let rendered: Vec<String> = copy.iter().map(render_index).collect();
     assert_eq!(rendered, ["32", "x"]);
 }
 
@@ -457,6 +488,15 @@ fn owned_simple_patterns_view_back_what_was_pushed() {
             assert_eq!(render_simple_pattern(pattern), *rendered, "round {round}");
         }
         assert!(view.get(pushed.len()).is_none(), "round {round}");
+        // the owned patterns read the same as their view
+        let rendered: Vec<String> = patterns.iter().map(render_simple_pattern).collect();
+        assert_eq!(rendered, expected, "round {round}");
+        assert_eq!(patterns.iter().len(), pushed.len(), "round {round}");
+        for (i, rendered) in expected.iter().enumerate() {
+            let pattern = patterns.get(i).expect("a pushed pattern");
+            assert_eq!(render_simple_pattern(pattern), *rendered, "round {round}");
+        }
+        assert!(patterns.get(pushed.len()).is_none(), "round {round}");
         patterns.clear();
         assert!(
             patterns.is_empty() && patterns.view().is_empty(),
@@ -464,6 +504,100 @@ fn owned_simple_patterns_view_back_what_was_pushed() {
         );
         assert_eq!(patterns.len(), 0, "round {round}");
     }
+}
+
+/// Owned constructor pattern arguments are debugged as their view, the list
+/// of patterns, and a clone keeps its patterns when the original is cleared.
+#[test]
+fn owned_simple_patterns_debug_as_their_view_and_clone_apart() {
+    let x = symbol_buf(b"x", false);
+    let mut patterns = SmtSimplePatternsBuf::new();
+    patterns.push(SmtSimplePattern::Symbol(x.view()));
+    patterns.push(SmtSimplePattern::Wildcard);
+    assert_eq!(format!("{patterns:?}"), format!("{:?}", patterns.view()));
+    let copy = patterns.clone();
+    patterns.clear();
+    assert!(patterns.is_empty());
+    let rendered: Vec<String> = copy.iter().map(render_simple_pattern).collect();
+    assert_eq!(rendered, ["x", "_"]);
+}
+
+/// An application is built only with arguments, and its function and
+/// arguments are read, changed and taken apart as they were given.
+#[test]
+fn an_application_is_built_only_with_arguments() {
+    let f = symbol_buf(b"f", false);
+    let function = || SmtQualifiedIdent::<OpaqueHandler> {
+        ident: SmtIdent {
+            name: f.view(),
+            indices: SmtIndices::empty(),
+        },
+        sort: None,
+    };
+    let mut no_args: Vec<String> = Vec::new();
+    let empty = SmtApplication::new(function(), SmtMultiple::new(&mut no_args));
+    assert_eq!(empty.err(), Some(SmtEmptyArgumentsError));
+
+    let mut args = vec!["x".to_string(), "y".to_string()];
+    let mut application = SmtApplication::new(function(), SmtMultiple::new(&mut args))
+        .expect("an application with arguments should be built");
+    assert_eq!(render_ident(application.function().ident), "f");
+    assert_eq!(application.function().sort, None);
+    assert_eq!(application.args().as_slice(), ["x", "y"]);
+    application.function_mut().sort = Some("Int".to_string());
+    application.args_mut()[1].push('!');
+    assert_eq!(application.function().sort.as_deref(), Some("Int"));
+    assert_eq!(application.args().as_slice(), ["x", "y!"]);
+    let (function, args) = application.into_parts();
+    assert_eq!(render_ident(function.ident), "f");
+    assert_eq!(function.sort.as_deref(), Some("Int"));
+    assert_eq!(args.into_iter().collect::<Vec<_>>(), ["x", "y!"]);
+}
+
+/// A constructor pattern, borrowed or owned, is built only with arguments,
+/// and views back and takes apart what it was given.
+#[test]
+fn a_constructor_pattern_is_built_only_with_arguments() {
+    let cons = symbol_buf(b"cons", false);
+    let no_args = SmtSimplePatternsBuf::new();
+    let empty = SmtPatternApplication::new(cons.view(), no_args.view());
+    assert_eq!(empty.err(), Some(SmtEmptyArgumentsError));
+    let empty = SmtPatternApplicationBuf::new(cons.clone(), no_args.clone());
+    assert_eq!(empty.err(), Some(SmtEmptyArgumentsError));
+
+    let h = symbol_buf(b"h", true);
+    let mut args = SmtSimplePatternsBuf::new();
+    args.push(SmtSimplePattern::Symbol(h.view()));
+    args.push(SmtSimplePattern::Wildcard);
+    let view = SmtPatternApplication::new(cons.view(), args.view())
+        .expect("a constructor pattern with arguments should be built");
+    assert_eq!(render_symbol(view.constructor()), "cons");
+    let rendered: Vec<String> = view.args().iter().map(render_simple_pattern).collect();
+    assert_eq!(rendered, ["|h|", "_"]);
+    let again = SmtPattern::Application(view).into_owned();
+    assert_eq!(render_pattern(again.view()), "(cons |h| _)");
+
+    let owned = SmtPatternApplicationBuf::new(cons.clone(), args.clone())
+        .expect("an owned constructor pattern with arguments should be built");
+    assert_eq!(render_symbol(owned.constructor().view()), "cons");
+    let rendered: Vec<String> = owned.args().iter().map(render_simple_pattern).collect();
+    assert_eq!(rendered, ["|h|", "_"]);
+    assert_eq!(
+        render_pattern(SmtPattern::Application(owned.view())),
+        "(cons |h| _)"
+    );
+    let pattern = SmtPatternBuf::Application(owned);
+    assert_eq!(render_pattern(pattern.view()), "(cons |h| _)");
+    let SmtPatternBuf::Application(owned) = pattern else {
+        panic!("an owned constructor pattern should stay one");
+    };
+    let (constructor, args) = owned.into_parts();
+    assert_eq!(render_symbol(constructor.view()), "cons");
+    let rendered: Vec<String> = args.iter().map(render_simple_pattern).collect();
+    assert_eq!(rendered, ["|h|", "_"]);
+
+    let simple = SmtPatternBuf::Simple(SmtSimplePatternBuf::Wildcard);
+    assert_eq!(render_pattern(simple.view()), "_");
 }
 
 #[test]
@@ -486,10 +620,7 @@ fn owned_match_cases_view_back_what_was_pushed() {
     ];
     for round in 0..2 {
         cases.push(
-            SmtPattern::Application {
-                constructor: cons.view(),
-                args: args.view(),
-            },
+            constructor_pattern(cons.view(), args.view()),
             "h".to_string(),
         );
         cases.push(
@@ -503,10 +634,7 @@ fn owned_match_cases_view_back_what_was_pushed() {
         let mut wildcard = SmtSimplePatternsBuf::new();
         wildcard.push(SmtSimplePattern::Wildcard);
         cases.push(
-            SmtPattern::Application {
-                constructor: cons.view(),
-                args: wildcard.view(),
-            },
+            constructor_pattern(cons.view(), wildcard.view()),
             "z".to_string(),
         );
         assert_eq!(cases.len(), expected.len(), "round {round}");
@@ -580,10 +708,7 @@ fn a_handler_takes_an_indexed_sort_and_a_match_built_outside_the_library() {
     args.push(SmtSimplePattern::Symbol(t.view()));
     let mut cases = SmtMatchCasesBuf::<RenderHandler>::new();
     cases.push(
-        SmtPattern::Application {
-            constructor: cons.view(),
-            args: args.view(),
-        },
+        constructor_pattern(cons.view(), args.view()),
         scrutinee.clone(),
     );
     cases.push(

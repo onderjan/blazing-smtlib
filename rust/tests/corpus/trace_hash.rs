@@ -268,9 +268,10 @@ impl TraceHash {
                 self.byte(1);
                 self.simple_pattern(simple);
             }
-            SmtPattern::Application { constructor, args } => {
+            SmtPattern::Application(application) => {
                 self.byte(2);
-                self.bytes(constructor.as_slice());
+                self.bytes(application.constructor().as_slice());
+                let args = application.args();
                 self.count(args.len());
                 for arg in args.iter() {
                     self.simple_pattern(arg);
@@ -324,9 +325,9 @@ impl SmtHandler for TraceHash {
             }
             SmtTerm::Application(application) => {
                 self.byte(3);
-                self.ident_view(application.function.ident);
-                self.optional_value(application.function.sort);
-                self.values(application.args.as_slice());
+                self.ident_view(application.function().ident);
+                self.optional_value(application.function().sort);
+                self.values(application.args().as_slice());
             }
         }
         Ok(self.produce())
