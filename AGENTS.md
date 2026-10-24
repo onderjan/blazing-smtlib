@@ -39,6 +39,10 @@ are how agents follow it.
   An enum that says which party failed is a `Cause`; one that classifies a
   defect is a `Kind`.
 - Every panic carries a message.
+- What is matched by text is in American English, for compatibility with other APIs:
+  identifiers, the names of files and options, and output that programs or tests match (such
+  as `Debug`). Everything else is in British English: comments, documentation and other prose,
+  and messages for people, such as `Display` implementations, which are not to be matched.
 - The tree stays free of compiler and linter warnings.
 - Tools and test harnesses are written in Rust or Lean, not in Python.
 
