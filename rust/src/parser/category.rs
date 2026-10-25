@@ -20,7 +20,7 @@ pub use {
         SmtTuple8Parser,
     },
     ident::SmtIdentParser,
-    pattern::SmtPatternParser,
+    pattern::{SmtPatternParser, SmtSimplePatternParser},
     qualified_ident::SmtQualifiedIdentParser,
     s_expr::SmtSExprParser,
     sort::SmtSortParser,
