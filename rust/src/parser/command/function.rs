@@ -6,8 +6,8 @@ use crate::{
     lexicon::SmtSymbolBuf,
     parser::{
         SmtMissingItem, SmtNonEmptyList, SmtPairParser, SmtParenMaximumParser,
-        SmtParenMultipleParser, SmtParenParser, SmtParenSortedVarsParser, SmtParse, SmtParseError,
-        SmtParseState, SmtSortParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
+        SmtParenMultipleParser, SmtParenParser, SmtParse, SmtParseError, SmtParseState,
+        SmtSortParser, SmtSortedVarParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser,
         handle_err, parse_by_token,
     },
     token::{SingleTokenCursor, SmtCursor},
@@ -30,13 +30,13 @@ impl<S> FunctionSignature<S> {
     }
 }
 
+/// Parses the parameters of a function signature in parentheses, then its result sort.
+type ParamsAndSortParser<H> =
+    SmtPairParser<H, SmtParenMultipleParser<H, SmtSortedVarParser<H>>, SmtSortParser<H>>;
+
 /// Parses a function signature: name, parameters (name and sort), and result sort.
 pub(super) struct FunctionSignatureParser<H: SmtCommandHandler> {
-    inner: SmtPairParser<
-        H,
-        SmtSymbolParser,
-        SmtPairParser<H, SmtParenSortedVarsParser<H>, SmtSortParser<H>>,
-    >,
+    inner: SmtPairParser<H, SmtSymbolParser, ParamsAndSortParser<H>>,
 }
 
 impl<H: SmtCommandHandler> FunctionSignatureParser<H> {

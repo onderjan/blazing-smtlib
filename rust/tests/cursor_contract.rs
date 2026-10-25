@@ -29,11 +29,11 @@ use blazing_smtlib::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMaximumParser,
         SmtClosedMultipleAttributeParser, SmtClosedMultipleParser, SmtClosedParser,
         SmtCommandParser, SmtIdentParser, SmtKeywordParser, SmtNumeralParser, SmtOpenParenParser,
-        SmtOpenedParser, SmtPairParser, SmtParenMaximumParser, SmtParenMultipleParser,
-        SmtParenSortedVarsParser, SmtParse, SmtParseError, SmtParseState, SmtPatternParser,
-        SmtQualifiedIdentParser, SmtSExprParser, SmtScriptParser, SmtSortParser,
-        SmtSortedVarParser, SmtStringParser, SmtSymbolParser, SmtTermParser, SmtTuple3Parser,
-        SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser, SmtTuple7Parser, SmtTuple8Parser,
+        SmtOpenedParser, SmtPairParser, SmtParenMaximumParser, SmtParenMultipleParser, SmtParse,
+        SmtParseError, SmtParseState, SmtPatternParser, SmtQualifiedIdentParser, SmtSExprParser,
+        SmtScriptParser, SmtSortParser, SmtSortedVarParser, SmtStringParser, SmtSymbolParser,
+        SmtTermParser, SmtTuple3Parser, SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser,
+        SmtTuple7Parser, SmtTuple8Parser,
     },
     token::{
         SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtVersionRefused,
@@ -489,7 +489,7 @@ fn every_library_parser_takes_a_token_at_every_call() {
     );
     violations(
         "paren-sorted-vars",
-        SmtParenSortedVarsParser::<H>::default,
+        SmtParenMultipleParser::<H, SmtSortedVarParser<H>>::default,
         &mut found,
     );
     violations(
@@ -530,11 +530,7 @@ fn every_library_parser_takes_a_token_at_every_call() {
     );
     violations(
         "paren-multiple",
-        || {
-            SmtParenMultipleParser::<H, _>::new(
-                SmtClosedMultipleParser::new(SmtSymbolParser::new()),
-            )
-        },
+        || SmtParenMultipleParser::<H, _>::new(SmtSymbolParser::new()),
         &mut found,
     );
     violations(

@@ -41,8 +41,6 @@ pub(crate) use sort::SortSlot;
 pub(crate) use sorted_var::SortedVarSlot;
 pub(crate) use term::TermSlot;
 
-pub type SmtParenSortedVarsParser<H> = SmtParenMultipleParser<H, SmtSortedVarParser<H>>;
-
 #[inline]
 fn parse_special_constant<'a>(
     kind: SmtSyntaxToken<'a>,

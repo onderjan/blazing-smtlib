@@ -14,11 +14,11 @@ use blazing_smtlib::{
         SmtClosedMultipleAttributeParser, SmtClosedMultipleParser, SmtClosedParser,
         SmtCommandParser, SmtCommandPayloadParser, SmtCommandRule, SmtIdentParser,
         SmtKeywordParser, SmtNumeralParser, SmtOpenParenParser, SmtOpenedParser, SmtPairParser,
-        SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParenSortedVarsParser,
-        SmtParse, SmtPatternParser, SmtQualifiedIdentParser, SmtSExprParser, SmtScriptParser,
-        SmtSimplePatternParser, SmtSortParser, SmtSortedVarParser, SmtStringParser,
-        SmtSymbolParser, SmtTermParser, SmtTuple3Parser, SmtTuple4Parser, SmtTuple5Parser,
-        SmtTuple6Parser, SmtTuple7Parser, SmtTuple8Parser,
+        SmtParenMaximumParser, SmtParenMultipleParser, SmtParenParser, SmtParse, SmtPatternParser,
+        SmtQualifiedIdentParser, SmtSExprParser, SmtScriptParser, SmtSimplePatternParser,
+        SmtSortParser, SmtSortedVarParser, SmtStringParser, SmtSymbolParser, SmtTermParser,
+        SmtTuple3Parser, SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser, SmtTuple7Parser,
+        SmtTuple8Parser,
     },
 };
 
@@ -61,7 +61,6 @@ fn the_category_parsers_are_exported() {
     parser_for_h::<SmtQualifiedIdentParser<H>>();
     parser_for_h::<SmtSortParser<H>>();
     parser_for_h::<SmtSortedVarParser<H>>();
-    parser_for_h::<SmtParenSortedVarsParser<H>>();
     parser_for_h::<SmtSExprParser<H>>();
     parser_for_h::<SmtTermParser<H>>();
     parser_for_h::<SmtClosedAttributeParser<H>>();

@@ -243,7 +243,37 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub type SmtParenParser<H, P> = SmtOpenedParser<H, SmtClosedParser<H, P>>;
+pub struct SmtParenParser<H: SmtHandler, P: SmtParse<H>> {
+    inner: SmtOpenedParser<H, SmtClosedParser<H, P>>,
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> SmtParenParser<H, P> {
+    pub fn new(inner: P) -> Self {
+        Self {
+            inner: SmtOpenedParser::new(SmtClosedParser::new(inner)),
+        }
+    }
+}
+
+impl<H: SmtHandler, P: SmtParse<H> + Default> Default for SmtParenParser<H, P> {
+    fn default() -> Self {
+        Self::new(P::default())
+    }
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenParser<H, P> {
+    type Result = P::Result;
+
+    #[inline]
+    fn parse<Z: SmtCursor>(
+        &mut self,
+        handler: &mut H,
+        parse_state: &mut SmtParseState<H>,
+        cursor: &mut Z,
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
+        self.inner.parse(handler, parse_state, cursor)
+    }
+}
 
 /// Parses multiple items followed by a closing parenthesis, returning the results as a vector.
 ///
@@ -340,7 +370,37 @@ impl<T> ClosedMultipleResource<T> {
 ///
 /// Preserves self-reset: if the inner parser is self-resetting,
 /// moves back into the default state before returning Break.
-pub type SmtParenMultipleParser<H, P> = SmtOpenedParser<H, SmtClosedMultipleParser<H, P>>;
+pub struct SmtParenMultipleParser<H: SmtHandler, P: SmtParse<H>> {
+    inner: SmtOpenedParser<H, SmtClosedMultipleParser<H, P>>,
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> SmtParenMultipleParser<H, P> {
+    pub fn new(inner: P) -> Self {
+        Self {
+            inner: SmtOpenedParser::new(SmtClosedMultipleParser::new(inner)),
+        }
+    }
+}
+
+impl<H: SmtHandler, P: SmtParse<H> + Default> Default for SmtParenMultipleParser<H, P> {
+    fn default() -> Self {
+        Self::new(P::default())
+    }
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMultipleParser<H, P> {
+    type Result = Vec<P::Result>;
+
+    #[inline]
+    fn parse<Z: SmtCursor>(
+        &mut self,
+        handler: &mut H,
+        parse_state: &mut SmtParseState<H>,
+        cursor: &mut Z,
+    ) -> Result<ControlFlow<Self::Result>, SmtParseError<H::Error>> {
+        self.inner.parse(handler, parse_state, cursor)
+    }
+}
 
 /// Parser that parses a number of items ending with a closing parenthesis up to some maximum.
 ///
