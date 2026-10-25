@@ -187,8 +187,8 @@ fn a_symbol_built_for_a_version_is_simple_unless_it_would_not_read_back() {
                 simple,
                 "{word:?} in {version:?}"
             );
-            let view = SmtSymbol::new(word, version).expect("allowed bytes");
-            let owned = SmtSymbolBuf::new(word.to_vec(), version).expect("allowed bytes");
+            let view = SmtSymbol::new_in(word, version).expect("allowed bytes");
+            let owned = SmtSymbolBuf::new_in(word.to_vec(), version).expect("allowed bytes");
             assert_eq!(view.is_quoted(), !simple, "{word:?} in {version:?}");
             assert_eq!(owned.is_quoted(), !simple, "{word:?} in {version:?}");
             assert!(view.as_slice() == word && owned.as_slice() == word);
@@ -196,16 +196,20 @@ fn a_symbol_built_for_a_version_is_simple_unless_it_would_not_read_back() {
         // allowed only quoted
         for word in [&b"1x"[..], b"a b", b""] {
             assert!(!SmtSymbolBuf::is_unquoted_allowed_in(word, version));
-            assert!(SmtSymbol::new(word, version).expect("quotable").is_quoted());
-            let owned = SmtSymbolBuf::new(word.to_vec(), version).expect("quotable");
+            assert!(
+                SmtSymbol::new_in(word, version)
+                    .expect("quotable")
+                    .is_quoted()
+            );
+            let owned = SmtSymbolBuf::new_in(word.to_vec(), version).expect("quotable");
             assert!(owned.is_quoted());
         }
         // allowed in neither form
         assert_eq!(
-            SmtSymbol::new(b"a|b", version).err(),
+            SmtSymbol::new_in(b"a|b", version).err(),
             Some(SmtDisallowedBytesError)
         );
-        let refused = SmtSymbolBuf::new(b"a|b".to_vec(), version).expect_err("not quotable");
+        let refused = SmtSymbolBuf::new_in(b"a|b".to_vec(), version).expect_err("not quotable");
         assert_eq!(refused.into_vec(), b"a|b");
     }
 }

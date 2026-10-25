@@ -104,7 +104,7 @@ impl<'a> SmtBytes<'a> {
     }
 
     #[inline]
-    pub fn as_slice(self) -> &'a [u8] {
+    pub fn as_slice(&self) -> &'a [u8] {
         self.0
     }
 

@@ -115,7 +115,7 @@ impl SmtSymbolBuf {
     ///
     /// The symbol is simple if its bytes are allowed in a simple symbol and are
     /// not a reserved word of the version, and quoted otherwise.
-    pub fn new(value: Vec<u8>, version: SmtVersion) -> Result<Self, SmtDisallowedByteVecError> {
+    pub fn new_in(value: Vec<u8>, version: SmtVersion) -> Result<Self, SmtDisallowedByteVecError> {
         if Self::is_unquoted_allowed_in(&value, version) {
             Self::new_unquoted(value)
         } else {
@@ -226,7 +226,7 @@ impl<'a> SmtSymbol<'a> {
     ///
     /// The symbol is simple if its bytes are allowed in a simple symbol and are
     /// not a reserved word of the version, and quoted otherwise.
-    pub fn new(value: &'a [u8], version: SmtVersion) -> Result<Self, SmtDisallowedBytesError> {
+    pub fn new_in(value: &'a [u8], version: SmtVersion) -> Result<Self, SmtDisallowedBytesError> {
         if SmtSymbolBuf::is_unquoted_allowed_in(value, version) {
             Self::new_unquoted(value)
         } else {

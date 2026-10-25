@@ -223,14 +223,14 @@ impl SmtSpan {
         Self::new_empty(SmtLocation::initial())
     }
 
-    pub fn start(self) -> SmtLocation {
+    pub fn start(&self) -> SmtLocation {
         self.start
     }
-    pub fn end(self) -> SmtLocation {
+    pub fn end(&self) -> SmtLocation {
         self.end
     }
 
-    pub fn is_empty(self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.start == self.end
     }
 
