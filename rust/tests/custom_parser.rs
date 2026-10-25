@@ -13,8 +13,8 @@ use blazing_smtlib::{
     SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
     SmtReader, SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtAttributes, SmtBindings, SmtMatchCases, SmtPattern,
-        SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars, SmtTerm,
+        SmtAttributeValue, SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern,
+        SmtQuantifierKind, SmtSExpr, SmtSort, SmtTerm,
     },
     lexicon::{SmtKeyword, SmtSymbol, SmtSymbolBuf},
     parser::{
@@ -66,11 +66,11 @@ macro_rules! numbering_handler {
             fn annotate_term(
                 &mut self,
                 term: u64,
-                _attributes: SmtAttributes<'_, Self>,
+                _attributes: SmtMultiple<'_, Self::Attribute>,
             ) -> Result<u64, Error> {
                 Ok(term)
             }
-            fn start_let(&mut self, _bindings: SmtBindings<'_, u64>) -> Result<(), Error> {
+            fn start_let(&mut self, _bindings: SmtNamedValues<'_, u64>) -> Result<(), Error> {
                 Ok(())
             }
             fn end_let(&mut self, _scope: (), body: u64) -> Result<u64, Error> {
@@ -79,7 +79,7 @@ macro_rules! numbering_handler {
             fn start_quantifier(
                 &mut self,
                 _kind: SmtQuantifierKind,
-                _vars: SmtSortedVars<'_, ()>,
+                _vars: SmtNamedValues<'_, ()>,
             ) -> Result<(), Error> {
                 Ok(())
             }
@@ -91,7 +91,7 @@ macro_rules! numbering_handler {
             ) -> Result<u64, Error> {
                 Ok(body)
             }
-            fn start_lambda(&mut self, _vars: SmtSortedVars<'_, ()>) -> Result<(), Error> {
+            fn start_lambda(&mut self, _vars: SmtNamedValues<'_, ()>) -> Result<(), Error> {
                 Ok(())
             }
             fn end_lambda(&mut self, _scope: (), body: u64) -> Result<u64, Error> {

@@ -21,10 +21,10 @@ use std::{
 use blazing_smtlib::{
     SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtReadError, SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
-        SmtFunctionSignatures, SmtIdent, SmtIndex, SmtMatchCases, SmtMultiple, SmtPattern,
-        SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
-        SmtSpecialConstant, SmtSymbols, SmtTerm,
+        SmtAttributeValue, SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtIdent,
+        SmtIndex, SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern, SmtQuantifierKind,
+        SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSpecialConstant, SmtSymbols,
+        SmtTerm,
     },
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
@@ -548,7 +548,11 @@ impl SmtHandler for Reprint {
         Ok(out)
     }
 
-    fn annotate_term(&mut self, term: Text, attributes: SmtAttributes<'_, Self>) -> Res<Text> {
+    fn annotate_term(
+        &mut self,
+        term: Text,
+        attributes: SmtMultiple<'_, Self::Attribute>,
+    ) -> Res<Text> {
         let mut out = b"(! ".to_vec();
         out.extend_from_slice(&term);
         for attribute in attributes.iter() {
@@ -559,7 +563,7 @@ impl SmtHandler for Reprint {
         Ok(out)
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Text>) -> Res<Text> {
+    fn start_let(&mut self, bindings: SmtNamedValues<'_, Text>) -> Res<Text> {
         let mut out = b"(let ".to_vec();
         sorted_vars(&mut out, bindings.iter());
         Ok(out)
@@ -576,7 +580,7 @@ impl SmtHandler for Reprint {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, Text>,
+        vars: SmtNamedValues<'_, Text>,
     ) -> Res<Text> {
         let mut out = Vec::new();
         sorted_vars(&mut out, vars.iter());
@@ -595,7 +599,7 @@ impl SmtHandler for Reprint {
         Ok(out)
     }
 
-    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Text>) -> Res<Text> {
+    fn start_lambda(&mut self, vars: SmtNamedValues<'_, Text>) -> Res<Text> {
         let mut out = b"(lambda ".to_vec();
         sorted_vars(&mut out, vars.iter());
         Ok(out)

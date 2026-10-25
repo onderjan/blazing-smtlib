@@ -162,19 +162,13 @@ impl<T: Debug> Debug for SmtMultiple<'_, T> {
 ///
 /// The values can be inspected and modified in place, and [`IntoIterator`]
 /// moves them out in order.
-pub struct SmtNamed<'a, V> {
+pub struct SmtNamedValues<'a, V> {
     text: &'a [u8],
     names: SmtMultiple<'a, SymbolHandle>,
     values: SmtMultiple<'a, V>,
 }
 
-/// Let bindings to be handled: the names with their terms.
-pub type SmtBindings<'a, T> = SmtNamed<'a, T>;
-
-/// Sorted variables to be handled: the names with their sorts.
-pub type SmtSortedVars<'a, S> = SmtNamed<'a, S>;
-
-impl<'a, V> SmtNamed<'a, V> {
+impl<'a, V> SmtNamedValues<'a, V> {
     pub(crate) fn new(
         text: &'a [u8],
         names: SmtMultiple<'a, SymbolHandle>,
@@ -230,12 +224,12 @@ impl<'a, V> SmtNamed<'a, V> {
     }
 }
 
-impl<'a, V> IntoIterator for SmtNamed<'a, V> {
+impl<'a, V> IntoIterator for SmtNamedValues<'a, V> {
     type Item = (SmtSymbol<'a>, V);
-    type IntoIter = SmtNamedIntoIter<'a, V>;
+    type IntoIter = SmtNamedValuesIntoIter<'a, V>;
 
     fn into_iter(self) -> Self::IntoIter {
-        SmtNamedIntoIter {
+        SmtNamedValuesIntoIter {
             text: self.text,
             names: self.names.into_iter(),
             values: self.values.into_iter(),
@@ -244,13 +238,13 @@ impl<'a, V> IntoIterator for SmtNamed<'a, V> {
 }
 
 /// Iterator moving named values out in order.
-pub struct SmtNamedIntoIter<'a, V> {
+pub struct SmtNamedValuesIntoIter<'a, V> {
     text: &'a [u8],
     names: SmtMultipleIntoIter<'a, SymbolHandle>,
     values: SmtMultipleIntoIter<'a, V>,
 }
 
-impl<'a, V> Iterator for SmtNamedIntoIter<'a, V> {
+impl<'a, V> Iterator for SmtNamedValuesIntoIter<'a, V> {
     type Item = (SmtSymbol<'a>, V);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -264,28 +258,22 @@ impl<'a, V> Iterator for SmtNamedIntoIter<'a, V> {
     }
 }
 
-impl<V> ExactSizeIterator for SmtNamedIntoIter<'_, V> {}
+impl<V> ExactSizeIterator for SmtNamedValuesIntoIter<'_, V> {}
 
-impl<V: Debug> Debug for SmtNamed<'_, V> {
+impl<V: Debug> Debug for SmtNamedValues<'_, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-/// Owned named values, from which [`SmtNamed`] is viewed.
-pub struct SmtNamedBuf<V> {
+/// Owned named values, from which [`SmtNamedValues`] is viewed.
+pub struct SmtNamedValuesBuf<V> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
     values: Vec<V>,
 }
 
-/// Owned let bindings.
-pub type SmtBindingsBuf<T> = SmtNamedBuf<T>;
-
-/// Owned sorted variables.
-pub type SmtSortedVarsBuf<S> = SmtNamedBuf<S>;
-
-impl<V> SmtNamedBuf<V> {
+impl<V> SmtNamedValuesBuf<V> {
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -306,8 +294,8 @@ impl<V> SmtNamedBuf<V> {
         self.values.clear();
     }
 
-    pub fn view_mut(&mut self) -> SmtNamed<'_, V> {
-        SmtNamed::new(
+    pub fn view_mut(&mut self) -> SmtNamedValues<'_, V> {
+        SmtNamedValues::new(
             &self.text,
             SmtMultiple::new(&mut self.names),
             SmtMultiple::new(&mut self.values),
@@ -332,7 +320,7 @@ impl<V> SmtNamedBuf<V> {
     }
 }
 
-impl<V> Default for SmtNamedBuf<V> {
+impl<V> Default for SmtNamedValuesBuf<V> {
     fn default() -> Self {
         Self::new()
     }
@@ -989,7 +977,7 @@ impl Default for SmtSortAritiesBuf {
 pub struct SmtConstructors<'a, S> {
     text: &'a [u8],
     names: &'a [SymbolHandle],
-    selectors: &'a mut [SmtNamedBuf<S>],
+    selectors: &'a mut [SmtNamedValuesBuf<S>],
 }
 
 impl<'a, S> SmtConstructors<'a, S> {
@@ -1014,7 +1002,7 @@ impl<'a, S> SmtConstructors<'a, S> {
 }
 
 impl<'a, S> IntoIterator for SmtConstructors<'a, S> {
-    type Item = (SmtSymbol<'a>, SmtSortedVars<'a, S>);
+    type Item = (SmtSymbol<'a>, SmtNamedValues<'a, S>);
     type IntoIter = SmtConstructorsIter<'a, S>;
 
     fn into_iter(self) -> Self::IntoIter {
@@ -1030,11 +1018,11 @@ impl<'a, S> IntoIterator for SmtConstructors<'a, S> {
 pub struct SmtConstructorsIter<'a, S> {
     text: &'a [u8],
     names: slice::Iter<'a, SymbolHandle>,
-    selectors: slice::IterMut<'a, SmtNamedBuf<S>>,
+    selectors: slice::IterMut<'a, SmtNamedValuesBuf<S>>,
 }
 
 impl<'a, S> Iterator for SmtConstructorsIter<'a, S> {
-    type Item = (SmtSymbol<'a>, SmtSortedVars<'a, S>);
+    type Item = (SmtSymbol<'a>, SmtNamedValues<'a, S>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let name = self.names.next()?.symbol_view(self.text);
@@ -1068,7 +1056,7 @@ pub struct SmtConstructorsBuf<S> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
     /// Selector storage, the first `names.len()` in use.
-    selectors: Vec<SmtNamedBuf<S>>,
+    selectors: Vec<SmtNamedValuesBuf<S>>,
 }
 
 impl<S> SmtConstructorsBuf<S> {
@@ -1086,7 +1074,7 @@ impl<S> SmtConstructorsBuf<S> {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
         if index == self.selectors.len() {
-            self.selectors.push(SmtNamedBuf::new());
+            self.selectors.push(SmtNamedValuesBuf::new());
         }
     }
 
@@ -1156,7 +1144,7 @@ fn append_named<'a, V: SmtAppendTokens + 'a>(
 
 /// Appends each name with its value as `(name value)`, in order, without
 /// enclosing parentheses.
-impl<V: SmtAppendTokens> SmtAppendTokens for SmtNamed<'_, V> {
+impl<V: SmtAppendTokens> SmtAppendTokens for SmtNamedValues<'_, V> {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         append_named(self.iter(), tokens);
     }
@@ -1164,7 +1152,7 @@ impl<V: SmtAppendTokens> SmtAppendTokens for SmtNamed<'_, V> {
 
 /// Appends each name with its value as `(name value)`, in order, without
 /// enclosing parentheses.
-impl<V: SmtAppendTokens> SmtAppendTokens for SmtNamedBuf<V> {
+impl<V: SmtAppendTokens> SmtAppendTokens for SmtNamedValuesBuf<V> {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         let text = self.text.as_slice();
         let names = self.names.iter().map(|name| name.symbol_view(text));

@@ -278,13 +278,10 @@ where
     }
 }
 
-/// Sorts to be handled.
-pub type SmtSorts<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Sort>;
-
 /// A sort to be handled.
 pub struct SmtSort<'a, H: SmtHandler + ?Sized> {
     pub ident: SmtIdent<'a>,
-    pub args: SmtSorts<'a, H>,
+    pub args: SmtMultiple<'a, H::Sort>,
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtSort<'_, H>
@@ -299,21 +296,18 @@ where
     }
 }
 
-/// Terms to be handled.
-pub type SmtTerms<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Term>;
-
 /// A term that is an application.
 ///
 /// It is guaranteed that `args` are nonempty.
 pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
     function: SmtQualifiedIdent<'a, H>,
-    args: SmtTerms<'a, H>,
+    args: SmtMultiple<'a, H::Term>,
 }
 
 impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
     pub fn new(
         function: SmtQualifiedIdent<'a, H>,
-        args: SmtTerms<'a, H>,
+        args: SmtMultiple<'a, H::Term>,
     ) -> Result<Self, SmtEmptyArgumentsError> {
         if args.is_empty() {
             return Err(SmtEmptyArgumentsError);
@@ -322,7 +316,10 @@ impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
     }
 
     #[inline]
-    pub(crate) fn new_unchecked(function: SmtQualifiedIdent<'a, H>, args: SmtTerms<'a, H>) -> Self {
+    pub(crate) fn new_unchecked(
+        function: SmtQualifiedIdent<'a, H>,
+        args: SmtMultiple<'a, H::Term>,
+    ) -> Self {
         debug_assert!(!args.is_empty(), "an application without arguments");
         Self { function, args }
     }
@@ -335,7 +332,7 @@ impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
         &mut self.function
     }
 
-    pub fn args(&self) -> &SmtTerms<'a, H> {
+    pub fn args(&self) -> &SmtMultiple<'a, H::Term> {
         &self.args
     }
 
@@ -343,7 +340,7 @@ impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
         self.args.as_mut_slice()
     }
 
-    pub fn into_parts(self) -> (SmtQualifiedIdent<'a, H>, SmtTerms<'a, H>) {
+    pub fn into_parts(self) -> (SmtQualifiedIdent<'a, H>, SmtMultiple<'a, H::Term>) {
         (self.function, self.args)
     }
 }
@@ -443,16 +440,10 @@ where
     }
 }
 
-/// S-expressions to be handled.
-pub type SmtSExprs<'a, H> = SmtMultiple<'a, <H as SmtHandler>::SExpr>;
-
-/// Attributes to be handled.
-pub type SmtAttributes<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Attribute>;
-
 pub enum SmtAttributeValue<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     Symbol(SmtSymbol<'a>),
-    SExprs(SmtSExprs<'a, H>),
+    SExprs(SmtMultiple<'a, H::SExpr>),
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtAttributeValue<'_, H>
@@ -554,7 +545,7 @@ pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
     Symbol(SmtSymbol<'a>),
     Reserved(SmtReserved),
     Keyword(SmtKeyword<'a>),
-    SExprs(SmtSExprs<'a, H>),
+    SExprs(SmtMultiple<'a, H::SExpr>),
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtSExpr<'_, H>

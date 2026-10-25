@@ -11,9 +11,9 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtAttributes, SmtBindings, SmtBindingsBuf, SmtIndicesBuf,
-        SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort,
-        SmtSortedVars, SmtSortedVarsBuf, SmtTerm,
+        SmtAttributeValue, SmtIndicesBuf, SmtMatchCases, SmtMultiple, SmtNamedValues,
+        SmtNamedValuesBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort,
+        SmtTerm,
     },
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtSymbol},
@@ -179,7 +179,7 @@ impl SmtHandler for Retoken {
     fn annotate_term(
         &mut self,
         term: SmtTokensBuf,
-        attributes: SmtAttributes<'_, Self>,
+        attributes: SmtMultiple<'_, Self::Attribute>,
     ) -> Result<SmtTokensBuf, Error> {
         Ok(Build::new()
             .open()
@@ -192,9 +192,9 @@ impl SmtHandler for Retoken {
 
     fn start_let(
         &mut self,
-        bindings: SmtBindings<'_, SmtTokensBuf>,
+        bindings: SmtNamedValues<'_, SmtTokensBuf>,
     ) -> Result<SmtTokensBuf, Error> {
-        let mut owned = SmtBindingsBuf::new();
+        let mut owned = SmtNamedValuesBuf::new();
         for (name, term) in bindings.iter() {
             owned.push(name, term.clone());
         }
@@ -210,7 +210,7 @@ impl SmtHandler for Retoken {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, SmtTokensBuf>,
+        vars: SmtNamedValues<'_, SmtTokensBuf>,
     ) -> Result<SmtTokensBuf, Error> {
         let word = match kind {
             SmtQuantifierKind::Exists => SmtGeneralReserved::Exists,
@@ -230,9 +230,9 @@ impl SmtHandler for Retoken {
 
     fn start_lambda(
         &mut self,
-        vars: SmtSortedVars<'_, SmtTokensBuf>,
+        vars: SmtNamedValues<'_, SmtTokensBuf>,
     ) -> Result<SmtTokensBuf, Error> {
-        let mut owned = SmtSortedVarsBuf::new();
+        let mut owned = SmtNamedValuesBuf::new();
         for (name, sort) in vars.iter() {
             owned.push(name, sort.clone());
         }
@@ -401,10 +401,10 @@ fn an_attribute_and_its_s_expressions_append_the_tokens_they_were_read_from() {
 #[test]
 fn a_list_appends_its_values_without_enclosing_parentheses() {
     // an owned list of named values appends each as ( name value )
-    let mut named = SmtSortedVarsBuf::new();
+    let mut named = SmtNamedValuesBuf::new();
     named.push(SmtSymbol::new_unquoted(b"x").unwrap(), lexed("Int"));
     named.push(SmtSymbol::new_unquoted(b"y").unwrap(), lexed("(List Int)"));
     assert_same_tokens(&named, &lexed("(x Int) (y (List Int))"));
     // an empty one appends nothing
-    assert_same_tokens(&SmtBindingsBuf::<SmtTokensBuf>::new(), &lexed(""));
+    assert_same_tokens(&SmtNamedValuesBuf::<SmtTokensBuf>::new(), &lexed(""));
 }

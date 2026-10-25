@@ -19,10 +19,10 @@ use std::convert::Infallible;
 use blazing_smtlib::{
     SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
-        SmtFunctionSignatures, SmtIdent, SmtIndex, SmtMatchCases, SmtMultiple, SmtPattern,
-        SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
-        SmtSpecialConstant, SmtSymbols, SmtTerm,
+        SmtAttributeValue, SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtIdent,
+        SmtIndex, SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern, SmtQuantifierKind,
+        SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSpecialConstant, SmtSymbols,
+        SmtTerm,
     },
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
 };
@@ -257,7 +257,7 @@ impl TraceHash {
         });
     }
 
-    fn binder_vars(&mut self, vars: &SmtSortedVars<'_, u64>) {
+    fn binder_vars(&mut self, vars: &SmtNamedValues<'_, u64>) {
         self.count(vars.len());
         for (name, sort) in vars.iter() {
             self.bytes(name.as_slice());
@@ -391,7 +391,7 @@ impl SmtHandler for TraceHash {
     fn annotate_term(
         &mut self,
         term: u64,
-        attributes: SmtAttributes<'_, Self>,
+        attributes: SmtMultiple<'_, Self::Attribute>,
     ) -> Result<u64, Self::Error> {
         self.byte(tag::ANNOTATE_TERM);
         self.u64(term);
@@ -399,7 +399,7 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, Self::Term>) -> Result<u64, Self::Error> {
+    fn start_let(&mut self, bindings: SmtNamedValues<'_, Self::Term>) -> Result<u64, Self::Error> {
         self.byte(tag::START_LET);
         self.count(bindings.len());
         for (name, term) in bindings.iter() {
@@ -419,7 +419,7 @@ impl SmtHandler for TraceHash {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, Self::Sort>,
+        vars: SmtNamedValues<'_, Self::Sort>,
     ) -> Result<u64, Self::Error> {
         self.byte(tag::START_QUANTIFIER);
         self.quantifier_kind(kind);
@@ -440,7 +440,7 @@ impl SmtHandler for TraceHash {
         Ok(self.produce())
     }
 
-    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self::Sort>) -> Result<u64, Self::Error> {
+    fn start_lambda(&mut self, vars: SmtNamedValues<'_, Self::Sort>) -> Result<u64, Self::Error> {
         self.byte(tag::START_LAMBDA);
         self.binder_vars(&vars);
         Ok(self.produce())

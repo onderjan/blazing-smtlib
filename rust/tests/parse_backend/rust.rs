@@ -6,9 +6,9 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtCommandHandler, SmtHandler, SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
-        SmtFunctionSignatures, SmtIdent, SmtMatchCases, SmtMultiple, SmtPattern, SmtQualifiedIdent,
-        SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
+        SmtAttributeValue, SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtIdent,
+        SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern, SmtQualifiedIdent,
+        SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSymbols, SmtTerm,
     },
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     parser::{
@@ -33,7 +33,7 @@ fn qualified_ident<H: SmtHandler>(view: SmtQualifiedIdent<'_, H>) -> QualifiedId
     }
 }
 
-fn sorted_vars<S>(vars: SmtSortedVars<'_, S>) -> SortedVars<S> {
+fn sorted_vars<S>(vars: SmtNamedValues<'_, S>) -> SortedVars<S> {
     vars.into_iter()
         .map(|(name, sort)| (name.into_owned(), sort))
         .collect()
@@ -125,12 +125,12 @@ impl<H: Handler> SmtHandler for Adapt<'_, H> {
     fn annotate_term(
         &mut self,
         term: H::Term,
-        attributes: SmtAttributes<'_, Self>,
+        attributes: SmtMultiple<'_, Self::Attribute>,
     ) -> Result<H::Term, H::Error> {
         self.0.annotate_term(term, attributes.into_iter().collect())
     }
 
-    fn start_let(&mut self, bindings: SmtBindings<'_, H::Term>) -> Result<H::Scope, H::Error> {
+    fn start_let(&mut self, bindings: SmtNamedValues<'_, H::Term>) -> Result<H::Scope, H::Error> {
         self.0.start_let(sorted_vars(bindings))
     }
 
@@ -141,7 +141,7 @@ impl<H: Handler> SmtHandler for Adapt<'_, H> {
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, H::Sort>,
+        vars: SmtNamedValues<'_, H::Sort>,
     ) -> Result<H::Scope, H::Error> {
         self.0.start_quantifier(kind, sorted_vars(vars))
     }
@@ -155,7 +155,7 @@ impl<H: Handler> SmtHandler for Adapt<'_, H> {
         self.0.end_quantifier(kind, scope, body)
     }
 
-    fn start_lambda(&mut self, vars: SmtSortedVars<'_, H::Sort>) -> Result<H::Scope, H::Error> {
+    fn start_lambda(&mut self, vars: SmtNamedValues<'_, H::Sort>) -> Result<H::Scope, H::Error> {
         self.0.start_lambda(sorted_vars(vars))
     }
 

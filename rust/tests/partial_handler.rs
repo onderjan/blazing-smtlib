@@ -11,9 +11,9 @@ use blazing_smtlib::{
     SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
     SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtAttributes, SmtBindings, SmtFunctionSignature, SmtFunctionSignatures,
-        SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities,
-        SmtSortedVars, SmtSymbols, SmtTerm,
+        SmtAttributeValue, SmtFunctionSignature, SmtFunctionSignatures, SmtMatchCases, SmtMultiple,
+        SmtNamedValues, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities,
+        SmtSymbols, SmtTerm,
     },
     lexicon::{SmtKeyword, SmtSymbol},
     read_smt,
@@ -68,11 +68,11 @@ impl<const LEVEL: u8> SmtHandler for Solver<LEVEL> {
     fn annotate_term(
         &mut self,
         _term: (),
-        _attributes: SmtAttributes<'_, Self>,
+        _attributes: SmtMultiple<'_, Self::Attribute>,
     ) -> Result<(), Error> {
         Ok(())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, ()>) -> Result<(), Error> {
+    fn start_let(&mut self, _bindings: SmtNamedValues<'_, ()>) -> Result<(), Error> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), _body: ()) -> Result<(), Error> {
@@ -81,7 +81,7 @@ impl<const LEVEL: u8> SmtHandler for Solver<LEVEL> {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, ()>,
+        _vars: SmtNamedValues<'_, ()>,
     ) -> Result<(), Error> {
         Ok(())
     }
@@ -93,7 +93,7 @@ impl<const LEVEL: u8> SmtHandler for Solver<LEVEL> {
     ) -> Result<(), Error> {
         Ok(())
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, ()>) -> Result<(), Error> {
+    fn start_lambda(&mut self, _vars: SmtNamedValues<'_, ()>) -> Result<(), Error> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), _body: ()) -> Result<(), Error> {

@@ -1,9 +1,8 @@
 use crate::{
     SmtHandler,
     grammar::{
-        SmtBindings, SmtIdent, SmtIndex, SmtIndices, SmtMatchCases, SmtMultiple, SmtNamed,
-        SmtPattern, SmtPatternApplication, SmtQualifiedIdent, SmtSimplePattern, SmtSimplePatterns,
-        SmtSort, SmtSortedVars,
+        SmtIdent, SmtIndex, SmtIndices, SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern,
+        SmtPatternApplication, SmtQualifiedIdent, SmtSimplePattern, SmtSimplePatterns, SmtSort,
     },
     lexicon::{SmtKeyword, SmtNumeral, SmtSymbol},
     parser::{
@@ -221,11 +220,11 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         text_start: usize,
         names_start: usize,
         terms_start: usize,
-        f: impl FnOnce(SmtBindings<'_, H::Term>) -> R,
+        f: impl FnOnce(SmtNamedValues<'_, H::Term>) -> R,
     ) -> R {
         let names = SmtMultiple::new_starting(&mut self.symbols, names_start);
         let terms = SmtMultiple::new_starting(&mut self.terms, terms_start);
-        let bindings = SmtNamed::new(&self.text, names, terms);
+        let bindings = SmtNamedValues::new(&self.text, names, terms);
         let result = f(bindings);
         self.symbols.truncate(names_start);
         self.terms.truncate(terms_start);
@@ -239,11 +238,11 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
         text_start: usize,
         names_start: usize,
         sorts_start: usize,
-        f: impl FnOnce(SmtSortedVars<'_, H::Sort>) -> R,
+        f: impl FnOnce(SmtNamedValues<'_, H::Sort>) -> R,
     ) -> R {
         let names = SmtMultiple::new_starting(&mut self.symbols, names_start);
         let sorts = SmtMultiple::new_starting(&mut self.sorts, sorts_start);
-        let sorted_vars = SmtNamed::new(&self.text, names, sorts);
+        let sorted_vars = SmtNamedValues::new(&self.text, names, sorts);
         let result = f(sorted_vars);
         self.symbols.truncate(names_start);
         self.sorts.truncate(sorts_start);
@@ -462,7 +461,7 @@ fn ident_view<'a>(text: &'a [u8], indices: &'a [IndexHandle], ident: IdentHandle
 /// Proof that a hand-over comes from the arena.
 ///
 /// Only the arena can construct it, so only the arena
-/// can create [`SmtMultiple`] or [`SmtBindings`].
+/// can create [`SmtMultiple`] or [`SmtNamedValues`].
 pub(crate) struct ArenaAccess {
     _priv: (),
 }
