@@ -13,6 +13,7 @@ use blazing_smtlib::{
     lexer::{
         SmtLexErrorCause, SmtLexRecovery, SmtLexer, SmtLexerCursor, SmtLexerToken, SmtRecover,
     },
+    lexicon::SmtDecimal,
     span::SmtLocation,
     token::{
         SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtReserved, SmtSyntaxToken,
@@ -281,7 +282,10 @@ fn unhex(digits: &str) -> Result<Vec<u8>, String> {
 }
 
 fn read_version(word: &str) -> Result<SmtVersion, String> {
-    SmtVersion::from_decimal(word.as_bytes()).ok_or_else(|| format!("unknown version {word:?}"))
+    SmtDecimal::new(word.as_bytes())
+        .ok()
+        .and_then(SmtVersion::from_decimal)
+        .ok_or_else(|| format!("unknown version {word:?}"))
 }
 
 fn read_reply(word: &str) -> Result<Reply, String> {

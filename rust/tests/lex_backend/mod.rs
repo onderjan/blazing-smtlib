@@ -34,6 +34,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use blazing_smtlib::{
     SmtVersion,
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
+    lexicon::SmtDecimal,
     span::SmtLocation,
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory},
 };
@@ -674,7 +675,9 @@ fn parse_continues(field: &str, line: &str) -> Option<Loc> {
 }
 
 fn parse_version(field: &str, line: &str) -> SmtVersion {
-    SmtVersion::from_decimal(field.as_bytes())
+    SmtDecimal::new(field.as_bytes())
+        .ok()
+        .and_then(SmtVersion::from_decimal)
         .unwrap_or_else(|| panic!("the driver sent an unknown version: {line:?}"))
 }
 

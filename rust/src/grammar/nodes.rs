@@ -339,8 +339,8 @@ impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
         &self.args
     }
 
-    pub fn args_mut(&mut self) -> &mut SmtTerms<'a, H> {
-        &mut self.args
+    pub fn args_mut(&mut self) -> &mut [H::Term] {
+        self.args.as_mut_slice()
     }
 
     pub fn into_parts(self) -> (SmtQualifiedIdent<'a, H>, SmtTerms<'a, H>) {

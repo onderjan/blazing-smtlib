@@ -12,8 +12,8 @@ pub enum SmtVersion {
 
 impl SmtVersion {
     /// The version that the decimal names, if any.
-    pub fn from_decimal(decimal: &[u8]) -> Option<Self> {
-        match decimal {
+    pub fn from_decimal(decimal: SmtDecimal<'_>) -> Option<Self> {
+        match decimal.as_slice() {
             b"2.0" => Some(SmtVersion::V2_0),
             b"2.5" => Some(SmtVersion::V2_5),
             b"2.6" => Some(SmtVersion::V2_6),

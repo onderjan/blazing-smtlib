@@ -16,7 +16,7 @@ use blazing_smtlib::{
     },
     lexer::{SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
-        SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
+        SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
         SmtStringContentBuf, SmtSymbolBuf,
     },
     parser::{
@@ -350,7 +350,10 @@ impl<'l> Fields<'l> {
 
     fn version(&mut self) -> SmtVersion {
         let field = self.next();
-        SmtVersion::from_decimal(field.as_bytes()).unwrap_or_else(|| self.bad("version"))
+        SmtDecimal::new(field.as_bytes())
+            .ok()
+            .and_then(SmtVersion::from_decimal)
+            .unwrap_or_else(|| self.bad("version"))
     }
 
     fn location(&mut self) -> Location {
@@ -541,7 +544,9 @@ pub fn command_outcome(result: &str) -> SmtCommandOutcome {
         ["exit"] => SmtCommandOutcome::Exit,
         ["end"] => SmtCommandOutcome::EndOfFile,
         ["set-version", version] => SmtCommandOutcome::SetVersion(
-            SmtVersion::from_decimal(version.as_bytes())
+            SmtDecimal::new(version.as_bytes())
+                .ok()
+                .and_then(SmtVersion::from_decimal)
                 .unwrap_or_else(|| panic!("the Lean driver sent a bad command outcome {result:?}")),
         ),
         _ => panic!("the Lean driver sent a bad command outcome {result:?}"),

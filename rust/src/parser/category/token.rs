@@ -7,11 +7,13 @@ use crate::{
     token::{SmtCursor, SmtSyntaxToken, SmtTokenCategory},
 };
 
-pub struct SmtSymbolParser;
+pub struct SmtSymbolParser {
+    _priv: (),
+}
 
 impl SmtSymbolParser {
     pub fn new() -> Self {
-        Self
+        Self { _priv: () }
     }
 }
 
@@ -58,11 +60,13 @@ impl<H: SmtHandler> SmtParse<H> for SmtSymbolParser {
 /// based only on the token itself.
 macro_rules! token_parser {
     ($parser:ident, $result:ty, $ty:ident, $pattern:pat => $value:expr) => {
-        pub struct $parser;
+        pub struct $parser {
+            _priv: (),
+        }
 
         impl $parser {
             pub fn new() -> Self {
-                Self
+                Self { _priv: () }
             }
         }
 

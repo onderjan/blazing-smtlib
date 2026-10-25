@@ -455,7 +455,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                 SetInfoState::Version => {
                     // only a decimal that converts to a version names one
                     let version = if let SmtSyntaxToken::Decimal(decimal) = cursor.syntax(&token) {
-                        SmtVersion::from_decimal(decimal.as_slice())
+                        SmtVersion::from_decimal(decimal)
                     } else {
                         None
                     };

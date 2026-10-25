@@ -172,7 +172,7 @@ pub struct SmtClosedParser<H: SmtHandler, P: SmtParse<H>> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
-            inner: SmtPairParser::new(inner, SmtCloseParenParser),
+            inner: SmtPairParser::new(inner, SmtCloseParenParser::new()),
         }
     }
 }
@@ -211,7 +211,7 @@ pub struct SmtOpenedParser<H: SmtHandler, P: SmtParse<H>> {
 impl<H: SmtHandler, P: SmtParse<H>> SmtOpenedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
-            inner: SmtPairParser::new(SmtOpenParenParser, inner),
+            inner: SmtPairParser::new(SmtOpenParenParser::new(), inner),
         }
     }
 }

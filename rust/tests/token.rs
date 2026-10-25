@@ -4,6 +4,7 @@ mod reserved_words;
 
 use blazing_smtlib::{
     SmtVersion,
+    lexicon::SmtDecimal,
     token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved},
 };
 
@@ -265,7 +266,7 @@ fn a_version_and_its_decimal_convert_into_each_other() {
         let decimal = version.as_decimal();
         assert_eq!(decimal, spelling, "decimal of {version:?}");
         assert_eq!(
-            SmtVersion::from_decimal(decimal.as_slice()),
+            SmtVersion::from_decimal(decimal),
             Some(version),
             "version of {spelling}"
         );
@@ -278,7 +279,7 @@ fn a_decimal_naming_no_version_has_none() {
         "2.1", "2.4", "2.8", "3.0", "1.0", "0.0", "2.50", "2.00", "20.0", "2.06",
     ] {
         assert_eq!(
-            SmtVersion::from_decimal(decimal.as_bytes()),
+            SmtVersion::from_decimal(SmtDecimal::new(decimal.as_bytes()).expect("a decimal")),
             None,
             "{decimal}"
         );

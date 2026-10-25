@@ -11,11 +11,13 @@ use crate::{
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
 };
 
-pub struct SmtSimplePatternParser;
+pub struct SmtSimplePatternParser {
+    _priv: (),
+}
 
 impl SmtSimplePatternParser {
     pub fn new() -> Self {
-        Self
+        Self { _priv: () }
     }
 
     /// Consumes exactly one token, which must be a simple pattern.
