@@ -32,8 +32,8 @@ use std::ops::ControlFlow;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
-    SmtLocation,
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind, SmtLexicalExpected},
+    span::SmtLocation,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
         SmtTokenCategory,

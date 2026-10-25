@@ -40,7 +40,7 @@ use std::ops::ControlFlow;
 use std::path::Path;
 
 use blazing_smtlib::{
-    SmtLocation, SmtNonstandardCommandError, SmtSpan,
+    SmtNonstandardCommandError,
     grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind},
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
@@ -55,6 +55,7 @@ use blazing_smtlib::{
         SmtVersionErrorKind,
     },
     reader::{SmtReadError, SmtReadErrorCause, SmtReader},
+    span::{SmtLocation, SmtSpan},
     token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
     version::{SmtVersion, SmtVersionPosture},
 };

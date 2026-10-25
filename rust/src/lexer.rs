@@ -12,7 +12,6 @@ use std::marker::PhantomData;
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtLocated, SmtLocation, SmtSpan,
     lexer::{
         char_class::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN,
@@ -23,6 +22,7 @@ use crate::{
             FAST_RUN_MASK, HEXADECIMAL_RUN, START, Start, TokenEnd,
         },
     },
+    span::{SmtLocated, SmtLocation, SmtSpan},
     token::{
         BatchCursorAction, InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor,
         SmtRecover,

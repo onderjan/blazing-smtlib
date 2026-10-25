@@ -9,8 +9,8 @@ use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use blazing_smtlib::{
-    SmtLocation,
     lexer::{SmtLexErrorCause, SmtLexRecovery, SmtLexer},
+    span::SmtLocation,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtRecover,
         SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory,

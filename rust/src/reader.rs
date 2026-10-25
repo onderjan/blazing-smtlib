@@ -23,15 +23,16 @@ use std::{
 };
 
 use crate::{
-    SmtCommandHandler, SmtHandler, SmtLocated, SmtSpan,
+    SmtCommandHandler, SmtHandler,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     parser::{
         SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorCause, SmtScriptParser,
         SmtSyntaxErrorKind, SmtVersionErrorKind,
     },
+    span::{SmtLocated, SmtSpan},
 };
 use crate::{
-    SmtLocation,
+    span::SmtLocation,
     version::{SmtVersion, SmtVersionPosture},
 };
 

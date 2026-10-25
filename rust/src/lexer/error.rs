@@ -1,6 +1,6 @@
 use std::{error::Error, fmt};
 
-use crate::{SmtLocation, SmtSpan};
+use crate::span::{SmtLocation, SmtSpan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {

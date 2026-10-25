@@ -3,7 +3,7 @@
 //!
 //! They check the Rust interface itself and call the library directly.
 
-use blazing_smtlib::{SmtInvalidLocation, SmtInvalidSpan, SmtLocation, SmtSpan};
+use blazing_smtlib::span::{SmtInvalidLocation, SmtInvalidSpan, SmtLocation, SmtSpan};
 
 fn location(offset: u64, line: u64, column: u64) -> SmtLocation {
     SmtLocation::new(offset, line, column).unwrap_or_else(|_| {

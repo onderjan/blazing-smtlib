@@ -270,7 +270,8 @@ impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtParse<H> for SmtCommandPaylo
 mod tests {
     use super::*;
     use crate::{
-        SmtSpan, SmtSyntaxChecker,
+        SmtSyntaxChecker,
+        span::SmtSpan,
         token::{InnerCategory, SingleTokenCursor, SmtBatchCursor, SmtToken},
     };
 

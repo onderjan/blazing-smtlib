@@ -34,8 +34,8 @@ use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
-    SmtLocated, SmtLocation,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
+    span::{SmtLocated, SmtLocation},
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtToken,
         SmtTokenCategory,

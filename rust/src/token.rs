@@ -7,13 +7,13 @@ use std::{
 };
 
 use crate::{
-    SmtLocation, SmtSpan,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
         SmtHexDigits, SmtHexDigitsBuf, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf,
         SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace,
         SmtWhitespaceBuf,
     },
+    span::{SmtLocation, SmtSpan},
     version::SmtVersion,
 };
 

@@ -1,5 +1,5 @@
 use crate::{
-    SmtLocation,
+    span::SmtLocation,
     token::{SmtConsume, SmtRecover},
 };
 
@@ -21,7 +21,7 @@ pub enum SmtFailFast {}
 pub enum SmtRecovering {}
 
 pub(super) mod sealed {
-    use crate::{SmtLocation, token::SmtConsume};
+    use crate::{span::SmtLocation, token::SmtConsume};
 
     /// Recovery information and methods only the lexer can access.
     ///

@@ -14,8 +14,8 @@ use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtLocation,
     lexer::{SmtLexer, SmtLexicalErrorKind},
+    span::SmtLocation,
     token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
     version::SmtVersion,
 };

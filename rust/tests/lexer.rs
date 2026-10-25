@@ -8,8 +8,8 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtSpan,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
+    span::SmtSpan,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
         SmtTokenCategory,
