@@ -20,14 +20,14 @@ use blazing_smtlib::{
     grammar::SmtEmptyArgumentsError,
     lexer::{SmtLexError, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
-        SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtNumericOverflow, SmtSymbolBuf,
+        SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtNumericOverflowError, SmtSymbolBuf,
     },
     parser::{
         SmtMissingItem, SmtNonEmptyList, SmtParseError, SmtSyntaxErrorKind, SmtSyntaxExpected,
         SmtVersionErrorKind,
     },
     read_smt,
-    span::{SmtInvalidLocation, SmtInvalidSpan, SmtLocation},
+    span::{SmtInvalidLocationError, SmtInvalidSpanError, SmtLocation},
     token::{
         SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
         SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
@@ -79,9 +79,9 @@ fn the_returned_error_types_are_errors() {
     assert_error::<SmtDisallowedBytesError>();
     assert_error::<SmtDisallowedByteVecError>();
     assert_error::<SmtEmptyArgumentsError>();
-    assert_error::<SmtInvalidLocation>();
-    assert_error::<SmtInvalidSpan>();
-    assert_error::<SmtNumericOverflow>();
+    assert_error::<SmtInvalidLocationError>();
+    assert_error::<SmtInvalidSpanError>();
+    assert_error::<SmtNumericOverflowError>();
 }
 
 /// A location as zero-based `(line, column)`.

@@ -656,15 +656,15 @@ string8_newtype!(SmtCommentBuf, SmtComment);
 
 /// The numeric value does not fit into the integer type it is converted to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct SmtNumericOverflow;
+pub struct SmtNumericOverflowError;
 
-impl std::fmt::Display for SmtNumericOverflow {
+impl std::fmt::Display for SmtNumericOverflowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("value does not fit into integer type")
     }
 }
 
-impl std::error::Error for SmtNumericOverflow {}
+impl std::error::Error for SmtNumericOverflowError {}
 
 impl<'a> SmtNumeral<'a> {
     /// The value as `u32`, or `None` if it does not fit.
@@ -755,18 +755,18 @@ impl SmtNumeralBuf {
 macro_rules! numeric_try_from {
     ($view:ident, $buf:ident, $int:ty, $method:ident) => {
         impl TryFrom<$view<'_>> for $int {
-            type Error = SmtNumericOverflow;
+            type Error = SmtNumericOverflowError;
 
             fn try_from(value: $view<'_>) -> Result<Self, Self::Error> {
-                value.$method().ok_or(SmtNumericOverflow)
+                value.$method().ok_or(SmtNumericOverflowError)
             }
         }
 
         impl TryFrom<&$buf> for $int {
-            type Error = SmtNumericOverflow;
+            type Error = SmtNumericOverflowError;
 
             fn try_from(value: &$buf) -> Result<Self, Self::Error> {
-                value.$method().ok_or(SmtNumericOverflow)
+                value.$method().ok_or(SmtNumericOverflowError)
             }
         }
     };

@@ -295,7 +295,10 @@ mod tests {
                     &mut SingleTokenCursor::new(&cursor, close),
                 )
                 .expect("check-sat closing parenthesis must parse");
-            assert!(matches!(flow, ControlFlow::Break(())));
+            assert!(
+                matches!(flow, ControlFlow::Break(())),
+                "check-sat should end at its closing parenthesis"
+            );
         }
     }
 }

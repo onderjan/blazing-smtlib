@@ -1,9 +1,10 @@
 //! Public-API tests of locations and spans: the consistency their
-//! constructors check, their order, and the join of spans.
+//! constructors check, their order, the join of spans, and that a location
+//! does not advance past the last offset.
 //!
 //! They check the Rust interface itself and call the library directly.
 
-use blazing_smtlib::span::{SmtInvalidLocation, SmtInvalidSpan, SmtLocation, SmtSpan};
+use blazing_smtlib::span::{SmtInvalidLocationError, SmtInvalidSpanError, SmtLocation, SmtSpan};
 
 fn location(offset: u64, line: u64, column: u64) -> SmtLocation {
     SmtLocation::new(offset, line, column).unwrap_or_else(|_| {
@@ -53,7 +54,7 @@ fn a_location_is_consistent_exactly_when_its_lines_and_columns_fit_before_its_of
     ] {
         assert_eq!(
             SmtLocation::new(offset, line, column),
-            Err(SmtInvalidLocation),
+            Err(SmtInvalidLocationError),
             "offset {offset}, line {line}, column {column}"
         );
     }
@@ -80,7 +81,11 @@ fn a_span_must_not_end_before_it_starts() {
         location(20, 1, 9),
         location(20, 2, 2),
     ] {
-        assert_eq!(SmtSpan::new(start, end), Err(SmtInvalidSpan), "end {end:?}");
+        assert_eq!(
+            SmtSpan::new(start, end),
+            Err(SmtInvalidSpanError),
+            "end {end:?}"
+        );
     }
 }
 
@@ -149,4 +154,16 @@ fn a_joined_span_runs_from_the_earlier_start_to_the_later_end() {
             "{second:?} joined with {first:?}"
         );
     }
+}
+
+#[test]
+#[should_panic(expected = "location offset must not overflow")]
+fn a_location_at_the_last_offset_does_not_advance_over_a_line_feed() {
+    location(u64::MAX, 1, 0).after_byte(b'\n');
+}
+
+#[test]
+#[should_panic(expected = "location offset must not overflow")]
+fn a_location_at_the_last_offset_does_not_advance_over_a_column() {
+    location(u64::MAX, 0, u64::MAX).after_column();
 }

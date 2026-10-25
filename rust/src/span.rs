@@ -19,19 +19,19 @@ pub struct SmtLocation {
 /// The line and column cannot be at the offset: every line before
 /// and every column on the line take at least one byte.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct SmtInvalidLocation;
+pub struct SmtInvalidLocationError;
 
-impl std::fmt::Display for SmtInvalidLocation {
+impl std::fmt::Display for SmtInvalidLocationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("invalid location")
     }
 }
 
-impl std::error::Error for SmtInvalidLocation {}
+impl std::error::Error for SmtInvalidLocationError {}
 
 impl SmtLocation {
     #[inline]
-    pub fn new(offset: u64, line: u64, column: u64) -> Result<Self, SmtInvalidLocation> {
+    pub fn new(offset: u64, line: u64, column: u64) -> Result<Self, SmtInvalidLocationError> {
         if Self::is_allowed(offset, line, column) {
             Ok(Self {
                 offset,
@@ -39,7 +39,7 @@ impl SmtLocation {
                 column,
             })
         } else {
-            Err(SmtInvalidLocation)
+            Err(SmtInvalidLocationError)
         }
     }
 
@@ -91,7 +91,7 @@ impl SmtLocation {
     pub fn after_byte(self, c: u8) -> Self {
         if c == b'\n' {
             Self {
-                offset: self.offset + 1,
+                offset: self.next_offset(),
                 line: self.line + 1,
                 column: 0,
             }
@@ -103,10 +103,19 @@ impl SmtLocation {
     #[inline]
     pub fn after_column(self) -> Self {
         Self {
-            offset: self.offset + 1,
+            offset: self.next_offset(),
             line: self.line,
             column: self.column + 1,
         }
+    }
+
+    /// The offset of the next byte; the line and the column cannot overflow
+    /// where it does not, as neither exceeds the offset.
+    #[inline]
+    fn next_offset(self) -> u64 {
+        self.offset
+            .checked_add(1)
+            .expect("location offset must not overflow")
     }
 }
 
@@ -150,23 +159,23 @@ pub struct SmtSpan {
 
 /// The end location is not at or after the start location.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct SmtInvalidSpan;
+pub struct SmtInvalidSpanError;
 
-impl std::fmt::Display for SmtInvalidSpan {
+impl std::fmt::Display for SmtInvalidSpanError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("invalid span")
     }
 }
 
-impl std::error::Error for SmtInvalidSpan {}
+impl std::error::Error for SmtInvalidSpanError {}
 
 impl SmtSpan {
     #[inline]
-    pub fn new(start: SmtLocation, end: SmtLocation) -> Result<Self, SmtInvalidSpan> {
+    pub fn new(start: SmtLocation, end: SmtLocation) -> Result<Self, SmtInvalidSpanError> {
         if Self::is_allowed(start, end) {
             Ok(Self { start, end })
         } else {
-            Err(SmtInvalidSpan)
+            Err(SmtInvalidSpanError)
         }
     }
 

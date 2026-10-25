@@ -5,7 +5,7 @@ use blazing_smtlib::{
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtBytesBuf, SmtComment, SmtCommentBuf, SmtDecimal,
         SmtDecimalBuf, SmtDisallowedBytesError, SmtHexDigits, SmtHexDigitsBuf, SmtKeyword,
-        SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumericOverflow, SmtStringContent,
+        SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumericOverflowError, SmtStringContent,
         SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace, SmtWhitespaceBuf,
     },
 };
@@ -403,8 +403,8 @@ struct NumeralConversions {
     max: u128,
     buf_to: fn(&SmtNumeralBuf) -> Option<u128>,
     view_to: fn(SmtNumeral<'_>) -> Option<u128>,
-    buf_try_from: fn(&SmtNumeralBuf) -> Result<u128, SmtNumericOverflow>,
-    view_try_from: fn(SmtNumeral<'_>) -> Result<u128, SmtNumericOverflow>,
+    buf_try_from: fn(&SmtNumeralBuf) -> Result<u128, SmtNumericOverflowError>,
+    view_try_from: fn(SmtNumeral<'_>) -> Result<u128, SmtNumericOverflowError>,
     from_method: fn(u128) -> SmtNumeralBuf,
     from_trait: fn(u128) -> SmtNumeralBuf,
 }
@@ -462,13 +462,13 @@ fn convert(conversions: &NumeralConversions, digits: &str) -> Option<u128> {
     );
     assert_eq!(
         (conversions.buf_try_from)(&owned),
-        by_method.ok_or(SmtNumericOverflow),
+        by_method.ok_or(SmtNumericOverflowError),
         "{} TryFrom of the owned {digits}",
         conversions.name
     );
     assert_eq!(
         (conversions.view_try_from)(owned.view()),
-        by_method.ok_or(SmtNumericOverflow),
+        by_method.ok_or(SmtNumericOverflowError),
         "{} TryFrom of the viewed {digits}",
         conversions.name
     );
@@ -562,12 +562,12 @@ struct DigitConversions {
     max: u128,
     hex_buf: fn(&SmtHexDigitsBuf) -> Option<u128>,
     hex_view: fn(SmtHexDigits<'_>) -> Option<u128>,
-    hex_buf_try_from: fn(&SmtHexDigitsBuf) -> Result<u128, SmtNumericOverflow>,
-    hex_view_try_from: fn(SmtHexDigits<'_>) -> Result<u128, SmtNumericOverflow>,
+    hex_buf_try_from: fn(&SmtHexDigitsBuf) -> Result<u128, SmtNumericOverflowError>,
+    hex_view_try_from: fn(SmtHexDigits<'_>) -> Result<u128, SmtNumericOverflowError>,
     bin_buf: fn(&SmtBinDigitsBuf) -> Option<u128>,
     bin_view: fn(SmtBinDigits<'_>) -> Option<u128>,
-    bin_buf_try_from: fn(&SmtBinDigitsBuf) -> Result<u128, SmtNumericOverflow>,
-    bin_view_try_from: fn(SmtBinDigits<'_>) -> Result<u128, SmtNumericOverflow>,
+    bin_buf_try_from: fn(&SmtBinDigitsBuf) -> Result<u128, SmtNumericOverflowError>,
+    bin_view_try_from: fn(SmtBinDigits<'_>) -> Result<u128, SmtNumericOverflowError>,
 }
 
 macro_rules! digit_conversions {
@@ -608,7 +608,7 @@ fn convert_hex(conversions: &DigitConversions, digits: &str) -> Option<u128> {
         value,
         "{name} view of #x{digits}"
     );
-    let by_try_from = value.ok_or(SmtNumericOverflow);
+    let by_try_from = value.ok_or(SmtNumericOverflowError);
     assert_eq!(
         (conversions.hex_buf_try_from)(&owned),
         by_try_from,
@@ -634,7 +634,7 @@ fn convert_bin(conversions: &DigitConversions, digits: &str) -> Option<u128> {
         value,
         "{name} view of #b{digits}"
     );
-    let by_try_from = value.ok_or(SmtNumericOverflow);
+    let by_try_from = value.ok_or(SmtNumericOverflowError);
     assert_eq!(
         (conversions.bin_buf_try_from)(&owned),
         by_try_from,
