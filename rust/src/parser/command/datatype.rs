@@ -11,7 +11,7 @@ use crate::{
         SmtSortedVarParser, SmtSymbolParser, SmtSyntaxErrorKind, category::SmtPairParser, expected,
         handle_err, parse_by_token,
     },
-    token::{SingleTokenCursor, SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
+    token::{SingleTokenCursor, SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).
@@ -167,7 +167,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                 None
             }
             DatatypeState::Kind => match cursor.syntax(&token) {
-                SmtSyntaxToken::ParenOpen => {
+                SmtToken::ParenOpen => {
                     // simple constructors, start the datatype with no parameters
                     self.start_datatype(handler, Vec::new())?;
                     self.state = DatatypeState::SimpleConstructors;
@@ -184,7 +184,7 @@ impl<H: SmtCommandHandler> DatatypeParser<H> {
                     );
                     None
                 }
-                SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Par)) => {
+                SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Par)) => {
                     // parametric constructors, we need to parse the parameters first
                     self.state = DatatypeState::Parameters;
                     None

@@ -21,7 +21,7 @@ use blazing_smtlib::{
         SmtStringParser, SmtSymbolParser, SmtTermParser, SmtTuple3Parser, SmtTuple8Parser,
     },
     span::SmtLocation,
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken},
 };
 
 type H = SmtSyntaxChecker;
@@ -103,7 +103,7 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for PrintedCursor {
     fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, Infallible> {
         self.printed.get_or_insert_with(|| format!("{cursor:?}"));
         while let Some(token) = cursor.next() {
-            if matches!(cursor.syntax(&token), SmtSyntaxToken::EndOfFile) {
+            if matches!(cursor.syntax(&token), SmtToken::EndOfFile) {
                 return Ok(ControlFlow::Break(()));
             }
         }

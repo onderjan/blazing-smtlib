@@ -10,7 +10,7 @@ use crate::{
     grammar::SmtPattern,
     lexicon::{SmtNumeral, SmtSymbol},
     parser::{Arena, ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle, TextHandle},
-    token::{SmtAppendTokens, SmtSyntaxToken, SmtTokensCursor},
+    token::{SmtAppendTokens, SmtToken, SmtTokensCursor},
 };
 
 /// Multiple values to be handled.
@@ -1301,10 +1301,10 @@ fn append_named<'a, V: SmtAppendTokens + 'a>(
     tokens: &mut SmtTokensCursor<'a>,
 ) {
     for (name, value) in named {
-        tokens.push(SmtSyntaxToken::ParenOpen);
-        tokens.push(SmtSyntaxToken::Symbol(name));
+        tokens.push(SmtToken::ParenOpen);
+        tokens.push(SmtToken::Symbol(name));
         value.append_tokens(tokens);
-        tokens.push(SmtSyntaxToken::ParenClose);
+        tokens.push(SmtToken::ParenClose);
     }
 }
 

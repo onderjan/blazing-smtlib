@@ -9,7 +9,7 @@ use crate::{
         SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SortSlot, expected,
         parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
 /// A parser that reads an SMT-LIB qualified identifier.
@@ -207,13 +207,13 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
                 match cursor.syntax(&token) {
-                    SmtSyntaxToken::Symbol(name) => {
+                    SmtToken::Symbol(name) => {
                         // return a simple ident, the slot is in its initial state
                         return Ok(ControlFlow::Break(QualifiedIdentHandle::unqualified(
                             arena.push_nonindexed_ident(name),
                         )));
                     }
-                    SmtSyntaxToken::ParenOpen => self.state = State::Open,
+                    SmtToken::ParenOpen => self.state = State::Open,
                     _ => {
                         return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
                             SmtSyntaxExpected::Ident,
@@ -223,13 +223,13 @@ impl<H: SmtHandler + ?Sized> QualifiedIdentSlot<H> {
             }
             // step 2: expecting an underscore or 'as'
             State::Open => match cursor.syntax(&token) {
-                SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
+                SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                     // unqualified indexed ident
                     // move the ident slot after underscore
                     ident_slot.move_after_underscore();
                     self.state = State::UnqualifiedIndexed;
                 }
-                SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::As)) => {
+                SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::As)) => {
                     // qualified ident, parse identifier next
                     self.state = State::QualifiedIdent;
                 }

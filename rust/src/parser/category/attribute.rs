@@ -9,7 +9,7 @@ use crate::{
         SmtSyntaxErrorKind, SmtSyntaxExpected, TextHandle, category::parse_special_constant,
         expected, handle_err, parse_by_token,
     },
-    token::{SmtCursor, SmtSyntaxToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
@@ -214,11 +214,11 @@ impl AttributeSlot {
                     self.arena_attributes_start = arena.attributes.len();
                 }
                 match cursor.syntax(&token) {
-                    SmtSyntaxToken::ParenClose => {
+                    SmtToken::ParenClose => {
                         // finish the attribute
                         return Ok(ControlFlow::Break(self.finish::<H, A>(arena)?));
                     }
-                    SmtSyntaxToken::Keyword(keyword) => {
+                    SmtToken::Keyword(keyword) => {
                         // we received an attribute name, store it in the arena text
                         self.state = State::AfterName(arena.push_text(keyword.as_slice()));
                     }
@@ -237,11 +237,11 @@ impl AttributeSlot {
                 }
 
                 let (value, decision) = match cursor.syntax(&token) {
-                    SmtSyntaxToken::Symbol(symbol) => (
+                    SmtToken::Symbol(symbol) => (
                         Some(SmtAttributeValue::Symbol(symbol)),
                         Decision::FinishAttribute,
                     ),
-                    SmtSyntaxToken::ParenOpen => {
+                    SmtToken::ParenOpen => {
                         // start a list of sexprs ending with closing parenthesis
                         self.state = State::InsideSExpr {
                             name,
@@ -250,13 +250,13 @@ impl AttributeSlot {
                         };
                         return Ok(ControlFlow::Continue(()));
                     }
-                    SmtSyntaxToken::ParenClose => {
+                    SmtToken::ParenClose => {
                         // an attribute with only a name followed by the parenthesis
                         // since we already have a closing parenthesis here,
                         // we need to immediately finish after pushing the attribute
                         (None, Decision::Break)
                     }
-                    SmtSyntaxToken::Keyword(keyword) => {
+                    SmtToken::Keyword(keyword) => {
                         // check if we actually can start a next keyword
                         // the current attribute is not handled and counted yet,
                         // so we need to add it to `num_attributes`
@@ -312,7 +312,7 @@ impl AttributeSlot {
                 arena_s_exprs_start,
                 outside,
             } => {
-                if outside && matches!(cursor.syntax(&token), SmtSyntaxToken::ParenClose) {
+                if outside && matches!(cursor.syntax(&token), SmtToken::ParenClose) {
                     // the s-expr closing parenthesis was consumed,
                     // the attribute closing parenthesis was not consumed yet
                     // handle the attribute with its name and S-expressions handed over

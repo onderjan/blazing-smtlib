@@ -30,7 +30,7 @@ use blazing_smtlib::{
     span::{SmtInvalidLocationError, SmtInvalidSpanError, SmtLocation},
     token::{
         SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
-        SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
+        SmtReserved, SmtToken, SmtTokenCategory, SmtVersionRefused,
     },
 };
 
@@ -168,10 +168,10 @@ impl<E> SmtConsume for RejectNumerals<E> {
 impl<'a, E> SmtConsumeFrom<SmtLexerCursor<'a>> for RejectNumerals<E> {
     fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, E> {
         while let Some(token) = cursor.next() {
-            if let SmtSyntaxToken::Numeral(_) = cursor.syntax(&token) {
+            if let SmtToken::Numeral(_) = cursor.syntax(&token) {
                 return Err((self.0)());
             }
-            if let SmtSyntaxToken::EndOfFile = cursor.syntax(&token) {
+            if let SmtToken::EndOfFile = cursor.syntax(&token) {
                 return Ok(ControlFlow::Break(()));
             }
         }
@@ -274,7 +274,7 @@ fn the_source_is_the_source_of_the_carried_error() {
     let write = SmtWriteError::from(io::Error::other(Rejected));
     assert!(is_underlying(write.source()));
     assert!(write.to_string().contains(&Rejected.to_string()));
-    let lambda = SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Lambda));
+    let lambda = SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Lambda));
     let not_in_version = lambda
         .write_smt(&mut Vec::new(), SmtVersion::V2_6)
         .expect_err("lambda is not reserved in 2.6");

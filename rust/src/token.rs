@@ -35,7 +35,7 @@ pub enum SmtTokenCategory {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum SmtSyntaxToken<'a> {
+pub enum SmtToken<'a> {
     ParenOpen,
     ParenClose,
     Numeral(SmtNumeral<'a>),
@@ -51,50 +51,38 @@ pub enum SmtSyntaxToken<'a> {
     EndOfFile,
 }
 
-impl<'a> SmtSyntaxToken<'a> {
+impl<'a> SmtToken<'a> {
     /// Construct the token kind from the token and version.
     #[inline]
     pub fn from_lexer_token(token: SmtLexerToken<'a>, version: SmtVersion) -> Self {
         let content = token.content();
         match token.category() {
-            SmtTokenCategory::ParenOpen => SmtSyntaxToken::ParenOpen,
-            SmtTokenCategory::ParenClose => SmtSyntaxToken::ParenClose,
-            SmtTokenCategory::Numeral => {
-                SmtSyntaxToken::Numeral(SmtNumeral::new_unchecked(content))
-            }
-            SmtTokenCategory::Decimal => {
-                SmtSyntaxToken::Decimal(SmtDecimal::new_unchecked(content))
-            }
+            SmtTokenCategory::ParenOpen => SmtToken::ParenOpen,
+            SmtTokenCategory::ParenClose => SmtToken::ParenClose,
+            SmtTokenCategory::Numeral => SmtToken::Numeral(SmtNumeral::new_unchecked(content)),
+            SmtTokenCategory::Decimal => SmtToken::Decimal(SmtDecimal::new_unchecked(content)),
             SmtTokenCategory::Hexadecimal => {
-                SmtSyntaxToken::Hexadecimal(SmtHexDigits::new_unchecked(content))
+                SmtToken::Hexadecimal(SmtHexDigits::new_unchecked(content))
             }
-            SmtTokenCategory::Binary => {
-                SmtSyntaxToken::Binary(SmtBinDigits::new_unchecked(content))
-            }
+            SmtTokenCategory::Binary => SmtToken::Binary(SmtBinDigits::new_unchecked(content)),
             SmtTokenCategory::UnquotedSymbol => {
                 // only the words reserved in the version are reserved words
                 if let Some(reserved) = SmtReserved::from_bytes(content, version) {
-                    SmtSyntaxToken::Reserved(reserved)
+                    SmtToken::Reserved(reserved)
                 } else {
-                    SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(false, content))
+                    SmtToken::Symbol(SmtSymbol::new_unchecked(false, content))
                 }
             }
             SmtTokenCategory::QuotedSymbol => {
-                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(true, content))
+                SmtToken::Symbol(SmtSymbol::new_unchecked(true, content))
             }
-            SmtTokenCategory::String => {
-                SmtSyntaxToken::String(SmtStringContent::new_unchecked(content))
-            }
-            SmtTokenCategory::Keyword => {
-                SmtSyntaxToken::Keyword(SmtKeyword::new_unchecked(content))
-            }
+            SmtTokenCategory::String => SmtToken::String(SmtStringContent::new_unchecked(content)),
+            SmtTokenCategory::Keyword => SmtToken::Keyword(SmtKeyword::new_unchecked(content)),
             SmtTokenCategory::Whitespace => {
-                SmtSyntaxToken::Whitespace(SmtWhitespace::new_unchecked(content))
+                SmtToken::Whitespace(SmtWhitespace::new_unchecked(content))
             }
-            SmtTokenCategory::Comment => {
-                SmtSyntaxToken::Comment(SmtComment::new_unchecked(content))
-            }
-            SmtTokenCategory::EndOfFile => SmtSyntaxToken::EndOfFile,
+            SmtTokenCategory::Comment => SmtToken::Comment(SmtComment::new_unchecked(content)),
+            SmtTokenCategory::EndOfFile => SmtToken::EndOfFile,
         }
     }
 
@@ -117,19 +105,19 @@ impl<'a> SmtSyntaxToken<'a> {
         version: SmtVersion,
     ) -> Result<(), SmtWriteError> {
         match self {
-            SmtSyntaxToken::ParenOpen => writer.write_all(b"(")?,
-            SmtSyntaxToken::ParenClose => writer.write_all(b")")?,
-            SmtSyntaxToken::Numeral(numeral) => writer.write_all(numeral.as_slice())?,
-            SmtSyntaxToken::Decimal(decimal) => writer.write_all(decimal.as_slice())?,
-            SmtSyntaxToken::Hexadecimal(digits) => {
+            SmtToken::ParenOpen => writer.write_all(b"(")?,
+            SmtToken::ParenClose => writer.write_all(b")")?,
+            SmtToken::Numeral(numeral) => writer.write_all(numeral.as_slice())?,
+            SmtToken::Decimal(decimal) => writer.write_all(decimal.as_slice())?,
+            SmtToken::Hexadecimal(digits) => {
                 writer.write_all(b"#x")?;
                 writer.write_all(digits.as_slice())?;
             }
-            SmtSyntaxToken::Binary(digits) => {
+            SmtToken::Binary(digits) => {
                 writer.write_all(b"#b")?;
                 writer.write_all(digits.as_slice())?;
             }
-            SmtSyntaxToken::String(content) => {
+            SmtToken::String(content) => {
                 writer.write_all(b"\"")?;
                 if version == SmtVersion::V2_0 {
                     // SMT-LIB 2.0: a double quote and a backslash are escaped by a backslash
@@ -158,11 +146,11 @@ impl<'a> SmtSyntaxToken<'a> {
                 }
                 writer.write_all(b"\"")?;
             }
-            SmtSyntaxToken::Keyword(keyword) => {
+            SmtToken::Keyword(keyword) => {
                 writer.write_all(b":")?;
                 writer.write_all(keyword.as_slice())?;
             }
-            SmtSyntaxToken::Symbol(symbol) => {
+            SmtToken::Symbol(symbol) => {
                 // a simple symbol that is a reserved word in the version
                 // would be read as the reserved word, quote it to keep the symbol
                 if symbol.is_quoted()
@@ -175,7 +163,7 @@ impl<'a> SmtSyntaxToken<'a> {
                     writer.write_all(symbol.as_slice())?;
                 }
             }
-            SmtSyntaxToken::Reserved(reserved) => {
+            SmtToken::Reserved(reserved) => {
                 if !reserved.is_in_version(version) {
                     // the reserved word is not in the version
                     // there is no way to write it
@@ -185,20 +173,20 @@ impl<'a> SmtSyntaxToken<'a> {
                 }
                 writer.write_all(reserved.as_str().as_bytes())?;
             }
-            SmtSyntaxToken::Whitespace(whitespace) => writer.write_all(whitespace.as_slice())?,
-            SmtSyntaxToken::Comment(comment) => {
+            SmtToken::Whitespace(whitespace) => writer.write_all(whitespace.as_slice())?,
+            SmtToken::Comment(comment) => {
                 writer.write_all(b";")?;
                 writer.write_all(comment.as_slice())?;
             }
-            SmtSyntaxToken::EndOfFile => {}
+            SmtToken::EndOfFile => {}
         }
         Ok(())
     }
 }
 
-/// An owned token, from which [`SmtSyntaxToken`] is viewed.
+/// An owned token, from which [`SmtToken`] is viewed.
 #[derive(Debug, Clone)]
-pub enum SmtSyntaxTokenBuf {
+pub enum SmtTokenBuf {
     ParenOpen,
     ParenClose,
     Numeral(SmtNumeralBuf),
@@ -214,42 +202,42 @@ pub enum SmtSyntaxTokenBuf {
     EndOfFile,
 }
 
-impl SmtSyntaxTokenBuf {
-    pub fn view(&self) -> SmtSyntaxToken<'_> {
+impl SmtTokenBuf {
+    pub fn view(&self) -> SmtToken<'_> {
         match self {
-            Self::ParenOpen => SmtSyntaxToken::ParenOpen,
-            Self::ParenClose => SmtSyntaxToken::ParenClose,
-            Self::Numeral(value) => SmtSyntaxToken::Numeral(value.view()),
-            Self::Decimal(value) => SmtSyntaxToken::Decimal(value.view()),
-            Self::Hexadecimal(value) => SmtSyntaxToken::Hexadecimal(value.view()),
-            Self::Binary(value) => SmtSyntaxToken::Binary(value.view()),
-            Self::String(value) => SmtSyntaxToken::String(value.view()),
-            Self::Keyword(value) => SmtSyntaxToken::Keyword(value.view()),
-            Self::Symbol(value) => SmtSyntaxToken::Symbol(value.view()),
-            Self::Reserved(reserved) => SmtSyntaxToken::Reserved(*reserved),
-            Self::Whitespace(value) => SmtSyntaxToken::Whitespace(value.view()),
-            Self::Comment(value) => SmtSyntaxToken::Comment(value.view()),
-            Self::EndOfFile => SmtSyntaxToken::EndOfFile,
+            Self::ParenOpen => SmtToken::ParenOpen,
+            Self::ParenClose => SmtToken::ParenClose,
+            Self::Numeral(value) => SmtToken::Numeral(value.view()),
+            Self::Decimal(value) => SmtToken::Decimal(value.view()),
+            Self::Hexadecimal(value) => SmtToken::Hexadecimal(value.view()),
+            Self::Binary(value) => SmtToken::Binary(value.view()),
+            Self::String(value) => SmtToken::String(value.view()),
+            Self::Keyword(value) => SmtToken::Keyword(value.view()),
+            Self::Symbol(value) => SmtToken::Symbol(value.view()),
+            Self::Reserved(reserved) => SmtToken::Reserved(*reserved),
+            Self::Whitespace(value) => SmtToken::Whitespace(value.view()),
+            Self::Comment(value) => SmtToken::Comment(value.view()),
+            Self::EndOfFile => SmtToken::EndOfFile,
         }
     }
 }
 
-impl SmtSyntaxToken<'_> {
-    pub fn into_owned(self) -> SmtSyntaxTokenBuf {
+impl SmtToken<'_> {
+    pub fn into_owned(self) -> SmtTokenBuf {
         match self {
-            Self::ParenOpen => SmtSyntaxTokenBuf::ParenOpen,
-            Self::ParenClose => SmtSyntaxTokenBuf::ParenClose,
-            Self::Numeral(value) => SmtSyntaxTokenBuf::Numeral(value.into_owned()),
-            Self::Decimal(value) => SmtSyntaxTokenBuf::Decimal(value.into_owned()),
-            Self::Hexadecimal(value) => SmtSyntaxTokenBuf::Hexadecimal(value.into_owned()),
-            Self::Binary(value) => SmtSyntaxTokenBuf::Binary(value.into_owned()),
-            Self::String(value) => SmtSyntaxTokenBuf::String(value.into_owned()),
-            Self::Keyword(value) => SmtSyntaxTokenBuf::Keyword(value.into_owned()),
-            Self::Symbol(value) => SmtSyntaxTokenBuf::Symbol(value.into_owned()),
-            Self::Reserved(reserved) => SmtSyntaxTokenBuf::Reserved(reserved),
-            Self::Whitespace(value) => SmtSyntaxTokenBuf::Whitespace(value.into_owned()),
-            Self::Comment(value) => SmtSyntaxTokenBuf::Comment(value.into_owned()),
-            Self::EndOfFile => SmtSyntaxTokenBuf::EndOfFile,
+            Self::ParenOpen => SmtTokenBuf::ParenOpen,
+            Self::ParenClose => SmtTokenBuf::ParenClose,
+            Self::Numeral(value) => SmtTokenBuf::Numeral(value.into_owned()),
+            Self::Decimal(value) => SmtTokenBuf::Decimal(value.into_owned()),
+            Self::Hexadecimal(value) => SmtTokenBuf::Hexadecimal(value.into_owned()),
+            Self::Binary(value) => SmtTokenBuf::Binary(value.into_owned()),
+            Self::String(value) => SmtTokenBuf::String(value.into_owned()),
+            Self::Keyword(value) => SmtTokenBuf::Keyword(value.into_owned()),
+            Self::Symbol(value) => SmtTokenBuf::Symbol(value.into_owned()),
+            Self::Reserved(reserved) => SmtTokenBuf::Reserved(reserved),
+            Self::Whitespace(value) => SmtTokenBuf::Whitespace(value.into_owned()),
+            Self::Comment(value) => SmtTokenBuf::Comment(value.into_owned()),
+            Self::EndOfFile => SmtTokenBuf::EndOfFile,
         }
     }
 }
@@ -283,24 +271,24 @@ struct TokenHandle {
 
 impl TokenHandle {
     /// Pushes the bytes of the token into `text`.
-    fn create_by_push(text: &mut Vec<u8>, token: SmtSyntaxToken) -> TokenHandle {
+    fn create_by_push(text: &mut Vec<u8>, token: SmtToken) -> TokenHandle {
         let (kind, bytes): (TokenKind, &[u8]) = match token {
-            SmtSyntaxToken::ParenOpen => (TokenKind::ParenOpen, &[]),
-            SmtSyntaxToken::ParenClose => (TokenKind::ParenClose, &[]),
-            SmtSyntaxToken::Numeral(value) => (TokenKind::Numeral, value.as_slice()),
-            SmtSyntaxToken::Decimal(value) => (TokenKind::Decimal, value.as_slice()),
-            SmtSyntaxToken::Hexadecimal(value) => (TokenKind::Hexadecimal, value.as_slice()),
-            SmtSyntaxToken::Binary(value) => (TokenKind::Binary, value.as_slice()),
-            SmtSyntaxToken::String(value) => (TokenKind::String, value.as_slice()),
-            SmtSyntaxToken::Keyword(value) => (TokenKind::Keyword, value.as_slice()),
-            SmtSyntaxToken::Symbol(value) if value.is_quoted() => {
+            SmtToken::ParenOpen => (TokenKind::ParenOpen, &[]),
+            SmtToken::ParenClose => (TokenKind::ParenClose, &[]),
+            SmtToken::Numeral(value) => (TokenKind::Numeral, value.as_slice()),
+            SmtToken::Decimal(value) => (TokenKind::Decimal, value.as_slice()),
+            SmtToken::Hexadecimal(value) => (TokenKind::Hexadecimal, value.as_slice()),
+            SmtToken::Binary(value) => (TokenKind::Binary, value.as_slice()),
+            SmtToken::String(value) => (TokenKind::String, value.as_slice()),
+            SmtToken::Keyword(value) => (TokenKind::Keyword, value.as_slice()),
+            SmtToken::Symbol(value) if value.is_quoted() => {
                 (TokenKind::QuotedSymbol, value.as_slice())
             }
-            SmtSyntaxToken::Symbol(value) => (TokenKind::UnquotedSymbol, value.as_slice()),
-            SmtSyntaxToken::Reserved(reserved) => (TokenKind::Reserved(reserved), &[]),
-            SmtSyntaxToken::Whitespace(value) => (TokenKind::Whitespace, value.as_slice()),
-            SmtSyntaxToken::Comment(value) => (TokenKind::Comment, value.as_slice()),
-            SmtSyntaxToken::EndOfFile => (TokenKind::EndOfFile, &[]),
+            SmtToken::Symbol(value) => (TokenKind::UnquotedSymbol, value.as_slice()),
+            SmtToken::Reserved(reserved) => (TokenKind::Reserved(reserved), &[]),
+            SmtToken::Whitespace(value) => (TokenKind::Whitespace, value.as_slice()),
+            SmtToken::Comment(value) => (TokenKind::Comment, value.as_slice()),
+            SmtToken::EndOfFile => (TokenKind::EndOfFile, &[]),
         };
         let start = text.len();
         text.extend_from_slice(bytes);
@@ -313,32 +301,24 @@ impl TokenHandle {
 
     /// Views the token.
     #[inline]
-    fn view(self, text: &[u8]) -> SmtSyntaxToken<'_> {
+    fn view(self, text: &[u8]) -> SmtToken<'_> {
         // the bytes were pushed from a view of the same kind, so they are allowed
         let bytes = &text[self.start..self.end];
         match self.kind {
-            TokenKind::ParenOpen => SmtSyntaxToken::ParenOpen,
-            TokenKind::ParenClose => SmtSyntaxToken::ParenClose,
-            TokenKind::Numeral => SmtSyntaxToken::Numeral(SmtNumeral::new_unchecked(bytes)),
-            TokenKind::Decimal => SmtSyntaxToken::Decimal(SmtDecimal::new_unchecked(bytes)),
-            TokenKind::Hexadecimal => {
-                SmtSyntaxToken::Hexadecimal(SmtHexDigits::new_unchecked(bytes))
-            }
-            TokenKind::Binary => SmtSyntaxToken::Binary(SmtBinDigits::new_unchecked(bytes)),
-            TokenKind::String => SmtSyntaxToken::String(SmtStringContent::new_unchecked(bytes)),
-            TokenKind::Keyword => SmtSyntaxToken::Keyword(SmtKeyword::new_unchecked(bytes)),
-            TokenKind::UnquotedSymbol => {
-                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(false, bytes))
-            }
-            TokenKind::QuotedSymbol => {
-                SmtSyntaxToken::Symbol(SmtSymbol::new_unchecked(true, bytes))
-            }
-            TokenKind::Reserved(reserved) => SmtSyntaxToken::Reserved(reserved),
-            TokenKind::Whitespace => {
-                SmtSyntaxToken::Whitespace(SmtWhitespace::new_unchecked(bytes))
-            }
-            TokenKind::Comment => SmtSyntaxToken::Comment(SmtComment::new_unchecked(bytes)),
-            TokenKind::EndOfFile => SmtSyntaxToken::EndOfFile,
+            TokenKind::ParenOpen => SmtToken::ParenOpen,
+            TokenKind::ParenClose => SmtToken::ParenClose,
+            TokenKind::Numeral => SmtToken::Numeral(SmtNumeral::new_unchecked(bytes)),
+            TokenKind::Decimal => SmtToken::Decimal(SmtDecimal::new_unchecked(bytes)),
+            TokenKind::Hexadecimal => SmtToken::Hexadecimal(SmtHexDigits::new_unchecked(bytes)),
+            TokenKind::Binary => SmtToken::Binary(SmtBinDigits::new_unchecked(bytes)),
+            TokenKind::String => SmtToken::String(SmtStringContent::new_unchecked(bytes)),
+            TokenKind::Keyword => SmtToken::Keyword(SmtKeyword::new_unchecked(bytes)),
+            TokenKind::UnquotedSymbol => SmtToken::Symbol(SmtSymbol::new_unchecked(false, bytes)),
+            TokenKind::QuotedSymbol => SmtToken::Symbol(SmtSymbol::new_unchecked(true, bytes)),
+            TokenKind::Reserved(reserved) => SmtToken::Reserved(reserved),
+            TokenKind::Whitespace => SmtToken::Whitespace(SmtWhitespace::new_unchecked(bytes)),
+            TokenKind::Comment => SmtToken::Comment(SmtComment::new_unchecked(bytes)),
+            TokenKind::EndOfFile => SmtToken::EndOfFile,
         }
     }
 }
@@ -359,7 +339,7 @@ impl SmtTokensBuf {
     }
 
     /// Copies the token after the others.
-    pub fn push(&mut self, token: SmtSyntaxToken) {
+    pub fn push(&mut self, token: SmtToken) {
         let token = TokenHandle::create_by_push(&mut self.text, token);
         self.handles.push(token);
     }
@@ -377,11 +357,11 @@ impl SmtTokensBuf {
         self.handles.is_empty()
     }
 
-    pub fn get(&self, index: usize) -> Option<SmtSyntaxToken<'_>> {
+    pub fn get(&self, index: usize) -> Option<SmtToken<'_>> {
         Some(self.handles.get(index)?.view(&self.text))
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSyntaxToken<'_>> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtToken<'_>> {
         let text = self.text.as_slice();
         self.handles.iter().map(move |handle| handle.view(text))
     }
@@ -423,7 +403,7 @@ pub trait SmtCursor {
     type Lookahead: SmtLookahead<Self::Token>;
 
     /// Views the user token as a library token under the version in force.
-    fn syntax<'t>(&self, token: &'t Self::Token) -> SmtSyntaxToken<'t>;
+    fn syntax<'t>(&self, token: &'t Self::Token) -> SmtToken<'t>;
 
     /// Consumes the next token (if any).
     fn next(&mut self) -> Option<Self::Token>;
@@ -504,7 +484,7 @@ pub trait SmtLookahead<T> {
     fn next(&mut self) -> Option<T>;
 
     /// Views the user token as a library token.
-    fn syntax<'t>(&self, token: &'t T) -> SmtSyntaxToken<'t>;
+    fn syntax<'t>(&self, token: &'t T) -> SmtToken<'t>;
 }
 
 impl<T> SmtLookahead<T> for () {
@@ -513,7 +493,7 @@ impl<T> SmtLookahead<T> for () {
     }
 
     /// Views the user token as a library token.
-    fn syntax<'t>(&self, _token: &'t T) -> SmtSyntaxToken<'t> {
+    fn syntax<'t>(&self, _token: &'t T) -> SmtToken<'t> {
         panic!("unit lookahead cannot view user token as it produces no tokens")
     }
 }
@@ -536,7 +516,7 @@ impl<'a, Z: SmtCursor> SmtCursor for SingleTokenCursor<'a, Z> {
     type Token = Z::Token;
     type Lookahead = ();
 
-    fn syntax<'t>(&self, token: &'t Self::Token) -> SmtSyntaxToken<'t> {
+    fn syntax<'t>(&self, token: &'t Self::Token) -> SmtToken<'t> {
         self.cursor.syntax(token)
     }
 
@@ -573,7 +553,7 @@ impl<'a, Z: SmtCursor> SmtCursor for SingleTokenCursor<'a, Z> {
 /// the discarding mode. EOF tokens are never discarded themselves.
 #[derive(Debug, Clone)]
 pub struct SmtTokensCursor<'a> {
-    tokens: VecDeque<SmtSyntaxToken<'a>>,
+    tokens: VecDeque<SmtToken<'a>>,
     /// Whether the tokens are discarded until an end-of-file token is pushed.
     discarding: bool,
     version: SmtVersion,
@@ -595,9 +575,9 @@ impl<'a> SmtTokensCursor<'a> {
     /// other than EOF is silently dropped, so the cursor
     /// remains empty.
     #[inline]
-    pub fn push(&mut self, token: SmtSyntaxToken<'a>) {
+    pub fn push(&mut self, token: SmtToken<'a>) {
         if self.discarding {
-            if matches!(token, SmtSyntaxToken::EndOfFile) {
+            if matches!(token, SmtToken::EndOfFile) {
                 // the end-of-file token ends discarding
                 // and it is not discarded
                 self.discarding = false;
@@ -617,22 +597,22 @@ impl<'a> SmtTokensCursor<'a> {
 }
 
 impl<'a> SmtCursor for SmtTokensCursor<'a> {
-    type Token = SmtSyntaxToken<'a>;
+    type Token = SmtToken<'a>;
     type Lookahead = ();
 
     #[inline]
-    fn syntax<'t>(&self, token: &'t SmtSyntaxToken<'a>) -> SmtSyntaxToken<'t> {
+    fn syntax<'t>(&self, token: &'t SmtToken<'a>) -> SmtToken<'t> {
         *token
     }
 
     #[allow(clippy::should_implement_trait)]
     #[inline]
-    fn next(&mut self) -> Option<SmtSyntaxToken<'a>> {
+    fn next(&mut self) -> Option<SmtToken<'a>> {
         self.tokens.pop_front()
     }
 
     #[inline]
-    fn peek(&self) -> Option<SmtSyntaxToken<'a>> {
+    fn peek(&self) -> Option<SmtToken<'a>> {
         self.tokens.front().copied()
     }
 
@@ -663,7 +643,7 @@ impl<'a> SmtCursor for SmtTokensCursor<'a> {
     fn discard_rest(&mut self) {
         // drop the tokens before the next end-of-file token, which stays there
         while let Some(token) = self.tokens.front() {
-            if matches!(token, SmtSyntaxToken::EndOfFile) {
+            if matches!(token, SmtToken::EndOfFile) {
                 // stop discarding, keep EOF
                 return;
             }
@@ -680,14 +660,14 @@ pub trait SmtAppendTokens {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>);
 }
 
-impl SmtAppendTokens for SmtSyntaxToken<'_> {
+impl SmtAppendTokens for SmtToken<'_> {
     #[inline]
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         tokens.push(*self);
     }
 }
 
-impl SmtAppendTokens for SmtSyntaxTokenBuf {
+impl SmtAppendTokens for SmtTokenBuf {
     #[inline]
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         tokens.push(self.view());
@@ -725,7 +705,7 @@ impl<T: SmtAppendTokens> SmtAppendTokens for Vec<T> {
 impl SmtAppendTokens for SmtReserved {
     #[inline]
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
-        tokens.push(SmtSyntaxToken::Reserved(*self));
+        tokens.push(SmtToken::Reserved(*self));
     }
 }
 
@@ -736,14 +716,14 @@ macro_rules! plain_append_tokens {
         impl SmtAppendTokens for $view<'_> {
             #[inline]
             fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
-                tokens.push(SmtSyntaxToken::$variant(*self));
+                tokens.push(SmtToken::$variant(*self));
             }
         }
 
         impl SmtAppendTokens for $buf {
             #[inline]
             fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
-                tokens.push(SmtSyntaxToken::$variant(self.view()));
+                tokens.push(SmtToken::$variant(self.view()));
             }
         }
     };
@@ -826,9 +806,9 @@ impl SmtTokensCursor<'_> {
         tokens.clear();
         // an empty deque becomes a vector without moving or reallocating, and an
         // empty vector mapped and collected keeps its allocation in the new type
-        let tokens: Vec<SmtSyntaxToken<'b>> = Vec::from(tokens)
+        let tokens: Vec<SmtToken<'b>> = Vec::from(tokens)
             .into_iter()
-            .map(|_| SmtSyntaxToken::EndOfFile)
+            .map(|_| SmtToken::EndOfFile)
             .collect();
         SmtTokensCursor {
             tokens: VecDeque::from(tokens),

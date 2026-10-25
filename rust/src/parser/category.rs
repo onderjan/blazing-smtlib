@@ -1,4 +1,4 @@
-use crate::{grammar::SmtSpecialConstant, token::SmtSyntaxToken};
+use crate::{grammar::SmtSpecialConstant, token::SmtToken};
 
 mod attribute;
 mod combinator;
@@ -42,15 +42,13 @@ pub(crate) use sorted_var::SortedVarSlot;
 pub(crate) use term::TermSlot;
 
 #[inline]
-fn parse_special_constant<'a>(
-    kind: SmtSyntaxToken<'a>,
-) -> Result<SmtSpecialConstant<'a>, SmtSyntaxToken<'a>> {
+fn parse_special_constant<'a>(kind: SmtToken<'a>) -> Result<SmtSpecialConstant<'a>, SmtToken<'a>> {
     let constant = match kind {
-        SmtSyntaxToken::Numeral(value) => SmtSpecialConstant::Numeral(value),
-        SmtSyntaxToken::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
-        SmtSyntaxToken::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
-        SmtSyntaxToken::Binary(value) => SmtSpecialConstant::Binary(value),
-        SmtSyntaxToken::String(string) => SmtSpecialConstant::String(string),
+        SmtToken::Numeral(value) => SmtSpecialConstant::Numeral(value),
+        SmtToken::Decimal(decimal) => SmtSpecialConstant::Decimal(decimal),
+        SmtToken::Hexadecimal(value) => SmtSpecialConstant::Hexadecimal(value),
+        SmtToken::Binary(value) => SmtSpecialConstant::Binary(value),
+        SmtToken::String(string) => SmtSpecialConstant::String(string),
         kind => return Err(kind),
     };
     Ok(constant)
@@ -64,7 +62,7 @@ pub(crate) mod tests {
         SmtNonstandardCommandError, SmtSyntaxChecker, SmtVersion,
         lexer::SmtLexer,
         parser::{SmtParse, SmtParseError, SmtParseState},
-        token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
+        token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken},
     };
 
     /// Drives `parser` over `parse_state` through the whole input with the
@@ -98,7 +96,7 @@ pub(crate) mod tests {
                         // count the tokens left after the result, and break at
                         // the end of the input, as every consumer must
                         while let Some(token) = cursor.next() {
-                            if matches!(cursor.syntax(&token), SmtSyntaxToken::EndOfFile) {
+                            if matches!(cursor.syntax(&token), SmtToken::EndOfFile) {
                                 return Ok(ControlFlow::Break(()));
                             }
                             self.unconsumed += 1;

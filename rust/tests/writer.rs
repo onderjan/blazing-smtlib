@@ -16,7 +16,7 @@ use blazing_smtlib::{
         SmtBinDigitsBuf, SmtCommentBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf,
         SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
     },
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken, SmtTokenCategory},
 };
 
 const VERSIONS: [SmtVersion; 4] = [
@@ -81,7 +81,7 @@ fn write_back(version: SmtVersion, input: &[u8]) -> WrittenBack {
 }
 
 /// Writes the token into a fresh buffer.
-fn written(token: SmtSyntaxToken<'_>, version: SmtVersion) -> Result<Vec<u8>, SmtWriteError> {
+fn written(token: SmtToken<'_>, version: SmtVersion) -> Result<Vec<u8>, SmtWriteError> {
     let mut text = Vec::new();
     token.write_smt(&mut text, version)?;
     Ok(text)
@@ -184,7 +184,7 @@ fn a_symbol_spelling_a_word_reserved_in_the_version_is_written_quoted() {
         for word in reserved_words::reserved_words() {
             let symbol = SmtSymbolBuf::new_unquoted(word.as_bytes().to_vec())
                 .expect("a reserved word is a simple symbol");
-            let text = written(SmtSyntaxToken::Symbol(symbol.view()), version)
+            let text = written(SmtToken::Symbol(symbol.view()), version)
                 .expect("a symbol is written in every version");
             let reserved = SmtReserved::from_bytes(word.as_bytes(), SmtVersion::V2_7)
                 .expect("the word is reserved in the latest version");
@@ -222,7 +222,7 @@ fn words_reserved_in_later_versions_are_quoted_only_from_those_on() {
         ("echo", SmtVersion::V2_0, SmtVersion::V2_5),
     ] {
         let symbol = SmtSymbolBuf::new_unquoted(word.as_bytes().to_vec()).expect("a symbol");
-        let token = SmtSyntaxToken::Symbol(symbol.view());
+        let token = SmtToken::Symbol(symbol.view());
         let before = written(token, unquoted_until).expect("a symbol is written");
         assert_eq!(String::from_utf8_lossy(&before), word);
         let from = written(token, quoted_from).expect("a symbol is written");
@@ -232,10 +232,10 @@ fn words_reserved_in_later_versions_are_quoted_only_from_those_on() {
     // written quoted even when it need not be
     for version in VERSIONS {
         let plain = SmtSymbolBuf::new_unquoted(b"x".to_vec()).expect("a symbol");
-        let text = written(SmtSyntaxToken::Symbol(plain.view()), version);
+        let text = written(SmtToken::Symbol(plain.view()), version);
         assert_eq!(text.expect("a symbol is written"), b"x");
         let quoted = SmtSymbolBuf::new_quoted(b"x".to_vec()).expect("a symbol");
-        let text = written(SmtSyntaxToken::Symbol(quoted.view()), version);
+        let text = written(SmtToken::Symbol(quoted.view()), version);
         assert_eq!(text.expect("a symbol is written"), b"|x|");
     }
 }
@@ -247,7 +247,7 @@ fn a_reserved_word_is_written_only_in_the_versions_that_reserve_it() {
             let reserved = SmtReserved::from_bytes(word.as_bytes(), SmtVersion::V2_7)
                 .expect("the word is reserved in the latest version");
             let mut text = Vec::new();
-            let result = SmtSyntaxToken::Reserved(reserved).write_smt(&mut text, version);
+            let result = SmtToken::Reserved(reserved).write_smt(&mut text, version);
             if reserved.is_in_version(version) {
                 result.unwrap_or_else(|err| panic!("{word} in {version:?}: {err:?}"));
                 assert_eq!(String::from_utf8_lossy(&text), reserved.as_str());
@@ -292,20 +292,20 @@ fn a_failure_of_the_writer_is_an_io_error() {
     let whitespace = SmtWhitespaceBuf::new(b" \n".to_vec()).expect("whitespace");
     let comment = SmtCommentBuf::new(b" c\n".to_vec()).expect("a comment");
     let tokens = [
-        SmtSyntaxToken::ParenOpen,
-        SmtSyntaxToken::ParenClose,
-        SmtSyntaxToken::Numeral(numeral.view()),
-        SmtSyntaxToken::Decimal(decimal.view()),
-        SmtSyntaxToken::Hexadecimal(hex.view()),
-        SmtSyntaxToken::Binary(bin.view()),
-        SmtSyntaxToken::String(string.view()),
-        SmtSyntaxToken::String(empty_string.view()),
-        SmtSyntaxToken::Keyword(keyword.view()),
-        SmtSyntaxToken::Symbol(symbol.view()),
-        SmtSyntaxToken::Symbol(quoted.view()),
-        SmtSyntaxToken::Reserved(let_word),
-        SmtSyntaxToken::Whitespace(whitespace.view()),
-        SmtSyntaxToken::Comment(comment.view()),
+        SmtToken::ParenOpen,
+        SmtToken::ParenClose,
+        SmtToken::Numeral(numeral.view()),
+        SmtToken::Decimal(decimal.view()),
+        SmtToken::Hexadecimal(hex.view()),
+        SmtToken::Binary(bin.view()),
+        SmtToken::String(string.view()),
+        SmtToken::String(empty_string.view()),
+        SmtToken::Keyword(keyword.view()),
+        SmtToken::Symbol(symbol.view()),
+        SmtToken::Symbol(quoted.view()),
+        SmtToken::Reserved(let_word),
+        SmtToken::Whitespace(whitespace.view()),
+        SmtToken::Comment(comment.view()),
     ];
     for version in VERSIONS {
         for token in tokens {
@@ -323,10 +323,10 @@ fn a_failure_of_the_writer_is_an_io_error() {
 #[test]
 fn the_end_of_the_input_writes_nothing() {
     for version in VERSIONS {
-        let text = written(SmtSyntaxToken::EndOfFile, version);
+        let text = written(SmtToken::EndOfFile, version);
         assert_eq!(text.expect("the end of the input is written"), b"");
         // not even a failing writer is written to
-        SmtSyntaxToken::EndOfFile
+        SmtToken::EndOfFile
             .write_smt(&mut FailingWriter, version)
             .expect("the end of the input touches no writer");
     }

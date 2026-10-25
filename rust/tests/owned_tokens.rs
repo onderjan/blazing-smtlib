@@ -17,7 +17,7 @@ use blazing_smtlib::{
     parser::{SmtParse, SmtParseState, SmtTermParser},
     token::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtSyntaxToken, SmtSyntaxTokenBuf, SmtTokensBuf, SmtTokensCursor,
+        SmtToken, SmtTokenBuf, SmtTokensBuf, SmtTokensCursor,
     },
 };
 
@@ -49,7 +49,7 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Keep {
             let token = cursor.syntax(&token);
             self.debugged.push(format!("{token:?}"));
             self.tokens.push(token);
-            if matches!(token, SmtSyntaxToken::EndOfFile) {
+            if matches!(token, SmtToken::EndOfFile) {
                 let kept = std::mem::take(self);
                 return Ok(ControlFlow::Break((kept.debugged, kept.tokens)));
             }
@@ -68,7 +68,7 @@ fn keep(input: &[u8]) -> (Vec<String>, SmtTokensBuf) {
 }
 
 /// The tokens as debugged.
-fn debugged<'a>(tokens: impl IntoIterator<Item = SmtSyntaxToken<'a>>) -> Vec<String> {
+fn debugged<'a>(tokens: impl IntoIterator<Item = SmtToken<'a>>) -> Vec<String> {
     tokens
         .into_iter()
         .map(|token| format!("{token:?}"))
@@ -94,11 +94,8 @@ fn appended<V: SmtAppendTokens + ?Sized>(value: &V) -> Vec<String> {
 #[test]
 fn a_token_owned_and_viewed_again_is_the_token() {
     let (expected, tokens) = keep(EVERY_KIND);
-    let owned: Vec<SmtSyntaxTokenBuf> = tokens.iter().map(SmtSyntaxToken::into_owned).collect();
-    assert_eq!(
-        debugged(owned.iter().map(SmtSyntaxTokenBuf::view)),
-        expected
-    );
+    let owned: Vec<SmtTokenBuf> = tokens.iter().map(SmtToken::into_owned).collect();
+    assert_eq!(debugged(owned.iter().map(SmtTokenBuf::view)), expected);
 }
 
 #[test]
@@ -176,12 +173,12 @@ fn discarding_skips_the_tokens_before_the_next_end_of_the_input() {
     let (_, ab) = keep(b"(a b)");
     let mut cursor = SmtTokensCursor::new(SmtVersion::V2_7);
     for token in [
-        SmtSyntaxToken::ParenOpen,
-        SmtSyntaxToken::Symbol(x),
-        SmtSyntaxToken::ParenClose,
-        SmtSyntaxToken::EndOfFile,
-        SmtSyntaxToken::Symbol(y),
-        SmtSyntaxToken::EndOfFile,
+        SmtToken::ParenOpen,
+        SmtToken::Symbol(x),
+        SmtToken::ParenClose,
+        SmtToken::EndOfFile,
+        SmtToken::Symbol(y),
+        SmtToken::EndOfFile,
     ] {
         cursor.push(token);
     }
@@ -192,46 +189,46 @@ fn discarding_skips_the_tokens_before_the_next_end_of_the_input() {
     assert_eq!(
         drain(&mut cursor),
         debugged([
-            SmtSyntaxToken::EndOfFile,
-            SmtSyntaxToken::Symbol(y),
-            SmtSyntaxToken::EndOfFile
+            SmtToken::EndOfFile,
+            SmtToken::Symbol(y),
+            SmtToken::EndOfFile
         ])
     );
     // with no end of the input ahead, every token is discarded
     cursor.clear();
-    cursor.push(SmtSyntaxToken::Symbol(x));
-    cursor.push(SmtSyntaxToken::Symbol(y));
+    cursor.push(SmtToken::Symbol(x));
+    cursor.push(SmtToken::Symbol(y));
     cursor.discard_rest();
     assert!(cursor.is_empty());
     // and so is every token pushed or appended until the end of the input:
     // the list ends with one, which is kept
-    cursor.push(SmtSyntaxToken::Symbol(x));
+    cursor.push(SmtToken::Symbol(x));
     ab.append_tokens(&mut cursor);
-    assert_eq!(drain(&mut cursor), debugged([SmtSyntaxToken::EndOfFile]));
+    assert_eq!(drain(&mut cursor), debugged([SmtToken::EndOfFile]));
     // the end of the input is kept with what follows it
-    cursor.push(SmtSyntaxToken::Symbol(x));
+    cursor.push(SmtToken::Symbol(x));
     cursor.discard_rest();
-    cursor.push(SmtSyntaxToken::Symbol(x));
+    cursor.push(SmtToken::Symbol(x));
     assert!(cursor.is_empty());
-    cursor.push(SmtSyntaxToken::EndOfFile);
-    cursor.push(SmtSyntaxToken::Symbol(y));
+    cursor.push(SmtToken::EndOfFile);
+    cursor.push(SmtToken::Symbol(y));
     assert_eq!(
         drain(&mut cursor),
-        debugged([SmtSyntaxToken::EndOfFile, SmtSyntaxToken::Symbol(y)])
+        debugged([SmtToken::EndOfFile, SmtToken::Symbol(y)])
     );
     // discarding right before the end of the input keeps it
-    cursor.push(SmtSyntaxToken::EndOfFile);
+    cursor.push(SmtToken::EndOfFile);
     cursor.discard_rest();
-    cursor.push(SmtSyntaxToken::Symbol(y));
+    cursor.push(SmtToken::Symbol(y));
     assert_eq!(
         drain(&mut cursor),
-        debugged([SmtSyntaxToken::EndOfFile, SmtSyntaxToken::Symbol(y)])
+        debugged([SmtToken::EndOfFile, SmtToken::Symbol(y)])
     );
     // clearing ends discarding
     cursor.discard_rest();
     cursor.clear();
-    cursor.push(SmtSyntaxToken::Symbol(x));
-    assert_eq!(drain(&mut cursor), debugged([SmtSyntaxToken::Symbol(x)]));
+    cursor.push(SmtToken::Symbol(x));
+    assert_eq!(drain(&mut cursor), debugged([SmtToken::Symbol(x)]));
 }
 
 #[test]
@@ -245,8 +242,8 @@ fn consuming_all_and_clearing_empty_the_cursor() {
     cursor.consume_all();
     assert!(cursor.is_empty() && cursor.next().is_none());
     // tokens pushed after consuming all are handed over
-    cursor.push(SmtSyntaxToken::ParenOpen);
-    assert_eq!(drain(&mut cursor), debugged([SmtSyntaxToken::ParenOpen]));
+    cursor.push(SmtToken::ParenOpen);
+    assert_eq!(drain(&mut cursor), debugged([SmtToken::ParenOpen]));
     // clearing removes the consumed and the unconsumed tokens alike
     for token in tokens.iter() {
         cursor.push(token);
@@ -265,12 +262,10 @@ fn a_parser_reads_from_a_tokens_cursor_and_leaves_the_rest() {
     let (_, tokens) = keep(b"(f x 1) (g)");
     let mut cursor = SmtTokensCursor::new(SmtVersion::V2_7);
     // an abstract stream: no whitespace or comments
-    for token in tokens.iter().filter(|token| {
-        !matches!(
-            token,
-            SmtSyntaxToken::Whitespace(_) | SmtSyntaxToken::Comment(_)
-        )
-    }) {
+    for token in tokens
+        .iter()
+        .filter(|token| !matches!(token, SmtToken::Whitespace(_) | SmtToken::Comment(_)))
+    {
         cursor.push(token);
     }
     let flow = SmtTermParser::default()
@@ -284,10 +279,10 @@ fn a_parser_reads_from_a_tokens_cursor_and_leaves_the_rest() {
     assert_eq!(
         drain(&mut cursor),
         debugged([
-            SmtSyntaxToken::ParenOpen,
-            SmtSyntaxToken::Symbol(SmtSymbol::new_unquoted(b"g").expect("a symbol")),
-            SmtSyntaxToken::ParenClose,
-            SmtSyntaxToken::EndOfFile,
+            SmtToken::ParenOpen,
+            SmtToken::Symbol(SmtSymbol::new_unquoted(b"g").expect("a symbol")),
+            SmtToken::ParenClose,
+            SmtToken::EndOfFile,
         ])
     );
 }
@@ -305,56 +300,56 @@ fn a_plain_value_appends_the_token_of_its_kind() {
     let whitespace = SmtWhitespace::new(b" \n").expect("whitespace");
     let comment = SmtComment::new(b" note").expect("a comment");
 
-    let cases: [(Vec<String>, Vec<String>, SmtSyntaxToken<'_>); 10] = [
+    let cases: [(Vec<String>, Vec<String>, SmtToken<'_>); 10] = [
         (
             appended(&numeral),
             appended(&numeral.into_owned()),
-            SmtSyntaxToken::Numeral(numeral),
+            SmtToken::Numeral(numeral),
         ),
         (
             appended(&decimal),
             appended(&decimal.into_owned()),
-            SmtSyntaxToken::Decimal(decimal),
+            SmtToken::Decimal(decimal),
         ),
         (
             appended(&hex),
             appended(&hex.into_owned()),
-            SmtSyntaxToken::Hexadecimal(hex),
+            SmtToken::Hexadecimal(hex),
         ),
         (
             appended(&bin),
             appended(&bin.into_owned()),
-            SmtSyntaxToken::Binary(bin),
+            SmtToken::Binary(bin),
         ),
         (
             appended(&string),
             appended(&string.into_owned()),
-            SmtSyntaxToken::String(string),
+            SmtToken::String(string),
         ),
         (
             appended(&keyword),
             appended(&keyword.into_owned()),
-            SmtSyntaxToken::Keyword(keyword),
+            SmtToken::Keyword(keyword),
         ),
         (
             appended(&unquoted),
             appended(&unquoted.into_owned()),
-            SmtSyntaxToken::Symbol(unquoted),
+            SmtToken::Symbol(unquoted),
         ),
         (
             appended(&quoted),
             appended(&quoted.into_owned()),
-            SmtSyntaxToken::Symbol(quoted),
+            SmtToken::Symbol(quoted),
         ),
         (
             appended(&whitespace),
             appended(&whitespace.into_owned()),
-            SmtSyntaxToken::Whitespace(whitespace),
+            SmtToken::Whitespace(whitespace),
         ),
         (
             appended(&comment),
             appended(&comment.into_owned()),
-            SmtSyntaxToken::Comment(comment),
+            SmtToken::Comment(comment),
         ),
     ];
     for (viewed, owned, token) in cases {
@@ -374,10 +369,10 @@ fn a_token_appends_itself_and_a_list_appends_its_tokens_in_order() {
     let reserved = SmtReserved::General(SmtGeneralReserved::Let);
     assert_eq!(
         appended(&reserved),
-        debugged([SmtSyntaxToken::Reserved(reserved)])
+        debugged([SmtToken::Reserved(reserved)])
     );
     // a slice appends each of its values in turn
-    let owned: Vec<SmtSyntaxTokenBuf> = tokens.iter().map(SmtSyntaxToken::into_owned).collect();
+    let owned: Vec<SmtTokenBuf> = tokens.iter().map(SmtToken::into_owned).collect();
     assert_eq!(appended(owned.as_slice()), expected);
     let lists = [keep(b"(a)").1, SmtTokensBuf::new(), keep(b"b c").1];
     let mut each = Vec::new();

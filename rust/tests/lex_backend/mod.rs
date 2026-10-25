@@ -38,7 +38,7 @@ use blazing_smtlib::{
     },
     lexicon::SmtDecimal,
     span::SmtLocation,
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken, SmtTokenCategory},
 };
 
 /// A location as `(offset, line, column)`, all zero-based.
@@ -192,11 +192,11 @@ impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtLexerCursor<'a>> for Collect<
         cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
-            let kind = match SmtSyntaxToken::from_lexer_token(token, self.version) {
-                SmtSyntaxToken::Symbol(symbol) => LexedKind::Symbol(symbol.as_slice().to_vec()),
-                SmtSyntaxToken::Reserved(reserved) => LexedKind::Reserved(reserved),
-                SmtSyntaxToken::Keyword(keyword) => LexedKind::Keyword(keyword.as_slice().to_vec()),
-                SmtSyntaxToken::EndOfFile => LexedKind::EndOfFile,
+            let kind = match SmtToken::from_lexer_token(token, self.version) {
+                SmtToken::Symbol(symbol) => LexedKind::Symbol(symbol.as_slice().to_vec()),
+                SmtToken::Reserved(reserved) => LexedKind::Reserved(reserved),
+                SmtToken::Keyword(keyword) => LexedKind::Keyword(keyword.as_slice().to_vec()),
+                SmtToken::EndOfFile => LexedKind::EndOfFile,
                 _ => LexedKind::Other,
             };
             self.tokens.push(LexedToken {

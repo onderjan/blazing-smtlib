@@ -17,7 +17,7 @@ use blazing_smtlib::{
     lexicon::{SmtCommentBuf, SmtNumeralBuf, SmtSymbol},
     token::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,
+        SmtToken, SmtTokensBuf, SmtTokensCursor,
     },
 };
 
@@ -58,14 +58,11 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Keep {
     ) -> Result<ControlFlow<SmtTokensBuf>, Infallible> {
         while let Some(token) = cursor.next() {
             let token = cursor.syntax(&token);
-            let layout = matches!(
-                token,
-                SmtSyntaxToken::Whitespace(_) | SmtSyntaxToken::Comment(_)
-            );
+            let layout = matches!(token, SmtToken::Whitespace(_) | SmtToken::Comment(_));
             if self.concrete || !layout {
                 self.tokens.push(token);
             }
-            if matches!(token, SmtSyntaxToken::EndOfFile) {
+            if matches!(token, SmtToken::EndOfFile) {
                 return Ok(ControlFlow::Break(std::mem::take(&mut self.tokens)));
             }
         }
@@ -211,7 +208,7 @@ fn the_compact_and_line_forms_read_back_as_the_tokens_and_are_written_alike_agai
                     tokens
                         .iter()
                         .filter_map(|token| match token {
-                            SmtSyntaxToken::Comment(comment) => {
+                            SmtToken::Comment(comment) => {
                                 let content = comment.as_slice();
                                 let content = content
                                     .strip_suffix(b"\n")
@@ -305,10 +302,7 @@ fn the_line_writer_ends_a_comment_with_a_line_feed_only_before_a_token() {
     // nor is it ended without an end of the input
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
     let comment = SmtCommentBuf::new(b" c".to_vec()).expect("a comment");
-    let tokens = [
-        SmtSyntaxToken::Symbol(x),
-        SmtSyntaxToken::Comment(comment.view()),
-    ];
+    let tokens = [SmtToken::Symbol(x), SmtToken::Comment(comment.view())];
     assert_eq!(written(tokens.as_slice(), SmtWriteStyle::Line), "x ; c");
 }
 
@@ -380,12 +374,12 @@ fn the_layout_writer_ends_a_comment_without_a_line_ending_before_a_token() {
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
     let mut tokens = SmtTokensBuf::new();
     for token in [
-        SmtSyntaxToken::Comment(open.view()),
-        SmtSyntaxToken::Symbol(x),
-        SmtSyntaxToken::Comment(ended.view()),
-        SmtSyntaxToken::Symbol(x),
-        SmtSyntaxToken::Comment(open.view()),
-        SmtSyntaxToken::ParenOpen,
+        SmtToken::Comment(open.view()),
+        SmtToken::Symbol(x),
+        SmtToken::Comment(ended.view()),
+        SmtToken::Symbol(x),
+        SmtToken::Comment(open.view()),
+        SmtToken::ParenOpen,
     ] {
         tokens.push(token);
     }
@@ -450,7 +444,7 @@ fn both_writers_fail_on_a_reserved_word_their_version_does_not_have() {
     // not written
     let lambda = SmtReserved::General(SmtGeneralReserved::Lambda);
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
-    let tokens = [SmtSyntaxToken::Reserved(lambda), SmtSyntaxToken::Symbol(x)];
+    let tokens = [SmtToken::Reserved(lambda), SmtToken::Symbol(x)];
     let mut compact_writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_6));
     let err = compact_writer
         .write(tokens.as_slice())
@@ -494,8 +488,8 @@ fn a_failure_of_the_underlying_writer_is_an_io_error_of_both_writers() {
     writer.set_version(SmtVersion::V2_6);
     // a failing write stops at the failing token
     let failing = [
-        SmtSyntaxToken::Reserved(lambda),
-        SmtSyntaxToken::Numeral(numeral.view()),
+        SmtToken::Reserved(lambda),
+        SmtToken::Numeral(numeral.view()),
     ];
     writer
         .write(failing.as_slice())
@@ -562,7 +556,7 @@ fn the_writers_consume_a_tokens_cursor_and_break_at_its_end_of_the_input() {
     assert_eq!(writer.into_inner(), b"(a b)\nc\n");
     // without an end of the input, the writer continues
     let mut cursor = SmtTokensCursor::new(SmtVersion::V2_7);
-    cursor.push(SmtSyntaxToken::ParenOpen);
+    cursor.push(SmtToken::ParenOpen);
     let mut writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_7));
     let flow = writer
         .consume(&mut cursor)

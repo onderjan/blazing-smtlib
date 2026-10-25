@@ -35,9 +35,7 @@ use blazing_smtlib::{
         SmtTermParser, SmtTuple3Parser, SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser,
         SmtTuple7Parser, SmtTuple8Parser,
     },
-    token::{
-        SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtVersionRefused,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken, SmtVersionRefused},
 };
 
 // --- Tokens as owned values ---
@@ -62,37 +60,37 @@ enum Owned {
 impl Owned {
     /// The owned token of a library token, or `None` for whitespace and
     /// comments, which the parsers are never handed.
-    fn from_syntax(token: SmtSyntaxToken<'_>) -> Option<Self> {
+    fn from_syntax(token: SmtToken<'_>) -> Option<Self> {
         Some(match token {
-            SmtSyntaxToken::ParenOpen => Owned::Open,
-            SmtSyntaxToken::ParenClose => Owned::Close,
-            SmtSyntaxToken::Numeral(value) => Owned::Numeral(value.into_owned()),
-            SmtSyntaxToken::Decimal(value) => Owned::Decimal(value.into_owned()),
-            SmtSyntaxToken::Hexadecimal(value) => Owned::Hexadecimal(value.into_owned()),
-            SmtSyntaxToken::Binary(value) => Owned::Binary(value.into_owned()),
-            SmtSyntaxToken::String(value) => Owned::String(value.into_owned()),
-            SmtSyntaxToken::Keyword(value) => Owned::Keyword(value.into_owned()),
-            SmtSyntaxToken::Symbol(value) => Owned::Symbol(value.into_owned()),
-            SmtSyntaxToken::Reserved(reserved) => Owned::Reserved(reserved),
-            SmtSyntaxToken::Whitespace(_) | SmtSyntaxToken::Comment(_) => return None,
-            SmtSyntaxToken::EndOfFile => Owned::EndOfFile,
+            SmtToken::ParenOpen => Owned::Open,
+            SmtToken::ParenClose => Owned::Close,
+            SmtToken::Numeral(value) => Owned::Numeral(value.into_owned()),
+            SmtToken::Decimal(value) => Owned::Decimal(value.into_owned()),
+            SmtToken::Hexadecimal(value) => Owned::Hexadecimal(value.into_owned()),
+            SmtToken::Binary(value) => Owned::Binary(value.into_owned()),
+            SmtToken::String(value) => Owned::String(value.into_owned()),
+            SmtToken::Keyword(value) => Owned::Keyword(value.into_owned()),
+            SmtToken::Symbol(value) => Owned::Symbol(value.into_owned()),
+            SmtToken::Reserved(reserved) => Owned::Reserved(reserved),
+            SmtToken::Whitespace(_) | SmtToken::Comment(_) => return None,
+            SmtToken::EndOfFile => Owned::EndOfFile,
         })
     }
 
     /// The token as the library views it.
-    fn syntax(&self) -> SmtSyntaxToken<'_> {
+    fn syntax(&self) -> SmtToken<'_> {
         match self {
-            Owned::Open => SmtSyntaxToken::ParenOpen,
-            Owned::Close => SmtSyntaxToken::ParenClose,
-            Owned::Numeral(value) => SmtSyntaxToken::Numeral(value.view()),
-            Owned::Decimal(value) => SmtSyntaxToken::Decimal(value.view()),
-            Owned::Hexadecimal(value) => SmtSyntaxToken::Hexadecimal(value.view()),
-            Owned::Binary(value) => SmtSyntaxToken::Binary(value.view()),
-            Owned::String(value) => SmtSyntaxToken::String(value.view()),
-            Owned::Keyword(value) => SmtSyntaxToken::Keyword(value.view()),
-            Owned::Symbol(value) => SmtSyntaxToken::Symbol(value.view()),
-            Owned::Reserved(reserved) => SmtSyntaxToken::Reserved(*reserved),
-            Owned::EndOfFile => SmtSyntaxToken::EndOfFile,
+            Owned::Open => SmtToken::ParenOpen,
+            Owned::Close => SmtToken::ParenClose,
+            Owned::Numeral(value) => SmtToken::Numeral(value.view()),
+            Owned::Decimal(value) => SmtToken::Decimal(value.view()),
+            Owned::Hexadecimal(value) => SmtToken::Hexadecimal(value.view()),
+            Owned::Binary(value) => SmtToken::Binary(value.view()),
+            Owned::String(value) => SmtToken::String(value.view()),
+            Owned::Keyword(value) => SmtToken::Keyword(value.view()),
+            Owned::Symbol(value) => SmtToken::Symbol(value.view()),
+            Owned::Reserved(reserved) => SmtToken::Reserved(*reserved),
+            Owned::EndOfFile => SmtToken::EndOfFile,
         }
     }
 }
@@ -163,7 +161,7 @@ impl<'d> SmtCursor for Piece<'d> {
     type Token = &'d Owned;
     type Lookahead = ();
 
-    fn syntax<'t>(&self, token: &'t &'d Owned) -> SmtSyntaxToken<'t> {
+    fn syntax<'t>(&self, token: &'t &'d Owned) -> SmtToken<'t> {
         token.syntax()
     }
 

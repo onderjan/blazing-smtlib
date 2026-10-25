@@ -7,7 +7,7 @@ use crate::{
         SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, expected,
         handle_err,
     },
-    token::{SmtCursor, SmtReserved, SmtSyntaxToken},
+    token::{SmtCursor, SmtReserved, SmtToken},
 };
 
 mod datatype;
@@ -109,11 +109,11 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                     // consume the peeked token
                     let _ = cursor.next();
                     match cursor.syntax(&peeked) {
-                        SmtSyntaxToken::ParenOpen => {
+                        SmtToken::ParenOpen => {
                             // open the command
                             self.state = CommandParserState::CommandOpen;
                         }
-                        SmtSyntaxToken::EndOfFile => {
+                        SmtToken::EndOfFile => {
                             // end of file here finishes the parser,
                             // which is already in its initial state
                             return Ok(ControlFlow::Break(SmtCommandOutcome::EndOfFile));
@@ -131,14 +131,14 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                     let _ = cursor.next();
                     // expect the command name
                     self.state = match cursor.syntax(&peeked) {
-                        SmtSyntaxToken::Reserved(SmtReserved::CommandName(name)) => {
+                        SmtToken::Reserved(SmtReserved::CommandName(name)) => {
                             // a command-name reserved word names a standard command
                             CommandParserState::Standard(StandardCommandKind::from_reserved(
                                 name,
                                 cursor.version(),
                             ))
                         }
-                        SmtSyntaxToken::Symbol(name) => {
+                        SmtToken::Symbol(name) => {
                             // a symbol (even a quoted one spelled like a standard command)
                             // can only name a nonstandard command
                             Self::start_nonstandard_command(handler, name)?

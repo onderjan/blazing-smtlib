@@ -29,7 +29,7 @@ use blazing_smtlib::{
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     read_smt_file,
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken},
 };
 
 /// Printed text is lexed in pieces of about this size, cut between commands.
@@ -38,28 +38,28 @@ const FLUSH_SIZE: usize = 1 << 20;
 // --- token digests ---
 
 /// Writes the text of a token as it appears in SMT-LIB, nothing for the end of input.
-fn token_text(token: &SmtSyntaxToken<'_>, out: &mut Vec<u8>) {
+fn token_text(token: &SmtToken<'_>, out: &mut Vec<u8>) {
     match token {
-        SmtSyntaxToken::ParenOpen => out.push(b'('),
-        SmtSyntaxToken::ParenClose => out.push(b')'),
-        SmtSyntaxToken::Numeral(numeral) => out.extend_from_slice(numeral.as_slice()),
-        SmtSyntaxToken::Decimal(decimal) => out.extend_from_slice(decimal.as_slice()),
-        SmtSyntaxToken::Hexadecimal(digits) => {
+        SmtToken::ParenOpen => out.push(b'('),
+        SmtToken::ParenClose => out.push(b')'),
+        SmtToken::Numeral(numeral) => out.extend_from_slice(numeral.as_slice()),
+        SmtToken::Decimal(decimal) => out.extend_from_slice(decimal.as_slice()),
+        SmtToken::Hexadecimal(digits) => {
             out.extend_from_slice(b"#x");
             out.extend_from_slice(digits.as_slice());
         }
-        SmtSyntaxToken::Binary(digits) => {
+        SmtToken::Binary(digits) => {
             out.extend_from_slice(b"#b");
             out.extend_from_slice(digits.as_slice());
         }
-        SmtSyntaxToken::String(content) => string(out, *content),
-        SmtSyntaxToken::Keyword(keyword) => self::keyword(out, *keyword),
-        SmtSyntaxToken::Symbol(symbol) => self::symbol(out, *symbol),
-        SmtSyntaxToken::Reserved(reserved) => out.extend_from_slice(reserved.as_str().as_bytes()),
-        SmtSyntaxToken::Whitespace(_) | SmtSyntaxToken::Comment(_) => {
+        SmtToken::String(content) => string(out, *content),
+        SmtToken::Keyword(keyword) => self::keyword(out, *keyword),
+        SmtToken::Symbol(symbol) => self::symbol(out, *symbol),
+        SmtToken::Reserved(reserved) => out.extend_from_slice(reserved.as_str().as_bytes()),
+        SmtToken::Whitespace(_) | SmtToken::Comment(_) => {
             unreachable!("a plain consumer is not handed whitespace or comments")
         }
-        SmtSyntaxToken::EndOfFile => {}
+        SmtToken::EndOfFile => {}
     }
 }
 
@@ -101,7 +101,7 @@ impl TokenDigest {
         }
     }
 
-    fn add(&mut self, token: &SmtSyntaxToken<'_>) {
+    fn add(&mut self, token: &SmtToken<'_>) {
         if self.exit == ExitState::Done {
             return;
         }
@@ -120,17 +120,15 @@ impl TokenDigest {
         // follow the depth to find a top-level `(exit)`
         let at_top = self.depth == 0;
         match token {
-            SmtSyntaxToken::ParenOpen => self.depth += 1,
-            SmtSyntaxToken::ParenClose => self.depth = self.depth.saturating_sub(1),
+            SmtToken::ParenOpen => self.depth += 1,
+            SmtToken::ParenClose => self.depth = self.depth.saturating_sub(1),
             _ => {}
         }
         if self.stops_at_exit {
             self.exit = match (self.exit, token) {
-                (_, SmtSyntaxToken::ParenOpen) if at_top => ExitState::AfterOpen,
+                (_, SmtToken::ParenOpen) if at_top => ExitState::AfterOpen,
                 (ExitState::AfterOpen, _) if self.text == b"exit" => ExitState::InExit,
-                (ExitState::InExit, SmtSyntaxToken::ParenClose) if self.depth == 0 => {
-                    ExitState::Done
-                }
+                (ExitState::InExit, SmtToken::ParenClose) if self.depth == 0 => ExitState::Done,
                 (ExitState::InExit, _) => ExitState::InExit,
                 _ => ExitState::Outside,
             };
@@ -153,7 +151,7 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for TokenDigest {
         let mut at_end = false;
         while let Some(token) = cursor.next() {
             let syntax = cursor.syntax(&token);
-            if matches!(syntax, SmtSyntaxToken::EndOfFile) {
+            if matches!(syntax, SmtToken::EndOfFile) {
                 at_end = true;
             }
             self.add(&syntax);
@@ -241,11 +239,11 @@ fn numeral(out: &mut Vec<u8>, numeral: SmtNumeral<'_>) {
 
 fn special_constant(out: &mut Vec<u8>, constant: SmtSpecialConstant<'_>) {
     let token = match constant {
-        SmtSpecialConstant::Numeral(numeral) => SmtSyntaxToken::Numeral(numeral),
-        SmtSpecialConstant::Decimal(decimal) => SmtSyntaxToken::Decimal(decimal),
-        SmtSpecialConstant::Hexadecimal(digits) => SmtSyntaxToken::Hexadecimal(digits),
-        SmtSpecialConstant::Binary(digits) => SmtSyntaxToken::Binary(digits),
-        SmtSpecialConstant::String(content) => SmtSyntaxToken::String(content),
+        SmtSpecialConstant::Numeral(numeral) => SmtToken::Numeral(numeral),
+        SmtSpecialConstant::Decimal(decimal) => SmtToken::Decimal(decimal),
+        SmtSpecialConstant::Hexadecimal(digits) => SmtToken::Hexadecimal(digits),
+        SmtSpecialConstant::Binary(digits) => SmtToken::Binary(digits),
+        SmtSpecialConstant::String(content) => SmtToken::String(content),
     };
     token_text(&token, out);
 }
@@ -1072,11 +1070,11 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Rebuild<'_> {
         while let Some(token) = cursor.next() {
             let syntax = cursor.syntax(&token);
             match syntax {
-                SmtSyntaxToken::EndOfFile => at_end = true,
+                SmtToken::EndOfFile => at_end = true,
                 // after a top-level `(exit)` the input is discarded, nothing is rebuilt
                 _ if self.mismatch.is_some() || self.exit.exit == ExitState::Done => {}
                 // layout is copied from the input, so it matches by construction
-                SmtSyntaxToken::Whitespace(_) | SmtSyntaxToken::Comment(_) => {
+                SmtToken::Whitespace(_) | SmtToken::Comment(_) => {
                     let span = token.span();
                     self.compared += span.end().offset() - span.start().offset();
                 }

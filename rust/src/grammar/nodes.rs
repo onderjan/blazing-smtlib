@@ -9,7 +9,7 @@ use crate::{
         SmtSymbolBuf,
     },
     parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
-    token::{SmtAppendTokens, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtTokensCursor},
+    token::{SmtAppendTokens, SmtGeneralReserved, SmtReserved, SmtToken, SmtTokensCursor},
 };
 
 #[derive(Debug, Clone)]
@@ -749,8 +749,8 @@ impl<'a> SmtPatternApplication<'a> {
 
 fn append_index<'a>(index: SmtIndex<'a>, tokens: &mut SmtTokensCursor<'a>) {
     tokens.push(match index {
-        SmtIndex::Numeral(numeral) => SmtSyntaxToken::Numeral(numeral),
-        SmtIndex::Symbol(symbol) => SmtSyntaxToken::Symbol(symbol),
+        SmtIndex::Numeral(numeral) => SmtToken::Numeral(numeral),
+        SmtIndex::Symbol(symbol) => SmtToken::Symbol(symbol),
     });
 }
 
@@ -764,16 +764,16 @@ fn append_indices<'a>(indices: SmtIndices<'a>, tokens: &mut SmtTokensCursor<'a>)
 fn append_ident<'a>(ident: SmtIdent<'a>, tokens: &mut SmtTokensCursor<'a>) {
     if ident.indices.is_empty() {
         // just the symbol
-        tokens.push(SmtSyntaxToken::Symbol(ident.name));
+        tokens.push(SmtToken::Symbol(ident.name));
     } else {
         // indexed identifier: ( _ symbol index+ ).
-        tokens.push(SmtSyntaxToken::ParenOpen);
-        tokens.push(SmtSyntaxToken::Reserved(SmtReserved::General(
+        tokens.push(SmtToken::ParenOpen);
+        tokens.push(SmtToken::Reserved(SmtReserved::General(
             SmtGeneralReserved::Underscore,
         )));
-        tokens.push(SmtSyntaxToken::Symbol(ident.name));
+        tokens.push(SmtToken::Symbol(ident.name));
         append_indices(ident.indices, tokens);
-        tokens.push(SmtSyntaxToken::ParenClose);
+        tokens.push(SmtToken::ParenClose);
     }
 }
 
@@ -787,32 +787,32 @@ fn append_qualified_ident<'a, S: SmtAppendTokens>(
         None => append_ident(ident, tokens),
         Some(sort) => {
             // use the qualification syntax: ( as identifier sort )
-            tokens.push(SmtSyntaxToken::ParenOpen);
-            tokens.push(SmtSyntaxToken::Reserved(SmtReserved::General(
+            tokens.push(SmtToken::ParenOpen);
+            tokens.push(SmtToken::Reserved(SmtReserved::General(
                 SmtGeneralReserved::As,
             )));
             append_ident(ident, tokens);
             sort.append_tokens(tokens);
-            tokens.push(SmtSyntaxToken::ParenClose);
+            tokens.push(SmtToken::ParenClose);
         }
     }
 }
 
 fn append_special_constant<'a>(constant: SmtSpecialConstant<'a>, tokens: &mut SmtTokensCursor<'a>) {
     tokens.push(match constant {
-        SmtSpecialConstant::Numeral(value) => SmtSyntaxToken::Numeral(value),
-        SmtSpecialConstant::Decimal(value) => SmtSyntaxToken::Decimal(value),
-        SmtSpecialConstant::Hexadecimal(value) => SmtSyntaxToken::Hexadecimal(value),
-        SmtSpecialConstant::Binary(value) => SmtSyntaxToken::Binary(value),
-        SmtSpecialConstant::String(value) => SmtSyntaxToken::String(value),
+        SmtSpecialConstant::Numeral(value) => SmtToken::Numeral(value),
+        SmtSpecialConstant::Decimal(value) => SmtToken::Decimal(value),
+        SmtSpecialConstant::Hexadecimal(value) => SmtToken::Hexadecimal(value),
+        SmtSpecialConstant::Binary(value) => SmtToken::Binary(value),
+        SmtSpecialConstant::String(value) => SmtToken::String(value),
     });
 }
 
 fn append_simple_pattern<'a>(pattern: SmtSimplePattern<'a>, tokens: &mut SmtTokensCursor<'a>) {
     tokens.push(match pattern {
-        SmtSimplePattern::Symbol(symbol) => SmtSyntaxToken::Symbol(symbol),
+        SmtSimplePattern::Symbol(symbol) => SmtToken::Symbol(symbol),
         SmtSimplePattern::Wildcard => {
-            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore))
+            SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore))
         }
     });
 }
@@ -829,10 +829,10 @@ fn append_pattern_application<'a>(
     tokens: &mut SmtTokensCursor<'a>,
 ) {
     // use the pattern application syntax: ( constructor pattern+ )
-    tokens.push(SmtSyntaxToken::ParenOpen);
-    tokens.push(SmtSyntaxToken::Symbol(application.constructor));
+    tokens.push(SmtToken::ParenOpen);
+    tokens.push(SmtToken::Symbol(application.constructor));
     append_simple_patterns(application.args, tokens);
-    tokens.push(SmtSyntaxToken::ParenClose);
+    tokens.push(SmtToken::ParenClose);
 }
 
 fn append_pattern<'a>(pattern: SmtPattern<'a>, tokens: &mut SmtTokensCursor<'a>) {
@@ -909,10 +909,10 @@ where
             append_ident(self.ident, tokens);
         } else {
             // use the syntax for a sort with arguments: ( identifier sort+ )
-            tokens.push(SmtSyntaxToken::ParenOpen);
+            tokens.push(SmtToken::ParenOpen);
             append_ident(self.ident, tokens);
             self.args.append_tokens(tokens);
-            tokens.push(SmtSyntaxToken::ParenClose);
+            tokens.push(SmtToken::ParenClose);
         }
     }
 }
@@ -924,10 +924,10 @@ where
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         // use the application syntax: ( function term+ )
-        tokens.push(SmtSyntaxToken::ParenOpen);
+        tokens.push(SmtToken::ParenOpen);
         self.function.append_tokens(tokens);
         self.args.append_tokens(tokens);
-        tokens.push(SmtSyntaxToken::ParenClose);
+        tokens.push(SmtToken::ParenClose);
     }
 }
 
@@ -952,12 +952,12 @@ where
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         match self {
             Self::SpecialConstant(constant) => append_special_constant(*constant, tokens),
-            Self::Symbol(symbol) => tokens.push(SmtSyntaxToken::Symbol(*symbol)),
+            Self::Symbol(symbol) => tokens.push(SmtToken::Symbol(*symbol)),
             Self::SExprs(s_exprs) => {
                 // the S-expressions are enclosed in parentheses: ( s_expr* )
-                tokens.push(SmtSyntaxToken::ParenOpen);
+                tokens.push(SmtToken::ParenOpen);
                 s_exprs.append_tokens(tokens);
-                tokens.push(SmtSyntaxToken::ParenClose);
+                tokens.push(SmtToken::ParenClose);
             }
         }
     }
@@ -970,14 +970,14 @@ where
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         match self {
             Self::SpecialConstant(constant) => append_special_constant(*constant, tokens),
-            Self::Symbol(symbol) => tokens.push(SmtSyntaxToken::Symbol(*symbol)),
-            Self::Reserved(reserved) => tokens.push(SmtSyntaxToken::Reserved(*reserved)),
-            Self::Keyword(keyword) => tokens.push(SmtSyntaxToken::Keyword(*keyword)),
+            Self::Symbol(symbol) => tokens.push(SmtToken::Symbol(*symbol)),
+            Self::Reserved(reserved) => tokens.push(SmtToken::Reserved(*reserved)),
+            Self::Keyword(keyword) => tokens.push(SmtToken::Keyword(*keyword)),
             Self::SExprs(s_exprs) => {
                 // the S-expressions are enclosed in parentheses: ( s_expr* )
-                tokens.push(SmtSyntaxToken::ParenOpen);
+                tokens.push(SmtToken::ParenOpen);
                 s_exprs.append_tokens(tokens);
-                tokens.push(SmtSyntaxToken::ParenClose);
+                tokens.push(SmtToken::ParenClose);
             }
         }
     }

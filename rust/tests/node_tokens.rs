@@ -20,7 +20,7 @@ use blazing_smtlib::{
     read_smt,
     token::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,
+        SmtToken, SmtTokensBuf, SmtTokensCursor,
     },
 };
 
@@ -43,7 +43,7 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Keep {
     ) -> Result<ControlFlow<SmtTokensBuf>, Infallible> {
         while let Some(token) = cursor.next() {
             match cursor.syntax(&token) {
-                SmtSyntaxToken::EndOfFile => {
+                SmtToken::EndOfFile => {
                     return Ok(ControlFlow::Break(std::mem::take(&mut self.tokens)));
                 }
                 token => self.tokens.push(token),
@@ -85,21 +85,21 @@ impl Build {
         Self(SmtTokensBuf::new())
     }
 
-    fn token(mut self, token: SmtSyntaxToken<'_>) -> Self {
+    fn token(mut self, token: SmtToken<'_>) -> Self {
         self.0.push(token);
         self
     }
 
     fn word(self, word: SmtGeneralReserved) -> Self {
-        self.token(SmtSyntaxToken::Reserved(SmtReserved::General(word)))
+        self.token(SmtToken::Reserved(SmtReserved::General(word)))
     }
 
     fn open(self) -> Self {
-        self.token(SmtSyntaxToken::ParenOpen)
+        self.token(SmtToken::ParenOpen)
     }
 
     fn close(self) -> Self {
-        self.token(SmtSyntaxToken::ParenClose)
+        self.token(SmtToken::ParenClose)
     }
 
     fn value<V: SmtAppendTokens + ?Sized>(mut self, value: &V) -> Self {

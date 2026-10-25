@@ -3,7 +3,7 @@ use std::fmt;
 use crate::{
     SmtVersion,
     span::SmtSpan,
-    token::{SmtCursor, SmtLookahead, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused},
+    token::{SmtCursor, SmtLookahead, SmtToken, SmtTokenCategory, SmtVersionRefused},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -185,8 +185,8 @@ impl<'a> SmtCursor for SmtLexerCursor<'a> {
     type Lookahead = SmtLexerWindow<'a>;
 
     #[inline]
-    fn syntax<'t>(&self, token: &'t SmtLexerToken) -> SmtSyntaxToken<'t> {
-        SmtSyntaxToken::from_lexer_token(*token, self.version)
+    fn syntax<'t>(&self, token: &'t SmtLexerToken) -> SmtToken<'t> {
+        SmtToken::from_lexer_token(*token, self.version)
     }
 
     #[inline]
@@ -278,7 +278,7 @@ impl<'a> SmtLookahead<SmtLexerToken<'a>> for SmtLexerWindow<'a> {
         Some(token)
     }
 
-    fn syntax<'t>(&self, token: &'t SmtLexerToken<'a>) -> SmtSyntaxToken<'t> {
-        SmtSyntaxToken::from_lexer_token(*token, self.version)
+    fn syntax<'t>(&self, token: &'t SmtLexerToken<'a>) -> SmtToken<'t> {
+        SmtToken::from_lexer_token(*token, self.version)
     }
 }

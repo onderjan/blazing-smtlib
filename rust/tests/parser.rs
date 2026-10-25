@@ -28,9 +28,7 @@ use blazing_smtlib::{
         SmtSyntaxErrorKind,
     },
     span::SmtSpan,
-    token::{
-        SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokenCategory, SmtVersionRefused},
 };
 
 #[test]
@@ -1218,7 +1216,7 @@ impl<Z: SmtCursor> SmtCursor for OneToken<'_, Z> {
     type Token = Z::Token;
     type Lookahead = ();
 
-    fn syntax<'t>(&self, token: &'t Z::Token) -> SmtSyntaxToken<'t> {
+    fn syntax<'t>(&self, token: &'t Z::Token) -> SmtToken<'t> {
         self.inner.syntax(token)
     }
 
@@ -1275,11 +1273,11 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Observing<'_> {
         while let Some(token) = cursor.peek() {
             self.spans.push(token.span());
             match cursor.syntax(&token) {
-                SmtSyntaxToken::Whitespace(_) => {
+                SmtToken::Whitespace(_) => {
                     cursor.next();
                     continue;
                 }
-                SmtSyntaxToken::Comment(_) => {
+                SmtToken::Comment(_) => {
                     self.handler.0.commands.push("comment");
                     cursor.next();
                     continue;

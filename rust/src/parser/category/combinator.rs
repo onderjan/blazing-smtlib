@@ -6,7 +6,7 @@ use crate::{
         SmtCloseParenParser, SmtOpenParenParser, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, expected,
     },
-    token::{SmtCursor, SmtSyntaxToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// Parses using the first parser, then the second, then returns the result tuple.
@@ -379,7 +379,7 @@ impl<T> ClosedMultipleResource<T> {
         while let Some(token) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
-                if matches!(cursor.syntax(&token), SmtSyntaxToken::ParenClose) {
+                if matches!(cursor.syntax(&token), SmtToken::ParenClose) {
                     // consume the peeked closing parenthesis
                     let _ = cursor.next();
                     return Ok(ControlFlow::Break(self.items.drain(..).collect()));
@@ -509,7 +509,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
         while let Some(peeked) = cursor.peek() {
             if self.outside {
                 // we are outside, a closing parenthesis ends processing
-                if matches!(cursor.syntax(&peeked), SmtSyntaxToken::ParenClose) {
+                if matches!(cursor.syntax(&peeked), SmtToken::ParenClose) {
                     // consume the peeked closing parenthesis
                     let _ = cursor.next();
                     let results = self.results.drain(..).collect();

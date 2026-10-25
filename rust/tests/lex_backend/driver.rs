@@ -16,7 +16,7 @@ use blazing_smtlib::{
     lexicon::SmtDecimal,
     span::SmtLocation,
     token::{
-        SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtReserved, SmtSyntaxToken,
+        SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtReserved, SmtToken,
         SmtTokenCategory,
     },
 };
@@ -95,9 +95,9 @@ fn version_name(version: SmtVersion) -> &'static str {
 }
 
 fn token_line(token: SmtLexerToken<'_>, version: SmtVersion) -> String {
-    let reserved = match SmtSyntaxToken::from_lexer_token(token, version) {
-        SmtSyntaxToken::Reserved(SmtReserved::General(_)) => "general",
-        SmtSyntaxToken::Reserved(SmtReserved::CommandName(_)) => "command",
+    let reserved = match SmtToken::from_lexer_token(token, version) {
+        SmtToken::Reserved(SmtReserved::General(_)) => "general",
+        SmtToken::Reserved(SmtReserved::CommandName(_)) => "command",
         _ => "-",
     };
     format!(

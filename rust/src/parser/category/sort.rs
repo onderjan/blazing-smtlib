@@ -6,7 +6,7 @@ use crate::{
         Arena, IdentHandle, IdentSlot, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, SmtSyntaxExpected, expected, handle_err, parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
 /// A parser that reads an SMT-LIB sort.
@@ -129,7 +129,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                     debug_assert!(self.is_pristine(), "must be pristine when starting");
                 }
                 match cursor.syntax(&token) {
-                    SmtSyntaxToken::Symbol(name) => {
+                    SmtToken::Symbol(name) => {
                         // the sort consists just of a single-symbol ident
                         let name = arena.push_symbol(name);
                         let ident = IdentHandle {
@@ -138,12 +138,12 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                         };
                         ControlFlow::Break((ident, arena.sorts.len()))
                     }
-                    SmtSyntaxToken::ParenOpen => {
+                    SmtToken::ParenOpen => {
                         // move the state to open
                         self.state = State::Open;
                         ControlFlow::Continue(())
                     }
-                    SmtSyntaxToken::ParenClose => {
+                    SmtToken::ParenClose => {
                         match self.levels.pop() {
                             Some(last_level) => {
                                 // close the last level
@@ -177,15 +177,13 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
             State::Open => {
                 // decide how to continue
                 let state = match cursor.syntax(&token) {
-                    SmtSyntaxToken::Reserved(SmtReserved::General(
-                        SmtGeneralReserved::Underscore,
-                    )) => {
+                    SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                         // this is a sort consisting just of an indexed identifier
                         // move the ident slot after underscore
                         ident_slot.move_after_underscore();
                         State::IdentOnly
                     }
-                    SmtSyntaxToken::Symbol(name) => {
+                    SmtToken::Symbol(name) => {
                         // non-indexed ident starting sort
                         let name = arena.push_symbol(name);
                         let ident = IdentHandle {
@@ -198,7 +196,7 @@ impl<H: SmtHandler + ?Sized> SortSlot<H> {
                         });
                         State::Start
                     }
-                    SmtSyntaxToken::ParenOpen => {
+                    SmtToken::ParenOpen => {
                         // indexed ident starting sort
                         // move the ident slot after opening parenthesis
                         ident_slot.move_after_open_paren();

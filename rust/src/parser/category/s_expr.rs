@@ -7,7 +7,7 @@ use crate::{
         Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected,
         category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtCursor, SmtSyntaxToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// A parser that reads an SMT-LIB S-expression.
@@ -96,8 +96,8 @@ impl SExprSlot {
         }
 
         let s_expr = match cursor.syntax(&token) {
-            SmtSyntaxToken::Symbol(symbol) => SmtSExpr::Symbol(symbol),
-            SmtSyntaxToken::Reserved(reserved) => {
+            SmtToken::Symbol(symbol) => SmtSExpr::Symbol(symbol),
+            SmtToken::Reserved(reserved) => {
                 // reserved words are only allowed in S-expressions since SMT-LIB 2.6
                 if cursor.version() >= SmtVersion::V2_6 {
                     SmtSExpr::Reserved(reserved)
@@ -107,15 +107,15 @@ impl SExprSlot {
                     ])));
                 }
             }
-            SmtSyntaxToken::Keyword(keyword) => SmtSExpr::Keyword(keyword),
-            SmtSyntaxToken::ParenOpen => {
+            SmtToken::Keyword(keyword) => SmtSExpr::Keyword(keyword),
+            SmtToken::ParenOpen => {
                 // add a new level, remember where its S-expressions will start in the arena
                 self.levels.push(Level {
                     arena_s_exprs_start: arena.s_exprs.len(),
                 });
                 return Ok(ControlFlow::Continue(()));
             }
-            SmtSyntaxToken::ParenClose => {
+            SmtToken::ParenClose => {
                 // try to pop the last level
                 let Some(last_level) = self.levels.pop() else {
                     // no last level, all that we received was ")"

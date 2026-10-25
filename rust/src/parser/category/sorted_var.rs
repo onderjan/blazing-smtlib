@@ -8,7 +8,7 @@ use crate::{
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SortSlot, SymbolHandle,
         parse_by_token,
     },
-    token::{SmtCursor, SmtSyntaxToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
@@ -138,7 +138,7 @@ impl<H: SmtHandler + ?Sized> SortedVarSlot<H> {
 
         if self.is_open {
             // after "(", waiting for the name, which goes to the arena text
-            let SmtSyntaxToken::Symbol(name) = cursor.syntax(&token) else {
+            let SmtToken::Symbol(name) = cursor.syntax(&token) else {
                 return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
                     SmtSyntaxExpected::Symbol,
                 ])));

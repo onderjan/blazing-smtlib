@@ -8,7 +8,7 @@ use crate::{
         Arena, IdentHandle, IndexHandle, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected, parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
 /// A parser that reads an SMT-LIB identifier.
@@ -152,11 +152,11 @@ impl IdentSlot {
             State::Start => {
                 debug_assert!(self.is_pristine(), "must be pristine when starting");
                 match cursor.syntax(&token) {
-                    SmtSyntaxToken::Symbol(name) => {
+                    SmtToken::Symbol(name) => {
                         // a simple identifier
                         return Ok(ControlFlow::Break(arena.push_nonindexed_ident(name)));
                     }
-                    SmtSyntaxToken::ParenOpen => {
+                    SmtToken::ParenOpen => {
                         self.state = State::Open;
                     }
                     _ => {
@@ -169,7 +169,7 @@ impl IdentSlot {
                 // this must be an underscore
                 if matches!(
                     cursor.syntax(&token),
-                    SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore))
+                    SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore))
                 ) {
                     self.state = State::AfterUnderscore;
                 } else {
@@ -182,7 +182,7 @@ impl IdentSlot {
                 let name = match self.name.take() {
                     None => {
                         // we need to read the name, its indices will follow in the arena
-                        if let SmtSyntaxToken::Symbol(name) = cursor.syntax(&token) {
+                        if let SmtToken::Symbol(name) = cursor.syntax(&token) {
                             Some(self.push_name(arena, name))
                         } else {
                             return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
@@ -194,7 +194,7 @@ impl IdentSlot {
                         // we have already read the name, so we will be reading an index
                         // and ending with closing parenthesis
                         match cursor.syntax(&token) {
-                            SmtSyntaxToken::ParenClose => {
+                            SmtToken::ParenClose => {
                                 let indices_start = self.arena_indices_start;
                                 if arena.indices.len() == indices_start {
                                     let kind =
@@ -210,13 +210,13 @@ impl IdentSlot {
                                     indices_start,
                                 }));
                             }
-                            SmtSyntaxToken::Numeral(index_value) => {
+                            SmtToken::Numeral(index_value) => {
                                 let index = arena.push_text(index_value.as_slice());
                                 arena.indices.push(IndexHandle::Numeral(index));
                             }
                             // symbol index is only allowed since SMT-LIB 2.5,
                             // otherwise the fallback is taken
-                            SmtSyntaxToken::Symbol(index_symbol)
+                            SmtToken::Symbol(index_symbol)
                                 if cursor.version() >= SmtVersion::V2_5 =>
                             {
                                 let index = arena.push_symbol(index_symbol);

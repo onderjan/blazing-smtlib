@@ -21,7 +21,7 @@ use crate::{
         },
         parse_by_token,
     },
-    token::{SmtCommandNameReserved, SmtCursor, SmtSyntaxToken},
+    token::{SmtCommandNameReserved, SmtCursor, SmtToken},
 };
 
 /// Defines the rule of one standard command: its payload parser
@@ -444,7 +444,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
         parse_by_token(cursor, |cursor, token| {
             match self.state {
                 SetInfoState::Name => {
-                    self.state = if let SmtSyntaxToken::Keyword(keyword) = cursor.syntax(&token)
+                    self.state = if let SmtToken::Keyword(keyword) = cursor.syntax(&token)
                         && keyword.as_slice() == b"smt-lib-version"
                     {
                         SetInfoState::Version
@@ -454,7 +454,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SetInfoParser {
                 }
                 SetInfoState::Version => {
                     // only a decimal that converts to a version names one
-                    let version = if let SmtSyntaxToken::Decimal(decimal) = cursor.syntax(&token) {
+                    let version = if let SmtToken::Decimal(decimal) = cursor.syntax(&token) {
                         SmtVersion::from_decimal(decimal)
                     } else {
                         None
@@ -543,15 +543,15 @@ impl<H: SmtCommandHandler> SmtParse<H> for PropLiteralParser {
         //    in turn, then move back to Start.
         parse_by_token(cursor, |cursor, token| {
             self.state = match (&self.state, cursor.syntax(&token)) {
-                (PropLiteralState::Start, SmtSyntaxToken::Symbol(_)) => PropLiteralState::Start,
-                (PropLiteralState::Start, SmtSyntaxToken::ParenOpen) => PropLiteralState::Not,
-                (PropLiteralState::Not, SmtSyntaxToken::Symbol(symbol))
+                (PropLiteralState::Start, SmtToken::Symbol(_)) => PropLiteralState::Start,
+                (PropLiteralState::Start, SmtToken::ParenOpen) => PropLiteralState::Not,
+                (PropLiteralState::Not, SmtToken::Symbol(symbol))
                     if symbol.as_slice() == b"not" =>
                 {
                     PropLiteralState::Negated
                 }
-                (PropLiteralState::Negated, SmtSyntaxToken::Symbol(_)) => PropLiteralState::Close,
-                (PropLiteralState::Close, SmtSyntaxToken::ParenClose) => PropLiteralState::Start,
+                (PropLiteralState::Negated, SmtToken::Symbol(_)) => PropLiteralState::Close,
+                (PropLiteralState::Close, SmtToken::ParenClose) => PropLiteralState::Start,
                 _ => {
                     return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
                         SmtSyntaxExpected::PropositionalLiteral,

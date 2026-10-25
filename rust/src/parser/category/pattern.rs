@@ -8,7 +8,7 @@ use crate::{
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected,
         parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
 pub struct SmtSimplePatternParser {
@@ -41,8 +41,8 @@ impl SmtSimplePatternParser {
         token: &'t Z::Token,
     ) -> Result<SmtSimplePattern<'t>, SmtParseError<H::Error>> {
         let result = match cursor.syntax(token) {
-            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
-            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
+            SmtToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
+            SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
                 if underscore_wildcard_allowed(cursor.version()) {
                     Some(SmtSimplePattern::Wildcard)
@@ -199,7 +199,7 @@ impl PatternSlot {
 
         if let Some(constructor) = self.constructor.take() {
             // step 3: parsing the arguments
-            if matches!(cursor.syntax(token), SmtSyntaxToken::ParenClose) {
+            if matches!(cursor.syntax(token), SmtToken::ParenClose) {
                 // there must be at least one argument to the constructor
                 let args_end = arena.simple_patterns.len();
                 if args_end == self.arena_args_start {
@@ -228,7 +228,7 @@ impl PatternSlot {
 
         if self.is_open {
             // step 2: expecting the constructor, which goes to the arena text
-            let SmtSyntaxToken::Symbol(constructor) = cursor.syntax(token) else {
+            let SmtToken::Symbol(constructor) = cursor.syntax(token) else {
                 return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
                     SmtSyntaxExpected::Symbol,
                 ])));
@@ -243,8 +243,8 @@ impl PatternSlot {
         // step 1: expecting a simple pattern or an opening parenthesis
         debug_assert!(self.is_pristine(), "must be pristine when starting");
         let result = match cursor.syntax(token) {
-            SmtSyntaxToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
-            SmtSyntaxToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
+            SmtToken::Symbol(symbol) => Some(SmtSimplePattern::Symbol(symbol)),
+            SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Underscore)) => {
                 // the underscore wildcard is not allowed in every version
                 if underscore_wildcard_allowed(cursor.version()) {
                     Some(SmtSimplePattern::Wildcard)
@@ -252,7 +252,7 @@ impl PatternSlot {
                     None
                 }
             }
-            SmtSyntaxToken::ParenOpen => {
+            SmtToken::ParenOpen => {
                 // move to constructor parsing
                 self.is_open = true;
                 return Ok(ControlFlow::Continue(()));

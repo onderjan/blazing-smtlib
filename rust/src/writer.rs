@@ -8,7 +8,7 @@ use std::{
 use crate::{
     SmtVersion,
     token::{
-        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
+        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken,
         SmtTokensCursor,
     },
 };
@@ -241,7 +241,7 @@ impl<W: Write> SmtWriter<W> {
 
     /// Writes the token, returning whether it ended the input.
     #[inline]
-    fn write_token(&mut self, token: SmtSyntaxToken<'_>) -> Result<bool, SmtWriteError> {
+    fn write_token(&mut self, token: SmtToken<'_>) -> Result<bool, SmtWriteError> {
         match &mut self.position {
             Position::Line(position) => position.write_token(&mut self.writer, self.version, token),
             Position::Layout(position) => {
@@ -305,11 +305,11 @@ impl LinePosition {
         &mut self,
         writer: &mut W,
         version: SmtVersion,
-        token: SmtSyntaxToken<'_>,
+        token: SmtToken<'_>,
     ) -> Result<bool, SmtWriteError> {
         match token {
-            SmtSyntaxToken::Whitespace(_) => return Ok(false),
-            SmtSyntaxToken::EndOfFile => {
+            SmtToken::Whitespace(_) => return Ok(false),
+            SmtToken::EndOfFile => {
                 // the line is ended only if another input follows
                 if *self != Self::Start {
                     *self = Self::AfterInput;
@@ -322,12 +322,12 @@ impl LinePosition {
             // anything after a comment would be a part of it,
             // and each input starts on a line of its own
             (Self::AfterComment | Self::AfterInput, _) => writer.write_all(b"\n")?,
-            (Self::AfterToken, SmtSyntaxToken::ParenClose) => {}
+            (Self::AfterToken, SmtToken::ParenClose) => {}
             (Self::AfterToken, _) => writer.write_all(b" ")?,
             _ => {}
         }
         *self = match token {
-            SmtSyntaxToken::Comment(comment) => {
+            SmtToken::Comment(comment) => {
                 // the comment is ended by a line feed only if a token follows
                 let content = comment.as_slice();
                 let content = match content.last() {
@@ -338,7 +338,7 @@ impl LinePosition {
                 writer.write_all(content)?;
                 Self::AfterComment
             }
-            SmtSyntaxToken::ParenOpen => {
+            SmtToken::ParenOpen => {
                 writer.write_all(b"(")?;
                 Self::AfterOpen
             }
@@ -386,17 +386,17 @@ impl LayoutPosition {
         &mut self,
         writer: &mut W,
         version: SmtVersion,
-        token: SmtSyntaxToken<'_>,
+        token: SmtToken<'_>,
     ) -> Result<bool, SmtWriteError> {
         let is_atom = !matches!(
             token,
-            SmtSyntaxToken::ParenOpen
-                | SmtSyntaxToken::ParenClose
-                | SmtSyntaxToken::Whitespace(_)
-                | SmtSyntaxToken::Comment(_)
-                | SmtSyntaxToken::EndOfFile
+            SmtToken::ParenOpen
+                | SmtToken::ParenClose
+                | SmtToken::Whitespace(_)
+                | SmtToken::Comment(_)
+                | SmtToken::EndOfFile
         );
-        if matches!(token, SmtSyntaxToken::EndOfFile) {
+        if matches!(token, SmtToken::EndOfFile) {
             self.input_ended = true;
             return Ok(true);
         }
@@ -417,11 +417,11 @@ impl LayoutPosition {
         }
         token.write_smt(writer, version)?;
         self.last = match token {
-            SmtSyntaxToken::Whitespace(whitespace) => match whitespace.as_slice().last() {
+            SmtToken::Whitespace(whitespace) => match whitespace.as_slice().last() {
                 Some(b'\n') => LayoutLast::LineStart,
                 _ => LayoutLast::Delimiter,
             },
-            SmtSyntaxToken::Comment(comment) => match comment.as_slice().last() {
+            SmtToken::Comment(comment) => match comment.as_slice().last() {
                 Some(b'\n') => LayoutLast::LineStart,
                 Some(b'\r') => LayoutLast::Delimiter,
                 _ => LayoutLast::OpenComment,
@@ -465,11 +465,11 @@ impl CompactPosition {
         &mut self,
         writer: &mut W,
         version: SmtVersion,
-        token: SmtSyntaxToken<'_>,
+        token: SmtToken<'_>,
     ) -> Result<bool, SmtWriteError> {
         match token {
-            SmtSyntaxToken::Whitespace(_) => {}
-            SmtSyntaxToken::Comment(comment) => {
+            SmtToken::Whitespace(_) => {}
+            SmtToken::Comment(comment) => {
                 if self.line != CompactLine::Start {
                     writer.write_all(b"\n")?;
                 }
@@ -484,7 +484,7 @@ impl CompactPosition {
                 writer.write_all(b"\n")?;
                 self.line = CompactLine::Start;
             }
-            SmtSyntaxToken::EndOfFile => {
+            SmtToken::EndOfFile => {
                 if self.line != CompactLine::Start {
                     writer.write_all(b"\n")?;
                 }
@@ -492,7 +492,7 @@ impl CompactPosition {
                 self.line = CompactLine::Start;
                 return Ok(true);
             }
-            SmtSyntaxToken::ParenOpen => {
+            SmtToken::ParenOpen => {
                 if self.line == CompactLine::AfterToken {
                     writer.write_all(b" ")?;
                 }
@@ -500,7 +500,7 @@ impl CompactPosition {
                 self.depth += 1;
                 self.line = CompactLine::AfterOpen;
             }
-            SmtSyntaxToken::ParenClose => {
+            SmtToken::ParenClose => {
                 writer.write_all(b")")?;
                 // a closing parenthesis outside of parentheses ends an item too
                 self.depth = self.depth.saturating_sub(1);

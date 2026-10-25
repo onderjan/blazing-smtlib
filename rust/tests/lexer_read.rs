@@ -17,7 +17,7 @@ use blazing_smtlib::{
         SmtLexicalErrorKind,
     },
     span::SmtLocation,
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken},
 };
 
 /// A consumer that keeps the abstract tokens as debugged, and discards the
@@ -41,7 +41,7 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Tokens {
     ) -> Result<ControlFlow<Vec<String>>, Infallible> {
         while let Some(token) = cursor.next() {
             let token = cursor.syntax(&token);
-            if matches!(token, SmtSyntaxToken::EndOfFile) {
+            if matches!(token, SmtToken::EndOfFile) {
                 return Ok(ControlFlow::Break(std::mem::take(&mut self.tokens)));
             }
             self.tokens.push(format!("{token:?}"));

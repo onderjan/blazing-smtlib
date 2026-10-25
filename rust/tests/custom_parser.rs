@@ -22,7 +22,7 @@ use blazing_smtlib::{
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SmtTermParser, SmtVersionErrorKind,
     },
     read_smt,
-    token::{SmtCursor, SmtSyntaxToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// The error of the handlers' own.
@@ -148,10 +148,10 @@ impl<H: SmtHandler<Error = Error>> SmtParse<H> for Failing {
         while let Some(token) = cursor.next() {
             self.taken += 1;
             match cursor.syntax(&token) {
-                SmtSyntaxToken::ParenClose | SmtSyntaxToken::EndOfFile => {
+                SmtToken::ParenClose | SmtToken::EndOfFile => {
                     return Ok(ControlFlow::Break(std::mem::take(&mut self.taken)));
                 }
-                SmtSyntaxToken::Symbol(symbol) => match symbol.as_slice() {
+                SmtToken::Symbol(symbol) => match symbol.as_slice() {
                     b"syntax" => {
                         return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
                             SmtSyntaxExpected::Term,

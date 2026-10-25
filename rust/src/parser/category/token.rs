@@ -4,7 +4,7 @@ use crate::{
     SmtHandler,
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected},
-    token::{SmtCursor, SmtSyntaxToken, SmtTokenCategory},
+    token::{SmtCursor, SmtToken, SmtTokenCategory},
 };
 
 pub struct SmtSymbolParser {
@@ -36,7 +36,7 @@ impl SmtSymbolParser {
         token: Z::Token,
     ) -> Result<SmtSymbolBuf, SmtParseError<H::Error>> {
         match cursor.syntax(&token) {
-            SmtSyntaxToken::Symbol(symbol) => Ok(symbol.into_owned()),
+            SmtToken::Symbol(symbol) => Ok(symbol.into_owned()),
             _ => Err(SmtParseError::syntax(SmtSyntaxErrorKind::Expected(&[
                 SmtSyntaxExpected::Symbol,
             ]))),
@@ -122,10 +122,10 @@ macro_rules! token_parser {
     };
 }
 
-token_parser!(SmtOpenParenParser, (), ParenOpen, SmtSyntaxToken::ParenOpen => ());
-token_parser!(SmtCloseParenParser, (), ParenClose, SmtSyntaxToken::ParenClose => ());
+token_parser!(SmtOpenParenParser, (), ParenOpen, SmtToken::ParenOpen => ());
+token_parser!(SmtCloseParenParser, (), ParenClose, SmtToken::ParenClose => ());
 
-token_parser!(SmtNumeralParser, SmtNumeralBuf, Numeral, SmtSyntaxToken::Numeral(numeral) => numeral.into_owned());
+token_parser!(SmtNumeralParser, SmtNumeralBuf, Numeral, SmtToken::Numeral(numeral) => numeral.into_owned());
 
-token_parser!(SmtKeywordParser, SmtKeywordBuf, Keyword, SmtSyntaxToken::Keyword(keyword) => keyword.into_owned());
-token_parser!(SmtStringParser, SmtStringContentBuf, String, SmtSyntaxToken::String(string) => string.into_owned());
+token_parser!(SmtKeywordParser, SmtKeywordBuf, Keyword, SmtToken::Keyword(keyword) => keyword.into_owned());
+token_parser!(SmtStringParser, SmtStringContentBuf, String, SmtToken::String(string) => string.into_owned());
