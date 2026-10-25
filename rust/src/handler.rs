@@ -3,9 +3,9 @@ use std::{convert::Infallible, error::Error, fmt, fmt::Debug};
 use crate::{
     SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures,
-        SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern, SmtQuantifierKind, SmtSExpr,
-        SmtSort, SmtSortArities, SmtSymbols, SmtTerm,
+        SmtAttributeValue, SmtBindings, SmtConstructors, SmtFunctionSignature,
+        SmtFunctionSignatures, SmtMatchCases, SmtMultiple, SmtPattern, SmtQuantifierKind, SmtSExpr,
+        SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
     },
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol, SmtSymbolBuf},
     parser::SmtParse,
@@ -54,14 +54,14 @@ pub trait SmtHandler {
 
     fn start_let(
         &mut self,
-        bindings: SmtNamedValues<'_, Self::Term>,
+        bindings: SmtBindings<'_, Self::Term>,
     ) -> Result<Self::Scope, Self::Error>;
     fn end_let(&mut self, scope: Self::Scope, body: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        vars: SmtNamedValues<'_, Self::Sort>,
+        vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<Self::Scope, Self::Error>;
     fn end_quantifier(
         &mut self,
@@ -72,7 +72,7 @@ pub trait SmtHandler {
 
     fn start_lambda(
         &mut self,
-        vars: SmtNamedValues<'_, Self::Sort>,
+        vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<Self::Scope, Self::Error>;
     fn end_lambda(
         &mut self,
@@ -1007,7 +1007,7 @@ impl SmtHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn start_let(&mut self, _bindings: SmtNamedValues<'_, Self::Term>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -1022,7 +1022,7 @@ impl SmtHandler for SmtSyntaxChecker {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtNamedValues<'_, Self::Sort>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
@@ -1037,7 +1037,7 @@ impl SmtHandler for SmtSyntaxChecker {
 
     fn start_lambda(
         &mut self,
-        _vars: SmtNamedValues<'_, Self::Sort>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }

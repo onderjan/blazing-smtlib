@@ -176,6 +176,12 @@ pub struct SmtNamedValues<'a, V> {
     values: SmtMultiple<'a, V>,
 }
 
+/// Let bindings to be handled: the names with their terms.
+pub type SmtBindings<'a, T> = SmtNamedValues<'a, T>;
+
+/// Sorted variables to be handled: the names with their sorts.
+pub type SmtSortedVars<'a, S> = SmtNamedValues<'a, S>;
+
 impl<'a, V> SmtNamedValues<'a, V> {
     pub(crate) fn new(
         text: &'a [u8],

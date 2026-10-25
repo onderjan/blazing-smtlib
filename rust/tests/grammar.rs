@@ -6,13 +6,13 @@ use std::fmt::Debug;
 use blazing_smtlib::{
     SmtHandler, SmtVersion,
     grammar::{
-        SmtApplication, SmtAttributeValue, SmtConstructors, SmtEmptyArgumentsError,
+        SmtApplication, SmtAttributeValue, SmtBindings, SmtConstructors, SmtEmptyArgumentsError,
         SmtFunctionSignature, SmtFunctionSignatures, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf,
         SmtIndices, SmtIndicesBuf, SmtMatchCases, SmtMatchCasesBuf, SmtMultiple, SmtNamedValues,
         SmtPattern, SmtPatternApplication, SmtPatternApplicationBuf, SmtPatternBuf,
         SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
         SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort, SmtSortArities,
-        SmtSpecialConstant, SmtSpecialConstantBuf, SmtSymbols, SmtTerm,
+        SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtSymbols, SmtTerm,
     },
     lexicon::{
         SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeyword, SmtNumeralBuf,
@@ -40,7 +40,7 @@ impl SmtHandler for OpaqueHandler {
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
-    fn start_let(&mut self, _bindings: SmtNamedValues<'_, Self::Term>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -66,7 +66,7 @@ impl SmtHandler for OpaqueHandler {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtNamedValues<'_, Self::Sort>,
+        _vars: SmtSortedVars<'_, Self::Sort>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -78,7 +78,7 @@ impl SmtHandler for OpaqueHandler {
     ) -> Result<String, Infallible> {
         Ok(body)
     }
-    fn start_lambda(&mut self, _vars: SmtNamedValues<'_, Self::Sort>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -139,6 +139,8 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();
     assert_debug::<SmtNamedValues<'static, String>>();
+    assert_debug::<SmtBindings<'static, String>>();
+    assert_debug::<SmtSortedVars<'static, String>>();
     assert_debug::<SmtAttributeValue<'static, OpaqueHandler>>();
     assert_debug::<SmtSExpr<'static, OpaqueHandler>>();
     // the signature views hand their sorts over by reference, so they can be copied
