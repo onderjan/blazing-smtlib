@@ -11,7 +11,7 @@ fn main() -> Result<(), u32> {
     let _executable_name = args.next().unwrap();
     let file_path = args.next().unwrap();
 
-    match read_smt_file(&mut SmtSyntaxChecker, &PathBuf::from(file_path)) {
+    match read_smt_file(&mut SmtSyntaxChecker, PathBuf::from(file_path)) {
         Err(err) => match err.cause() {
             SmtReadErrorCause::Io(err) => {
                 eprintln!("Error reading file: {}", err);

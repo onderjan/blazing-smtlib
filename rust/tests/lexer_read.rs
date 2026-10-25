@@ -216,3 +216,21 @@ fn lexing_a_file_lexes_its_content_and_fails_to_open_with_a_zero_span() {
     assert_eq!(loc(err.span().start()), (0, 0, 0));
     assert!(err.span().is_empty());
 }
+
+#[test]
+fn a_file_is_lexed_from_a_path_of_any_of_the_usual_types() {
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("lexer-read-paths.smt2");
+    std::fs::write(&path, INPUT).expect("the test file can be written");
+    let text = path.to_str().expect("the test path is UTF-8").to_owned();
+    let mut lexer = SmtLexer::new(Tokens::default(), SmtVersion::V2_7);
+    for result in [
+        lexer.lex_file(&path),
+        lexer.lex_file(path.as_path()),
+        lexer.lex_file(text.as_str()),
+        lexer.lex_file(&text),
+        lexer.lex_file(path.clone()),
+        lexer.lex_file(text.clone()),
+    ] {
+        result.unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+    }
+}

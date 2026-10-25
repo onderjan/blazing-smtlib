@@ -320,7 +320,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     /// span at the start of the input.
     pub fn lex_file(
         &mut self,
-        path: &Path,
+        path: impl AsRef<Path>,
     ) -> Result<SmtLocated<C::Result>, SmtLexerReadError<C::Error>> {
         let file = File::open(path).map_err(|err| {
             SmtLexerReadError::new(SmtLexerReadErrorCause::Io(err), SmtSpan::new_zero())

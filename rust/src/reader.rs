@@ -160,7 +160,7 @@ impl<E> From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E> {
 /// span at the start of the input.
 pub fn read_smt_file<H: SmtCommandHandler>(
     handler: &mut H,
-    path: &Path,
+    path: impl AsRef<Path>,
 ) -> Result<(), SmtReadError<H::Error>> {
     SmtReader::script(handler, SmtVersionPosture::default(), SmtVersion::default())
         .read_file(path)
@@ -256,7 +256,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// or if the parser breaks its contract.
     pub fn read_file(
         &mut self,
-        path: &Path,
+        path: impl AsRef<Path>,
     ) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorCause::Io(err), SmtSpan::new_zero()))?;

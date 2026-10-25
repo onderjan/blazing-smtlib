@@ -678,3 +678,25 @@ fn reading_a_buffer_or_a_file_finishes_where_reading_the_slice_does() {
         assert_eq!(from_file, from_slice, "{:?}", input.escape_ascii());
     }
 }
+
+/// Paths of the usual types are accepted, which only the Rust interface
+/// shows: this test checks it itself.
+#[test]
+fn a_file_is_read_from_a_path_of_any_of_the_usual_types() {
+    use blazing_smtlib::{SmtReader, SmtSyntaxChecker, read_smt_file};
+    use std::path::PathBuf;
+
+    let path: PathBuf = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("read-paths.smt2");
+    std::fs::write(&path, b"(check-sat)\n").expect("the test file can be written");
+    let text: String = path.to_str().expect("the test path is UTF-8").to_owned();
+
+    read_smt_file(&mut SmtSyntaxChecker, &path).expect("a `&PathBuf` is read");
+    read_smt_file(&mut SmtSyntaxChecker, path.as_path()).expect("a `&Path` is read");
+    read_smt_file(&mut SmtSyntaxChecker, text.as_str()).expect("a `&str` is read");
+    read_smt_file(&mut SmtSyntaxChecker, &text).expect("a `&String` is read");
+    let mut handler = SmtSyntaxChecker;
+    let mut reader =
+        SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+    reader.read_file(text.clone()).expect("a `String` is read");
+    reader.read_file(path.clone()).expect("a `PathBuf` is read");
+}
