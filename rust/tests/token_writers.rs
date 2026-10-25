@@ -1,25 +1,30 @@
-//! Public-API tests of the writer in its three styles: the line style, which
-//! writes tokens on one line as far as comments allow; the compact style,
-//! which writes the compact form, and the canonical form when handed no
-//! comments; and the layout style, which writes tokens in the layout they
-//! are handed over in. The writer is fed by the lexer, through a cursor and
-//! by `write`.
+//! Tests of the writer in its three styles: the line style, which writes
+//! tokens on one line as far as comments allow; the compact style, which
+//! writes the compact form, and the canonical form when handed no comments;
+//! and the layout style, which writes tokens in the layout they are handed
+//! over in. The writer is fed by the lexer, through a cursor and by `write`.
 //!
-//! They check the Rust interface itself and call the library directly.
+//! They run against `write_backend`, so that the driver runs them against
+//! the Lean port too. The token values handed to the writer, and the tokens
+//! of the written text that the tests compare, are lexed by the Rust lexer.
+//! The tests of the Rust interface itself call the writer directly and say
+//! so.
+
+mod write_backend;
 
 use std::convert::Infallible;
-use std::io::{self, Write};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtVersion, SmtWriteErrorCause, SmtWriteStyle, SmtWriter, SmtWriterConfig,
+    SmtVersion, SmtWriteStyle, SmtWriter, SmtWriterConfig,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtCommentBuf, SmtNumeralBuf, SmtSymbol},
     token::{
-        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtToken, SmtTokensBuf, SmtTokensCursor,
+        SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken,
+        SmtTokensBuf,
     },
 };
+use write_backend::{Answer, Item, WriteFailure, Writing};
 
 /// Inputs that every version from 2.5 on lexes alike, with every kind of
 /// token, and whitespace and comments around and between them.
@@ -70,7 +75,8 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Keep {
     }
 }
 
-/// Lexes the input in the version into its tokens, concrete or abstract.
+/// Lexes the input in the version into its tokens, concrete or abstract,
+/// with the Rust lexer.
 fn lexed(input: &[u8], version: SmtVersion, concrete: bool) -> SmtTokensBuf {
     let keep = Keep {
         concrete,
@@ -87,26 +93,23 @@ fn debugged(tokens: &SmtTokensBuf) -> Vec<String> {
     tokens.iter().map(|token| format!("{token:?}")).collect()
 }
 
-/// The configuration of writing in the style, in the version.
-fn styled(version: SmtVersion, style: SmtWriteStyle) -> SmtWriterConfig {
-    SmtWriterConfig::new(version).with_style(style)
-}
-
-/// The configuration of writing in the compact style, in the version.
-fn compact_config(version: SmtVersion) -> SmtWriterConfig {
-    styled(version, SmtWriteStyle::Compact)
-}
-
-/// The configuration of writing in the layout style, in the version.
-fn layout_config(version: SmtVersion) -> SmtWriterConfig {
-    styled(version, SmtWriteStyle::Layout)
+/// What a writer in the style writes for the tokens, handed over in one
+/// write, in 2.7.
+fn written_tokens<'t>(
+    tokens: impl IntoIterator<Item = SmtToken<'t>>,
+    style: SmtWriteStyle,
+) -> String {
+    let text = write_backend::written(
+        SmtVersion::V2_7,
+        Writing::Writer(style),
+        &[Item::write(tokens)],
+    );
+    String::from_utf8(text).expect("the test text is UTF-8")
 }
 
 /// What a writer in the style writes for the value, in 2.7.
-fn written<V: SmtAppendTokens + ?Sized>(value: &V, style: SmtWriteStyle) -> String {
-    let mut writer = SmtWriter::new(Vec::new(), styled(SmtVersion::V2_7, style));
-    writer.write(value).expect("writing into a vector succeeds");
-    String::from_utf8(writer.into_inner()).expect("the test text is UTF-8")
+fn written(value: &SmtTokensBuf, style: SmtWriteStyle) -> String {
+    written_tokens(value.iter(), style)
 }
 
 /// What the compact writer writes for the value, in 2.7.
@@ -122,13 +125,8 @@ fn layout(value: &SmtTokensBuf) -> String {
 /// What a writer in the style writes for the inputs lexed one after another
 /// into it, in the version.
 fn written_lexed(inputs: &[&[u8]], version: SmtVersion, style: SmtWriteStyle) -> Vec<u8> {
-    let mut writer = SmtWriter::new(Vec::new(), styled(version, style));
-    let mut lexer = SmtLexer::new(&mut writer, version);
-    for input in inputs {
-        lexer.lex_all(input).expect("the test input should lex");
-    }
-    drop(lexer);
-    writer.into_inner()
+    let items: Vec<Item> = inputs.iter().map(|input| Item::lex(input)).collect();
+    write_backend::written(version, Writing::Writer(style), &items)
 }
 
 /// What the compact writer writes for the inputs lexed one after another
@@ -303,7 +301,7 @@ fn the_line_writer_ends_a_comment_with_a_line_feed_only_before_a_token() {
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
     let comment = SmtCommentBuf::new(b" c".to_vec()).expect("a comment");
     let tokens = [SmtToken::Symbol(x), SmtToken::Comment(comment.view())];
-    assert_eq!(written(tokens.as_slice(), SmtWriteStyle::Line), "x ; c");
+    assert_eq!(written_tokens(tokens, SmtWriteStyle::Line), "x ; c");
 }
 
 #[test]
@@ -422,14 +420,38 @@ fn both_writers_quote_a_symbol_that_spells_a_word_reserved_in_their_version() {
     assert_eq!(compact(&tokens), "(|lambda| x)\n");
     assert_eq!(layout(&tokens), "(|lambda| x)");
     // in their own version, the same tokens are written as they are
-    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
+    for (style, expected) in [
+        (SmtWriteStyle::Compact, &b"(lambda x)\n"[..]),
+        (SmtWriteStyle::Layout, b"(lambda x)"),
+    ] {
+        let text = write_backend::written(
+            SmtVersion::V2_7,
+            Writing::Writer(style),
+            &[Item::version(SmtVersion::V2_6), Item::write(tokens.iter())],
+        );
+        assert_eq!(text, expected, "{style:?}");
+    }
+}
+
+/// Tests the Rust interface itself: the getters of the writer. Calls the
+/// writer directly.
+#[test]
+fn a_writer_shows_its_version_and_what_it_wrote_into() {
+    let tokens = lexed(b"(lambda x)", SmtVersion::V2_6, false);
+    let mut writer = SmtWriter::new(
+        Vec::new(),
+        SmtWriterConfig::new(SmtVersion::V2_7).with_style(SmtWriteStyle::Compact),
+    );
     writer.set_version(SmtVersion::V2_6);
     assert_eq!(writer.version(), SmtVersion::V2_6);
     writer
         .write(&tokens)
         .expect("writing into a vector succeeds");
     assert_eq!(writer.get_ref().as_slice(), b"(lambda x)\n");
-    let mut writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_7));
+    let mut writer = SmtWriter::new(
+        Vec::new(),
+        SmtWriterConfig::new(SmtVersion::V2_7).with_style(SmtWriteStyle::Layout),
+    );
     writer.set_version(SmtVersion::V2_6);
     assert_eq!(writer.version(), SmtVersion::V2_6);
     writer
@@ -445,126 +467,119 @@ fn both_writers_fail_on_a_reserved_word_their_version_does_not_have() {
     let lambda = SmtReserved::General(SmtGeneralReserved::Lambda);
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
     let tokens = [SmtToken::Reserved(lambda), SmtToken::Symbol(x)];
-    let mut compact_writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_6));
-    let err = compact_writer
-        .write(tokens.as_slice())
-        .expect_err("2.6 has no `lambda`");
-    assert!(matches!(err.cause(), SmtWriteErrorCause::NotInVersion(word) if *word == lambda));
-    assert!(compact_writer.get_ref().is_empty());
-    let mut layout_writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_6));
-    let err = layout_writer
-        .write(tokens.as_slice())
-        .expect_err("2.6 has no `lambda`");
-    assert!(matches!(err.cause(), SmtWriteErrorCause::NotInVersion(word) if *word == lambda));
-    assert!(layout_writer.get_ref().is_empty());
-}
-
-struct FailingWriter;
-
-impl Write for FailingWriter {
-    fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-        Err(io::Error::other("the test writer fails every write"))
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Err(io::Error::other("the test writer fails every flush"))
+    for style in [SmtWriteStyle::Compact, SmtWriteStyle::Layout] {
+        let written = write_backend::write(
+            SmtVersion::V2_6,
+            Writing::Writer(style),
+            false,
+            &[Item::write(tokens)],
+        );
+        // 2.6 has no `lambda`
+        assert_eq!(
+            written.answers,
+            [Answer::Failed(WriteFailure::NotInVersion(lambda))],
+            "{style:?}"
+        );
+        assert!(written.out.is_empty(), "{style:?}");
     }
 }
 
 #[test]
 fn a_failure_of_the_underlying_writer_is_an_io_error_of_both_writers() {
     let numeral = SmtNumeralBuf::new(b"12".to_vec()).expect("a numeral");
-    let err = SmtWriter::new(FailingWriter, compact_config(SmtVersion::V2_7))
-        .write(&numeral)
-        .expect_err("the writer fails");
-    assert!(matches!(err.cause(), SmtWriteErrorCause::Io(_)));
-    let err = SmtWriter::new(FailingWriter, layout_config(SmtVersion::V2_7))
-        .write(&numeral)
-        .expect_err("the writer fails");
-    assert!(matches!(err.cause(), SmtWriteErrorCause::Io(_)));
+    let numeral = SmtToken::Numeral(numeral.view());
+    for style in [SmtWriteStyle::Compact, SmtWriteStyle::Layout] {
+        let written = write_backend::write(
+            SmtVersion::V2_7,
+            Writing::Writer(style),
+            true,
+            &[Item::write([numeral])],
+        );
+        assert!(
+            matches!(&written.answers[..], [Answer::Failed(WriteFailure::Io(_))]),
+            "the writer fails, got {:?}",
+            written.answers
+        );
+    }
     // a writer that failed in one write writes the next value
-    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
     let lambda = SmtReserved::General(SmtGeneralReserved::Lambda);
-    writer.set_version(SmtVersion::V2_6);
     // a failing write stops at the failing token
-    let failing = [
-        SmtToken::Reserved(lambda),
-        SmtToken::Numeral(numeral.view()),
-    ];
-    writer
-        .write(failing.as_slice())
-        .expect_err("2.6 has no `lambda`");
-    assert!(writer.get_ref().is_empty());
-    writer
-        .write(&numeral)
-        .expect("writing into a vector succeeds");
-    assert_eq!(writer.into_inner(), b"12\n");
+    let failing = [SmtToken::Reserved(lambda), numeral];
+    let written = write_backend::write(
+        SmtVersion::V2_7,
+        Writing::Writer(SmtWriteStyle::Compact),
+        false,
+        &[
+            Item::version(SmtVersion::V2_6),
+            Item::write(failing),
+            Item::write([numeral]),
+        ],
+    );
+    // 2.6 has no `lambda`, and the failing write writes nothing
+    assert_eq!(
+        written.answers,
+        [
+            Answer::Ok,
+            Answer::Failed(WriteFailure::NotInVersion(lambda)),
+            Answer::Ok
+        ]
+    );
+    assert_eq!(written.out, b"12\n");
 }
 
 #[test]
 fn the_writers_write_each_value_handed_to_write_in_turn() {
     let numeral = SmtNumeralBuf::new(b"12".to_vec()).expect("a numeral");
-    let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
-    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
-    writer
-        .write(&numeral)
-        .expect("writing into a vector succeeds");
-    writer
-        .write(&[x, x])
-        .expect("writing into a vector succeeds");
-    writer
-        .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
-        .expect("writing into a vector succeeds");
-    assert_eq!(writer.into_inner(), b"12\nx\nx\n(f x)\n");
-    let mut writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_7));
-    writer
-        .write(&numeral)
-        .expect("writing into a vector succeeds");
-    writer
-        .write(&[x, x])
-        .expect("writing into a vector succeeds");
-    writer
-        .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
-        .expect("writing into a vector succeeds");
-    assert_eq!(writer.into_inner(), b"12 x x(f\n x)");
-    let mut writer = SmtWriter::new(Vec::new(), styled(SmtVersion::V2_7, SmtWriteStyle::Line));
-    writer
-        .write(&numeral)
-        .expect("writing into a vector succeeds");
+    let numeral = SmtToken::Numeral(numeral.view());
+    let x = SmtToken::Symbol(SmtSymbol::new_unquoted(b"x").expect("a symbol"));
+    let lexed_value = lexed(b"(f\n x)", SmtVersion::V2_7, true);
+    let values = [
+        Item::write([numeral]),
+        Item::write([x, x]),
+        Item::write(lexed_value.iter()),
+    ];
+    for (style, expected) in [
+        (SmtWriteStyle::Compact, &b"12\nx\nx\n(f x)\n"[..]),
+        (SmtWriteStyle::Layout, b"12 x x(f\n x)"),
+        (SmtWriteStyle::Line, b"12 x x (f x)"),
+    ] {
+        let text = write_backend::written(SmtVersion::V2_7, Writing::Writer(style), &values);
+        assert_eq!(text, expected, "{style:?}");
+    }
     // a single value is written without a line feed
-    assert_eq!(writer.get_ref().as_slice(), b"12");
-    writer
-        .write(&[x, x])
-        .expect("writing into a vector succeeds");
-    writer
-        .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
-        .expect("writing into a vector succeeds");
-    assert_eq!(writer.into_inner(), b"12 x x (f x)");
+    let text = write_backend::written(
+        SmtVersion::V2_7,
+        Writing::Writer(SmtWriteStyle::Line),
+        &values[..1],
+    );
+    assert_eq!(text, b"12");
 }
 
 #[test]
 fn the_writers_consume_a_tokens_cursor_and_break_at_its_end_of_the_input() {
     let tokens = lexed(b"(a b) c", SmtVersion::V2_7, false);
-    let mut cursor = SmtTokensCursor::new(SmtVersion::V2_7);
-    tokens.append_tokens(&mut cursor);
-    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
-    let flow = writer
-        .consume(&mut cursor)
-        .expect("writing into a vector succeeds");
-    assert!(matches!(flow, ControlFlow::Break(())));
-    assert!(cursor.is_empty());
-    assert_eq!(writer.into_inner(), b"(a b)\nc\n");
+    let written = write_backend::write(
+        SmtVersion::V2_7,
+        Writing::Writer(SmtWriteStyle::Compact),
+        false,
+        &[Item::consume(tokens.iter())],
+    );
+    // the writer takes every token
+    assert_eq!(written.answers, [Answer::Break(0)]);
+    assert_eq!(written.out, b"(a b)\nc\n");
     // without an end of the input, the writer continues
-    let mut cursor = SmtTokensCursor::new(SmtVersion::V2_7);
-    cursor.push(SmtToken::ParenOpen);
-    let mut writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_7));
-    let flow = writer
-        .consume(&mut cursor)
-        .expect("writing into a vector succeeds");
-    assert!(matches!(flow, ControlFlow::Continue(())));
-    assert_eq!(writer.into_inner(), b"(");
+    let written = write_backend::write(
+        SmtVersion::V2_7,
+        Writing::Writer(SmtWriteStyle::Layout),
+        false,
+        &[Item::consume([SmtToken::ParenOpen])],
+    );
+    assert_eq!(written.answers, [Answer::Continue(0)]);
+    assert_eq!(written.out, b"(");
 }
 
+/// Tests the Rust interface itself: the configuration and its getters.
+/// Calls the writer directly.
 #[test]
 fn a_writer_keeps_its_configuration_and_writes_in_the_layout_style_by_default() {
     let config = SmtWriterConfig::new(SmtVersion::V2_6);

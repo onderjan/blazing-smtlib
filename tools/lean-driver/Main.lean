@@ -4,10 +4,11 @@ The Rust tests run their lexer inputs, and their parser and reader inputs, throu
 Lean port.
 
 Reads one request per line from the standard input and writes the response
-to the standard output, until the input ends. The lexer requests (`lex`) are answered here; the
-parser requests are answered by `ParseRequests` (`Parse.lean`), which also reads the answers to
-the handler's calls from the standard input while it answers a request, and keeps the reader of
-`reader` for the requests after it.
+to the standard output, until the input ends. The lexer requests (`lex`, `lex-from` and
+`lex-file`) are answered here; the writer requests (`write`) are answered by `WriteRequests`
+(`Write.lean`); the parser requests are answered by `ParseRequests` (`Parse.lean`), which also
+reads the answers to the handler's calls from the standard input while it answers a request, and
+keeps the reader of `reader` for the requests after it.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the lexer that answers: `z`, the
 library's lexer `BSmtLib.Lexer`, which is the one when the variable is unset, `v`, the naive
@@ -23,17 +24,15 @@ import BSmtLib.Lexer.Internal.VNaive
 import BSmtLib.Lexer.Internal.WRustPort
 import BSmtLib.Lexer.Internal.X1BatchInCore
 import Protocol
+import Write
 import Parse
 
 open BSmtLib
-open BSmtLib.Token
-open BSmtLib.Lexer.Error (LexerError LexicalErrorKind)
+open BSmtLib.Token (BatchTag Consume ConsumeFrom Cursor)
+open BSmtLib.Lexer.Error (LexerError LexerReadError LexicalErrorKind)
 open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
 open BSmtLib.Lexer (Recover)
 open BSmtLib.Span (Location Located)
-
-/- The token constructors that `open BSmtLib.Token` brings in would capture this name. -/
-variable {whitespace : Bool}
 
 /- The loops over a cursor's tokens end as each step consumes a token: they descend by the
 producer's consumption, which is well-founded. -/
@@ -79,7 +78,19 @@ inductive Behaviour where
   end-of-file token inside a parenthesis, or on every end-of-file token
   if `refuseEnd` is set. The symbol `to-2.0` makes it set the version. -/
   | rules (refuseEnd : Bool)
+  /-- It takes every token and continues, and has the cursor discard the
+  rest of the input once it has taken `after` tokens, the end-of-file
+  token not counted. -/
+  | discard (after : Nat)
   deriving BEq
+
+/-- What a `lex-from` or a `lex-file` request lexes as a whole input. -/
+inductive ReadInput where
+  /-- A buffered reader that hands out the bytes `size` at a time, and then ends or, if `fails`,
+  fails. -/
+  | reader (size : Nat) (bytes : ByteArray) (fails : Bool)
+  /-- The file at the path. -/
+  | file (path : System.FilePath)
 
 /-- A request, read from its line. A feed is a slice, or `none` for the end of the input. -/
 structure Request where
@@ -87,7 +98,10 @@ structure Request where
   whitespace : Bool
   recover : Bool
   behaviour : Behaviour
+  /-- The feeds of a `lex` request. -/
   feeds : Array (Option ByteArray)
+  /-- The input of a `lex-from` or a `lex-file` request, `none` for a `lex` request. -/
+  read : Option ReadInput
 
 def readReply (word : String) : Except String Reply := do
   let bad := s!"unknown reply {repr word}"
@@ -114,9 +128,57 @@ def readReply (word : String) : Except String Reply := do
   | "w", some version => return .switchAndFinish count version
   | _, _ => throw bad
 
+/-- The request with the word read as an option into it, or `none` if the word is none. -/
+def readOption (word : String) (request : Request) : Except String (Option Request) := do
+  if word == "ws" then
+    return some { request with whitespace := true }
+  if word == "recover" then
+    return some { request with recover := true }
+  -- at most one of the options that script the consumer
+  if request.behaviour != .takeAll then
+    return none
+  if word == "rules" then
+    return some { request with behaviour := .rules false }
+  if word == "rules=refuse-end" then
+    return some { request with behaviour := .rules true }
+  if word.startsWith "plan=" then
+    let replies := (word.drop 5).toString
+    -- no replies at all are a plan too: every token is taken,
+    -- and the hand-overs are reported
+    let replies ← if replies.isEmpty then pure #[]
+      else (replies.splitOn ",").toArray.mapM readReply
+    return some { request with behaviour := .plan replies }
+  if word.startsWith "discard=" then
+    let some after := (word.drop 8).toString.toNat?
+      | throw s!"unknown option {repr word}"
+    if after == 0 then
+      throw s!"the consumer must take a token first: {repr word}"
+    return some { request with behaviour := .discard after }
+  return none
+
+/-- The input of a `lex-from` request, of its operands: the buffer size, the bytes and how the
+reader ends. -/
+def readReader (operands : Array String) : Except String ReadInput := do
+  let #[size, bytes, ending] := operands
+    | throw "lex-from takes a size, bytes and an ending"
+  let some size := size.toNat?
+    | throw s!"bad buffer size {repr size}"
+  if size == 0 then
+    throw s!"bad buffer size {repr size}"
+  unless bytes.startsWith "s" do
+    throw s!"bad bytes {repr bytes}"
+  let bytes ← unhex (bytes.drop 1).toString
+  let fails ← match ending with
+    | "end" => pure false
+    | "fail" => pure true
+    | _ => throw s!"unknown ending {repr ending}"
+  return .reader size bytes fails
+
 def readRequest (line : String) : Except String Request := do
   let words := line.splitOn " "
-  if words.head? != some "lex" then
+  let some kind := words.head?
+    | throw "unknown request"
+  unless ["lex", "lex-from", "lex-file"].contains kind do
     throw "unknown request"
   let some version := words[1]?
     | throw "no version"
@@ -125,33 +187,36 @@ def readRequest (line : String) : Except String Request := do
     whitespace := false
     recover := false
     behaviour := .takeAll
-    feeds := #[] }
+    feeds := #[]
+    read := none }
+  -- the options come before the other operands
+  let mut operands : Array String := #[]
   for word in words.drop 2 do
-    let scripted := request.behaviour != .takeAll
-    -- the options come before the feeds
-    let option := request.feeds.isEmpty
-    if word == "e" then
-      request := { request with feeds := request.feeds.push none }
-    else if word == "ws" && option then
-      request := { request with whitespace := true }
-    else if word == "recover" && option then
-      request := { request with recover := true }
-    else if word == "rules" && option && !scripted then
-      request := { request with behaviour := .rules false }
-    else if word == "rules=refuse-end" && option && !scripted then
-      request := { request with behaviour := .rules true }
-    else if word.startsWith "plan=" && option && !scripted then
-      let replies := (word.drop 5).toString
-      -- no replies at all are a plan too: every token is taken,
-      -- and the hand-overs are reported
-      let replies ← if replies.isEmpty then pure #[]
-        else (replies.splitOn ",").toArray.mapM readReply
-      request := { request with behaviour := .plan replies }
-    else if word.startsWith "s" then
-      let bytes ← unhex (word.drop 1).toString
-      request := { request with feeds := request.feeds.push (some bytes) }
-    else
-      throw s!"unknown operation {repr word}"
+    if operands.isEmpty then
+      if let some next ← readOption word request then
+        request := next
+        continue
+    operands := operands.push word
+  match kind with
+  | "lex" =>
+    for word in operands do
+      if word == "e" then
+        request := { request with feeds := request.feeds.push none }
+      else if word.startsWith "s" then
+        let bytes ← unhex (word.drop 1).toString
+        request := { request with feeds := request.feeds.push (some bytes) }
+      else
+        throw s!"unknown operation {repr word}"
+  | "lex-from" =>
+    request := { request with read := some (← readReader operands) }
+  | _ =>
+    let #[digits] := operands
+      | throw "lex-file takes a path"
+    let some path := String.fromUTF8? (← unhex digits)
+      | throw s!"the path {digits} is not UTF-8"
+    request := { request with read := some (.file path) }
+  if request.recover && request.read.isSome then
+    throw "only lex takes recover"
   return request
 
 /- LEAN: the Rust driver collects the lines in a `RefCell<String>` shared with the consumer;
@@ -165,6 +230,9 @@ structure Scripted (whitespace : Bool) where
   behaviour : Behaviour
   /-- The number of hand-overs answered by the plan. -/
   handed : Nat
+  /-- The number of tokens taken, the end-of-file token not counted, for the consumer that
+  discards. -/
+  taken : Nat := 0
   /-- The number of parentheses left open by the tokens taken by the rules. -/
   opened : Nat
   out : IO.Ref String
@@ -256,6 +324,31 @@ def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
 termination_by cursor
 decreasing_by exact next.2
 
+/--
+Takes every token of the cursor, which has one, writing a line for each, and has the cursor
+discard the rest of the input once the consumer has taken `after` tokens, the end-of-file token
+not counted.
+-/
+def takeDiscarding {batch : BatchTag} {whitespace : Bool} (after : Nat) (version : Version)
+    (cursor : LexerCursor batch) (h : cursor.HasNext) :
+    StateT (Scripted whitespace) IO { c : LexerCursor batch // c.Consumed cursor } := do
+  let (token, ⟨next, consumed⟩) := cursor.next h
+  let state : Scripted whitespace ← get
+  state.out.modify (· ++ tokenLine cursor token version)
+  let mut next : { c : LexerCursor batch // c.Consumed cursor } := ⟨next, consumed⟩
+  if cursor.category token != .endOfFile then
+    let taken := state.taken + 1
+    set ({ state with taken } : Scripted whitespace)
+    if taken == after then
+      next := ⟨next.1.discardRest, (LexerCursor.discardRest_follows next.1).trans_consumed next.2⟩
+  if h : next.1.HasNext then
+    let ⟨last, taken⟩ ← takeDiscarding after version next.1 h
+    return ⟨last, taken.trans next.2⟩
+  else
+    return next
+termination_by cursor
+decreasing_by exact next.2
+
 /- LEAN: the Rust error type is `&'static str`, the name of what made the consumer fail. The
 result says whether the consumer finished by its script (`true`) or only because it was handed
 the end of the input (`false`): every consumer breaks there at the latest, and the second kind
@@ -303,6 +396,7 @@ instance {batch : BatchTag} : ConsumeFrom (Scripted whitespace) (LexerCursor bat
           | .switch _ version => (.ok .continue, switched version)
           | .switchAndFinish _ version => (.ok (.break true), switched version)
       | .rules refuseEnd => takeByRules refuseEnd version cursor h
+      | .discard after => pure (.ok .continue, ← takeDiscarding after version cursor h)
     return (breakAtEnd cursor h result, next)
 
 instance : Recover (Scripted whitespace) IO where
@@ -533,6 +627,8 @@ structure Ops (whitespace : Bool) where
     (IO (Except (LexerError String × Recovering) (Option (Located Bool) × Recovering)))
   recoveringLocation : Recovering → Location
   recoveringVersion : Recovering → Version
+  /-- Where the lexer that stops at its first error discards the input from, if it does. -/
+  discardedFrom : Lexer → Option Location
 
 /-- The lines that end the feed: where the lexer is, and its version if the consumer is scripted. -/
 def feedLines (request : Request) (location : Location) (version : Version) : String :=
@@ -655,7 +751,8 @@ def w (whitespace : Bool) : Ops whitespace :=
       | .lexer lexer => .inl lexer
       | .pending pending => .inr pending.lexEof
     recoveringLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
-    recoveringVersion := Lexer.Internal.WRustPort.Lexer.version }
+    recoveringVersion := Lexer.Internal.WRustPort.Lexer.version
+    discardedFrom := Lexer.Internal.WRustPort.Lexer.discardedFrom }
 
 /-- The lexer with the batch kept in its state, `BSmtLib.Lexer.Internal.X1BatchInCore`, which has
 the Rust port's type and lexes by functions of its own. -/
@@ -676,7 +773,8 @@ def x1 (whitespace : Bool) : Ops whitespace :=
       | .lexer lexer => .inl lexer
       | .pending pending => .inr (Lexer.Internal.X1BatchInCore.Lexer.PendingEof.lexEof pending)
     recoveringLocation := Lexer.Internal.WRustPort.Lexer.currentLocation
-    recoveringVersion := Lexer.Internal.WRustPort.Lexer.version }
+    recoveringVersion := Lexer.Internal.WRustPort.Lexer.version
+    discardedFrom := Lexer.Internal.WRustPort.Lexer.discardedFrom }
 
 end Own
 
@@ -711,10 +809,152 @@ def answerNaive (request : Request) : ExceptT String IO String := do
     response := response ++ "ok\n"
   return response
 
+/-! Lexing a whole input from a buffered reader or a file, for `lex-from` and `lex-file`. -/
+
+/-- The message of the failure of the buffered reader of a `lex-from` request that fails after
+its bytes. -/
+def READER_FAILURE : String := "the test reader fails after its input"
+
+/-- The buffered reader of a `lex-from` request: hands out its bytes `size` at a time, and then
+ends or, if `fails`, fails. -/
+structure Chunks where
+  bytes : ByteArray
+  /-- The number of the bytes consumed. -/
+  consumed : Nat
+  size : Nat
+  fails : Bool
+
+instance : Reader.BufRead Chunks IO where
+  fillBuf self := do
+    if self.consumed ≥ self.bytes.size && self.fails then
+      return .error (IO.userError READER_FAILURE)
+    let stop := min (self.consumed + self.size) self.bytes.size
+    return .ok (self.bytes.toByteSlice self.consumed stop, self)
+  consume self amount := { self with consumed := self.consumed + amount }
+
+/-- The operations of a lexer that stops at its first error, which lexing a whole input from a
+buffered reader needs. -/
+structure ReadOps (L : Type) where
+  lexSlice : L → ByteSlice → IO (Except (LexerError String) L)
+  lexEof : L → IO (Except (LexerError String) (Option (Located Bool) × L))
+  currentLocation : L → Location
+  discardedFrom : L → Option Location
+
+/- LEAN: the lexers of the chain have no `lexFrom` of their own; this does what the library's
+`Lexer.lexFrom` does, step for step. It is `partial`, as `Lexer.lexFrom` is. -/
+/-- `Lexer.lexFrom` over the lexer of the operations. -/
+partial def emulatedLexFrom {L B : Type} [Reader.BufRead B IO] (ops : ReadOps L) (lexer : L)
+    (buf : B) : IO (Except (LexerReadError String) (Option (Located Bool)) × B) := do
+  let lexRest (lexer : L) : IO (Except (LexerReadError String) (Option (Located Bool))) := do
+    return ((← ops.lexEof lexer).map (·.1)).mapError LexerReadError.ofLex
+  if (ops.discardedFrom lexer).isSome then
+    -- the consumer does not care about any subsequent bytes
+    return (← lexRest lexer, buf)
+  match ← Reader.BufRead.fillBuf buf with
+  | .error err =>
+    let span := Span.Internal.newEmpty (ops.currentLocation lexer)
+    return (.error (LexerReadError.Internal.new (.io err) span), buf)
+  | .ok (buffer, buf) =>
+    if buffer.size == 0 then
+      return (← lexRest lexer, buf)
+    -- consume the bytes lexed, which are fewer than the buffer holds when discarding begins
+    -- inside it
+    let startOffset := (ops.currentLocation lexer).offset
+    match ← ops.lexSlice lexer buffer with
+    | .error err => return (.error (LexerReadError.ofLex err), buf)
+    | .ok lexer =>
+      let len := (ops.currentLocation lexer).offset - startOffset
+      emulatedLexFrom ops lexer (Reader.BufRead.consume (n := IO) buf len)
+
+/-- `Lexer.lexFile` over the lexer of the operations. -/
+def emulatedLexFile {L : Type} (ops : ReadOps L) (lexer : L) (path : System.FilePath) :
+    IO (Except (LexerReadError String) (Option (Located Bool))) := do
+  match ← (IO.FS.Handle.mk path .read).toBaseIO with
+  | .error err => return .error (LexerReadError.Internal.new (.io err) Span.Internal.newZero)
+  | .ok file =>
+    let buf := Reader.BufReader.new (IO.FS.Stream.ofHandle file) Lexer.Internal.BUF_READER_CAPACITY
+    return (← emulatedLexFrom ops lexer buf).1
+
+/-- Lexes the input as a whole input with the lexer of the operations, giving the outcome and,
+for a buffered reader, the number of its bytes not consumed. -/
+def emulatedRead {L : Type} (ops : ReadOps L) (lexer : L) :
+    ReadInput → IO (Except (LexerReadError String) (Option (Located Bool)) × Option Nat)
+  | .reader size bytes fails => do
+    let (result, reader) ← emulatedLexFrom ops lexer ({ bytes, consumed := 0, size, fails } : Chunks)
+    return (result, some (bytes.size - reader.consumed))
+  | .file path => do return (← emulatedLexFile ops lexer path, none)
+
+/-- Lexes the input as a whole input with the library's lexer, giving the outcome and, for a
+buffered reader, the number of its bytes not consumed. -/
+def libraryRead {whitespace : Bool} (lexer : Lexer (Scripted whitespace)) :
+    ReadInput → IO (Except (LexerReadError String) (Option (Located Bool)) × Option Nat)
+  | .reader size bytes fails => do
+    let (result, reader) ← lexer.lexFrom (n := IO) ({ bytes, consumed := 0, size, fails } : Chunks)
+    return (((result.map (·.1)).mapError (·.1)), some (bytes.size - reader.consumed))
+  | .file path => do
+    return (((← lexer.lexFile (n := IO) path).map (·.1)).mapError (·.1), none)
+
+/-- The lines of the outcome of lexing a whole input: the result, or the error that ended it. -/
+def readLines (result : Except (LexerReadError String) (Option (Located Bool)))
+    (rest : Option Nat) : String :=
+  match result with
+  | .ok (some located) =>
+    -- only a finish by the script is reported
+    let finish := if located.value then s!"fin {location located.location}\n" else ""
+    let rest := match rest with
+      | some rest => s!" {rest}"
+      | none => ""
+    s!"{finish}done {location located.location}{rest}\n"
+  | .ok none => "none\n"
+  | .error err =>
+    match err.cause with
+    | .lexical kind =>
+      s!"err {errorKindName kind} {location err.span.start} {location err.span.end}\n"
+    | .consumer name => s!"cerr {name}\n"
+    | .io error =>
+      s!"ioerr {location err.span.start} {location err.span.end} \
+        x{hex (toString error).toUTF8.toByteSlice}\n"
+
+/-- Answers a `lex-from` or a `lex-file` request with the chosen lexer, whose consumer takes
+whitespace and comments if `whitespace` is set. -/
+def answerReadAs (whitespace : Bool) (choice : LexerChoice) (request : Request)
+    (input : ReadInput) : IO String := do
+  -- the consumer writes into the response while the lexer owns it
+  let lines ← IO.mkRef ""
+  let consumer : Scripted whitespace :=
+    { behaviour := request.behaviour, handed := 0, opened := 0, out := lines }
+  let version := request.version
+  let (result, rest) ← match choice with
+    | .z => libraryRead (Lexer.new consumer version) input
+    | .v =>
+      emulatedRead
+        { lexSlice := fun lexer slice => do
+            return (← Lexer.Internal.VNaive.Lexer.lexSlice lexer slice).mapError (·.1)
+          lexEof := fun lexer => do
+            return (← Lexer.Internal.VNaive.Lexer.lexEof lexer).mapError (·.1)
+          currentLocation := Lexer.Internal.VNaive.Lexer.currentLocation
+          discardedFrom := Lexer.Internal.VNaive.Lexer.discardedFrom }
+        (Lexer.Internal.VNaive.Lexer.new consumer version) input
+    | .w | .x1 =>
+      let ops := if choice matches .w then Own.w whitespace else Own.x1 whitespace
+      emulatedRead
+        { lexSlice := fun lexer slice => do return (← ops.lexSlice lexer slice).mapError (·.1)
+          lexEof := fun lexer => do return (← ops.lexEof lexer).mapError (·.1)
+          currentLocation := ops.currentLocation
+          discardedFrom := ops.discardedFrom }
+        (ops.new consumer version) input
+  return (← lines.get) ++ readLines result rest
+
+/-- Answers a `lex-from` or a `lex-file` request with the chosen lexer. -/
+def answerRead (choice : LexerChoice) (request : Request) (input : ReadInput) : IO String :=
+  answerReadAs request.whitespace choice request input
+
 /-- Answers one request line, giving the response lines. -/
 def answer (choice : LexerChoice) (line : String) : ExceptT String IO String := do
   -- decode the whole request first, so that a malformed one produces no lines
   let request ← readRequest line
+  if let some input := request.read then
+    return ← answerRead choice request input
   match choice with
   | .v => return ← answerNaive request
   | .w => return ← Own.answer Own.w request
@@ -765,7 +1005,10 @@ partial def serve (choice : LexerChoice) (stdin : IO.FS.Stream) (stdout : IO.FS.
         stdout.putStr s!"fail {message}\n"
         pure session
     else
-      let out ← match ← (answer choice request).run with
+      -- the writer requests are answered by `WriteRequests` (`Write.lean`)
+      let answered := if words.head? == some "write" then WriteRequests.answer request
+        else answer choice request
+      let out ← match ← answered.run with
         | .ok out => pure out
         | .error message => pure s!"fail {message}\n"
       stdout.putStr out

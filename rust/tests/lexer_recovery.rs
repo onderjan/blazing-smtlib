@@ -157,6 +157,9 @@ fn run_feeds<const WHITESPACE: bool>(
             Line::Handover { .. } | Line::Finish(_) => {
                 panic!("the consumer has no plan and never finishes: {context}")
             }
+            Line::Done { .. } | Line::NoResult | Line::IoError { .. } => {
+                panic!("feeding slices reads no whole input: {context}")
+            }
         }
     }
     assert_eq!(

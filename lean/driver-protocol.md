@@ -9,7 +9,8 @@ answer with the same expectations they use for the Rust library.
 
 This document is the contract between the two sides. The sections up to
 "How the Rust tests select the driver" cover the lexer; the section "The
-parser" after them covers the parser and the reader. Nothing here is to be
+parser" after them covers the parser and the reader, and the section "The
+writer" covers the writer (`rust/tests/write_backend`). Nothing here is to be
 changed without the maintainer.
 
 ## The executable
@@ -227,8 +228,17 @@ parentheses it has taken for that; an abandon sets the count back to zero.
 The unquoted symbol `to-2.0` makes it set the version to 2.0. With
 `rules=refuse-end` it fails on every end-of-file token.
 
-At most one of `plan` and `rules` is given. A consumer with either of them is
-called scripted below.
+```
+discard=<k>
+```
+
+The consumer takes every token and continues, and has its cursor discard the
+rest of the input (the Rust `discard_rest`) once it has taken `k` tokens, the
+end-of-file token not counted. `k` is at least one. The count runs over the
+whole request, whatever the hand-overs are.
+
+At most one of `plan`, `rules` and `discard` is given. A consumer with any of
+them is called scripted below.
 
 ```
 recover
@@ -378,13 +388,85 @@ v 2.7
 ok
 ```
 
+## Lexing a whole input from a buffered reader or a file
+
+```
+lex-from <version> <option> ... <size> s<hex> <ending>
+lex-file <version> <option> ... <hex>
+```
+
+The driver creates one lexer for the request and has it lex one whole input,
+the end of the input included: from a buffered reader (the Rust `lex_from`),
+or from the file at the path (the Rust `lex_file`). The options are those of
+`lex` but `recover`.
+
+- The buffered reader of `lex-from` holds the bytes `s<hex>` and hands them
+  out `<size>` at a time, `<size>` at least one: each time it is asked for
+  bytes, it gives at most that many of those not consumed yet. Once they are
+  all consumed, it ends if `<ending>` is `end`: it gives no bytes. If
+  `<ending>` is `fail`, it fails instead, every time it is asked again, with
+  the message `the test reader fails after its input`.
+- The path of `lex-file` is `<hex>`, the bytes of the path. The Lean driver
+  takes it as UTF-8.
+
+The response is the lines of the tokens handed to the consumer, as for `lex`,
+then one closing line. There are no `at` and no `v` lines.
+
+```
+fin <location>
+done <location> <rest>
+done <location>
+none
+err <kind> <start> <end>
+cerr <name>
+ioerr <start> <end> x<hex>
+```
+
+- `done`: the lexer returned the result of the consumer at the location. For
+  `lex-from`, `<rest>` is the number of the bytes of the buffered reader that
+  were not consumed; `lex-file` has none. If the consumer finished by its
+  plan, a `fin` line with the same location comes before.
+- `none`: the lexer returned no result. The Rust lexer always returns one; the
+  line exists so that a Lean lexer that does not is reported, not mistaken
+  for a malformed response.
+- `err` and `cerr`: the error that ended lexing, as for `lex` without
+  `recover`.
+- `ioerr`: reading failed, with the span of the error and the message of the
+  failure. A buffered reader that fails gives an empty span where the lexer
+  is; a file that cannot be opened, an empty span at the origin. The message
+  of a file that cannot be opened is the system's and differs between the two
+  sides.
+
+These are the answers of the Rust lexer. `(a b)` from a buffered reader that
+hands out three bytes at a time, to a consumer that discards the rest after
+two tokens: the reader is consumed up to the discarded bytes, three of which
+are left.
+
+```
+lex-from 2.7 discard=2 3 s2861206229 end
+t ParenOpen 0:0:0 1:0:1 - x28
+t UnquotedSymbol 1:0:1 2:0:2 - x61
+t EndOfFile 2:0:2 2:0:2 - x
+done 2:0:2 3
+```
+
+`(a` from a buffered reader that hands out two bytes at a time and then
+fails: the error is where the lexer is when the reader fails.
+
+```
+lex-from 2.7 2 s2861 fail
+t ParenOpen 0:0:0 1:0:1 - x28
+ioerr 2:0:2 2:0:2 x746865207465737420726561646572206661696c732061667465722069747320696e707574
+```
+
 ## What the protocol leaves out
 
 The tests of the token cursor, of the panics that answer a broken contract
 (a consumer that takes no token, a slice fed after a failed end of the
 input, a call after an error of a lexer that stops at its first error) and of
-the calls that lex a whole input at once test the Rust interface in process.
-They stay Rust-only. The tests of the reader go through the parser requests
+the types and conversions of the Rust interface (the error of lexing from a
+buffered reader and its display, the types of a path) test the Rust interface
+in process. They stay Rust-only. The tests of the reader go through the parser requests
 described in "The parser".
 
 ## How the Rust tests select the driver
@@ -401,10 +483,11 @@ BLAZING_SMTLIB_LEAN_DRIVER=/path/to/the/driver cargo test
 
 The lexer tests that go through the driver are those of `tests/lexer.rs`,
 `tests/lexer_slices.rs`, `tests/lexer_symbols.rs`, `tests/lexer_v2_0.rs`,
-`tests/lexer_whitespace.rs`, `tests/lexer_batches.rs` and
-`tests/lexer_recovery.rs` that do not use the Rust lexer's own interface. The
-parser tests that go through it are described in "The parser". Everything else
-in the suite tests the Rust library whatever the variable says.
+`tests/lexer_whitespace.rs`, `tests/lexer_batches.rs`,
+`tests/lexer_recovery.rs` and `tests/lexer_read.rs` that do not use the Rust
+lexer's own interface. The parser tests that go through it are described in
+"The parser", the writer tests in "The writer". Everything else in the suite
+tests the Rust library whatever the variable says.
 
 The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean lexer
 that the driver answers with: `z`, the library's, when it is unset; `v`, the
@@ -803,3 +886,102 @@ numbered from 0 and fails nothing. `>` marks the lines the Rust side sends,
 The parser tests select the driver as the lexer tests do, by
 `BLAZING_SMTLIB_LEAN_DRIVER`; the same driver serves both. The tests that go
 through it are listed in `rust/tests/parse_backend/mod.rs`.
+
+## The writer
+
+The writer tests hand tokens to a writer and check the bytes it writes and
+the errors it fails with. All the general rules of "The executable" hold. A
+writer request runs the writer of the Lean library (`BSmtLib.Writer`) or
+`Token.writeSmt` through the public interface; the tokens of a `lex` item are
+lexed by the library's lexer, whatever `BLAZING_SMTLIB_LEAN_LEXER` says.
+
+```
+write <version> <style> <item> ...
+write <version> <style> fail <item> ...
+```
+
+- `<version>` is the version the writing starts in.
+- `<style>` is `line`, `compact` or `layout`: the items go to one writer of
+  that style (the Rust `SmtWriter` with `SmtWriterConfig::new(<version>)`
+  and `with_style`). With `-` there is no writer: each token is written by
+  itself, by the Rust `write_smt`, in the version in force.
+- With `fail`, what the bytes are written into fails every write and every
+  flush, with the message `the test writer fails every write`. Otherwise it
+  keeps them.
+
+The items are handed over in order:
+
+- `lex:<hex>`: the bytes, lexed as one whole input (the Rust `lex_all`) in
+  the version in force. With a writer, the writer is the consumer. With `-`,
+  a consumer that takes every token, whitespace and comments included, writes
+  each by `write_smt` in the version of its cursor and breaks at the
+  end-of-file token.
+- `write:<token>,<token>,...`: one write of the tokens (the writer's `write`),
+  or with `-` each token written by `write_smt` until one fails. `write:`
+  alone hands over no tokens.
+- `consume:<token>,<token>,...`: the writer consumes a tokens cursor that
+  holds the tokens, in the version in force (`SmtTokensCursor` and the
+  writer's `consume`). It needs a writer and at least one token.
+- `version:<version>`: the version in force from now on (the writer's
+  `set_version`).
+
+A token is one of:
+
+- `(`, `)`, and `e` for the end of the input;
+- `N<hex>`, `D<hex>`, `X<hex>`, `B<hex>`: a numeral, a decimal, hexadecimal
+  digits and binary digits, the bytes of their spelling (`X` and `B` without
+  their `#x` and `#b`);
+- `S<hex>`: a string literal, by its content;
+- `k<hex>`: a keyword, by its name without the colon;
+- `u<hex>`, `q<hex>`: an unquoted and a quoted symbol, by its name;
+- `w<hex>`, `c<hex>`: whitespace and a comment, by their content;
+- `r<word>`: a reserved word, by its spelling, in whichever version reserves
+  it.
+
+The response is one line per item, then the closing line:
+
+```
+ok
+break <left>
+continue <left>
+err <kind> <start> <end>
+werr io x<hex>
+werr not-in-version <word>
+out x<hex>
+```
+
+- `ok`: the item succeeded.
+- `break` and `continue`: the answer of the writer to a `consume`, with the
+  number of tokens it left in the cursor.
+- `err`: the lexical error that ended a `lex` item.
+- `werr`: writing failed, by an error of what the bytes are written into, with
+  its message, or by a reserved word that the version in force does not have.
+- `out`: every byte written, in the order written.
+
+These are the answers of the Rust library. A writer of the compact style
+consumes `(a) c` with the end of the input:
+
+```
+write 2.7 compact consume:(,u61,),u63,e
+break 0
+out x2861290a630a
+```
+
+A failing writer, under each token written by itself: the numeral fails, the
+end of the input writes nothing, so it does not fail.
+
+```
+write 2.7 - fail write:N3132 write:e
+werr io x746865207465737420777269746572206661696c73206576657279207772697465
+ok
+out x
+```
+
+### How the Rust tests select the driver for the writer
+
+The writer tests select the driver as the lexer tests do, by
+`BLAZING_SMTLIB_LEAN_DRIVER`; the same driver serves them. The tests that go
+through it are those of `tests/writer.rs` and `tests/token_writers.rs` that
+do not use the Rust writer's own interface. The answers of the Rust library
+come from `rust/tests/write_backend/driver.rs`, which the tests call in
+process and `tools/rust-lex-driver` prints.

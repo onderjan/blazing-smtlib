@@ -6,6 +6,10 @@
 //! tests check the Lean port. The protocol is described in
 //! `lean/driver-protocol.md`.
 //!
+//! The lexer is fed slices and ends of the input (`run` and the helpers
+//! over it), or lexes one whole input from a buffered reader (`lex_from`)
+//! or a file (`lex_file`).
+//!
 //! The environment variable `BLAZING_SMTLIB_LEAN_LEXER` chooses the Lean
 //! lexer that the driver answers with: `z`, the library's, if it is unset,
 //! `w` or `x1`, the other lexers of the chain of proofs, which cut their
@@ -580,6 +584,20 @@ pub enum Line {
     At(Loc),
     /// The lexer's version after a feed. Only reported for a scripted consumer.
     Version(SmtVersion),
+    /// Lexing from a buffered reader or a file ended with a result at the
+    /// location. For a buffered reader, `rest` is the number of its bytes
+    /// that were not consumed.
+    Done { location: Loc, rest: Option<u64> },
+    /// Lexing from a buffered reader or a file ended without a result: the
+    /// consumer continued on the end of the input.
+    NoResult,
+    /// Reading the buffered reader or the file failed, with the span of the
+    /// error and the message of the failure.
+    IoError {
+        start: Loc,
+        end: Loc,
+        message: Vec<u8>,
+    },
 }
 
 fn reply_word(reply: driver::Reply) -> String {
@@ -596,7 +614,22 @@ fn reply_word(reply: driver::Reply) -> String {
 }
 
 fn request_line(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> String {
-    let mut request = format!("lex {}", version_name(version));
+    let mut request = request_start("lex", version, options);
+    for feed in feeds {
+        match feed {
+            Feed::Slice(slice) => {
+                request.push_str(" s");
+                request.push_str(&hex(slice));
+            }
+            Feed::Eof => request.push_str(" e"),
+        }
+    }
+    request
+}
+
+/// The request of the kind up to its options, which it ends with.
+fn request_start(kind: &str, version: SmtVersion, options: &Options) -> String {
+    let mut request = format!("{kind} {}", version_name(version));
     if options.whitespace {
         request.push_str(" ws");
     }
@@ -611,15 +644,7 @@ fn request_line(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> S
         }
         driver::Behaviour::Rules { refuse_end: false } => request.push_str(" rules"),
         driver::Behaviour::Rules { refuse_end: true } => request.push_str(" rules=refuse-end"),
-    }
-    for feed in feeds {
-        match feed {
-            Feed::Slice(slice) => {
-                request.push_str(" s");
-                request.push_str(&hex(slice));
-            }
-            Feed::Eof => request.push_str(" e"),
-        }
+        driver::Behaviour::Discard(after) => request.push_str(&format!(" discard={after}")),
     }
     request
 }
@@ -627,7 +652,10 @@ fn request_line(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> S
 /// Whether the line is the last one of a response.
 fn ends_response(line: &str, recover: bool) -> bool {
     line == "ok"
+        || line == "none"
         || line.starts_with("fail ")
+        || line.starts_with("done ")
+        || line.starts_with("ioerr ")
         || (!recover && (line.starts_with("err ") || line.starts_with("cerr ")))
 }
 
@@ -689,16 +717,65 @@ fn parse_version(field: &str, line: &str) -> SmtVersion {
 /// After an error of a recovering lexer, the rest of the failed feed is
 /// applied again from where the input continues, until the feed is done.
 pub fn run(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> Vec<Line> {
+    run_request(version, options, &request_line(version, options, feeds))
+}
+
+/// How the buffered reader of `lex_from` goes on after its bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReaderEnd {
+    /// It ends the input.
+    End,
+    /// It fails, with the message `driver::READER_FAILURE`.
+    Fail,
+}
+
+/// Runs a fresh lexer of the version, with a consumer as the options say,
+/// over a buffered reader that hands out the bytes `size` at a time and then
+/// goes on as `end` says, lexing them as a whole input, as `lex_from` does.
+/// Returns everything it reported, the last line being the outcome.
+pub fn lex_from(
+    version: SmtVersion,
+    options: &Options,
+    size: usize,
+    bytes: &[u8],
+    end: ReaderEnd,
+) -> Vec<Line> {
+    let ending = match end {
+        ReaderEnd::End => "end",
+        ReaderEnd::Fail => "fail",
+    };
+    let request = format!(
+        "{} {size} s{} {ending}",
+        request_start("lex-from", version, options),
+        hex(bytes)
+    );
+    run_request(version, options, &request)
+}
+
+/// Runs a fresh lexer of the version, with a consumer as the options say,
+/// over the file at the path, as `lex_file` does. Returns everything it
+/// reported, the last line being the outcome.
+pub fn lex_file(version: SmtVersion, options: &Options, path: &std::path::Path) -> Vec<Line> {
+    let request = format!(
+        "{} {}",
+        request_start("lex-file", version, options),
+        hex(path.as_os_str().as_encoded_bytes())
+    );
+    run_request(version, options, &request)
+}
+
+/// Sends the request, whose lexer starts in the version and whose options
+/// are these, and returns the lines of its response.
+fn run_request(version: SmtVersion, options: &Options, request: &str) -> Vec<Line> {
     assert!(
         !(boundary_free() && matches!(options.behaviour, driver::Behaviour::Plan(_))),
         "a plan is answered by hand-overs, which the lexer under test cuts elsewhere: \
          the test must end first where `boundaries_not_applicable` says so"
     );
-    let request = request_line(version, options, feeds);
     // the version in force, as far as the response tells
     let mut current = version;
     let mut lines = Vec::new();
-    for line in respond(&request, options.recover) {
+    for line in respond(request, options.recover) {
         let line = line.as_str();
         let fields: Vec<&str> = line.split(' ').collect();
         match fields.as_slice() {
@@ -763,6 +840,24 @@ pub fn run(version: SmtVersion, options: &Options, feeds: &[Feed<'_>]) -> Vec<Li
                 name: name.to_string(),
                 continues: rest.first().map(|field| parse_continues(field, line)),
             }),
+            ["done", location, rest @ ..] => lines.push(Line::Done {
+                location: parse_loc(location, line),
+                rest: rest.first().map(|rest| {
+                    rest.parse()
+                        .unwrap_or_else(|_| panic!("the driver sent a bad count: {line:?}"))
+                }),
+            }),
+            ["none"] => lines.push(Line::NoResult),
+            ["ioerr", start, end, message] => {
+                let message = message.strip_prefix('x').unwrap_or_else(|| {
+                    panic!("the driver sent a message without its prefix: {line:?}")
+                });
+                lines.push(Line::IoError {
+                    start: parse_loc(start, line),
+                    end: parse_loc(end, line),
+                    message: unhex(message, line),
+                });
+            }
             ["fail", ..] => panic!("the driver refused {request:?}: {line:?}"),
             _ => panic!("the driver sent a line that is not understood: {line:?}"),
         }

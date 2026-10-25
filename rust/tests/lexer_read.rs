@@ -3,8 +3,13 @@
 //! up to where the consumer discards the rest, and reports an I/O failure
 //! with an empty span where reading failed.
 //!
-//! They check the Rust interface itself (`lex_from` and `lex_file`, which
-//! the Lean port does not have yet) and call the lexer directly.
+//! The tests of this behaviour run against `lex_backend`, so that the
+//! driver runs them against the Lean port too; there the buffered reader is
+//! one of the driver's, which hands out the bytes it is given a number at a
+//! time. The tests of the Rust interface itself call the lexer directly and
+//! say so.
+
+mod lex_backend;
 
 use std::convert::Infallible;
 use std::io::{self, BufRead, Read};
@@ -16,15 +21,186 @@ use blazing_smtlib::{
         SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerReadError, SmtLexerReadErrorCause,
         SmtLexicalErrorKind,
     },
-    span::SmtLocation,
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken},
 };
+use lex_backend::{LexedToken, Line, Loc, Options, ReaderEnd};
 
-/// A consumer that keeps the abstract tokens as debugged, and discards the
-/// rest of the input after the first `(exit)` if asked to.
+const INPUT: &[u8] = b"(set-logic QF_UF)\n(assert (= x #b01))\n; done\n(check-sat)\n";
+
+/// The tokens a run reported, and the line of its outcome, which is its last.
+fn outcome(mut lines: Vec<Line>) -> (Vec<LexedToken>, Line) {
+    let last = lines.pop().expect("a response ends with its outcome");
+    let tokens = lines
+        .into_iter()
+        .map(|line| match line {
+            Line::Token(token) => token,
+            other => panic!("a line that no option asked for: {other:?}"),
+        })
+        .collect();
+    (tokens, last)
+}
+
+/// The tokens of the input lexed in one slice, and where the result is
+/// returned: at the end of the input, after the last token.
+fn lexed_whole(input: &[u8]) -> (Vec<LexedToken>, Loc) {
+    let whole = lex_backend::lex_whole(SmtVersion::V2_7, input);
+    assert_eq!(whole.error, None, "the input lexes");
+    let end = whole
+        .tokens
+        .last()
+        .expect("the end of the input is handed over")
+        .end;
+    (whole.tokens, end)
+}
+
+#[test]
+fn lexing_from_a_buffered_reader_lexes_as_the_slice_does_whatever_its_buffers() {
+    let (tokens, end) = lexed_whole(INPUT);
+    for size in [1, 2, 3, 7, 64] {
+        let (from_reader, last) = outcome(lex_backend::lex_from(
+            SmtVersion::V2_7,
+            &Options::default(),
+            size,
+            INPUT,
+            ReaderEnd::End,
+        ));
+        assert_eq!(from_reader, tokens, "buffers of {size}");
+        assert_eq!(
+            last,
+            Line::Done {
+                location: end,
+                rest: Some(0)
+            },
+            "buffers of {size}"
+        );
+    }
+}
+
+#[test]
+fn lexing_from_a_buffered_reader_consumes_it_up_to_where_the_rest_is_discarded() {
+    let input = b"(check-sat) (exit) x ) (";
+    // the consumer discards the rest after `(exit)`, its sixth token
+    let discarding = Options {
+        behaviour: lex_backend::driver::Behaviour::Discard(6),
+        ..Options::default()
+    };
+    let (_, last) = outcome(lex_backend::lex_from(
+        SmtVersion::V2_7,
+        &discarding,
+        input.len(),
+        input,
+        ReaderEnd::End,
+    ));
+    assert_eq!(
+        last,
+        Line::Done {
+            location: (18, 0, 18),
+            rest: Some(b" x ) (".len() as u64)
+        }
+    );
+    // without discarding, the whole input is consumed
+    let (_, last) = outcome(lex_backend::lex_from(
+        SmtVersion::V2_7,
+        &Options::default(),
+        input.len(),
+        input,
+        ReaderEnd::End,
+    ));
+    assert_eq!(
+        last,
+        Line::Done {
+            location: (24, 0, 24),
+            rest: Some(0)
+        }
+    );
+}
+
+#[test]
+fn a_failure_of_the_buffered_reader_is_an_io_error_with_an_empty_span_where_it_failed() {
+    let input = b"(check-sat)\n(";
+    let (_, last) = outcome(lex_backend::lex_from(
+        SmtVersion::V2_7,
+        &Options::default(),
+        input.len(),
+        input,
+        ReaderEnd::Fail,
+    ));
+    assert_eq!(
+        last,
+        Line::IoError {
+            start: (13, 1, 1),
+            end: (13, 1, 1),
+            message: lex_backend::driver::READER_FAILURE.as_bytes().to_vec(),
+        }
+    );
+}
+
+#[test]
+fn a_lexical_error_from_a_buffered_reader_is_the_one_of_the_slice() {
+    let input = b"(assert (= x #b012))";
+    let from_slice = lex_backend::lex_whole(SmtVersion::V2_7, input)
+        .error
+        .expect("the input does not lex");
+    assert_eq!(from_slice.kind, SmtLexicalErrorKind::MissingDelimiter);
+    for size in [1, 4, 64] {
+        let (_, last) = outcome(lex_backend::lex_from(
+            SmtVersion::V2_7,
+            &Options::default(),
+            size,
+            input,
+            ReaderEnd::End,
+        ));
+        assert_eq!(
+            last,
+            Line::LexicalError {
+                error: from_slice.clone(),
+                continues: None
+            },
+            "buffers of {size}"
+        );
+    }
+}
+
+#[test]
+fn lexing_a_file_lexes_its_content_and_fails_to_open_with_a_zero_span() {
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("lexer-read.smt2");
+    std::fs::write(&path, INPUT).expect("the test file can be written");
+    let (tokens, end) = lexed_whole(INPUT);
+    let (from_file, last) = outcome(lex_backend::lex_file(
+        SmtVersion::V2_7,
+        &Options::default(),
+        &path,
+    ));
+    assert_eq!(from_file, tokens);
+    assert_eq!(
+        last,
+        Line::Done {
+            location: end,
+            rest: None
+        }
+    );
+
+    let missing = std::path::Path::new("/nonexistent/blazing-smtlib-test/missing.smt2");
+    let (from_file, last) = outcome(lex_backend::lex_file(
+        SmtVersion::V2_7,
+        &Options::default(),
+        missing,
+    ));
+    assert_eq!(from_file, []);
+    match last {
+        Line::IoError { start, end, .. } => {
+            assert_eq!(start, (0, 0, 0));
+            assert_eq!(end, start);
+        }
+        other => panic!("the file does not exist, got {other:?}"),
+    }
+}
+
+// --- The Rust interface ---
+
+/// A consumer that keeps the abstract tokens as debugged.
 #[derive(Default)]
 struct Tokens {
-    discards_after_exit: bool,
     tokens: Vec<String>,
 }
 
@@ -45,20 +221,9 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Tokens {
                 return Ok(ControlFlow::Break(std::mem::take(&mut self.tokens)));
             }
             self.tokens.push(format!("{token:?}"));
-            if self.discards_after_exit && self.tokens.len() >= 3 {
-                let last = &self.tokens[self.tokens.len() - 3..];
-                if last[1].contains("Exit") && last[2] == "ParenClose" {
-                    cursor.discard_rest();
-                }
-            }
         }
         Ok(ControlFlow::Continue(()))
     }
-}
-
-/// Where the location is, as `(offset, line, column)`.
-fn loc(location: SmtLocation) -> (u64, u64, u64) {
-    (location.offset(), location.line(), location.column())
 }
 
 /// A buffered reader that hands out the input `size` bytes at a time.
@@ -114,55 +279,16 @@ impl BufRead for Failing<'_> {
     }
 }
 
-const INPUT: &[u8] = b"(set-logic QF_UF)\n(assert (= x #b01))\n; done\n(check-sat)\n";
-
+/// Tests the Rust interface itself: the cause of the error, its location
+/// and its `Display`. Calls the lexer directly.
 #[test]
-fn lexing_from_a_buffered_reader_lexes_as_the_slice_does_whatever_its_buffers() {
-    let whole = SmtLexer::new(Tokens::default(), SmtVersion::V2_7)
-        .lex_all(INPUT)
-        .expect("the input lexes");
-    for size in [1, 2, 3, 7, 64] {
-        let mut lexer = SmtLexer::new(Tokens::default(), SmtVersion::V2_7);
-        let located = lexer
-            .lex_from(Chunks { input: INPUT, size })
-            .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
-        assert_eq!(located.location(), whole.location(), "buffers of {size}");
-        assert_eq!(located.value(), whole.value(), "buffers of {size}");
-    }
-}
-
-#[test]
-fn lexing_from_a_buffered_reader_consumes_it_up_to_where_the_rest_is_discarded() {
-    let input = b"(check-sat) (exit) x ) (";
-    let consumer = Tokens {
-        discards_after_exit: true,
-        ..Tokens::default()
-    };
-    let mut rest = &input[..];
-    let located = SmtLexer::new(consumer, SmtVersion::V2_7)
-        .lex_from(&mut rest)
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
-    assert_eq!(loc(located.location()), (18, 0, 18));
-    assert_eq!(rest, b" x ) (");
-    // without discarding, the whole input is consumed
-    let mut rest = &input[..];
-    let located = SmtLexer::new(Tokens::default(), SmtVersion::V2_7)
-        .lex_from(&mut rest)
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
-    assert_eq!(loc(located.location()), (24, 0, 24));
-    assert!(rest.is_empty());
-}
-
-#[test]
-fn a_failure_of_the_buffered_reader_is_an_io_error_with_an_empty_span_where_it_failed() {
+fn a_failure_of_the_buffered_reader_is_an_io_cause_shown_where_it_failed() {
     let err = SmtLexer::new(Tokens::default(), SmtVersion::V2_7)
         .lex_from(Failing {
             input: b"(check-sat)\n(",
         })
         .expect_err("the reader fails");
     assert!(matches!(err.cause(), SmtLexerReadErrorCause::Io(_)));
-    assert_eq!(loc(err.span().start()), (13, 1, 1));
-    assert_eq!(loc(err.span().end()), (13, 1, 1));
     assert_eq!(err.location(), err.span().start());
     assert!(
         err.to_string()
@@ -171,8 +297,11 @@ fn a_failure_of_the_buffered_reader_is_an_io_error_with_an_empty_span_where_it_f
     );
 }
 
+/// Tests the Rust interface itself: the type of the error, and that its
+/// location and its `Display` are those of the error of the slice. Calls
+/// the lexer directly.
 #[test]
-fn a_lexical_error_from_a_buffered_reader_is_the_one_of_the_slice() {
+fn a_lexical_error_from_a_buffered_reader_is_shown_as_the_one_of_the_slice() {
     let input = b"(assert (= x #b012))";
     let from_slice: SmtLexerError<Infallible> = SmtLexer::new(Tokens::default(), SmtVersion::V2_7)
         .lex_all(input)
@@ -195,28 +324,8 @@ fn a_lexical_error_from_a_buffered_reader_is_the_one_of_the_slice() {
     }
 }
 
-#[test]
-fn lexing_a_file_lexes_its_content_and_fails_to_open_with_a_zero_span() {
-    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("lexer-read.smt2");
-    std::fs::write(&path, INPUT).expect("the test file can be written");
-    let whole = SmtLexer::new(Tokens::default(), SmtVersion::V2_7)
-        .lex_all(INPUT)
-        .expect("the input lexes");
-    let located = SmtLexer::new(Tokens::default(), SmtVersion::V2_7)
-        .lex_file(&path)
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
-    assert_eq!(located.location(), whole.location());
-    assert_eq!(located.value(), whole.value());
-
-    let missing = std::path::Path::new("/nonexistent/blazing-smtlib-test/missing.smt2");
-    let err = SmtLexer::new(Tokens::default(), SmtVersion::V2_7)
-        .lex_file(missing)
-        .expect_err("the file does not exist");
-    assert!(matches!(err.cause(), SmtLexerReadErrorCause::Io(_)));
-    assert_eq!(loc(err.span().start()), (0, 0, 0));
-    assert!(err.span().is_empty());
-}
-
+/// Tests the Rust interface itself: the types a path may have. Calls the
+/// lexer directly.
 #[test]
 fn a_file_is_lexed_from_a_path_of_any_of_the_usual_types() {
     let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("lexer-read-paths.smt2");

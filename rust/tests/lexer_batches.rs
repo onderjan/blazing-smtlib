@@ -450,6 +450,9 @@ fn run_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run {
             Line::Abandon(_) | Line::Recover(_) => {
                 panic!("a lexer that stops at its first error does not recover")
             }
+            Line::Done { .. } | Line::NoResult | Line::IoError { .. } => {
+                panic!("feeding slices reads no whole input")
+            }
         }
     }
     assert_eq!(awaited, 0, "a hand-over with fewer tokens than it said");

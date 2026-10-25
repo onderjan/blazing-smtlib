@@ -10,7 +10,7 @@ path = "../../lean"
 # The modules of the driver besides its root.
 [[lean_lib]]
 name = "LeanDriver"
-roots = ["Protocol", "Parse"]
+roots = ["Protocol", "Parse", "Write"]
 
 [[lean_exe]]
 name = "lean-driver"

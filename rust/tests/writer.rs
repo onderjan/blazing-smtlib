@@ -1,23 +1,25 @@
-//! Public-API tests of writing tokens back as SMT-LIB text: that lexed text
-//! is written back as it was, how strings of 2.0 are escaped, that symbols
-//! spelling a reserved word are quoted, and the errors of writing.
+//! Tests of writing tokens back as SMT-LIB text, each token by itself: that
+//! lexed text is written back as it was, how strings of 2.0 are escaped,
+//! that symbols spelling a reserved word are quoted, and the errors of
+//! writing.
 //!
-//! They check the Rust interface itself and call the library directly.
+//! They run against `write_backend`, and read the written text back through
+//! `lex_backend`, so that the driver runs them against the Lean port too.
 
+mod lex_backend;
 mod reserved_words;
-
-use std::io::{self, Write};
-use std::ops::ControlFlow;
+mod write_backend;
 
 use blazing_smtlib::{
-    SmtVersion, SmtWriteError, SmtWriteErrorCause,
-    lexer::{SmtLexer, SmtLexerCursor},
+    SmtVersion,
     lexicon::{
         SmtBinDigitsBuf, SmtCommentBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf,
         SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
     },
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken, SmtTokenCategory},
+    token::{SmtReserved, SmtToken, SmtTokenCategory},
 };
+use lex_backend::Feed;
+use write_backend::{Answer, Item, WriteFailure, Writing};
 
 const VERSIONS: [SmtVersion; 4] = [
     SmtVersion::V2_0,
@@ -34,57 +36,46 @@ struct WrittenBack {
     tokens: Vec<(SmtTokenCategory, Vec<u8>)>,
 }
 
-/// A consumer that takes every token, whitespace and comments included, and
-/// writes it back in the version the cursor is in.
-#[derive(Default)]
-struct WriteBack {
-    written: WrittenBack,
-}
-
-impl SmtConsume for WriteBack {
-    type Result = WrittenBack;
-    type Error = SmtWriteError;
-    const IS_CONCRETE: bool = true;
-}
-
-impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for WriteBack {
-    fn consume(
-        &mut self,
-        cursor: &mut SmtLexerCursor<'a>,
-    ) -> Result<ControlFlow<Self::Result>, Self::Error> {
-        while let Some(token) = cursor.next() {
-            cursor
-                .syntax(&token)
-                .write_smt(&mut self.written.text, cursor.version())?;
-            if token.category() == SmtTokenCategory::EndOfFile {
-                return Ok(ControlFlow::Break(std::mem::take(&mut self.written)));
-            }
-            self.written
-                .tokens
-                .push((token.category(), token.content().to_vec()));
-        }
-        Ok(ControlFlow::Continue(()))
-    }
-}
-
-/// Lexes the whole input in the version and writes every token back.
+/// Lexes the whole input in the version, whitespace and comments included,
+/// and writes every token back by itself in the version.
 fn write_back(version: SmtVersion, input: &[u8]) -> WrittenBack {
-    SmtLexer::new(WriteBack::default(), version)
-        .lex_all(input)
-        .unwrap_or_else(|err| {
-            panic!(
-                "{:?} should lex and be written in {version:?}: {err:?}",
-                input.escape_ascii().to_string()
-            )
-        })
-        .into_value()
+    let text = write_backend::written(version, Writing::TokenByToken, &[Item::lex(input)]);
+    let lexed = lex_backend::lex_with_whitespace(version, &[Feed::Slice(input), Feed::Eof]);
+    assert_eq!(
+        lexed.error,
+        None,
+        "{:?} should lex in {version:?}",
+        input.escape_ascii().to_string()
+    );
+    let tokens = lexed
+        .tokens
+        .into_iter()
+        .filter(|token| token.ty != SmtTokenCategory::EndOfFile)
+        .map(|token| (token.ty, token.content))
+        .collect();
+    WrittenBack { text, tokens }
 }
 
-/// Writes the token into a fresh buffer.
-fn written(token: SmtToken<'_>, version: SmtVersion) -> Result<Vec<u8>, SmtWriteError> {
-    let mut text = Vec::new();
-    token.write_smt(&mut text, version)?;
-    Ok(text)
+/// Writes the token by itself.
+fn written(token: SmtToken<'_>, version: SmtVersion) -> Result<Vec<u8>, WriteFailure> {
+    let written = write_backend::write(
+        version,
+        Writing::TokenByToken,
+        false,
+        &[Item::write([token])],
+    );
+    match &written.answers[..] {
+        [Answer::Ok] => Ok(written.out),
+        [Answer::Failed(failure)] => {
+            assert!(
+                written.out.is_empty(),
+                "a failed token wrote {:?}",
+                written.out
+            );
+            Err(failure.clone())
+        }
+        other => panic!("one write should be answered once, got {other:?}"),
+    }
 }
 
 /// Inputs that every version lexes alike, with every kind of token, and
@@ -246,34 +237,20 @@ fn a_reserved_word_is_written_only_in_the_versions_that_reserve_it() {
         for word in reserved_words::reserved_words() {
             let reserved = SmtReserved::from_bytes(word.as_bytes(), SmtVersion::V2_7)
                 .expect("the word is reserved in the latest version");
-            let mut text = Vec::new();
-            let result = SmtToken::Reserved(reserved).write_smt(&mut text, version);
+            // `written` checks that a refused word writes nothing
+            let result = written(SmtToken::Reserved(reserved), version);
             if reserved.is_in_version(version) {
-                result.unwrap_or_else(|err| panic!("{word} in {version:?}: {err:?}"));
+                let text = result.unwrap_or_else(|err| panic!("{word} in {version:?}: {err:?}"));
                 assert_eq!(String::from_utf8_lossy(&text), reserved.as_str());
             } else {
-                match result.map_err(SmtWriteError::into_cause) {
-                    Err(SmtWriteErrorCause::NotInVersion(refused)) => {
+                match result {
+                    Err(WriteFailure::NotInVersion(refused)) => {
                         assert_eq!(refused, reserved, "{word} in {version:?}")
                     }
                     other => panic!("{word} in {version:?} should be refused, got {other:?}"),
                 }
-                assert!(text.is_empty(), "{word} in {version:?} wrote {text:?}");
             }
         }
-    }
-}
-
-/// A writer that fails every write.
-struct FailingWriter;
-
-impl Write for FailingWriter {
-    fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
-        Err(io::Error::other("the test writer fails every write"))
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Err(io::Error::other("the test writer fails every flush"))
     }
 }
 
@@ -308,14 +285,15 @@ fn a_failure_of_the_writer_is_an_io_error() {
         SmtToken::Comment(comment.view()),
     ];
     for version in VERSIONS {
-        for token in tokens {
-            match token.write_smt(&mut FailingWriter, version) {
-                Err(err) => assert!(
-                    matches!(err.cause(), SmtWriteErrorCause::Io(_)),
-                    "{token:?} in {version:?}: {err:?}"
-                ),
-                Ok(()) => panic!("{token:?} in {version:?} should fail to be written"),
-            }
+        // each token in a write of its own
+        let items: Vec<Item> = tokens.iter().map(|token| Item::write([*token])).collect();
+        let written = write_backend::write(version, Writing::TokenByToken, true, &items);
+        assert_eq!(written.answers.len(), tokens.len());
+        for (token, answer) in tokens.iter().zip(&written.answers) {
+            assert!(
+                matches!(answer, Answer::Failed(WriteFailure::Io(_))),
+                "{token:?} in {version:?} should fail to be written, got {answer:?}"
+            );
         }
     }
 }
@@ -326,8 +304,16 @@ fn the_end_of_the_input_writes_nothing() {
         let text = written(SmtToken::EndOfFile, version);
         assert_eq!(text.expect("the end of the input is written"), b"");
         // not even a failing writer is written to
-        SmtToken::EndOfFile
-            .write_smt(&mut FailingWriter, version)
-            .expect("the end of the input touches no writer");
+        let written = write_backend::write(
+            version,
+            Writing::TokenByToken,
+            true,
+            &[Item::write([SmtToken::EndOfFile])],
+        );
+        assert_eq!(
+            written.answers,
+            [Answer::Ok],
+            "the end of the input touches no writer"
+        );
     }
 }
