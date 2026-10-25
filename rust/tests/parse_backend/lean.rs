@@ -565,8 +565,8 @@ fn handler_call<H: Handler>(
         }
         "handle_sort" => {
             let ident = fields.ident();
-            let applied = values.sorts(fields);
-            let result = handler.handle_sort(Sort { ident, applied });
+            let args = values.sorts(fields);
+            let result = handler.handle_sort(Sort { ident, args });
             values.made(result, |values, sort| put(&mut values.sorts, sort))
         }
         "handle_term" => {

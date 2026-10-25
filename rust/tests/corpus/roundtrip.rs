@@ -466,14 +466,14 @@ impl SmtHandler for Reprint {
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Res<Text> {
         let mut out = Vec::new();
-        if sort.applied.is_empty() {
+        if sort.args.is_empty() {
             ident(&mut out, sort.ident);
         } else {
             out.push(b'(');
             ident(&mut out, sort.ident);
-            for applied in sort.applied.iter() {
+            for arg in sort.args.iter() {
                 out.push(b' ');
-                out.extend_from_slice(applied);
+                out.extend_from_slice(arg);
             }
             out.push(b')');
         }

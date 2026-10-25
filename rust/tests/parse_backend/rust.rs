@@ -77,7 +77,7 @@ impl<H: Handler> SmtHandler for Adapt<'_, H> {
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<H::Sort, H::Error> {
         self.0.handle_sort(Sort {
             ident: sort.ident.into_owned(),
-            applied: sort.applied.into_iter().collect(),
+            args: sort.args.into_iter().collect(),
         })
     }
 

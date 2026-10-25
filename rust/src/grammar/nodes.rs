@@ -284,7 +284,7 @@ pub type SmtSorts<'a, H> = SmtMultiple<'a, <H as SmtHandler>::Sort>;
 /// A sort to be handled.
 pub struct SmtSort<'a, H: SmtHandler + ?Sized> {
     pub ident: SmtIdent<'a>,
-    pub applied: SmtSorts<'a, H>,
+    pub args: SmtSorts<'a, H>,
 }
 
 impl<H: SmtHandler + ?Sized> Debug for SmtSort<'_, H>
@@ -294,7 +294,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SmtSort")
             .field("ident", &self.ident)
-            .field("applied", &self.applied)
+            .field("args", &self.args)
             .finish()
     }
 }
@@ -913,14 +913,14 @@ where
     H::Sort: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
-        if self.applied.is_empty() {
+        if self.args.is_empty() {
             // a sort without arguments is represented by its identifier
             append_ident(self.ident, tokens);
         } else {
             // use the syntax for a sort with arguments: ( identifier sort+ )
             tokens.push(SmtSyntaxToken::ParenOpen);
             append_ident(self.ident, tokens);
-            self.applied.append_tokens(tokens);
+            self.args.append_tokens(tokens);
             tokens.push(SmtSyntaxToken::ParenClose);
         }
     }

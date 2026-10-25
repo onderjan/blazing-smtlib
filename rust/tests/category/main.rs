@@ -186,11 +186,11 @@ impl Handler for Printing {
 
     fn handle_sort(&mut self, sort: Sort<Self::Sort>) -> Result<String, Infallible> {
         let ident = render_ident(&sort.ident);
-        Ok(if sort.applied.is_empty() {
+        Ok(if sort.args.is_empty() {
             ident
         } else {
             let mut items = vec![ident];
-            items.extend(sort.applied);
+            items.extend(sort.args);
             render_list(&items)
         })
     }

@@ -196,10 +196,10 @@ impl Handler for Resolving {
         } else {
             name
         };
-        Ok(if sort.applied.is_empty() {
+        Ok(if sort.args.is_empty() {
             name
         } else {
-            format!("({} {})", name, sort.applied.as_slice().join(" "))
+            format!("({} {})", name, sort.args.as_slice().join(" "))
         })
     }
 

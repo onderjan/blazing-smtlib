@@ -375,7 +375,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                         )));
                     }
                     // ensure the datatypes parser is expecting the correct number of elements
-                    self.datatypes_parser.set_maximum(introductions.len());
+                    self.datatypes_parser.set_max_elements(introductions.len());
                     // start datatype declarations
                     self.arities_buf.clear();
                     for (name, arity) in &introductions {

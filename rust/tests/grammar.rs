@@ -247,11 +247,11 @@ impl SmtHandler for RenderHandler {
 
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<String, Infallible> {
         let ident = render_ident(sort.ident);
-        if sort.applied.is_empty() {
+        if sort.args.is_empty() {
             return Ok(ident);
         }
-        let applied: Vec<String> = sort.applied.into_iter().collect();
-        Ok(format!("({ident} {})", applied.join(" ")))
+        let args: Vec<String> = sort.args.into_iter().collect();
+        Ok(format!("({ident} {})", args.join(" ")))
     }
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         match term {
@@ -680,14 +680,14 @@ fn a_handler_takes_an_indexed_sort_and_a_match_built_outside_the_library() {
     let width = numeral_buf(b"32");
     let mut indices = SmtIndicesBuf::new();
     indices.push(SmtIndex::Numeral(width.view()));
-    let mut applied = Vec::new();
+    let mut args = Vec::new();
     let sort = handler
         .handle_sort(SmtSort {
             ident: SmtIdent {
                 name: bit_vec.view(),
                 indices: indices.view(),
             },
-            applied: SmtMultiple::new(&mut applied),
+            args: SmtMultiple::new(&mut args),
         })
         .unwrap_or_else(|never| match never {});
     assert_eq!(sort, "(_ BitVec 32)");

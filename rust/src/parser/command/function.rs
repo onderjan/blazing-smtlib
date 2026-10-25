@@ -236,7 +236,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     }
 
                     // remember how many signatures we have and set it as a maximum for bodies
-                    self.bodies_parser.set_maximum(signatures.len());
+                    self.bodies_parser.set_max_elements(signatures.len());
 
                     // start recursive function bodies in the handler, passing the signatures;
                     // the body parser keeps them, as each body start is given its own again

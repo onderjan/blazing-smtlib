@@ -300,15 +300,15 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
     pub(crate) fn hand_over_sort<R>(
         &mut self,
         ident: IdentHandle,
-        applied_start: usize,
+        args_start: usize,
         f: impl FnOnce(SmtSort<'_, H>) -> R,
     ) -> R {
         let sort = SmtSort {
             ident: ident_view(&self.text, &self.indices, ident),
-            applied: SmtMultiple::new_starting(&mut self.sorts, applied_start),
+            args: SmtMultiple::new_starting(&mut self.sorts, args_start),
         };
         let result = f(sort);
-        self.sorts.truncate(applied_start);
+        self.sorts.truncate(args_start);
         self.indices.truncate(ident.indices_start);
         self.text.truncate(ident.name.start());
         result

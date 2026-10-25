@@ -29,7 +29,7 @@ pub struct QualifiedIdent<S> {
 #[derive(Debug)]
 pub struct Sort<S> {
     pub ident: SmtIdentBuf,
-    pub applied: Vec<S>,
+    pub args: Vec<S>,
 }
 
 /// An application of a qualified identifier to its arguments.
