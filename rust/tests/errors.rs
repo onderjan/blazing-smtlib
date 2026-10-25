@@ -18,7 +18,7 @@ use blazing_smtlib::{
     SmtNonstandardCommandError, SmtPartialCommandError, SmtReadError, SmtReadErrorCause,
     SmtSyntaxChecker, SmtVersion, SmtWriteError, SmtWriteErrorCause,
     grammar::SmtEmptyArgumentsError,
-    lexer::{SmtLexError, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
         SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtNumericOverflowError, SmtSymbolBuf,
     },
@@ -70,7 +70,7 @@ fn assert_error<T: Error + Send + Sync + 'static>() {}
 #[test]
 fn the_returned_error_types_are_errors() {
     assert_error::<SmtReadError<Rejected>>();
-    assert_error::<SmtLexError<Rejected>>();
+    assert_error::<SmtLexerError<Rejected>>();
     assert_error::<SmtParseError<Rejected>>();
     assert_error::<SmtPartialCommandError<Rejected>>();
     assert_error::<SmtNonstandardCommandError>();
@@ -179,7 +179,7 @@ impl<'a, E> SmtConsumeFrom<SmtLexerCursor<'a>> for RejectNumerals<E> {
     }
 }
 
-fn lex_error(input: &[u8]) -> SmtLexError<Rejected> {
+fn lex_error(input: &[u8]) -> SmtLexerError<Rejected> {
     let mut lexer = SmtLexer::new(RejectNumerals(|| Rejected), SmtVersion::V2_7);
     lexer
         .lex_all(input)

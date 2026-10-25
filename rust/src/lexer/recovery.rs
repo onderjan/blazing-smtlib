@@ -50,9 +50,9 @@ pub(super) mod sealed {
 /// and may change or be removed in any version.
 ///
 /// It cannot be implemented outside of this crate.
-pub trait SmtLexRecovery<C: SmtConsume>: sealed::Recovery<C> {}
+pub trait SmtLexerRecovery<C: SmtConsume>: sealed::Recovery<C> {}
 
-impl<C: SmtConsume> SmtLexRecovery<C> for SmtFailFast {}
+impl<C: SmtConsume> SmtLexerRecovery<C> for SmtFailFast {}
 
 impl<C: SmtConsume> sealed::Recovery<C> for SmtFailFast {
     const RECOVERS: bool = false;
@@ -68,7 +68,7 @@ impl<C: SmtConsume> sealed::Recovery<C> for SmtFailFast {
     }
 }
 
-impl<C: SmtRecover> SmtLexRecovery<C> for SmtRecovering {}
+impl<C: SmtRecover> SmtLexerRecovery<C> for SmtRecovering {}
 
 impl<C: SmtRecover> sealed::Recovery<C> for SmtRecovering {
     const RECOVERS: bool = true;

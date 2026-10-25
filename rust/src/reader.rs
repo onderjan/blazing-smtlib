@@ -24,7 +24,7 @@ use std::{
 
 use crate::{
     SmtCommandHandler, SmtHandler,
-    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexer, SmtLexerError, SmtLexerErrorCause, SmtLexicalErrorKind},
     parser::{
         SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorCause, SmtScriptParser,
         SmtSyntaxErrorKind, SmtVersionErrorKind,
@@ -139,12 +139,12 @@ impl<E: Error + 'static> Error for SmtReadError<E> {
     }
 }
 
-impl<E> From<SmtLexError<SmtParseError<E>>> for SmtReadError<E> {
-    fn from(err: SmtLexError<SmtParseError<E>>) -> Self {
+impl<E> From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E> {
+    fn from(err: SmtLexerError<SmtParseError<E>>) -> Self {
         let span = err.span();
         match err.into_cause() {
-            SmtLexErrorCause::Lexical(err) => Self::new(SmtReadErrorCause::Lexical(err), span),
-            SmtLexErrorCause::Consumer(err) => Self::from_parse(err, span),
+            SmtLexerErrorCause::Lexical(err) => Self::new(SmtReadErrorCause::Lexical(err), span),
+            SmtLexerErrorCause::Consumer(err) => Self::from_parse(err, span),
         }
     }
 }

@@ -36,7 +36,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use blazing_smtlib::{
     SmtVersion,
     lexer::{
-        SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexerToken, SmtLexicalErrorKind,
+        SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerErrorCause, SmtLexerToken,
+        SmtLexicalErrorKind,
     },
     span::{SmtLocated, SmtLocation},
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtTokenCategory},
@@ -258,13 +259,13 @@ impl Run {
 
 /// Whether a call returned the break that the consumer makes at the end of
 /// the input, as every consumer must, rather than a finish by the plan.
-fn breaks_at_end(result: &Result<SmtLocated<bool>, SmtLexError<()>>) -> bool {
+fn breaks_at_end(result: &Result<SmtLocated<bool>, SmtLexerError<()>>) -> bool {
     matches!(result, Ok(located) if !*located.value())
 }
 
 /// The location of a finish by the plan, which the end of the input returns.
 #[track_caller]
-fn finished_at(result: Result<SmtLocated<bool>, SmtLexError<()>>) -> (u64, u64, u64) {
+fn finished_at(result: Result<SmtLocated<bool>, SmtLexerError<()>>) -> (u64, u64, u64) {
     match result {
         Ok(located) if *located.value() => loc(located.location()),
         other => panic!("expected a finish by the plan, got {other:?}"),
@@ -286,7 +287,7 @@ fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
 /// continues.
 type Failed = (RunError, Option<ErrorSpan>);
 
-fn into_cause(err: SmtLexError<()>) -> Failed {
+fn into_cause(err: SmtLexerError<()>) -> Failed {
     assert_eq!(
         err.continues_from(),
         None,
@@ -294,8 +295,8 @@ fn into_cause(err: SmtLexError<()>) -> Failed {
     );
     let span = (loc(err.span().start()), loc(err.span().end()));
     match err.into_cause() {
-        SmtLexErrorCause::Lexical(kind) => (RunError::Lexical(kind), Some(span)),
-        SmtLexErrorCause::Consumer(()) => (RunError::Consumer, None),
+        SmtLexerErrorCause::Lexical(kind) => (RunError::Lexical(kind), Some(span)),
+        SmtLexerErrorCause::Consumer(()) => (RunError::Consumer, None),
     }
 }
 

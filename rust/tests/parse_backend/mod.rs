@@ -43,7 +43,7 @@ use blazing_smtlib::{
     SmtNonstandardCommandError, SmtReadError, SmtReadErrorCause, SmtReader, SmtVersion,
     SmtVersionPosture,
     grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind},
-    lexer::{SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind},
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorCause, SmtLexicalErrorKind},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
@@ -1317,7 +1317,7 @@ pub fn drive<H: Handler, P: Category<H>>(
                 .map_err(|err| (err.span(), err.into_cause()))
             {
                 Ok(_) => {}
-                Err((span, SmtLexErrorCause::Consumer(err))) => match err.into_cause() {
+                Err((span, SmtLexerErrorCause::Consumer(err))) => match err.into_cause() {
                     SmtParseErrorCause::Syntax(kind) => return Err((kind, span.into())),
                     SmtParseErrorCause::Version(kind) => {
                         panic!("a category parser cannot fail on the version, got {kind:?}")
@@ -1326,7 +1326,7 @@ pub fn drive<H: Handler, P: Category<H>>(
                         panic!("the handler must not fail on {text:?}")
                     }
                 },
-                Err((_, SmtLexErrorCause::Lexical(kind))) => {
+                Err((_, SmtLexerErrorCause::Lexical(kind))) => {
                     panic!("test input {text:?} must lex, got {kind:?}")
                 }
             }

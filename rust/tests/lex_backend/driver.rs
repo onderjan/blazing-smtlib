@@ -11,7 +11,7 @@ use std::rc::Rc;
 use blazing_smtlib::{
     SmtVersion,
     lexer::{
-        SmtLexErrorCause, SmtLexRecovery, SmtLexer, SmtLexerCursor, SmtLexerToken, SmtRecover,
+        SmtLexer, SmtLexerCursor, SmtLexerErrorCause, SmtLexerRecovery, SmtLexerToken, SmtRecover,
     },
     lexicon::SmtDecimal,
     span::SmtLocation,
@@ -361,7 +361,7 @@ fn read_request(line: &str) -> Result<Request, String> {
 
 /// Applies the feeds of the request to the lexer and writes the lines of
 /// the feeds themselves. Returns whether every feed was applied.
-fn drive<const WHITESPACE: bool, R: SmtLexRecovery<Scripted<WHITESPACE>>>(
+fn drive<const WHITESPACE: bool, R: SmtLexerRecovery<Scripted<WHITESPACE>>>(
     request: &Request,
     out: &RefCell<String>,
     lexer: &mut SmtLexer<Scripted<WHITESPACE>, R>,
@@ -392,13 +392,13 @@ fn drive<const WHITESPACE: bool, R: SmtLexRecovery<Scripted<WHITESPACE>>>(
 
             let continues = err.continues_from();
             let mut line = match err.cause() {
-                SmtLexErrorCause::Lexical(kind) => format!(
+                SmtLexerErrorCause::Lexical(kind) => format!(
                     "err {:?} {} {}",
                     kind,
                     location(err.span().start()),
                     location(err.span().end()),
                 ),
-                SmtLexErrorCause::Consumer(name) => format!("cerr {name}"),
+                SmtLexerErrorCause::Consumer(name) => format!("cerr {name}"),
             };
             if request.recover {
                 // where the input continues from, if it does

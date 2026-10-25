@@ -5,8 +5,8 @@ mod helpers;
 mod recovery;
 
 pub use cursor::{SmtLexerCursor, SmtLexerToken, SmtLexerWindow};
-pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind, SmtLexicalExpected};
-pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecover, SmtRecovering};
+pub use error::{SmtLexerError, SmtLexerErrorCause, SmtLexicalErrorKind, SmtLexicalExpected};
+pub use recovery::{SmtFailFast, SmtLexerRecovery, SmtRecover, SmtRecovering};
 
 pub(crate) use cursor::{InnerCategory, LexerCursorAction};
 
@@ -52,7 +52,7 @@ use crate::{
 ///
 /// If an error occurs during lexing, the lexer moves
 /// into a failure state where all further lexing calls panic.
-pub struct SmtLexer<C: SmtConsume, R: SmtLexRecovery<C> = SmtFailFast> {
+pub struct SmtLexer<C: SmtConsume, R: SmtLexerRecovery<C> = SmtFailFast> {
     /// Consumer of produced tokens.
     consumer: C,
 
@@ -145,7 +145,7 @@ struct Interrupted<E> {
 /// raised it, or the end of the input if the end raised it. For a consumer error,
 /// it is after the last token the consumer has consumed.
 struct Failure<E> {
-    error: SmtLexError<E>,
+    error: SmtLexerError<E>,
     location: SmtLocation,
 }
 
@@ -256,7 +256,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     pub fn lex_all(
         &mut self,
         input: &[u8],
-    ) -> Result<SmtLocated<C::Result>, SmtLexError<C::Error>> {
+    ) -> Result<SmtLocated<C::Result>, SmtLexerError<C::Error>> {
         self.lex_slice(input)?;
         self.lex_eof()
     }
@@ -286,10 +286,10 @@ impl<C: SmtRecover> SmtLexer<C, SmtRecovering> {
     }
 }
 
-type ArmLexResult<C> = Result<usize, Interrupted<SmtLexError<<C as SmtConsume>::Error>>>;
-type FinishLexResult<C> = Result<(), Interrupted<SmtLexError<<C as SmtConsume>::Error>>>;
+type ArmLexResult<C> = Result<usize, Interrupted<SmtLexerError<<C as SmtConsume>::Error>>>;
+type FinishLexResult<C> = Result<(), Interrupted<SmtLexerError<<C as SmtConsume>::Error>>>;
 
-impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
+impl<C: SmtConsume, R: SmtLexerRecovery<C>> SmtLexer<C, R> {
     fn construct(consumer: C, version: SmtVersion) -> Self {
         SmtLexer {
             consumer,
@@ -347,14 +347,14 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     }
 }
 
-impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLexer<C, R> {
+impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtLexer<C, R> {
     /// Lexes the given slice, sending the lexed tokens to the consumer.
     ///
     /// If the consumer produces a result, the result is held back until EOF.
     ///
     /// If an error occurs, the fail-fast lexer moves into
     /// a failure state and all further lexing calls panic.
-    pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), SmtLexError<C::Error>> {
+    pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), SmtLexerError<C::Error>> {
         if self.discard {
             // pretend that we lexed everything we were given
             return Ok(());
@@ -407,7 +407,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     /// The contract of the token consumer forbids it from
     /// returning [`ControlFlow::Continue`] on the EOF token,
     /// and the lexer panics if it does.
-    pub fn lex_eof(&mut self) -> Result<SmtLocated<C::Result>, SmtLexError<C::Error>> {
+    pub fn lex_eof(&mut self) -> Result<SmtLocated<C::Result>, SmtLexerError<C::Error>> {
         // the end of the input forces recovery
         let recovered = self.recovery_state.take().is_some();
         if recovered {
@@ -1499,7 +1499,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         &self,
         next: u8,
         position: usize,
-    ) -> Result<(), Interrupted<SmtLexError<E>>> {
+    ) -> Result<(), Interrupted<SmtLexerError<E>>> {
         if FAST[next as usize] & FAST_DELIM != 0 {
             Ok(())
         } else {
@@ -1835,8 +1835,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                 Self::finish_cursor(cursor, consumed_depth, lexed_depth);
 
                 return Err(Interrupted {
-                    result: Err(SmtLexError::new(
-                        SmtLexErrorCause::Lexical(SmtLexicalErrorKind::UnexpectedTrailingToken),
+                    result: Err(SmtLexerError::new(
+                        SmtLexerErrorCause::Lexical(SmtLexicalErrorKind::UnexpectedTrailingToken),
                         span,
                         None,
                     )),
@@ -1880,8 +1880,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                         }
                     }
                 }
-                Err(err) => Err(SmtLexError::new(
-                    SmtLexErrorCause::Consumer(err),
+                Err(err) => Err(SmtLexerError::new(
+                    SmtLexerErrorCause::Consumer(err),
                     consumed_span,
                     None,
                 )),
@@ -2022,7 +2022,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     }
 
     /// Error spanning the token so far and, if it ended at a byte, that byte.
-    fn error<E>(&self, kind: SmtLexicalErrorKind, end: TokenEnd) -> Interrupted<SmtLexError<E>> {
+    fn error<E>(&self, kind: SmtLexicalErrorKind, end: TokenEnd) -> Interrupted<SmtLexerError<E>> {
         // if the token ended at a byte, that byte raised the error,
         // otherwise the end of the input did
         self.error_with(kind, end.position + end.at_byte as usize, end.position)
@@ -2036,7 +2036,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         &self,
         kind: SmtLexicalErrorKind,
         position: usize,
-    ) -> Interrupted<SmtLexError<E>> {
+    ) -> Interrupted<SmtLexerError<E>> {
         // the byte before the position raised the error
         let raised_by = position
             .checked_sub(1)
@@ -2050,14 +2050,14 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         kind: SmtLexicalErrorKind,
         position: usize,
         failure: usize,
-    ) -> Interrupted<SmtLexError<E>> {
+    ) -> Interrupted<SmtLexerError<E>> {
         let end = self.location_at(position);
         let span = SmtSpan::new_unchecked(self.token_start, end);
         // no tokens have been consumed, as this is an error
         // that occurred during lexing
         Interrupted {
-            result: Err(SmtLexError::new(
-                SmtLexErrorCause::Lexical(kind),
+            result: Err(SmtLexerError::new(
+                SmtLexerErrorCause::Lexical(kind),
                 span,
                 None,
             )),
@@ -2069,7 +2069,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
     ///
     /// A fail-fast lexer has no way out of the failure mode. A recovering lexer
     /// makes the consumer abandon its current work and skips bytes until recovery is made.
-    fn fail(&mut self, failure: Failure<C::Error>, at_end: bool) -> SmtLexError<C::Error> {
+    fn fail(&mut self, failure: Failure<C::Error>, at_end: bool) -> SmtLexerError<C::Error> {
         if !R::RECOVERS {
             // set the lexer to failed state
             self.state = LexerState::Failed;
@@ -2082,7 +2082,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         } else {
             // start recovering from inside the string or quoted symbol if necessary
             match failure.error.cause() {
-                SmtLexErrorCause::Lexical(kind) => match kind {
+                SmtLexerErrorCause::Lexical(kind) => match kind {
                     SmtLexicalErrorKind::ForbiddenByteInString => RecoveryState::String,
                     SmtLexicalErrorKind::BackslashInQuotedSymbol
                     | SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol => {
@@ -2091,7 +2091,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                     _ => RecoveryState::Plain,
                 },
                 // the consumer fails at the boundary after a whole token
-                SmtLexErrorCause::Consumer(_) => RecoveryState::Boundary,
+                SmtLexerErrorCause::Consumer(_) => RecoveryState::Boundary,
             }
         };
 
@@ -2213,7 +2213,7 @@ struct FastState {
 
 impl FastState {
     #[inline(always)]
-    fn load<C: SmtConsume, R: SmtLexRecovery<C>>(lexer: &SmtLexer<C, R>, batch: &Batch) -> Self {
+    fn load<C: SmtConsume, R: SmtLexerRecovery<C>>(lexer: &SmtLexer<C, R>, batch: &Batch) -> Self {
         Self {
             len: batch.len,
             line: lexer.line,
@@ -2222,7 +2222,7 @@ impl FastState {
     }
 
     #[inline(always)]
-    fn store<C: SmtConsume, R: SmtLexRecovery<C>>(
+    fn store<C: SmtConsume, R: SmtLexerRecovery<C>>(
         self,
         lexer: &mut SmtLexer<C, R>,
         batch: &mut Batch,
