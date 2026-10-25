@@ -54,9 +54,9 @@ fn introduced_in(word: &str) -> SmtVersion {
 
 /// The default posture with 2.0 allowed as well: every version can be declared, once.
 fn every_version_allowed() -> SmtVersionPosture {
-    posture(|builder| {
-        builder.add_allowed(SmtVersion::V2_0);
-    })
+    SmtVersionPostureBuilder::new()
+        .add_allowed(SmtVersion::V2_0)
+        .build()
 }
 
 /// Reads the input as a script in the given pieces, then the end of the input,
@@ -149,12 +149,6 @@ fn assert_version_error(outcome: Outcome, kind: SmtVersionErrorKind, start: u64,
             end
         ))
     );
-}
-
-fn posture(build: impl FnOnce(&mut SmtVersionPostureBuilder)) -> SmtVersionPosture {
-    let mut builder = SmtVersionPostureBuilder::new();
-    build(&mut builder);
-    builder.build()
 }
 
 #[test]
@@ -375,11 +369,10 @@ fn a_version_that_is_not_supported_is_rejected() {
 
     // a version the library knows is rejected the same way when the posture excludes it
     for (excluded, spelling) in VERSIONS {
-        let without = posture(|builder| {
-            builder
-                .add_allowed(SmtVersion::V2_0)
-                .remove_allowed(excluded);
-        });
+        let without = SmtVersionPostureBuilder::new()
+            .add_allowed(SmtVersion::V2_0)
+            .remove_allowed(excluded)
+            .build();
         for (_, declared) in VERSIONS {
             let input = format!("(set-info :smt-lib-version {declared})");
             let result = read(&input, SmtVersion::V2_7, without.clone());
@@ -390,9 +383,7 @@ fn a_version_that_is_not_supported_is_rejected() {
             }
         }
     }
-    let none = posture(|builder| {
-        builder.clear_allowed();
-    });
+    let none = SmtVersionPostureBuilder::new().clear_allowed().build();
     let result = read("(set-info :smt-lib-version 2.7)", SmtVersion::V2_7, none);
     assert_version_error(result, SmtVersionErrorKind::Unsupported, 30, 31);
 }
@@ -427,9 +418,9 @@ fn the_number_of_declarations_is_limited() {
     }
 
     // with no declaration allowed, the first one is rejected
-    let zero = posture(|builder| {
-        builder.set_max_declarations(Some(0));
-    });
+    let zero = SmtVersionPostureBuilder::new()
+        .set_max_declarations(Some(0))
+        .build();
     let result = read(
         "(set-info :smt-lib-version 2.7)",
         SmtVersion::V2_7,
@@ -443,9 +434,9 @@ fn the_number_of_declarations_is_limited() {
 
     // a higher limit counts the declarations, and no limit allows any number
     let three = format!("{two}\n(set-info :smt-lib-version 2.7)");
-    let up_to_two = posture(|builder| {
-        builder.set_max_declarations(Some(2));
-    });
+    let up_to_two = SmtVersionPostureBuilder::new()
+        .set_max_declarations(Some(2))
+        .build();
     assert_eq!(read(two, SmtVersion::V2_7, up_to_two.clone()), Ok(()));
     assert_version_error(
         read(&three, SmtVersion::V2_7, up_to_two),
@@ -453,9 +444,9 @@ fn the_number_of_declarations_is_limited() {
         94,
         95,
     );
-    let unlimited = posture(|builder| {
-        builder.set_max_declarations(None);
-    });
+    let unlimited = SmtVersionPostureBuilder::new()
+        .set_max_declarations(None)
+        .build();
     let input = format!("{three}(declare-const lambda Bool)");
     assert_syntax_error(
         read(&input, SmtVersion::V2_7, unlimited.clone()),
@@ -937,11 +928,10 @@ fn the_string_escapes_follow_the_declared_version() {
     );
 
     // several declarations switch back and forth
-    let unlimited = posture(|builder| {
-        builder
-            .add_allowed(SmtVersion::V2_0)
-            .set_max_declarations(None);
-    });
+    let unlimited = SmtVersionPostureBuilder::new()
+        .add_allowed(SmtVersion::V2_0)
+        .set_max_declarations(None)
+        .build();
     let input =
         format!("{modern}{to_2_0}{legacy}(set-info :smt-lib-version 2.5){modern}{to_2_0}{legacy}");
     assert_eq!(read(&input, SmtVersion::V2_6, unlimited), Ok(()));

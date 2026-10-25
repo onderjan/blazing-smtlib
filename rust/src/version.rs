@@ -78,24 +78,24 @@ impl SmtVersionPostureBuilder {
         self.max_declarations
     }
 
-    pub fn clear_allowed(&mut self) -> &mut Self {
+    pub fn clear_allowed(mut self) -> Self {
         self.allowed.clear();
         self
     }
 
-    pub fn add_allowed(&mut self, allowed: SmtVersion) -> &mut Self {
+    pub fn add_allowed(mut self, allowed: SmtVersion) -> Self {
         self.allowed.push(allowed);
         self
     }
 
-    pub fn remove_allowed(&mut self, allowed: SmtVersion) -> &mut Self {
+    pub fn remove_allowed(mut self, allowed: SmtVersion) -> Self {
         while let Some(index) = self.allowed.iter().position(|elem| *elem == allowed) {
             self.allowed.remove(index);
         }
         self
     }
 
-    pub fn set_max_declarations(&mut self, max_declarations: Option<u64>) -> &mut Self {
+    pub fn set_max_declarations(mut self, max_declarations: Option<u64>) -> Self {
         self.max_declarations = max_declarations;
         self
     }

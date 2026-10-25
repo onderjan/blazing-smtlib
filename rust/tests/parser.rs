@@ -1304,9 +1304,9 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Observing<'_> {
 
 /// A posture that allows a switch from 2.7 to 2.0.
 fn posture_with_2_0() -> SmtVersionPosture {
-    let mut builder = SmtVersionPostureBuilder::new();
-    builder.add_allowed(SmtVersion::V2_0);
-    builder.build()
+    SmtVersionPostureBuilder::new()
+        .add_allowed(SmtVersion::V2_0)
+        .build()
 }
 
 #[test]
