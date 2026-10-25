@@ -52,7 +52,7 @@ instance needs them before it exists, so they cannot be the bridge's functions t
 def termNodeOf : Nodes.Term values.sort values.term → TermNode values
   | .specialConstant c => .constant (Bridge.constant c)
   | .qualifiedIdent i s => .identifier (Bridge.identifier i) s
-  | .application i s args => .application (Bridge.identifier i) s args.asSlice.toList
+  | .application i s args _ => .application (Bridge.identifier i) s args.asSlice.toList
 
 /-- The spec's S-expression node for one of the parser, with the values of `values`. -/
 def sExprNodeOf : Nodes.SExpr values.sExpr → SExprNode values

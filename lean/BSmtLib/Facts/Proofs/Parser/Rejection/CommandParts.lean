@@ -245,7 +245,8 @@ theorem literalStep_advances (version : Token.Version) :
       rw [show termStep (H := List Event) version ⟨.start, [.application f none #[a]]⟩
           .parenClose =
         (Parser.Internal.call
-            (Traits.Handler.handleTerm (H := List Event) (.application f none (.new #[a]))) >>=
+            (Traits.Handler.handleTerm (H := List Event)
+              (.application f none (.new #[a]) (Multiple.len_pos_new (by simp)))) >>=
           fun t => termComplete [] t) from rfl, bind_assoc]
       call_step
       rw [show ∀ t, termComplete (H := List Event) [] t = pure (.done t) from fun _ => rfl,

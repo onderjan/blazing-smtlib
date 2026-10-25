@@ -61,6 +61,10 @@ def uses : List Use := [
       `token.rs`; `Reserved` is itself `BSmtLib.Token.Reserved`", target := `BSmtLib.Token,
     items := [("reserved::SmtCommandNameReserved", `BSmtLib.Token.Reserved.CommandNameReserved),
       ("reserved::SmtGeneralReserved", `BSmtLib.Token.Reserved.GeneralReserved)] },
+  { rust := "`pub use writer::{SmtCompactTokenWriter, SmtLayoutTokenWriter}` in `token.rs`",
+    target := `BSmtLib.Token,
+    items := [("writer::SmtCompactTokenWriter", `BSmtLib.Token.Writer.CompactTokenWriter),
+      ("writer::SmtLayoutTokenWriter", `BSmtLib.Token.Writer.LayoutTokenWriter)] },
   { rust := "`pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind, \
       SmtLexicalExpected}` in `lexer.rs`",
     target := `BSmtLib.Lexer,
@@ -160,12 +164,14 @@ def uses : List Use := [
 
 /-- The modules the generated module imports: those the library's root imports but for it. -/
 def sources : List Name :=
-  [`BSmtLib.ControlFlow, `BSmtLib.Bytes, `BSmtLib.Plain, `BSmtLib.Span, `BSmtLib.Nodes,
-    `BSmtLib.Multiple.MatchCasesBuf,
+  [`BSmtLib.ControlFlow, `BSmtLib.Bytes, `BSmtLib.Plain, `BSmtLib.Plain.Versioned, `BSmtLib.Span,
+    `BSmtLib.Nodes, `BSmtLib.Multiple.MatchCasesBuf,
     `BSmtLib.Traits, `BSmtLib.Traits.CommandHandler, `BSmtLib.Traits.PartialCommandHandler,
     `BSmtLib.Traits.SyntaxChecker, `BSmtLib.Token,
     `BSmtLib.Token.Reserved, `BSmtLib.Token.SyntaxToken,
     `BSmtLib.Token.Lookahead, `BSmtLib.Token.Cursor, `BSmtLib.Token.ConsumeFrom,
+    `BSmtLib.Token.SyntaxTokenBuf, `BSmtLib.Token.TokensBuf, `BSmtLib.Token.TokensCursor,
+    `BSmtLib.Token.AppendTokens, `BSmtLib.Token.Writer,
     `BSmtLib.Lexer.Error, `BSmtLib.Lexer.Recovery, `BSmtLib.Lexer,
     `BSmtLib.Parser, `BSmtLib.Parser.Category, `BSmtLib.Parser.Command, `BSmtLib.Parser.Script,
     `BSmtLib.Parser.Adapter, `BSmtLib.Parser.Internal.Fused, `BSmtLib.Reader]

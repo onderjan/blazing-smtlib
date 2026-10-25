@@ -110,4 +110,59 @@ theorem LexError.Internal.new_inj {E : Type} {cause cause' : LexErrorCause E} {s
   · rintro ⟨rfl, rfl, rfl⟩
     rfl
 
+/- LEAN: Rust's crate-private `location_in`, which also checks the location in debug builds. -/
+/-- The most useful location for deciphering an error of the kind within the span. -/
+def LexicalErrorKind.Internal.locationIn (kind : LexicalErrorKind) (span : Span) :
+    Span.Location :=
+  match kind with
+  -- the span ends after the offending byte, which is not a line feed: a line feed is allowed
+  -- in both literals and delimits a token
+  | .forbiddenCharInString | .backslashInQuotedSymbol | .forbiddenCharInQuotedSymbol
+  | .missingDelimiter =>
+    Span.Location.Internal.new (span.end.offset - 1) span.end.line (span.end.column - 1)
+  | _ => span.start
+
+/--
+The most useful location for deciphering the error.
+
+Guaranteed to be within the span.
+-/
+def LexError.location {E : Type} (self : LexError E) : Span.Location :=
+  match self.cause with
+  | .lexical kind => LexicalErrorKind.Internal.locationIn kind self.span
+  | .consumer _ => self.span.start
+
+/- LEAN: Rust's `Display` implementations are `ToString` instances, with the same text. -/
+@[no_expose] instance : ToString LexicalExpected where
+  toString
+    | .fractionDigit => "expected fractional digit"
+    | .hexadecimalDigit => "expected hexadecimal digit"
+    | .binaryDigit => "expected binary digit"
+    | .base => "expected base (`x` or `b`) after `#`"
+
+@[no_expose] instance : ToString LexicalErrorKind where
+  toString
+    | .unexpectedCharacter => "unexpected character"
+    | .expected expected => toString expected
+    | .unclosedStringLiteral => "unclosed string literal"
+    | .forbiddenCharInString => "forbidden character in string literal"
+    | .emptyKeyword => "colon without keyword name"
+    | .backslashInQuotedSymbol => "backslash in quoted symbol"
+    | .forbiddenCharInQuotedSymbol => "forbidden character in quoted symbol"
+    | .unclosedQuotedSymbol => "unclosed quoted symbol"
+    | .numeralLeadingZero => "numeral with leading zero"
+    | .missingDelimiter => "missing delimiter after token"
+    | .unexpectedTrailingToken => "unexpected trailing token"
+
+@[no_expose] instance {E : Type} [ToString E] : ToString (LexErrorCause E) where
+  toString
+    | .lexical kind => toString kind
+    | .consumer error => toString error
+
+/-- The cause, at the line and the column of `location`, counted from one. -/
+@[no_expose] instance {E : Type} [ToString E] : ToString (LexError E) where
+  toString self :=
+    let location := self.location
+    s!"{self.cause} at line {location.line + 1}, column {location.column + 1}"
+
 end BSmtLib.Lexer.Error

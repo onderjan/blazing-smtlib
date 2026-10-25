@@ -288,7 +288,16 @@ def intoByteArray (self : DisallowedByteVecError) : ByteArray :=
 
 @[no_expose] instance : Hashable DisallowedByteVecError := ⟨fun s => hash s.bytes⟩
 
+@[no_expose] instance : ToString DisallowedByteVecError :=
+  ⟨fun _ => "given byte vector is not allowed"⟩
+
 end DisallowedByteVecError
+
+/-- The bytes are not allowed in the value that was to view them. -/
+structure DisallowedBytesError where
+  deriving BEq, Hashable, Repr
+
+@[no_expose] instance : ToString DisallowedBytesError := ⟨fun _ => "given bytes are not allowed"⟩
 
 /- LEAN: the counterpart of the Rust macro `string8_newtype!`, which gives each type above its
 methods and its view. The methods follow `BytesBuf`: `into_vec` is `intoByteArray`, and `Borrow`
@@ -311,7 +320,7 @@ local macro "plain_newtype " name:ident view:ident : command => do
 
     def asSlice (self : $name) : ByteSlice := self.bytes.asSlice
 
-    def asView (self : $name) : $view := ⟨self.bytes.asSlice⟩
+    def view (self : $name) : $view := ⟨self.bytes.asSlice⟩
 
     def intoBytesBuf (self : $name) : Bytes.BytesBuf := self.bytes
 
@@ -324,12 +333,16 @@ local macro "plain_newtype " name:ident view:ident : command => do
     @[no_expose] instance : Repr $name := ⟨fun s p => reprPrec s.bytes p⟩
 
     end $name)
+  let isAllowed := Lean.mkIdent (name.getId ++ `isAllowed)
   let viewMethods ← `(
     namespace $view
 
     /- LEAN: crate-private in Rust, where it also checks the value in debug builds. -/
     @[inline]
     def Internal.newUnchecked (value : ByteSlice) : $view := ⟨value⟩
+
+    def new (value : ByteSlice) : Except DisallowedBytesError $view :=
+      if $isAllowed value then .ok ⟨value⟩ else .error {}
 
     @[inline]
     def asSlice (self : $view) : ByteSlice := self.slice
@@ -407,11 +420,11 @@ def newQuoted (value : ByteArray) : Except DisallowedByteVecError SymbolBuf :=
   let value := Bytes.BytesBuf.fromByteArray value
   if isQuotedAllowed value.asSlice then .ok ⟨true, value⟩ else .error ⟨value⟩
 
-def bytes (self : SymbolBuf) : Bytes := self.value.asView
+def bytes (self : SymbolBuf) : Bytes := self.value.view
 
 def asSlice (self : SymbolBuf) : ByteSlice := self.value.asSlice
 
-def asView (self : SymbolBuf) : Symbol := ⟨self.quoted, self.value.asSlice⟩
+def view (self : SymbolBuf) : Symbol := ⟨self.quoted, self.value.asSlice⟩
 
 def intoBytesBuf (self : SymbolBuf) : Bytes.BytesBuf := self.value
 
@@ -421,6 +434,13 @@ def len (self : SymbolBuf) : Nat := self.value.len
 
 def isEmpty (self : SymbolBuf) : Bool := self.value.isEmpty
 
+/- LEAN: not in Rust, whose functions on the symbol set its fields. The functions of
+`BSmtLib.Plain.Versioned` build a symbol through this; the caller ensures that the bytes are
+allowed in the symbol. -/
+@[inline]
+def Internal.newUnchecked (isQuoted : Bool) (value : Bytes.BytesBuf) : SymbolBuf :=
+  ⟨isQuoted, value⟩
+
 end SymbolBuf
 
 namespace Symbol
@@ -428,6 +448,12 @@ namespace Symbol
 /- LEAN: crate-private in Rust, where it also checks the value in debug builds. -/
 @[inline]
 def Internal.newUnchecked (isQuoted : Bool) (value : ByteSlice) : Symbol := ⟨isQuoted, value⟩
+
+def newUnquoted (value : ByteSlice) : Except DisallowedBytesError Symbol :=
+  if SymbolBuf.isUnquotedAllowed value then .ok ⟨false, value⟩ else .error {}
+
+def newQuoted (value : ByteSlice) : Except DisallowedBytesError Symbol :=
+  if SymbolBuf.isQuotedAllowed value then .ok ⟨true, value⟩ else .error {}
 
 @[inline]
 def isQuoted (self : Symbol) : Bool := self.quoted
@@ -454,7 +480,7 @@ end Symbol
 
 namespace SymbolBuf
 
-@[no_expose] instance : Repr SymbolBuf := ⟨fun s p => reprPrec s.asView p⟩
+@[no_expose] instance : Repr SymbolBuf := ⟨fun s p => reprPrec s.view p⟩
 
 end SymbolBuf
 
@@ -480,14 +506,18 @@ plain_newtype_eq CommentBuf Comment
 
 /-! ## Numeric values -/
 
-/- LEAN: Rust's `to_u32`, `to_u64` and `to_usize` are the functions with `?`; its `TryFrom`
-implementations for these types, whose error is `NumeralOverflow`, have no counterpart, as Lean
-has no class for a fallible conversion. Lean has no 128-bit unsigned type: `toNat` and
-`NumeralBuf.fromNat` stand for Rust's `to_u128` and `from_u128`, and take every value. -/
+/- LEAN: Rust's `to_u32`, `to_u64` and `to_usize` of the numeral, the hexadecimal and the binary
+digits are the functions with `?`; its `TryFrom` implementations for these types, whose error is
+`NumericOverflow`, have no counterpart, as Lean has no class for a fallible conversion. Lean has
+no 128-bit unsigned type: `toNat` and `NumeralBuf.fromNat` stand for Rust's `to_u128` and
+`from_u128`, and take every value. -/
 
-/-- The numeral does not fit into the integer type it is converted to. -/
-structure NumeralOverflow where
+/-- The numeric value does not fit into the integer type it is converted to. -/
+structure NumericOverflow where
   deriving BEq, Hashable, Repr
+
+@[no_expose] instance : ToString NumericOverflow :=
+  ⟨fun _ => "value does not fit into integer type"⟩
 
 namespace Numeral
 
@@ -535,22 +565,99 @@ def fromUSize (value : USize) : NumeralBuf := fromNat value.toNat
 
 /- LEAN: not in Rust, as `Numeral.toNat`. -/
 /-- The value. -/
-def toNat (self : NumeralBuf) : Nat := self.asView.toNat
+def toNat (self : NumeralBuf) : Nat := self.view.toNat
 
 /-- The value as `UInt32`, or `none` if it does not fit. -/
-def toUInt32? (self : NumeralBuf) : Option UInt32 := self.asView.toUInt32?
+def toUInt32? (self : NumeralBuf) : Option UInt32 := self.view.toUInt32?
 
 /-- The value as `UInt64`, or `none` if it does not fit. -/
-def toUInt64? (self : NumeralBuf) : Option UInt64 := self.asView.toUInt64?
+def toUInt64? (self : NumeralBuf) : Option UInt64 := self.view.toUInt64?
 
 /--
 The value as `USize`, or `none` if it does not fit.
 
 Whether a value fits depends on the platform.
 -/
-def toUSize? (self : NumeralBuf) : Option USize := self.asView.toUSize?
+def toUSize? (self : NumeralBuf) : Option USize := self.view.toUSize?
 
 end NumeralBuf
+
+/-! ## Values of hexadecimal and binary digits -/
+
+/-- The value of an allowed hexadecimal digit. -/
+private def hexDigitValue (digit : UInt8) : Nat :=
+  if digit ≤ byte! '9' then (digit - byte! '0').toNat
+  else if digit ≥ byte! 'a' then (digit - byte! 'a').toNat + 10
+  -- only the upper-case letters are left
+  else (digit - byte! 'A').toNat + 10
+
+/-- The value of an allowed binary digit. -/
+private def binDigitValue (digit : UInt8) : Nat := (digit - byte! '0').toNat
+
+/-- The value of the digits in the radix, each valued by `digitValue`. -/
+private def digitsValue (radix : Nat) (digitValue : UInt8 → Nat) (digits : ByteSlice) : Nat :=
+  let rec loop (i value : Nat) : Nat :=
+    if h : i < digits.size then
+      loop (i + 1) (value * radix + digitValue digits[i])
+    else
+      value
+  loop 0 0
+
+/- LEAN: the counterpart of the Rust macro `digits_to_int!`. Lean has no 128-bit unsigned type:
+`toNat`, not in Rust, stands for Rust's `to_u128`, and takes every value. -/
+set_option hygiene false in
+local macro "digits_to_int " name:ident view:ident radix:num digitValue:ident : command => `(
+    namespace $view
+
+    /-- The value. -/
+    def toNat (self : $view) : Nat := digitsValue $radix $digitValue self.slice
+
+    /-- The value as `UInt32`, or `none` if it does not fit. -/
+    def toUInt32? (self : $view) : Option UInt32 :=
+      let value := self.toNat
+      if value < UInt32.size then some (UInt32.ofNat value) else none
+
+    /-- The value as `UInt64`, or `none` if it does not fit. -/
+    def toUInt64? (self : $view) : Option UInt64 :=
+      let value := self.toNat
+      if value < UInt64.size then some (UInt64.ofNat value) else none
+
+    /--
+    The value as `USize`, or `none` if it does not fit.
+
+    Whether a value fits depends on the platform.
+    -/
+    def toUSize? (self : $view) : Option USize :=
+      let value := self.toNat
+      if value < USize.size then some (USize.ofNat value) else none
+
+    end $view
+
+    namespace $name
+
+    /-- The value. -/
+    def toNat (self : $name) : Nat := self.view.toNat
+
+    /-- The value as `UInt32`, or `none` if it does not fit. -/
+    def toUInt32? (self : $name) : Option UInt32 := self.view.toUInt32?
+
+    /-- The value as `UInt64`, or `none` if it does not fit. -/
+    def toUInt64? (self : $name) : Option UInt64 := self.view.toUInt64?
+
+    /--
+    The value as `USize`, or `none` if it does not fit.
+
+    Whether a value fits depends on the platform.
+    -/
+    def toUSize? (self : $name) : Option USize := self.view.toUSize?
+
+    end $name)
+
+/- LEAN: `toNat` of the hexadecimal digits, not in Rust, stands for Rust's `to_u128`. -/
+digits_to_int HexDigitsBuf HexDigits 16 hexDigitValue
+
+/- LEAN: `toNat` of the binary digits, not in Rust, stands for Rust's `to_u128`. -/
+digits_to_int BinDigitsBuf BinDigits 2 binDigitValue
 
 /-! ## The parts of a decimal -/
 
@@ -580,14 +687,14 @@ end Decimal
 namespace DecimalBuf
 
 /-- The whole part, before the dot. -/
-def whole (self : DecimalBuf) : Numeral := self.asView.whole
+def whole (self : DecimalBuf) : Numeral := self.view.whole
 
 /--
 The digits of the fractional part, after the dot.
 
 They may have leading zeros, so they are not a numeral.
 -/
-def fraction (self : DecimalBuf) : ByteSlice := self.asView.fraction
+def fraction (self : DecimalBuf) : ByteSlice := self.view.fraction
 
 end DecimalBuf
 

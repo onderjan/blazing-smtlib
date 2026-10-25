@@ -4,6 +4,7 @@ public import BSmtLib.Reexports
 public import BSmtLib.ControlFlow
 public import BSmtLib.Bytes
 public import BSmtLib.Plain
+public import BSmtLib.Plain.Versioned
 public import BSmtLib.Span
 public import BSmtLib.Multiple
 public import BSmtLib.Multiple.MatchCases
@@ -19,6 +20,11 @@ public import BSmtLib.Token.SyntaxToken
 public import BSmtLib.Token.Lookahead
 public import BSmtLib.Token.Cursor
 public import BSmtLib.Token.ConsumeFrom
+public import BSmtLib.Token.SyntaxTokenBuf
+public import BSmtLib.Token.TokensBuf
+public import BSmtLib.Token.TokensCursor
+public import BSmtLib.Token.AppendTokens
+public import BSmtLib.Token.Writer
 public import BSmtLib.Lexer.Error
 public import BSmtLib.Lexer.Recovery
 public import BSmtLib.Lexer

@@ -164,7 +164,10 @@ def blankTermNode {S S' T T' : Type} [Blanks S S'] [Blanks T T'] :
     Nodes.Term S T → Nodes.Term S' T'
   | .specialConstant c => .specialConstant c
   | .qualifiedIdent i s => .qualifiedIdent i (blank s)
-  | .application i s args => .application i (blank s) (blank args)
+  | .application i s args h => .application i (blank s) (blank args) (by
+    rw [show blank args = Multiple.new (args.asSlice.map blank) from rfl, Multiple.len_new,
+      Array.size_map, Multiple.size_asSlice]
+    exact h)
 
 instance {S S' T T' : Type} [Blanks S S'] [Blanks T T'] :
     Blanks (Nodes.Term S T) (Nodes.Term S' T') :=
@@ -274,6 +277,16 @@ theorem BSim.ite {c c' : Prop} [Decidable c] [Decidable c'] {x₁ x₂ : PM H α
   by_cases h : c'
   · simp only [h, ↓reduceIte]; exact h₁ h
   · simp only [h, ↓reduceIte]; exact h₂ h
+
+theorem BSim.dite {c c' : Prop} [Decidable c] [Decidable c'] {x₁ : c → PM H α}
+    {x₂ : ¬ c → PM H α} {y₁ : c' → PM Shell β} {y₂ : ¬ c' → PM Shell β} (hc : c' = c)
+    (h₁ : ∀ (h : c) (h' : c'), BSim (x₁ h) (y₁ h'))
+    (h₂ : ∀ (h : ¬ c) (h' : ¬ c'), BSim (x₂ h) (y₂ h')) :
+    BSim (dite c x₁ x₂) (dite c' y₁ y₂) := by
+  subst hc
+  by_cases h : c'
+  · simp only [h, ↓reduceDIte]; exact h₁ h h
+  · simp only [h, ↓reduceDIte]; exact h₂ h h
 
 end
 

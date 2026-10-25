@@ -88,10 +88,12 @@ theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.ve
     have hparsed : parsed.isEmpty = false := by
       cases parsed using Array.recOn with
       | mk list => cases list <;> simp_all [Tree.Pattern.Valid]
-    refine ⟨.application symbol (#[] ++ parsed), by simp [Bridge.pattern, hmap], ?_⟩
+    have hpos : 0 < (#[] ++ parsed).size :=
+      Nodes.PatternApplication.Internal.size_pos (by simp [hparsed])
+    refine ⟨.application ⟨symbol, #[] ++ parsed, hpos⟩, by simp [Bridge.pattern, hmap], ?_⟩
     have hclose : RunsS points (PatternState.step (H := H) version)
         (.arguments symbol (#[] ++ parsed)) [.parenClose] (do tick points .parenClose; pure ())
-        fun _ => pure (.done (.application symbol (#[] ++ parsed))) :=
+        fun _ => pure (.done (.application ⟨symbol, #[] ++ parsed, hpos⟩)) :=
       RunsS.token (by simp [PatternState.step, hparsed])
     rw [show Parser.Internal.Input.parenOpen ::
         (Parser.Internal.Input.symbol symbol :: argumentTokens ++ [.parenClose]) =

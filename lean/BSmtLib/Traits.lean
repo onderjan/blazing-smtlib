@@ -121,4 +121,64 @@ inductive PartialCommandError (E : Type) where
   | handler (error : E)
   deriving Repr
 
+/- LEAN: Rust's `From<E>`, which makes the handler's error the error `handler` where the
+error of a partial command handler is expected. -/
+@[no_expose] instance {E : Type} : Coe E (PartialCommandError E) := ⟨.handler⟩
+
+/--
+The length of the bytes from `i` on that are replaced by one replacement character when they are
+no character: the longest start of a character's encoding there, or one byte.
+-/
+private def invalidLength (bytes : ByteArray) (i : Nat) : Nat :=
+  -- a missing byte reads as zero, which continues no encoding
+  let byte (k : Nat) : UInt8 := bytes[i + k]?.getD 0
+  let first := byte 0
+  if first < 0xC2 || first > 0xF4 then 1 else
+  -- the range of the second byte excludes overlong encodings, surrogates and values beyond
+  -- U+10FFFF
+  let (low, high) : UInt8 × UInt8 :=
+    if first == 0xE0 then (0xA0, 0xBF)
+    else if first == 0xED then (0x80, 0x9F)
+    else if first == 0xF0 then (0x90, 0xBF)
+    else if first == 0xF4 then (0x80, 0x8F)
+    else (0x80, 0xBF)
+  if byte 1 < low || byte 1 > high then 1
+  else if first < 0xE0 || byte 2 < 0x80 || byte 2 > 0xBF then 2
+  else 3
+
+/--
+The bytes as UTF-8, each longest invalid sequence replaced by the replacement character U+FFFD,
+as Rust's `String::from_utf8_lossy` does.
+-/
+private def utf8Lossy (bytes : ByteArray) : String :=
+  -- each step reads at least one byte, so the bytes' size bounds the steps
+  go bytes.size 0 ""
+where
+  go : Nat → Nat → String → String
+    | 0, _, text => text
+    | fuel + 1, i, text =>
+      if i < bytes.size then
+        match bytes.utf8DecodeChar? i with
+        | some c => go fuel (i + c.utf8Size) (text.push c)
+        | none => go fuel (i + invalidLength bytes i) (text.push '�')
+      else text
+
+/--
+The symbol for an error message: its bytes as UTF-8, invalid sequences replaced, enclosed in
+backticks, with the pipes of a quoted symbol.
+-/
+private def symbolText (symbol : SymbolBuf) : String :=
+  let name := utf8Lossy symbol.asSlice.toByteArray
+  if symbol.isQuoted then s!"`|{name}|`" else s!"`{name}`"
+
+/- LEAN: Rust's `Display` implementations are `ToString` instances, with the same text. -/
+@[no_expose] instance : ToString NonstandardCommandError :=
+  ⟨fun self => s!"unsupported nonstandard command {symbolText self.name}"⟩
+
+@[no_expose] instance {E : Type} [ToString E] : ToString (PartialCommandError E) where
+  toString
+    | .unsupported command => s!"unsupported command `{command.asStr}`"
+    | .unsupportedNonstandard name => s!"unsupported nonstandard command {symbolText name}"
+    | .handler error => toString error
+
 end BSmtLib.Traits

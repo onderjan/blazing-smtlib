@@ -851,6 +851,8 @@ end Internal.TokenBatch
 structure VersionRefused where
   deriving BEq, Hashable, Repr, Inhabited
 
+@[no_expose] instance : ToString VersionRefused := ⟨fun _ => "version switch refused"⟩
+
 /--
 A cursor into a batch of tokens, from which elements are consumed sequentially.
 
@@ -1557,7 +1559,9 @@ class Consume (H : Type) (R E : outParam Type) where
   it can reconstruct the byte stream precisely thanks
   to the whitespace and comments. The caller must hand
   over the whitespace and comment tokens present between
-  true syntactic tokens.
+  true syntactic tokens (unless the consumer specifically
+  allows them to be omitted, as e.g. `LayoutTokenWriter`
+  and `CompactTokenWriter` do).
 
   If false, the consumer operates over abstract tokens:
   it is not interested in whitespace and comments,

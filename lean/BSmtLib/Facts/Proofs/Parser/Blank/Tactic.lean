@@ -176,6 +176,7 @@ macro "blank_step" "[" ts:Lean.Parser.Tactic.SolveByElim.arg,* "]" : tactic => `
     | ((try blank_simp); bsplit <;> (try blank_simp) <;> (try dsimp only))
     | ((with_reducible refine BSim.bind ?_ (fun _ => ?_)); try dsimp only)
     | ((with_reducible refine BSim.ite ?_ (fun _ => ?_) (fun _ => ?_)); blank_simp)
+    | ((with_reducible refine BSim.dite ?_ (fun _ _ => ?_) (fun _ _ => ?_)); blank_simp)
     | blank_call
     | (solve_by_elim only [$ts,*])
     | blank_sub

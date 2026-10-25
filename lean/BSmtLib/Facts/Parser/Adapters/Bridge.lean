@@ -71,7 +71,7 @@ def symbolOrWildcard : Nodes.SimplePattern → Tree.SymbolOrWildcard
 /-- The spec's pattern for a pattern of the parser. -/
 def pattern : Nodes.Pattern → Tree.Pattern
   | .simple s => .single (symbolOrWildcard s)
-  | .application c args => .constructor (symbol c) (args.toList.map symbolOrWildcard)
+  | .application ⟨c, args, _⟩ => .constructor (symbol c) (args.toList.map symbolOrWildcard)
 
 /-- The spec's quantifier for a quantifier of the parser. -/
 def quantifier : Nodes.QuantifierKind → Tree.Quantifier
@@ -124,7 +124,7 @@ def termNode : Nodes.Term (Traits.Handler.«Sort» H) (Traits.Handler.Term H) �
     TermNode (valuesOf H)
   | .specialConstant c => .constant (constant c)
   | .qualifiedIdent i s => .identifier (identifier i) s
-  | .application i s args => .application (identifier i) s args.asSlice.toList
+  | .application i s args _ => .application (identifier i) s args.asSlice.toList
 
 /-- The spec's S-expression node for one of the parser, with the handler's values. -/
 def sExprNode : Nodes.SExpr (Traits.Handler.SExpr H) → SExprNode (valuesOf H)

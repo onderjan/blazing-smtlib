@@ -197,7 +197,8 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
           (do
             tick points .parenClose
             Parser.Internal.call (Traits.Handler.handleTerm
-              (.application head sort (.new (#[].push r ++ handled.toArray)))))
+              (.application head sort (.new (#[].push r ++ handled.toArray))
+                (Multiple.len_pos_new (by simp)))))
           fun r => termComplete levels r :=
       fun _ _ _ => Runs.token (by simp [termStep])
     have harguments' := fun sort => Runs.append (middle := fun r =>

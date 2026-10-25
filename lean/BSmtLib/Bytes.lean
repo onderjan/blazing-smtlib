@@ -79,7 +79,7 @@ def fromByte (byte : UInt8) : BytesBuf := ⟨ByteArray.empty.push byte⟩
 def asSlice (self : BytesBuf) : ByteSlice := self.bytes.toByteSlice
 
 @[inline]
-def asView (self : BytesBuf) : Bytes := ⟨self.asSlice⟩
+def view (self : BytesBuf) : Bytes := ⟨self.asSlice⟩
 
 def intoByteArray (self : BytesBuf) : ByteArray := self.bytes
 

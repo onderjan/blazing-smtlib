@@ -36,7 +36,7 @@ def push (self : MatchCasesBuf HandledTerm) (pattern : Pattern) (term : HandledT
 
 def clear (_ : MatchCasesBuf HandledTerm) : MatchCasesBuf HandledTerm := new
 
-def view (self : MatchCasesBuf HandledTerm) : MatchCases HandledTerm :=
+def viewMut (self : MatchCasesBuf HandledTerm) : MatchCases HandledTerm :=
   MatchCases.Internal.new self.entries
 
 def len (self : MatchCasesBuf HandledTerm) : Nat := self.entries.size

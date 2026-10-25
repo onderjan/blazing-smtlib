@@ -3,6 +3,7 @@ module
 public import BSmtLib.Plain
 public import BSmtLib.Token.Reserved
 public import BSmtLib.Multiple
+public import BSmtLib.Token.AppendTokens
 
 public section
 
@@ -28,38 +29,6 @@ inductive IndexBuf where
   | symbol (symbol : SymbolBuf)
   deriving Repr
 
-structure IdentBuf where
-  name : SymbolBuf
-  indices : Array IndexBuf
-  deriving Repr
-
-/-- An identifier that is a symbol alone, not indexed. -/
-def IdentBuf.newSimple (name : SymbolBuf) : IdentBuf :=
-  { name, indices := #[] }
-
-structure QualifiedIdentBuf (HandledSort : Type) where
-  ident : IdentBuf
-  sort : Option HandledSort
-  deriving Repr
-
-namespace QualifiedIdentBuf
-
-variable {HandledSort : Type}
-
-/-- A qualified identifier that is a symbol alone, neither indexed nor qualified. -/
-def newSimple (name : SymbolBuf) : QualifiedIdentBuf HandledSort :=
-  { ident := .newSimple name, sort := none }
-
-/-- An identifier, not qualified. -/
-def newUnqualified (ident : IdentBuf) : QualifiedIdentBuf HandledSort :=
-  { ident, sort := none }
-
-/-- An identifier qualified with the sort. -/
-def newQualified (ident : IdentBuf) (sort : HandledSort) : QualifiedIdentBuf HandledSort :=
-  { ident, sort := some sort }
-
-end QualifiedIdentBuf
-
 /-- An index of an indexed identifier. -/
 inductive Index where
   | numeral (digits : Numeral)
@@ -70,22 +39,16 @@ def Index.intoOwned : Index → IndexBuf
   | .numeral digits => .numeral digits.intoOwned
   | .symbol name => .symbol name.intoOwned
 
-/-- An identifier: a symbol, with its indices if it is indexed. -/
-/- LEAN: Rust's `indices` are `SmtIndices`, a container of the views; here an array. -/
-structure Ident where
-  name : Symbol
-  indices : Array Index
-  deriving Repr
-
-def Ident.intoOwned (self : Ident) : IdentBuf :=
-  { name := self.name.intoOwned, indices := self.indices.map Index.intoOwned }
+def IndexBuf.view : IndexBuf → Index
+  | .numeral digits => .numeral digits.view
+  | .symbol name => .symbol name.view
 
 /- LEAN: the index with its bytes copied, so that it holds no storage of the input; how the owned
 buffers keep what they are given. -/
 @[inline]
 def Index.Internal.copy : Index → Index
-  | .numeral digits => .numeral digits.intoOwned.asView
-  | .symbol name => .symbol name.intoOwned.asView
+  | .numeral digits => .numeral digits.intoOwned.view
+  | .symbol name => .symbol name.intoOwned.view
 
 /-- Owned indices of an identifier, from which `Ident.indices` is viewed. -/
 /- LEAN: Rust's `SmtIndicesBuf`, from which `SmtIndices` is viewed; Lean's indices are an
@@ -110,9 +73,67 @@ def len (self : IndicesBuf) : Nat := self.entries.size
 
 def isEmpty (self : IndicesBuf) : Bool := self.entries.isEmpty
 
+def get? (self : IndicesBuf) (index : Nat) : Option Index := self.entries[index]?
+
 @[no_expose] instance : Inhabited IndicesBuf := ⟨new⟩
 
+/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Multiple`. -/
+@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m IndicesBuf Index where
+  forIn self init f := ForIn.forIn self.entries init f
+
+/- LEAN: Rust's `Debug`, which lists the indices. -/
+@[no_expose] instance : Repr IndicesBuf := ⟨fun s p => reprPrec s.entries p⟩
+
 end IndicesBuf
+
+structure IdentBuf where
+  name : SymbolBuf
+  indices : IndicesBuf
+  deriving Repr
+
+/-- An identifier: a symbol, with its indices if it is indexed. -/
+/- LEAN: Rust's `indices` are `SmtIndices`, a container of the views; here an array. -/
+structure Ident where
+  name : Symbol
+  indices : Array Index
+  deriving Repr
+
+namespace IdentBuf
+
+/-- An identifier that is a symbol alone, not indexed. -/
+def newSimple (name : SymbolBuf) : IdentBuf :=
+  { name, indices := .new }
+
+def view (self : IdentBuf) : Ident :=
+  { name := self.name.view, indices := self.indices.view }
+
+end IdentBuf
+
+def Ident.intoOwned (self : Ident) : IdentBuf :=
+  { name := self.name.intoOwned, indices := self.indices.foldl IndicesBuf.push .new }
+
+structure QualifiedIdentBuf (HandledSort : Type) where
+  ident : IdentBuf
+  sort : Option HandledSort
+  deriving Repr
+
+namespace QualifiedIdentBuf
+
+variable {HandledSort : Type}
+
+/-- A qualified identifier that is a symbol alone, neither indexed nor qualified. -/
+def newSimple (name : SymbolBuf) : QualifiedIdentBuf HandledSort :=
+  { ident := .newSimple name, sort := none }
+
+/-- An identifier, not qualified. -/
+def newUnqualified (ident : IdentBuf) : QualifiedIdentBuf HandledSort :=
+  { ident, sort := none }
+
+/-- An identifier qualified with the sort. -/
+def newQualified (ident : IdentBuf) (sort : HandledSort) : QualifiedIdentBuf HandledSort :=
+  { ident, sort := some sort }
+
+end QualifiedIdentBuf
 
 /-- A qualified identifier: an identifier, with the sort it is qualified with by `as`, if it is
 qualified. -/
@@ -149,6 +170,13 @@ def SpecialConstant.intoOwned : SpecialConstant → SpecialConstantBuf
   | .binary digits => .binary digits.intoOwned
   | .string content => .string content.intoOwned
 
+def SpecialConstantBuf.view : SpecialConstantBuf → SpecialConstant
+  | .numeral digits => .numeral digits.view
+  | .decimal text => .decimal text.view
+  | .hexadecimal digits => .hexadecimal digits.view
+  | .binary digits => .binary digits.view
+  | .string content => .string content.view
+
 /-- Simple match pattern: a symbol or a wildcard. -/
 inductive SimplePatternBuf where
   /--
@@ -165,14 +193,6 @@ inductive SimplePatternBuf where
   | wildcard
   deriving Repr
 
-/-- Match pattern: a symbol, a wildcard, or a constructor application. -/
-inductive PatternBuf where
-  /-- A simple match pattern, either a symbol or a wildcard. -/
-  | simple (pattern : SimplePatternBuf)
-  /-- A constructor applied to at least one variable or wildcard. -/
-  | application (constructor : SymbolBuf) (args : Array SimplePatternBuf)
-  deriving Repr
-
 /-- A symbol, or the wildcard `_`, in a pattern. -/
 inductive SimplePattern where
   | symbol (symbol : Symbol)
@@ -183,40 +203,22 @@ def SimplePattern.intoOwned : SimplePattern → SimplePatternBuf
   | .symbol name => .symbol name.intoOwned
   | .wildcard => .wildcard
 
-/-- The pattern of a case of `match`. -/
-/- LEAN: Rust's `args` of an application are `SmtSimplePatterns`, a container of the views; here
-an array. -/
-inductive Pattern where
-  /-- A simple match pattern, either a symbol or a wildcard. -/
-  | simple (pattern : SimplePattern)
-  /-- A constructor applied to at least one variable or wildcard. -/
-  | application (constructor : Symbol) (args : Array SimplePattern)
-  deriving Repr
-
-def Pattern.intoOwned : Pattern → PatternBuf
-  | .simple pattern => .simple pattern.intoOwned
-  | .application constructor args =>
-    .application constructor.intoOwned (args.map SimplePattern.intoOwned)
+def SimplePatternBuf.view : SimplePatternBuf → SimplePattern
+  | .symbol name => .symbol name.view
+  | .wildcard => .wildcard
 
 /- LEAN: the simple pattern with its bytes copied, so that it holds no storage of the input; how
 the owned buffers keep what they are given. -/
 @[inline]
 def SimplePattern.Internal.copy : SimplePattern → SimplePattern
-  | .symbol name => .symbol name.intoOwned.asView
+  | .symbol name => .symbol name.intoOwned.view
   | .wildcard => .wildcard
 
-/- LEAN: the pattern with its bytes copied, as `SimplePattern.Internal.copy`. -/
-@[inline]
-def Pattern.Internal.copy : Pattern → Pattern
-  | .simple pattern => .simple (SimplePattern.Internal.copy pattern)
-  | .application constructor args =>
-    .application constructor.intoOwned.asView (args.map SimplePattern.Internal.copy)
-
-/-- Owned arguments of a constructor pattern, from which the `args` of `Pattern.application` are
+/-- Owned arguments of a constructor pattern, from which the `args` of `PatternApplication` are
 viewed. -/
 /- LEAN: Rust's `SmtSimplePatternsBuf`, from which `SmtSimplePatterns` is viewed; Lean's
-arguments are an `Array` of the views (see `Pattern`), which `view` gives. Each pattern is a view
-of a copy of its bytes that the buffer made, so the view needs no copy. -/
+arguments are an `Array` of the views (see `PatternApplication`), which `view` gives. Each
+pattern is a view of a copy of its bytes that the buffer made, so the view needs no copy. -/
 structure SimplePatternsBuf where
   private ofArray ::
   private entries : Array SimplePattern
@@ -236,9 +238,133 @@ def len (self : SimplePatternsBuf) : Nat := self.entries.size
 
 def isEmpty (self : SimplePatternsBuf) : Bool := self.entries.isEmpty
 
+def get? (self : SimplePatternsBuf) (index : Nat) : Option SimplePattern := self.entries[index]?
+
+/-- The arguments viewed are as many as the buffer holds. -/
+theorem size_view (self : SimplePatternsBuf) : self.view.size = self.len :=
+  (rfl)
+
+/- LEAN: a buffer of the views, copied: how `PatternApplication.intoOwned` makes its
+arguments. -/
+/-- The buffer of the patterns, each copied. -/
+def Internal.ofViews (patterns : Array SimplePattern) : SimplePatternsBuf :=
+  ⟨patterns.map SimplePattern.Internal.copy⟩
+
+theorem Internal.len_ofViews (patterns : Array SimplePattern) :
+    (Internal.ofViews patterns).len = patterns.size := by
+  simp [Internal.ofViews, len]
+
 @[no_expose] instance : Inhabited SimplePatternsBuf := ⟨new⟩
 
+/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Multiple`. -/
+@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m SimplePatternsBuf SimplePattern where
+  forIn self init f := ForIn.forIn self.entries init f
+
+/- LEAN: Rust's `Debug`, which lists the patterns. -/
+@[no_expose] instance : Repr SimplePatternsBuf := ⟨fun s p => reprPrec s.entries p⟩
+
 end SimplePatternsBuf
+
+/-- An application or a constructor pattern was to be built without arguments. -/
+structure EmptyArgumentsError where
+  deriving BEq, Hashable, Repr
+
+@[no_expose] instance : ToString EmptyArgumentsError :=
+  ⟨fun _ => "no arguments provided where at least one is required"⟩
+
+/--
+A constructor applied to at least one variable or wildcard, as a match pattern to be handled.
+-/
+/- LEAN: Rust's fields are private, so that the arguments cannot be empty, and read through the
+getters `constructor` and `args`; here the fields are public and the proof `nonempty` guards
+the arguments. Rust's `args` are `SmtSimplePatterns`, a container of the views; here an
+array. -/
+structure PatternApplication where
+  constructor : Symbol
+  args : Array SimplePattern
+  /-- There is at least one argument. -/
+  nonempty : 0 < args.size
+  deriving Repr
+
+/--
+A constructor applied to at least one variable or wildcard, from which `PatternApplication` is
+viewed.
+-/
+/- LEAN: the fields are public, as `PatternApplication`'s are, with the proof `nonempty`. -/
+structure PatternApplicationBuf where
+  constructor : SymbolBuf
+  args : SimplePatternsBuf
+  /-- There is at least one argument. -/
+  nonempty : 0 < args.len
+  deriving Repr
+
+namespace PatternApplication
+
+/-- The arguments of an array that is not empty are at least one. -/
+theorem Internal.size_pos {args : Array SimplePattern} (h : ¬args.isEmpty) : 0 < args.size :=
+  Nat.pos_of_ne_zero fun hz => h (Array.isEmpty_iff_size_eq_zero.mpr hz)
+
+/-- The constructor applied to the arguments; an error if there are none. -/
+def new (constructor : Symbol) (args : Array SimplePattern) :
+    Except EmptyArgumentsError PatternApplication :=
+  if h : 0 < args.size then .ok ⟨constructor, args, h⟩ else .error {}
+
+def intoOwned (self : PatternApplication) : PatternApplicationBuf :=
+  { constructor := self.constructor.intoOwned
+    args := SimplePatternsBuf.Internal.ofViews self.args
+    nonempty := by rw [SimplePatternsBuf.Internal.len_ofViews]; exact self.nonempty }
+
+end PatternApplication
+
+namespace PatternApplicationBuf
+
+/-- The constructor applied to the arguments; an error if there are none. -/
+def new (constructor : SymbolBuf) (args : SimplePatternsBuf) :
+    Except EmptyArgumentsError PatternApplicationBuf :=
+  if h : 0 < args.len then .ok ⟨constructor, args, h⟩ else .error {}
+
+def intoParts (self : PatternApplicationBuf) : SymbolBuf × SimplePatternsBuf :=
+  (self.constructor, self.args)
+
+def view (self : PatternApplicationBuf) : PatternApplication :=
+  { constructor := self.constructor.view, args := self.args.view,
+    nonempty := by rw [SimplePatternsBuf.size_view]; exact self.nonempty }
+
+end PatternApplicationBuf
+
+/-- Match pattern: a symbol, a wildcard, or a constructor application. -/
+inductive PatternBuf where
+  /-- A simple match pattern, either a symbol or a wildcard. -/
+  | simple (pattern : SimplePatternBuf)
+  /-- A constructor applied to at least one variable or wildcard. -/
+  | application (application : PatternApplicationBuf)
+  deriving Repr
+
+/-- The pattern of a case of `match`. -/
+inductive Pattern where
+  /-- A simple match pattern, either a symbol or a wildcard. -/
+  | simple (pattern : SimplePattern)
+  /-- A constructor applied to at least one variable or wildcard. -/
+  | application (application : PatternApplication)
+  deriving Repr
+
+def Pattern.intoOwned : Pattern → PatternBuf
+  | .simple pattern => .simple pattern.intoOwned
+  | .application app => .application app.intoOwned
+
+def PatternBuf.view : PatternBuf → Pattern
+  | .simple pattern => .simple pattern.view
+  | .application app => .application app.view
+
+/- LEAN: the pattern with its bytes copied, as `SimplePattern.Internal.copy`. -/
+@[inline]
+def Pattern.Internal.copy : Pattern → Pattern
+  | .simple pattern => .simple (SimplePattern.Internal.copy pattern)
+  | .application app =>
+    .application
+      { constructor := app.constructor.intoOwned.view
+        args := app.args.map SimplePattern.Internal.copy
+        nonempty := by rw [Array.size_map]; exact app.nonempty }
 
 /-- The two quantifiers. -/
 inductive QuantifierKind where
@@ -270,7 +396,16 @@ inductive Term (HandledSort HandledTerm : Type) where
   It is guaranteed that `args` are nonempty.
   -/
   | application (function : Ident) (sort : Option HandledSort) (args : Terms HandledTerm)
+      (nonempty : 0 < args.len)
   deriving Repr
+
+/- LEAN: Rust's `SmtApplication::new`, which builds the application that `SmtTerm::Application`
+holds; here the term, as the application is handed over flat. -/
+/-- The term that applies the function to the arguments; an error if there are none. -/
+def Term.newApplication {HandledSort HandledTerm : Type} (function : Ident)
+    (sort : Option HandledSort) (args : Terms HandledTerm) :
+    Except EmptyArgumentsError (Term HandledSort HandledTerm) :=
+  if h : 0 < args.len then .ok (.application function sort args h) else .error {}
 
 /-- S-expressions to be handled. -/
 /- LEAN: parameterised by the handled s-expressions, where Rust's is by the handler. -/
@@ -298,5 +433,149 @@ inductive AttributeValue (HandledSExpr : Type) where
   | symbol (symbol : Symbol)
   | sExprs (items : SExprs HandledSExpr)
   deriving Repr
+
+/-! ## Tokens of the nodes -/
+
+section AppendTokens
+
+open BSmtLib.Token (AppendTokens SyntaxToken TokensCursor)
+
+private def appendIndex (index : Index) (tokens : TokensCursor) : TokensCursor :=
+  tokens.push (match index with
+    | .numeral numeral => .numeral numeral
+    | .symbol symbol => .symbol symbol)
+
+private def appendIndices (indices : Array Index) (tokens : TokensCursor) : TokensCursor :=
+  indices.foldl (fun tokens index => appendIndex index tokens) tokens
+
+/-- Appends an identifier. -/
+private def appendIdent (ident : Ident) (tokens : TokensCursor) : TokensCursor :=
+  if ident.indices.isEmpty then
+    -- just the symbol
+    tokens.push (.symbol ident.name)
+  else
+    -- indexed identifier: ( _ symbol index+ ).
+    let tokens := tokens.push .parenOpen
+    let tokens := tokens.push (.reserved (.general .underscore))
+    let tokens := tokens.push (.symbol ident.name)
+    let tokens := appendIndices ident.indices tokens
+    tokens.push .parenClose
+
+/-- Appends a potentially qualified identifier. -/
+private def appendQualifiedIdent {HandledSort : Type} [AppendTokens HandledSort] (ident : Ident)
+    (sort : Option HandledSort) (tokens : TokensCursor) : TokensCursor :=
+  match sort with
+  | none => appendIdent ident tokens
+  | some sort =>
+    -- use the qualification syntax: ( as identifier sort )
+    let tokens := tokens.push .parenOpen
+    let tokens := tokens.push (.reserved (.general .as))
+    let tokens := appendIdent ident tokens
+    let tokens := AppendTokens.appendTokens sort tokens
+    tokens.push .parenClose
+
+private def appendSpecialConstant (constant : SpecialConstant) (tokens : TokensCursor) :
+    TokensCursor :=
+  tokens.push (match constant with
+    | .numeral value => .numeral value
+    | .decimal value => .decimal value
+    | .hexadecimal value => .hexadecimal value
+    | .binary value => .binary value
+    | .string value => .string value)
+
+private def appendSimplePattern (pattern : SimplePattern) (tokens : TokensCursor) :
+    TokensCursor :=
+  tokens.push (match pattern with
+    | .symbol symbol => .symbol symbol
+    | .wildcard => .reserved (.general .underscore))
+
+private def appendSimplePatterns (patterns : Array SimplePattern) (tokens : TokensCursor) :
+    TokensCursor :=
+  patterns.foldl (fun tokens pattern => appendSimplePattern pattern tokens) tokens
+
+/-- Appends a pattern application. -/
+private def appendPatternApplication (application : PatternApplication)
+    (tokens : TokensCursor) : TokensCursor :=
+  -- use the pattern application syntax: ( constructor pattern+ )
+  let tokens := tokens.push .parenOpen
+  let tokens := tokens.push (.symbol application.constructor)
+  let tokens := appendSimplePatterns application.args tokens
+  tokens.push .parenClose
+
+private def appendPattern (pattern : Pattern) (tokens : TokensCursor) : TokensCursor :=
+  match pattern with
+  | .simple simple => appendSimplePattern simple tokens
+  | .application application => appendPatternApplication application tokens
+
+/- LEAN: the counterpart of the Rust macro `append_tokens_by_view!`: the appending of a node,
+viewed or owned, by the function that appends its view. The views of Rust's `SmtIndices` and
+`SmtSimplePatterns` are arrays here, which the instance for arrays appends. -/
+set_option hygiene false in
+local macro "append_tokens_by_view " view:ident buf:ident append:ident : command =>
+  `(@[no_expose] instance : AppendTokens $view := ⟨$append⟩
+
+    @[no_expose] instance : AppendTokens $buf := ⟨fun self tokens => $append self.view tokens⟩)
+
+append_tokens_by_view Index IndexBuf appendIndex
+append_tokens_by_view Ident IdentBuf appendIdent
+append_tokens_by_view SpecialConstant SpecialConstantBuf appendSpecialConstant
+append_tokens_by_view SimplePattern SimplePatternBuf appendSimplePattern
+append_tokens_by_view PatternApplication PatternApplicationBuf appendPatternApplication
+append_tokens_by_view Pattern PatternBuf appendPattern
+
+@[no_expose] instance : AppendTokens IndicesBuf :=
+  ⟨fun self tokens => appendIndices self.view tokens⟩
+
+@[no_expose] instance : AppendTokens SimplePatternsBuf :=
+  ⟨fun self tokens => appendSimplePatterns self.view tokens⟩
+
+@[no_expose] instance {HandledSort : Type} [AppendTokens HandledSort] :
+    AppendTokens (QualifiedIdent HandledSort) :=
+  ⟨fun self tokens => appendQualifiedIdent self.ident self.sort tokens⟩
+
+@[no_expose] instance {HandledSort : Type} [AppendTokens HandledSort] :
+    AppendTokens (QualifiedIdentBuf HandledSort) :=
+  ⟨fun self tokens => appendQualifiedIdent self.ident.view self.sort tokens⟩
+
+@[no_expose] instance {HandledSort HandledTerm : Type} [AppendTokens HandledSort]
+    [AppendTokens HandledTerm] : AppendTokens (Term HandledSort HandledTerm) where
+  appendTokens self tokens :=
+    match self with
+    | .specialConstant constant => appendSpecialConstant constant tokens
+    | .qualifiedIdent ident sort => appendQualifiedIdent ident sort tokens
+    | .application function sort args _ =>
+      -- use the application syntax: ( function term+ )
+      let tokens := tokens.push .parenOpen
+      let tokens := appendQualifiedIdent function sort tokens
+      let tokens := AppendTokens.appendTokens args tokens
+      tokens.push .parenClose
+
+@[no_expose] instance {HandledSExpr : Type} [AppendTokens HandledSExpr] :
+    AppendTokens (AttributeValue HandledSExpr) where
+  appendTokens self tokens :=
+    match self with
+    | .specialConstant constant => appendSpecialConstant constant tokens
+    | .symbol symbol => tokens.push (.symbol symbol)
+    | .sExprs items =>
+      -- the S-expressions are enclosed in parentheses: ( s_expr* )
+      let tokens := tokens.push .parenOpen
+      let tokens := AppendTokens.appendTokens items tokens
+      tokens.push .parenClose
+
+@[no_expose] instance {HandledSExpr : Type} [AppendTokens HandledSExpr] :
+    AppendTokens (SExpr HandledSExpr) where
+  appendTokens self tokens :=
+    match self with
+    | .specialConstant constant => appendSpecialConstant constant tokens
+    | .symbol symbol => tokens.push (.symbol symbol)
+    | .reserved word => tokens.push (.reserved word)
+    | .keyword name => tokens.push (.keyword name)
+    | .sExprs items =>
+      -- the S-expressions are enclosed in parentheses: ( s_expr* )
+      let tokens := tokens.push .parenOpen
+      let tokens := AppendTokens.appendTokens items tokens
+      tokens.push .parenClose
+
+end AppendTokens
 
 end BSmtLib.Nodes

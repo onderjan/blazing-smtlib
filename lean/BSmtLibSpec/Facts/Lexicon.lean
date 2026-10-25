@@ -88,7 +88,9 @@ info: 'BSmtLibSpec.Facts.Lexicon.readOnItsOwn' depends on axioms: [propext, Clas
 `Lexicon.readConcrete input tokens` is the concrete reading of an input: its tokens with the
 whitespace and comments between them, and `Lexicon.printConcrete` writes it back. The canonical
 layout `Lexicon.layout` writes tokens with a single space between two of them, except after `(`
-and before `)`; `Lexicon.place` gives the offsets at which it puts them.
+and before `)`, and a line feed after each top-level item: after the `)` that closes every open
+parenthesis, and after a token outside parentheses; `Lexicon.place` gives the offsets at which
+it puts them.
 -/
 
 /-- The concrete printer writes the input of a tokenisation back exactly. -/

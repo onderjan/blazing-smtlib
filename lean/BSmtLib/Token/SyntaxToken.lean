@@ -117,6 +117,18 @@ structure WriteError where
   cause : WriteErrorCause
   deriving Repr
 
+/- LEAN: Rust builds the error from its cause in the crate, where its field is visible. -/
+/-- The error of the cause. -/
+@[inline]
+def WriteError.Internal.new (cause : WriteErrorCause) : WriteError := ⟨cause⟩
+
+@[no_expose] instance : ToString WriteErrorCause where
+  toString
+    | .io error => s!"I/O: {error}"
+    | .notInVersion reserved => s!"`{reserved.asStr}` is not reserved in written version"
+
+@[no_expose] instance : ToString WriteError := ⟨fun self => toString self.cause⟩
+
 namespace SyntaxToken
 
 /-- The bytes of the slice appended. -/

@@ -3,6 +3,7 @@ module
 public import BSmtLib.ControlFlow
 public import BSmtLib.Bytes
 public import BSmtLib.Plain
+public import BSmtLib.Plain.Versioned
 public import BSmtLib.Span
 public import BSmtLib.Nodes
 public import BSmtLib.Multiple.MatchCasesBuf
@@ -16,6 +17,11 @@ public import BSmtLib.Token.SyntaxToken
 public import BSmtLib.Token.Lookahead
 public import BSmtLib.Token.Cursor
 public import BSmtLib.Token.ConsumeFrom
+public import BSmtLib.Token.SyntaxTokenBuf
+public import BSmtLib.Token.TokensBuf
+public import BSmtLib.Token.TokensCursor
+public import BSmtLib.Token.AppendTokens
+public import BSmtLib.Token.Writer
 public import BSmtLib.Lexer.Error
 public import BSmtLib.Lexer.Recovery
 public import BSmtLib.Lexer
@@ -49,8 +55,8 @@ end BSmtLib
 
 namespace BSmtLib.BytesBuf
 
-export BSmtLib.Bytes.BytesBuf (asSlice asView eqSlice eqView fromByte fromByteArray instBEq
-  instHashable instRepr intoByteArray isEmpty len new)
+export BSmtLib.Bytes.BytesBuf (asSlice eqSlice eqView fromByte fromByteArray instBEq instHashable
+  instRepr intoByteArray isEmpty len new view)
 
 end BSmtLib.BytesBuf
 
@@ -93,7 +99,8 @@ end BSmtLib
 
 namespace BSmtLib.ConstructorsBuf
 
-export BSmtLib.Multiple.ConstructorsBuf (clear instInhabited isEmpty len new push pushSelector view)
+export BSmtLib.Multiple.ConstructorsBuf (clear instInhabited isEmpty len new push pushSelector
+  viewMut)
 
 end BSmtLib.ConstructorsBuf
 
@@ -160,7 +167,7 @@ end BSmtLib
 
 namespace BSmtLib.MatchCasesBuf
 
-export BSmtLib.Multiple.MatchCasesBuf (clear instInhabited isEmpty len new push view)
+export BSmtLib.Multiple.MatchCasesBuf (clear instInhabited isEmpty len new push viewMut)
 
 end BSmtLib.MatchCasesBuf
 
@@ -186,7 +193,7 @@ end BSmtLib
 
 namespace BSmtLib.NamedBuf
 
-export BSmtLib.Multiple.NamedBuf (clear instInhabited isEmpty len new push view)
+export BSmtLib.Multiple.NamedBuf (clear instInhabited isEmpty len new push viewMut)
 
 end BSmtLib.NamedBuf
 
@@ -279,6 +286,19 @@ export BSmtLib.Nodes (Attributes)
 
 end BSmtLib
 
+-- `BSmtLib.Nodes.EmptyArgumentsError`, by `pub use crate::nodes::*`
+namespace BSmtLib
+
+export BSmtLib.Nodes (EmptyArgumentsError)
+
+end BSmtLib
+
+namespace BSmtLib.EmptyArgumentsError
+
+export BSmtLib.Nodes.EmptyArgumentsError (mk)
+
+end BSmtLib.EmptyArgumentsError
+
 -- `BSmtLib.Nodes.Ident`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
@@ -301,7 +321,7 @@ end BSmtLib
 
 namespace BSmtLib.IdentBuf
 
-export BSmtLib.Nodes.IdentBuf (indices mk name newSimple)
+export BSmtLib.Nodes.IdentBuf (indices mk name newSimple view)
 
 end BSmtLib.IdentBuf
 
@@ -327,7 +347,7 @@ end BSmtLib
 
 namespace BSmtLib.IndexBuf
 
-export BSmtLib.Nodes.IndexBuf (numeral symbol)
+export BSmtLib.Nodes.IndexBuf (numeral symbol view)
 
 end BSmtLib.IndexBuf
 
@@ -340,7 +360,8 @@ end BSmtLib
 
 namespace BSmtLib.IndicesBuf
 
-export BSmtLib.Nodes.IndicesBuf (clear instInhabited isEmpty len new push view)
+export BSmtLib.Nodes.IndicesBuf (clear get? instForInIndexOfMonad instInhabited instRepr isEmpty
+  len new push view)
 
 end BSmtLib.IndicesBuf
 
@@ -357,6 +378,32 @@ export BSmtLib.Nodes.Pattern (application intoOwned simple)
 
 end BSmtLib.Pattern
 
+-- `BSmtLib.Nodes.PatternApplication`, by `pub use crate::nodes::*`
+namespace BSmtLib
+
+export BSmtLib.Nodes (PatternApplication)
+
+end BSmtLib
+
+namespace BSmtLib.PatternApplication
+
+export BSmtLib.Nodes.PatternApplication (args constructor intoOwned mk new nonempty)
+
+end BSmtLib.PatternApplication
+
+-- `BSmtLib.Nodes.PatternApplicationBuf`, by `pub use crate::nodes::*`
+namespace BSmtLib
+
+export BSmtLib.Nodes (PatternApplicationBuf)
+
+end BSmtLib
+
+namespace BSmtLib.PatternApplicationBuf
+
+export BSmtLib.Nodes.PatternApplicationBuf (args constructor intoParts mk new nonempty view)
+
+end BSmtLib.PatternApplicationBuf
+
 -- `BSmtLib.Nodes.PatternBuf`, by `pub use crate::nodes::*`
 namespace BSmtLib
 
@@ -366,7 +413,7 @@ end BSmtLib
 
 namespace BSmtLib.PatternBuf
 
-export BSmtLib.Nodes.PatternBuf (application simple)
+export BSmtLib.Nodes.PatternBuf (application simple view)
 
 end BSmtLib.PatternBuf
 
@@ -451,7 +498,7 @@ end BSmtLib
 
 namespace BSmtLib.SimplePatternBuf
 
-export BSmtLib.Nodes.SimplePatternBuf (symbol wildcard)
+export BSmtLib.Nodes.SimplePatternBuf (symbol view wildcard)
 
 end BSmtLib.SimplePatternBuf
 
@@ -464,7 +511,8 @@ end BSmtLib
 
 namespace BSmtLib.SimplePatternsBuf
 
-export BSmtLib.Nodes.SimplePatternsBuf (clear instInhabited isEmpty len new push view)
+export BSmtLib.Nodes.SimplePatternsBuf (clear get? instForInSimplePatternOfMonad instInhabited
+  instRepr isEmpty len new push size_view view)
 
 end BSmtLib.SimplePatternsBuf
 
@@ -497,7 +545,7 @@ end BSmtLib
 
 namespace BSmtLib.SpecialConstantBuf
 
-export BSmtLib.Nodes.SpecialConstantBuf (binary decimal hexadecimal numeral string)
+export BSmtLib.Nodes.SpecialConstantBuf (binary decimal hexadecimal numeral string view)
 
 end BSmtLib.SpecialConstantBuf
 
@@ -510,7 +558,7 @@ end BSmtLib
 
 namespace BSmtLib.Term
 
-export BSmtLib.Nodes.Term (application qualifiedIdent specialConstant)
+export BSmtLib.Nodes.Term (application newApplication qualifiedIdent specialConstant)
 
 end BSmtLib.Term
 
@@ -533,7 +581,7 @@ end BSmtLib
 namespace BSmtLib.BinDigits
 
 export BSmtLib.Plain.BinDigits (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+  intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
 
 end BSmtLib.BinDigits
 
@@ -546,8 +594,8 @@ end BSmtLib
 
 namespace BSmtLib.BinDigitsBuf
 
-export BSmtLib.Plain.BinDigitsBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.BinDigitsBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
+  intoByteArray intoBytesBuf isAllowed isEmpty len new toNat toUInt32? toUInt64? toUSize? view)
 
 end BSmtLib.BinDigitsBuf
 
@@ -561,7 +609,7 @@ end BSmtLib
 namespace BSmtLib.Comment
 
 export BSmtLib.Plain.Comment (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+  intoOwned isEmpty len new)
 
 end BSmtLib.Comment
 
@@ -574,8 +622,8 @@ end BSmtLib
 
 namespace BSmtLib.CommentBuf
 
-export BSmtLib.Plain.CommentBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.CommentBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
+  intoByteArray intoBytesBuf isAllowed isEmpty len new view)
 
 end BSmtLib.CommentBuf
 
@@ -589,7 +637,7 @@ end BSmtLib
 namespace BSmtLib.Decimal
 
 export BSmtLib.Plain.Decimal (asSlice eqOwned eqSlice eqString fraction instBEq instHashable
-  instRepr intoOwned isEmpty len whole)
+  instRepr intoOwned isEmpty len new whole)
 
 end BSmtLib.Decimal
 
@@ -602,8 +650,8 @@ end BSmtLib
 
 namespace BSmtLib.DecimalBuf
 
-export BSmtLib.Plain.DecimalBuf (asSlice asView eqSlice eqString eqView fraction instBEq
-  instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new whole)
+export BSmtLib.Plain.DecimalBuf (asSlice eqSlice eqString eqView fraction instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view whole)
 
 end BSmtLib.DecimalBuf
 
@@ -616,9 +664,23 @@ end BSmtLib
 
 namespace BSmtLib.DisallowedByteVecError
 
-export BSmtLib.Plain.DisallowedByteVecError (instBEq instHashable instRepr intoByteArray)
+export BSmtLib.Plain.DisallowedByteVecError (instBEq instHashable instRepr instToString
+  intoByteArray)
 
 end BSmtLib.DisallowedByteVecError
+
+-- `BSmtLib.Plain.DisallowedBytesError`, by `pub use crate::plain::*`
+namespace BSmtLib
+
+export BSmtLib.Plain (DisallowedBytesError)
+
+end BSmtLib
+
+namespace BSmtLib.DisallowedBytesError
+
+export BSmtLib.Plain.DisallowedBytesError (mk)
+
+end BSmtLib.DisallowedBytesError
 
 -- `BSmtLib.Plain.HexDigits`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -630,7 +692,7 @@ end BSmtLib
 namespace BSmtLib.HexDigits
 
 export BSmtLib.Plain.HexDigits (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+  intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
 
 end BSmtLib.HexDigits
 
@@ -643,8 +705,8 @@ end BSmtLib
 
 namespace BSmtLib.HexDigitsBuf
 
-export BSmtLib.Plain.HexDigitsBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.HexDigitsBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
+  intoByteArray intoBytesBuf isAllowed isEmpty len new toNat toUInt32? toUInt64? toUSize? view)
 
 end BSmtLib.HexDigitsBuf
 
@@ -658,7 +720,7 @@ end BSmtLib
 namespace BSmtLib.Keyword
 
 export BSmtLib.Plain.Keyword (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+  intoOwned isEmpty len new)
 
 end BSmtLib.Keyword
 
@@ -671,8 +733,8 @@ end BSmtLib
 
 namespace BSmtLib.KeywordBuf
 
-export BSmtLib.Plain.KeywordBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.KeywordBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
+  intoByteArray intoBytesBuf isAllowed isEmpty len new view)
 
 end BSmtLib.KeywordBuf
 
@@ -686,7 +748,7 @@ end BSmtLib
 namespace BSmtLib.Numeral
 
 export BSmtLib.Plain.Numeral (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len toNat toUInt32? toUInt64? toUSize?)
+  intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
 
 end BSmtLib.Numeral
 
@@ -699,24 +761,24 @@ end BSmtLib
 
 namespace BSmtLib.NumeralBuf
 
-export BSmtLib.Plain.NumeralBuf (asSlice asView eqSlice eqString eqView fromNat fromUInt32
-  fromUInt64 fromUSize instBEq instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty
-  len new toNat toUInt32? toUInt64? toUSize?)
+export BSmtLib.Plain.NumeralBuf (asSlice eqSlice eqString eqView fromNat fromUInt32 fromUInt64
+  fromUSize instBEq instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new
+  toNat toUInt32? toUInt64? toUSize? view)
 
 end BSmtLib.NumeralBuf
 
--- `BSmtLib.Plain.NumeralOverflow`, by `pub use crate::plain::*`
+-- `BSmtLib.Plain.NumericOverflow`, by `pub use crate::plain::*`
 namespace BSmtLib
 
-export BSmtLib.Plain (NumeralOverflow)
+export BSmtLib.Plain (NumericOverflow)
 
 end BSmtLib
 
-namespace BSmtLib.NumeralOverflow
+namespace BSmtLib.NumericOverflow
 
-export BSmtLib.Plain.NumeralOverflow (mk)
+export BSmtLib.Plain.NumericOverflow (mk)
 
-end BSmtLib.NumeralOverflow
+end BSmtLib.NumericOverflow
 
 -- `BSmtLib.Plain.StringContent`, by `pub use crate::plain::*`
 namespace BSmtLib
@@ -728,7 +790,7 @@ end BSmtLib
 namespace BSmtLib.StringContent
 
 export BSmtLib.Plain.StringContent (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+  intoOwned isEmpty len new)
 
 end BSmtLib.StringContent
 
@@ -741,8 +803,8 @@ end BSmtLib
 
 namespace BSmtLib.StringContentBuf
 
-export BSmtLib.Plain.StringContentBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.StringContentBuf (asSlice eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view)
 
 end BSmtLib.StringContentBuf
 
@@ -755,7 +817,8 @@ end BSmtLib
 
 namespace BSmtLib.Symbol
 
-export BSmtLib.Plain.Symbol (asSlice bytes instRepr intoOwned isEmpty isQuoted len)
+export BSmtLib.Plain.Symbol (asSlice bytes instRepr intoOwned intoVersioned isAllowedIn isEmpty
+  isQuoted len new newQuoted newUnquoted)
 
 end BSmtLib.Symbol
 
@@ -768,8 +831,9 @@ end BSmtLib
 
 namespace BSmtLib.SymbolBuf
 
-export BSmtLib.Plain.SymbolBuf (asSlice asView bytes instRepr intoByteArray intoBytesBuf isEmpty
-  isQuoted isQuotedAllowed isUnquotedAllowed len newQuoted newUnquoted)
+export BSmtLib.Plain.SymbolBuf (asSlice bytes instRepr intoByteArray intoBytesBuf intoVersioned
+  isAllowedIn isEmpty isQuoted isQuotedAllowed isUnquotedAllowed isUnquotedAllowedIn len new
+  newQuoted newUnquoted view)
 
 end BSmtLib.SymbolBuf
 
@@ -783,7 +847,7 @@ end BSmtLib
 namespace BSmtLib.Whitespace
 
 export BSmtLib.Plain.Whitespace (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len)
+  intoOwned isEmpty len new)
 
 end BSmtLib.Whitespace
 
@@ -796,8 +860,8 @@ end BSmtLib
 
 namespace BSmtLib.WhitespaceBuf
 
-export BSmtLib.Plain.WhitespaceBuf (asSlice asView eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new)
+export BSmtLib.Plain.WhitespaceBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
+  intoByteArray intoBytesBuf isAllowed isEmpty len new view)
 
 end BSmtLib.WhitespaceBuf
 
@@ -990,6 +1054,34 @@ export BSmtLib.Token.Reserved.GeneralReserved (all as asStr binary decimal excla
 
 end BSmtLib.Token.GeneralReserved
 
+/-! `pub use writer::{SmtCompactTokenWriter, SmtLayoutTokenWriter}` in `token.rs` -/
+
+-- `BSmtLib.Token.Writer.CompactTokenWriter`, by `pub use writer::SmtCompactTokenWriter`
+namespace BSmtLib.Token
+
+export BSmtLib.Token.Writer (CompactTokenWriter)
+
+end BSmtLib.Token
+
+namespace BSmtLib.Token.CompactTokenWriter
+
+export BSmtLib.Token.Writer.CompactTokenWriter (getRef intoInner new setVersion version write)
+
+end BSmtLib.Token.CompactTokenWriter
+
+-- `BSmtLib.Token.Writer.LayoutTokenWriter`, by `pub use writer::SmtLayoutTokenWriter`
+namespace BSmtLib.Token
+
+export BSmtLib.Token.Writer (LayoutTokenWriter)
+
+end BSmtLib.Token
+
+namespace BSmtLib.Token.LayoutTokenWriter
+
+export BSmtLib.Token.Writer.LayoutTokenWriter (getRef intoInner new setVersion version write)
+
+end BSmtLib.Token.LayoutTokenWriter
+
 /-! `pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind, SmtLexicalExpected}` in
 `lexer.rs` -/
 
@@ -1002,7 +1094,7 @@ end BSmtLib.Lexer
 
 namespace BSmtLib.Lexer.LexError
 
-export BSmtLib.Lexer.Error.LexError (cause continuesFrom span)
+export BSmtLib.Lexer.Error.LexError (cause continuesFrom location span)
 
 end BSmtLib.Lexer.LexError
 
@@ -1900,7 +1992,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.CommandPayloadParser
 
-export BSmtLib.Parser.Command.CommandPayloadParser (new)
+export BSmtLib.Parser.Command.CommandPayloadParser (new withRule)
 
 end BSmtLib.Parser.CommandPayloadParser
 

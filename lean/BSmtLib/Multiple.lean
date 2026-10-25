@@ -1,6 +1,7 @@
 module
 
 public import BSmtLib.Plain
+public import BSmtLib.Token.AppendTokens
 
 public section
 
@@ -57,6 +58,17 @@ def len (self : Multiple α) : Nat := self.asSlice.size
 
 @[inline]
 def isEmpty (self : Multiple α) : Bool := self.asSlice.isEmpty
+
+@[simp]
+theorem len_new (asSlice : Array α) : (new asSlice).len = asSlice.size :=
+  (rfl)
+
+theorem size_asSlice (self : Multiple α) : self.asSlice.size = self.len :=
+  (rfl)
+
+/-- The values of an array that is not empty are at least one. -/
+theorem len_pos_new {asSlice : Array α} (h : ¬asSlice.isEmpty) : 0 < (new asSlice).len :=
+  Nat.pos_of_ne_zero fun hz => h (Array.isEmpty_iff_size_eq_zero.mpr hz)
 
 @[inline]
 def get? (self : Multiple α) (index : Nat) : Option α := self.asSlice[index]?
@@ -137,11 +149,11 @@ variable {V : Type}
 def new : NamedBuf V := ⟨#[]⟩
 
 def push (self : NamedBuf V) (name : Symbol) (value : V) : NamedBuf V :=
-  ⟨self.entries.push (name.intoOwned.asView, value)⟩
+  ⟨self.entries.push (name.intoOwned.view, value)⟩
 
 def clear (_ : NamedBuf V) : NamedBuf V := new
 
-def view (self : NamedBuf V) : Named V := ⟨self.entries⟩
+def viewMut (self : NamedBuf V) : Named V := ⟨self.entries⟩
 
 def len (self : NamedBuf V) : Nat := self.entries.size
 
@@ -196,7 +208,7 @@ namespace SymbolsBuf
 def new : SymbolsBuf := ⟨#[]⟩
 
 def push (self : SymbolsBuf) (name : Symbol) : SymbolsBuf :=
-  ⟨self.entries.push name.intoOwned.asView⟩
+  ⟨self.entries.push name.intoOwned.view⟩
 
 def clear (_ : SymbolsBuf) : SymbolsBuf := new
 
@@ -257,7 +269,7 @@ namespace SortAritiesBuf
 def new : SortAritiesBuf := ⟨#[]⟩
 
 def push (self : SortAritiesBuf) (name : Symbol) (arity : Numeral) : SortAritiesBuf :=
-  ⟨self.entries.push (name.intoOwned.asView, arity.intoOwned.asView)⟩
+  ⟨self.entries.push (name.intoOwned.view, arity.intoOwned.view)⟩
 
 def clear (_ : SortAritiesBuf) : SortAritiesBuf := new
 
@@ -327,7 +339,7 @@ def new : ConstructorsBuf S := ⟨#[]⟩
 
 /-- Starts a constructor with no selectors; `pushSelector` adds them. -/
 def push (self : ConstructorsBuf S) (name : Symbol) : ConstructorsBuf S :=
-  ⟨self.entries.push (name.intoOwned.asView, ⟨#[]⟩)⟩
+  ⟨self.entries.push (name.intoOwned.view, ⟨#[]⟩)⟩
 
 def len (self : ConstructorsBuf S) : Nat := self.entries.size
 
@@ -338,11 +350,11 @@ def isEmpty (self : ConstructorsBuf S) : Bool := self.entries.isEmpty
 def pushSelector (self : ConstructorsBuf S) (name : Symbol) (sort : S) (_ : 0 < self.len) :
     ConstructorsBuf S :=
   ⟨self.entries.modify (self.entries.size - 1) fun (constructor, selectors) =>
-    (constructor, ⟨selectors.toArray.push (name.intoOwned.asView, sort)⟩)⟩
+    (constructor, ⟨selectors.toArray.push (name.intoOwned.view, sort)⟩)⟩
 
 def clear (_ : ConstructorsBuf S) : ConstructorsBuf S := new
 
-def view (self : ConstructorsBuf S) : Constructors S := ⟨self.entries⟩
+def viewMut (self : ConstructorsBuf S) : Constructors S := ⟨self.entries⟩
 
 @[no_expose] instance : Inhabited (ConstructorsBuf S) := ⟨new⟩
 
@@ -453,7 +465,7 @@ def new : FunctionSignaturesBuf S := ⟨#[]⟩
 /-- Starts a signature with no parameters; `pushParam` adds them. -/
 def push (self : FunctionSignaturesBuf S) (name : Symbol) (resultSort : S) :
     FunctionSignaturesBuf S :=
-  ⟨self.entries.push ⟨name.intoOwned.asView, #[], resultSort⟩⟩
+  ⟨self.entries.push ⟨name.intoOwned.view, #[], resultSort⟩⟩
 
 def len (self : FunctionSignaturesBuf S) : Nat := self.entries.size
 
@@ -464,7 +476,7 @@ def isEmpty (self : FunctionSignaturesBuf S) : Bool := self.entries.isEmpty
 def pushParam (self : FunctionSignaturesBuf S) (name : Symbol) (sort : S) (_ : 0 < self.len) :
     FunctionSignaturesBuf S :=
   ⟨self.entries.modify (self.entries.size - 1) fun signature =>
-    { signature with params := signature.params.push (name.intoOwned.asView, sort) }⟩
+    { signature with params := signature.params.push (name.intoOwned.view, sort) }⟩
 
 def clear (_ : FunctionSignaturesBuf S) : FunctionSignaturesBuf S := new
 
@@ -477,6 +489,37 @@ def get? (self : FunctionSignaturesBuf S) (index : Nat) : Option (FunctionSignat
 @[no_expose] instance : Inhabited (FunctionSignaturesBuf S) := ⟨new⟩
 
 end FunctionSignaturesBuf
+
+/-! ## Tokens of the values -/
+
+section AppendTokens
+
+open BSmtLib.Token (AppendTokens SyntaxToken TokensCursor)
+
+/-- Appends the values in order, without enclosing parentheses. -/
+@[no_expose] instance {α : Type} [AppendTokens α] : AppendTokens (Multiple α) :=
+  ⟨fun self tokens => AppendTokens.appendTokens self.asSlice tokens⟩
+
+/-- Appends each named value as ( name value ). -/
+private def appendNamed {V : Type} [AppendTokens V] (named : Array (Symbol × V))
+    (tokens : TokensCursor) : TokensCursor :=
+  named.foldl (init := tokens) fun tokens (name, value) =>
+    let tokens := tokens.push .parenOpen
+    let tokens := tokens.push (.symbol name)
+    let tokens := AppendTokens.appendTokens value tokens
+    tokens.push .parenClose
+
+/-- Appends each name with its value as `(name value)`, in order, without enclosing
+parentheses. -/
+@[no_expose] instance {V : Type} [AppendTokens V] : AppendTokens (Named V) :=
+  ⟨fun self tokens => appendNamed self.toArray tokens⟩
+
+/-- Appends each name with its value as `(name value)`, in order, without enclosing
+parentheses. -/
+@[no_expose] instance {V : Type} [AppendTokens V] : AppendTokens (NamedBuf V) :=
+  ⟨fun self tokens => appendNamed self.viewMut.toArray tokens⟩
+
+end AppendTokens
 
 end Multiple
 

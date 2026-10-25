@@ -140,20 +140,16 @@ def sowField : SimplePattern → String
 
 def patternField : Pattern → String
   | .simple symbol => s!"p {sowField symbol}"
-  | .application constructor arguments =>
-    s!"c {symbolField constructor} {listField sowField arguments}"
+  | .application application =>
+    s!"c {symbolField application.constructor} {listField sowField application.args}"
 
 /-! The owned values that the category parsers give, written as their views are. -/
 
 def symbolBufField (symbol : Plain.SymbolBuf) : String :=
-  symbolField symbol.asView
-
-def indexBufField : Nodes.IndexBuf → String
-  | .numeral digits => "n" ++ hex digits.asSlice
-  | .symbol symbol => symbolBufField symbol
+  symbolField symbol.view
 
 def identBufField (identifier : Nodes.IdentBuf) : String :=
-  s!"{symbolBufField identifier.name} {listField indexBufField identifier.indices}"
+  identField identifier.view
 
 def sowBufField : Nodes.SimplePatternBuf → String
   | .symbol symbol => symbolBufField symbol
@@ -161,8 +157,8 @@ def sowBufField : Nodes.SimplePatternBuf → String
 
 def patternBufField : Nodes.PatternBuf → String
   | .simple symbol => s!"p {sowBufField symbol}"
-  | .application constructor arguments =>
-    s!"c {symbolBufField constructor} {listField sowBufField arguments}"
+  | .application application =>
+    s!"c {symbolBufField application.constructor} {listField sowField application.args.view}"
 
 def quantifierField : QuantifierKind → String
   | .«forall» => "forall"
@@ -195,7 +191,7 @@ instance : Handler Remote IO where
     | .specialConstant constant => callValue s!"handle_term c {constantField constant}"
     | .qualifiedIdent identifier sort =>
       callValue s!"handle_term i {identField identifier} {optIdField sort}"
-    | .application function sort arguments =>
+    | .application function sort arguments _ =>
       callValue s!"handle_term a {identField function} {optIdField sort} \
         {idsField arguments.asSlice}"
   handleSExpr

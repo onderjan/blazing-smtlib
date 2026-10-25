@@ -156,7 +156,9 @@ instance : Canon SimplePattern := ⟨canonSymbolOrWildcard⟩
 
 def canonPattern : Pattern → Pattern
   | .simple s => .simple (canon s)
-  | .application c args => .application (canon c) (canon args)
+  | .application ⟨c, args, h⟩ => .application ⟨canon c, canon args, by
+    rw [show canon args = args.map canon from rfl, Array.size_map]
+    exact h⟩
 
 instance : Canon Pattern := ⟨canonPattern⟩
 
@@ -172,7 +174,10 @@ instance {T : Type} [Canon T] : Canon (Multiple.MatchCases T) :=
 def canonTermNode {S T : Type} [Canon S] [Canon T] : Nodes.Term S T → Nodes.Term S T
   | .specialConstant c => .specialConstant (canon c)
   | .qualifiedIdent i s => .qualifiedIdent (canon i) (canon s)
-  | .application i s args => .application (canon i) (canon s) (canon args)
+  | .application i s args h => .application (canon i) (canon s) (canon args) (by
+    rw [show canon args = Multiple.new (args.asSlice.map canon) from rfl, Multiple.len_new,
+      Array.size_map, Multiple.size_asSlice]
+    exact h)
 
 instance {S T : Type} [Canon S] [Canon T] : Canon (Nodes.Term S T) := ⟨canonTermNode⟩
 
@@ -253,6 +258,16 @@ theorem CSim.ite {c c' : Prop} [Decidable c] [Decidable c'] {x₁ x₂ y₁ y₂
   by_cases h : c'
   · simp only [h, ↓reduceIte]; exact h₁ h
   · simp only [h, ↓reduceIte]; exact h₂ h
+
+theorem CSim.dite {c c' : Prop} [Decidable c] [Decidable c'] {x₁ : c → RPM α} {x₂ : ¬ c → RPM α}
+    {y₁ : c' → RPM α} {y₂ : ¬ c' → RPM α} (hc : c' = c)
+    (h₁ : ∀ (h : c) (h' : c'), CSim (x₁ h) (y₁ h'))
+    (h₂ : ∀ (h : ¬ c) (h' : ¬ c'), CSim (x₂ h) (y₂ h')) :
+    CSim (dite c x₁ x₂) (dite c' y₁ y₂) := by
+  subst hc
+  by_cases h : c'
+  · simp only [h, ↓reduceDIte]; exact h₁ h h
+  · simp only [h, ↓reduceDIte]; exact h₂ h h
 
 end
 

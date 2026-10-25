@@ -208,6 +208,11 @@ def CommandPayloadParser.new (rule : R) (parser : CommandRule.Parser R H) :
     CommandPayloadParser H R :=
   ⟨rule, parser⟩
 
+/-- The payload parser of the rule, over the rule's default parser. -/
+def CommandPayloadParser.withRule [Inhabited (CommandRule.Parser R H)] (rule : R) :
+    CommandPayloadParser H R :=
+  .new rule default
+
 /- LEAN: Rust's `Default`, where the rule and its parser have one. -/
 @[no_expose]
 instance [Inhabited R] [Inhabited (CommandRule.Parser R H)] :

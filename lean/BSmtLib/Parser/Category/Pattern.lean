@@ -64,8 +64,9 @@ def step (version : Version) (self : PatternState) (token : Internal.Input) :
   | .arguments constructor found =>
     match token with
     | .parenClose =>
-      if found.isEmpty then syntaxError (.empty .patternArguments)
-      else pure (.done (.application constructor found))
+      if hne : found.isEmpty then syntaxError (.empty .patternArguments)
+      else pure (.done (.application
+        ⟨constructor, found, PatternApplication.Internal.size_pos hne⟩))
     | token =>
       match symbolOrWildcard? version token with
       | some argument => pure (.more (.arguments constructor (found.push argument)))

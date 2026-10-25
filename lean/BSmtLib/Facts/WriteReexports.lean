@@ -8,6 +8,7 @@ import Lean
 import BSmtLib.ControlFlow
 import BSmtLib.Bytes
 import BSmtLib.Plain
+import BSmtLib.Plain.Versioned
 import BSmtLib.Span
 import BSmtLib.Multiple
 import BSmtLib.Multiple.MatchCases
@@ -23,6 +24,11 @@ import BSmtLib.Token.SyntaxToken
 import BSmtLib.Token.Lookahead
 import BSmtLib.Token.Cursor
 import BSmtLib.Token.ConsumeFrom
+import BSmtLib.Token.SyntaxTokenBuf
+import BSmtLib.Token.TokensBuf
+import BSmtLib.Token.TokensCursor
+import BSmtLib.Token.AppendTokens
+import BSmtLib.Token.Writer
 import BSmtLib.Lexer.Error
 import BSmtLib.Lexer.Recovery
 import BSmtLib.Lexer

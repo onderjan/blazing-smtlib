@@ -47,7 +47,7 @@ example : (Facts.Proofs.Lexicon.RoundTrip.Tokens.readConcrete
 
 /-- The canonical layout drops them. -/
 example : Facts.Proofs.Lexicon.RoundTrip.Tokens.layout Facts.Proofs.Lexicon.RoundTrip.exampleTokens
-    = chars "(f x 1)" := by decide
+    = chars "(f x 1)\n" := by decide
 
 /-- Between `)` and `(` the layout writes a space. -/
 example : Facts.Proofs.Lexicon.RoundTrip.Tokens.layout [Facts.Proofs.Lexicon.RoundTrip.tok
@@ -58,6 +58,22 @@ example : Facts.Proofs.Lexicon.RoundTrip.Tokens.layout [Facts.Proofs.Lexicon.Rou
     Facts.Proofs.Lexicon.RoundTrip.tok .parenOpen 0 "(", Facts.Proofs.Lexicon.RoundTrip.tok
         .simpleSymbol 0 "h", Facts.Proofs.Lexicon.RoundTrip.tok .simpleSymbol 0 "b",
     Facts.Proofs.Lexicon.RoundTrip.tok .parenClose 0 ")", Facts.Proofs.Lexicon.RoundTrip.tok
-        .parenClose 0 ")"] = chars "(f (g a) (h b))" := by decide
+        .parenClose 0 ")"] = chars "(f (g a) (h b))\n" := by decide
+
+/-- After each top-level item the layout writes a line feed: after the `)` that closes every
+open parenthesis, after a token outside parentheses, and after a `)` that closes none. -/
+example : Facts.Proofs.Lexicon.RoundTrip.Tokens.layout [Facts.Proofs.Lexicon.RoundTrip.tok
+    .parenClose 0 ")", Facts.Proofs.Lexicon.RoundTrip.tok .simpleSymbol 0 "x",
+    Facts.Proofs.Lexicon.RoundTrip.tok .parenOpen 0 "(", Facts.Proofs.Lexicon.RoundTrip.tok
+        .simpleSymbol 0 "f", Facts.Proofs.Lexicon.RoundTrip.tok .parenClose 0 ")",
+    Facts.Proofs.Lexicon.RoundTrip.tok .numeral 0 "42"] = chars ")\nx\n(f)\n42\n" := by decide
+
+/-- The layout ends with a line feed also where parentheses are left open, and writes nothing
+for no tokens. -/
+example : Facts.Proofs.Lexicon.RoundTrip.Tokens.layout [Facts.Proofs.Lexicon.RoundTrip.tok
+    .parenOpen 0 "(", Facts.Proofs.Lexicon.RoundTrip.tok .simpleSymbol 0 "a",
+    Facts.Proofs.Lexicon.RoundTrip.tok .parenOpen 0 "(", Facts.Proofs.Lexicon.RoundTrip.tok
+        .simpleSymbol 0 "b"] = chars "(a (b\n" ∧
+    Facts.Proofs.Lexicon.RoundTrip.Tokens.layout [] = [] := by decide
 
 end BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip

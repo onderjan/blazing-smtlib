@@ -147,6 +147,94 @@ theorem ParseError.Internal.new_inj {E : Type} {cause cause' : ParseErrorCause E
   · rintro rfl
     rfl
 
+/- LEAN: Rust's `Display` implementations are `ToString` instances, with the same text. -/
+/-- The name of the item in a message. -/
+private def SyntaxExpected.name : SyntaxExpected → String
+  | .token category =>
+    match category with
+    | .parenOpen => "`(`"
+    | .parenClose => "`)`"
+    | .numeral => "numeral"
+    | .decimal => "decimal"
+    | .hexadecimal => "hexadecimal"
+    | .binary => "binary"
+    | .string => "string literal"
+    | .keyword => "keyword"
+    | .unquotedSymbol => "simple symbol"
+    | .quotedSymbol => "quoted symbol"
+    | .whitespace => "whitespace"
+    | .comment => "comment"
+    | .endOfFile => "end of input"
+  | .reserved word => s!"`{word.asStr}`"
+  | .symbol => "symbol"
+  | .index => "index"
+  | .ident => "identifier"
+  | .sort => "sort"
+  | .term => "term"
+  | .sExpr => "s-expression"
+  | .attribute => "attribute"
+  | .operator => "operator"
+  | .commandName => "command name"
+  | .propositionalLiteral => "propositional literal"
+
+@[no_expose] instance : ToString SyntaxExpected := ⟨fun self => s!"expected {self.name}"⟩
+
+@[no_expose] instance : ToString NonEmptyList where
+  toString self :=
+    let list := match self with
+      | .identIndices => "indices of identifier"
+      | .sortApplication => "arguments of sort"
+      | .termApplication => "arguments of application"
+      | .letBindings => "bindings of `let`"
+      | .annotation => "attributes of annotation"
+      | .quantifierBindings => "variables of quantifier"
+      | .lambdaBindings => "variables of `lambda`"
+      | .functionSignatures => "functions of `define-funs-rec`"
+      | .datatypeIntroductions => "sorts of `declare-datatypes`"
+      | .datatypeParameters => "parameters of datatype"
+      | .datatypeConstructors => "constructors of datatype"
+      | .patternArguments => "arguments of constructor pattern"
+      | .matchCases => "cases of `match`"
+      | .getValueTerms => "terms of `get-value`"
+    s!"{list} must not be empty"
+
+@[no_expose] instance : ToString MissingItem where
+  toString
+    | .functionBody => "too few function bodies for `define-funs-rec`"
+    | .datatype => "too few datatypes for `declare-datatypes`"
+
+/-- The items expected, the last joined by "or", with a serial comma before it if there are more
+than two; "unexpected token" if none are. -/
+@[no_expose] instance : ToString SyntaxErrorKind where
+  toString
+    | .expected expected =>
+      match expected.back? with
+      | none => "unexpected token"
+      | some last =>
+        let rest := expected.pop
+        let names := rest.toList.map SyntaxExpected.name
+        let joined := match names with
+          | [] => ""
+          | [first] => s!"{first} or "
+          | _ => String.intercalate ", " names ++ ", or "
+        s!"expected {joined}{last.name}"
+    | .empty list => toString list
+    | .missing item => toString item
+
+@[no_expose] instance : ToString VersionErrorKind where
+  toString
+    | .unsupported => "unsupported version"
+    | .tooManyDeclarations max => s!"too many version declarations (at most {max})"
+
+@[no_expose] instance {E : Type} [ToString E] : ToString (ParseErrorCause E) where
+  toString
+    | .syntax kind => toString kind
+    | .version kind => toString kind
+    | .handler error => toString error
+
+@[no_expose] instance {E : Type} [ToString E] : ToString (ParseError E) :=
+  ⟨fun self => toString self.cause⟩
+
 /-- The error of the handler's error. -/
 @[inline]
 def ParseError.handler {E : Type} (error : E) : ParseError E :=

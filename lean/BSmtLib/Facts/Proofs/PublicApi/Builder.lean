@@ -383,7 +383,7 @@ theorem symbolOrWildcardT_of (s : BSmtLib.Nodes.SimplePattern) :
 theorem patternT_ofPattern (p : BSmtLib.Nodes.Pattern) : patternT (ofPattern p) = pattern p := by
   cases p with
   | simple s => exact congrArg Tree.Pattern.single (symbolOrWildcardT_of s)
-  | application c args =>
+  | application a =>
     show Tree.Pattern.constructor _ _ = Tree.Pattern.constructor _ _
     rw [map_map_eq symbolOrWildcardT_of]; (try rfl)
 
@@ -399,7 +399,7 @@ theorem termNodeT_of (n : BSmtLib.Nodes.Term Tree.Sort Tree.Term) :
   | qualifiedIdent i s =>
     exact congrArg (fun x => Traversal.TermNode.identifier (values := treeValues) x s)
       (identifierT_ofIdentifier i)
-  | application i s args =>
+  | application i s args _ =>
     exact congrArg
       (fun x => Traversal.TermNode.application (values := treeValues) x s args.asSlice.toList)
       (identifierT_ofIdentifier i)

@@ -207,9 +207,11 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     | .parenClose =>
       match self.levels with
       | .application function sort arguments :: outer =>
-        if arguments.isEmpty then syntaxError (.empty .termApplication)
-        let term ← call (Handler.handleTerm (.application function sort (.new arguments)))
-        termComplete outer term
+        if hne : arguments.isEmpty then syntaxError (.empty .termApplication)
+        else
+          let term ← call (Handler.handleTerm
+            (.application function sort (.new arguments) (Multiple.len_pos_new hne)))
+          termComplete outer term
       | _ => syntaxError (.expected #[.term])
     | .symbol symbol =>
       let term ← call (Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none))

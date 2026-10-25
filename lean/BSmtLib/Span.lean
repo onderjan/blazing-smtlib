@@ -41,6 +41,8 @@ and every column on the line take at least one byte.
 structure InvalidLocation where
   deriving BEq, Hashable, Repr, Inhabited
 
+@[no_expose] instance : ToString InvalidLocation := ⟨fun _ => "invalid location"⟩
+
 namespace Location
 
 /- LEAN: Rust's `new_unchecked`, crate-private there; the caller ensures what `new` checks. -/
@@ -191,6 +193,8 @@ structure _root_.BSmtLib.Span where
 /-- The end location is not at or after the start location. -/
 structure InvalidSpan where
   deriving BEq, Hashable, Repr, Inhabited
+
+@[no_expose] instance : ToString InvalidSpan := ⟨fun _ => "invalid span"⟩
 
 @[inline]
 def start (self : Span) : Location :=

@@ -117,13 +117,13 @@ def ofSymbolOrWildcard : Nodes.SimplePattern → SymbolOrWildcard
 /-- The pattern's content. -/
 def ofPattern : Nodes.Pattern → Pattern
   | .simple s => .single (ofSymbolOrWildcard s)
-  | .application c args => .constructor (ofSymbol c) (args.toList.map ofSymbolOrWildcard)
+  | .application ⟨c, args, _⟩ => .constructor (ofSymbol c) (args.toList.map ofSymbolOrWildcard)
 
 /-- The term node's content. -/
 def ofTermNode {S T : Type} : Nodes.Term S T → TermNode S T
   | .specialConstant c => .constant (ofConstant c)
   | .qualifiedIdent i s => .identifier (ofIdentifier i) s
-  | .application i s args => .application (ofIdentifier i) s args.asSlice.toList
+  | .application i s args _ => .application (ofIdentifier i) s args.asSlice.toList
 
 /-- The s-expression node's content. -/
 def ofSExprNode {X : Type} : Nodes.SExpr X → SExprNode X

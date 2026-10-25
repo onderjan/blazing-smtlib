@@ -91,7 +91,8 @@ theorem literal_element (hA : TermAgrees h) :
           (Traits.Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none))
         tick points .parenClose
         Parser.Internal.call
-          (Traits.Handler.handleTerm (.application function none (.new #[t]))), ?_, ?_⟩
+          (Traits.Handler.handleTerm (.application function none (.new #[t])
+            (Multiple.len_pos_new (by simp)))), ?_, ?_⟩
     · simp [Tree.PropLiteral.asTerm, term_application, term_identifier, qualIdentifier, takeAll,
         Traversal.terms, Tree.Identifier.tokens, adaptRun_take hnameToken,
         adaptRun_take hnegationToken, adaptRun_take (token := .parenOpen) rfl,
@@ -116,7 +117,7 @@ theorem literal_element (hA : TermAgrees h) :
         (.qualifiedIdent ⟨symbol, #[]⟩ none)))
         (by simp [literalStep, termStep, Parser.Category.Term.Internal.termComplete]))
       fun t => Runs.token (program := Parser.Internal.call (Traits.Handler.handleTerm
-        (.application function none (.new #[t]))))
+        (.application function none (.new #[t]) (Multiple.len_pos_new (by simp)))))
         (by simp [literalStep, termStep, Parser.Category.Term.Internal.termComplete])).congr ?_ rfl
     simp
 

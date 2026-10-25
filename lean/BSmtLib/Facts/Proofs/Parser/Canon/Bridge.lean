@@ -52,8 +52,9 @@ open BSmtLib.Facts.Parser.Adapters.Bridge.Bridge
 
 @[canon_simps] theorem pattern_canonPattern (p : Pattern) :
     pattern (canonPattern p) = pattern p := by
-  cases p <;> simp only [pattern, canon_simps, Canon.canon, Array.toList_map, List.map_map,
-    Function.comp_def, symbolOrWildcard_canonSymbolOrWildcard]
+  rcases p with p | ⟨c, args, h⟩ <;>
+    simp only [pattern, canon_simps, Canon.canon, Array.toList_map, List.map_map,
+      Function.comp_def, symbolOrWildcard_canonSymbolOrWildcard]
 
 open BSmtLib.Facts.Parser.Adapters.Handler in
 @[canon_simps] theorem sExprNodeOf_canonSExprNode {values : BSmtLibSpec.Parser.Traversal.Values}
@@ -392,6 +393,7 @@ macro "canon_step" "[" ts:Lean.Parser.Tactic.SolveByElim.arg,* "]" : tactic => `
     | ((try canon_simp); csplit <;> (try canon_simp) <;> (try dsimp only))
     | ((with_reducible refine CSim.bind ?_ (fun _ => ?_)); try dsimp only)
     | ((with_reducible refine CSim.ite ?_ (fun _ => ?_) (fun _ => ?_)); canon_simp)
+    | ((with_reducible refine CSim.dite ?_ (fun _ _ => ?_) (fun _ _ => ?_)); canon_simp)
     | (refine CSim.same ?_; canon_simp; done)
     | (refine CSim.same ?_; canon_call; done)
     | (solve_by_elim only [$ts,*])

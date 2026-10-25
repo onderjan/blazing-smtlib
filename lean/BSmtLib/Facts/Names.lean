@@ -22,10 +22,12 @@ nor a `LEAN:` reason fails the build.
 
 /-! The naming rule, with its exceptions: the views of the cursor's tokens as syntax tokens,
 declared where `SyntaxToken` is, which `Token.lean` cannot import, and the error of writing a
-token, declared there as it names `Reserved`, whose module imports `Token.lean`. -/
+token, declared there as it names `Reserved`, whose module imports `Token.lean`; and the
+functions of the symbol that name the version and `Reserved`, declared in
+`BSmtLib.Plain.Versioned`, as the modules of both import `Plain.lean`. -/
 
 /--
-info: 8167 declarations in 451 modules; 85 add to a sibling's type:
+info: 8285 declarations in 457 modules; 86 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -64,6 +66,8 @@ BSmtLib.Facts.Proofs.Reader.Param.Walk:
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.modifyThe
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.pure_eq
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.run_rel
+BSmtLib.Token.SyntaxTokenBuf:
+  BSmtLib.Token.SyntaxToken.intoOwned
 BSmtLibSpec.Grammar.File:
   BSmtLibSpec.Grammar.Tree.Command.declaredVersion
   BSmtLibSpec.Grammar.Tree.Command.modeAfter
@@ -124,21 +128,32 @@ BSmtLibSpec.Lexer:
   BSmtLibSpec.Lexicon.Token.reservedKind
 BSmtLibSpec.Reader:
   BSmtLibSpec.Lexer.Handed.received
-4 exceptions:
+12 exceptions:
+  BSmtLib.Plain.Symbol.intoVersioned in BSmtLib.Plain.Versioned
+  BSmtLib.Plain.Symbol.isAllowedIn in BSmtLib.Plain.Versioned
+  BSmtLib.Plain.Symbol.new in BSmtLib.Plain.Versioned
+  BSmtLib.Plain.SymbolBuf.intoVersioned in BSmtLib.Plain.Versioned
+  BSmtLib.Plain.SymbolBuf.isAllowedIn in BSmtLib.Plain.Versioned
+  BSmtLib.Plain.SymbolBuf.isUnquotedAllowedIn in BSmtLib.Plain.Versioned
+  BSmtLib.Plain.SymbolBuf.new in BSmtLib.Plain.Versioned
   BSmtLib.Token.BatchCursor.TokenWindow.syntax in BSmtLib.Token.SyntaxToken
   BSmtLib.Token.BatchCursor.syntax in BSmtLib.Token.SyntaxToken
   BSmtLib.Token.WriteError in BSmtLib.Token.SyntaxToken
+  BSmtLib.Token.WriteError.Internal.new in BSmtLib.Token.SyntaxToken
   BSmtLib.Token.WriteErrorCause in BSmtLib.Token.SyntaxToken
 -/
 #guard_msgs in
 #naming except BSmtLib.Token.BatchCursor.syntax BSmtLib.Token.BatchCursor.TokenWindow.syntax
-  BSmtLib.Token.WriteError BSmtLib.Token.WriteErrorCause
+  BSmtLib.Token.WriteError BSmtLib.Token.WriteErrorCause BSmtLib.Token.WriteError.Internal.new
+  BSmtLib.Plain.Symbol.new BSmtLib.Plain.Symbol.isAllowedIn BSmtLib.Plain.Symbol.intoVersioned
+  BSmtLib.Plain.SymbolBuf.new BSmtLib.Plain.SymbolBuf.isUnquotedAllowedIn
+  BSmtLib.Plain.SymbolBuf.isAllowedIn BSmtLib.Plain.SymbolBuf.intoVersioned
 
 /-! The re-exports, for the `pub use` lines of the Rust crate: the generated module
 `BSmtLib.Reexports` is what `BSmtLib.Facts.Reexports.render` makes now, and every second name
 resolves. -/
 
-/-- info: 144 items re-exported, with 710 members -/
+/-- info: 150 items re-exported, with 786 members -/
 #guard_msgs in
 #reexports
 
@@ -397,7 +412,7 @@ of the Rust crate, trait implementation and structure with private fields has it
 counterpart, or a reason in `BSmtLib.Facts.RustOnly`; the items with a reason are listed. -/
 
 /--
-info: 470 public names with a Rust counterpart; 88 with a `LEAN:` reason instead:
+info: 547 public names with a Rust counterpart; 93 with a `LEAN:` reason instead:
   BSmtLib.Bytes.BytesBuf.eqSlice
   BSmtLib.Bytes.BytesBuf.eqView
   BSmtLib.Bytes.eqOwned
@@ -409,6 +424,7 @@ info: 470 public names with a Rust counterpart; 88 with a `LEAN:` reason instead
   BSmtLib.Lexer.PendingEof
   BSmtLib.Lexer.PendingEof.lexEof
   BSmtLib.Lexer.Recovery.Recovers
+  BSmtLib.Nodes.Term.newApplication
   BSmtLib.Parser.Category.Combinator.ParenMultipleParser.new
   BSmtLib.Parser.Category.Combinator.ParenParser.new
   BSmtLib.Parser.Category.ParenSortedVarsParser.new
@@ -417,9 +433,11 @@ info: 470 public names with a Rust counterpart; 88 with a `LEAN:` reason instead
   BSmtLib.Plain.BinDigits.eqOwned
   BSmtLib.Plain.BinDigits.eqSlice
   BSmtLib.Plain.BinDigits.eqString
+  BSmtLib.Plain.BinDigits.toNat
   BSmtLib.Plain.BinDigitsBuf.eqSlice
   BSmtLib.Plain.BinDigitsBuf.eqString
   BSmtLib.Plain.BinDigitsBuf.eqView
+  BSmtLib.Plain.BinDigitsBuf.toNat
   BSmtLib.Plain.Comment.eqOwned
   BSmtLib.Plain.Comment.eqSlice
   BSmtLib.Plain.Comment.eqString
@@ -435,9 +453,11 @@ info: 470 public names with a Rust counterpart; 88 with a `LEAN:` reason instead
   BSmtLib.Plain.HexDigits.eqOwned
   BSmtLib.Plain.HexDigits.eqSlice
   BSmtLib.Plain.HexDigits.eqString
+  BSmtLib.Plain.HexDigits.toNat
   BSmtLib.Plain.HexDigitsBuf.eqSlice
   BSmtLib.Plain.HexDigitsBuf.eqString
   BSmtLib.Plain.HexDigitsBuf.eqView
+  BSmtLib.Plain.HexDigitsBuf.toNat
   BSmtLib.Plain.Keyword.eqOwned
   BSmtLib.Plain.Keyword.eqSlice
   BSmtLib.Plain.Keyword.eqString
@@ -487,11 +507,13 @@ info: 470 public names with a Rust counterpart; 88 with a `LEAN:` reason instead
   BSmtLib.Token.Reserved.CommandNameReserved.all
   BSmtLib.Token.Reserved.GeneralReserved.all
 ---
-info: 686 Rust items, 259 trait implementations with a counterpart class and 87 structures with private fields; 87 without a counterpart, with a reason:
+info: 784 Rust items, 352 trait implementations with a counterpart class and 94 structures with private fields; 111 without a counterpart, with a reason:
   bytes::SmtBytes::iter
   bytes::SmtBytesBuf::from_boxed_slice
   bytes::SmtBytesBuf::into_boxed_slice
   bytes::SmtBytesBuf::iter
+  fields of nodes::SmtPatternApplication
+  fields of nodes::SmtPatternApplicationBuf
   impl core::default::Default for parser::category::combinator::SmtTuple3Parser
   impl core::default::Default for parser::category::combinator::SmtTuple4Parser
   impl core::default::Default for parser::category::combinator::SmtTuple5Parser
@@ -504,12 +526,18 @@ info: 686 Rust items, 259 trait implementations with a counterpart class and 87 
   impl core::fmt::Debug for nodes::SmtSimplePatterns
   impl core::fmt::Debug for nodes::SmtSort
   impl core::fmt::Debug for token::SmtToken
+  impl core::fmt::Debug for token::writer::SmtCompactTokenWriter
+  impl core::fmt::Debug for token::writer::SmtLayoutTokenWriter
   impl parser::SmtParse for parser::category::combinator::SmtTuple3Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple4Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple5Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple6Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple7Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple8Parser
+  impl token::SmtAppendTokens for nodes::SmtApplication
+  impl token::SmtAppendTokens for nodes::SmtIndices
+  impl token::SmtAppendTokens for nodes::SmtSimplePatterns
+  impl token::SmtAppendTokens for nodes::SmtSort
   impl token::SmtLookahead for token::SmtTokenWindow
   multiple::SmtConstructors::iter_mut
   multiple::SmtConstructorsIter
@@ -533,28 +561,41 @@ info: 686 Rust items, 259 trait implementations with a counterpart class and 87 
   multiple::SmtSymbols::iter
   multiple::SmtSymbolsIter
   nodes::SmtApplication
+  nodes::SmtApplication::args
+  nodes::SmtApplication::args_mut
+  nodes::SmtApplication::function
+  nodes::SmtApplication::function_mut
+  nodes::SmtApplication::into_parts
+  nodes::SmtApplication::new
   nodes::SmtIndices
+  nodes::SmtIndices::empty
   nodes::SmtIndices::get
   nodes::SmtIndices::is_empty
   nodes::SmtIndices::iter
   nodes::SmtIndices::len
+  nodes::SmtIndicesBuf::iter
   nodes::SmtSimplePatterns
   nodes::SmtSimplePatterns::get
   nodes::SmtSimplePatterns::is_empty
   nodes::SmtSimplePatterns::iter
   nodes::SmtSimplePatterns::len
+  nodes::SmtSimplePatternsBuf::iter
   nodes::SmtSort
   parser::SmtParse::Result
   parser::state::SmtParseState
   parser::state::SmtParseState::new
   plain::SmtBinDigits::iter
+  plain::SmtBinDigits::to_u128
   plain::SmtBinDigitsBuf::iter
+  plain::SmtBinDigitsBuf::to_u128
   plain::SmtComment::iter
   plain::SmtCommentBuf::iter
   plain::SmtDecimal::iter
   plain::SmtDecimalBuf::iter
   plain::SmtHexDigits::iter
+  plain::SmtHexDigits::to_u128
   plain::SmtHexDigitsBuf::iter
+  plain::SmtHexDigitsBuf::to_u128
   plain::SmtKeyword::iter
   plain::SmtKeywordBuf::iter
   plain::SmtNumeral::iter
@@ -575,6 +616,9 @@ info: 686 Rust items, 259 trait implementations with a counterpart class and 87 
   token::SmtToken::content
   token::SmtToken::span
   token::SmtTokenWindow
+  token::SmtTokensBuf::iter
+  token::writer::SmtCompactTokenWriter::get_mut
+  token::writer::SmtLayoutTokenWriter::get_mut
 -/
 #guard_msgs in
 #counterparts

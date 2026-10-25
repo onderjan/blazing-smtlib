@@ -186,15 +186,16 @@ def hasReason (lines : Array String) (ranges : DeclarationRanges) : Bool :=
   (header ++ above).any fun l => (l.splitOn "/- LEAN:").length > 1
 
 /-- The classes that stand for the traits of the standard library: `Debug` is `Repr`,
-`PartialEq` is `BEq`, `Hash` is `Hashable`, `Default` is `Inhabited`, `Ord` is `Ord` and
-`Index` is `GetElem`. The other traits of the standard library have no counterpart: `Clone` and
-`Copy` (Lean values are copied freely), `Eq`, `StructuralPartialEq` and `PartialOrd` (with
-`BEq` and `Ord`), `IndexMut`, `Borrow` and `From` (a conversion is a named function, checked as
-the item it is), and the iterator traits (a container is iterated through its array). -/
+`PartialEq` is `BEq`, `Hash` is `Hashable`, `Default` is `Inhabited`, `Ord` is `Ord`, `Index` is
+`GetElem` and `Display` is `ToString`. The other traits of the standard library have no
+counterpart: `Clone` and `Copy` (Lean values are copied freely), `Eq`, `StructuralPartialEq` and
+`PartialOrd` (with `BEq` and `Ord`), `IndexMut`, `Borrow` and `From` (a conversion is a named
+function, checked as the item it is), `Error` (the cause of an error is one of its fields), and
+the iterator traits (a container is iterated through its array). -/
 def stdClasses : List (String × Name) :=
   [("core::fmt::Debug", `Repr), ("core::cmp::PartialEq", `BEq), ("core::hash::Hash", `Hashable),
     ("core::default::Default", `Inhabited), ("core::cmp::Ord", `Ord),
-    ("core::ops::index::Index", `GetElem)]
+    ("core::ops::index::Index", `GetElem), ("core::fmt::Display", `ToString)]
 
 /-- The Lean classes that stand for the trait at `trait`, given the Rust items `all`: the class
 of a trait of the crate, the class of `stdClasses` for one of the standard library; none if the

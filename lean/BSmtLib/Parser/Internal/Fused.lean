@@ -135,10 +135,10 @@ def termStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
     | .parenClose =>
       match levels with
       | .application function sort arguments :: outer =>
-        if arguments.isEmpty then fail posture next h (.syntax (.empty .termApplication)) k
+        if hne : arguments.isEmpty then fail posture next h (.syntax (.empty .termApplication)) k
         else
           handleTerm posture next h declarations context outer
-            (.application function sort (.new arguments)) k
+            (.application function sort (.new arguments) (Multiple.len_pos_new hne)) k
       | _ => fail posture next h (.syntax (.expected #[.term])) k
     | .unquotedSymbol =>
       let content := contentOf next token

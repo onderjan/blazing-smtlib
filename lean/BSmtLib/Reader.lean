@@ -111,6 +111,31 @@ theorem ReadError.Internal.new_inj {E : Type} {cause cause' : ReadErrorCause E}
 instance {E : Type} : Inhabited (ReadError E) :=
   ⟨ReadError.Internal.new (.io (IO.userError "reading failed")) Span.Internal.newZero⟩
 
+/--
+The most useful location for deciphering the error.
+
+Guaranteed to be within the span.
+-/
+def ReadError.location {E : Type} (self : ReadError E) : Span.Location :=
+  match self.cause with
+  | .lexical kind => LexicalErrorKind.Internal.locationIn kind self.span
+  | _ => self.span.start
+
+/- LEAN: Rust's `Display` implementations are `ToString` instances, with the same text. -/
+@[no_expose] instance {E : Type} [ToString E] : ToString (ReadErrorCause E) where
+  toString
+    | .io error => s!"I/O: {error}"
+    | .lexical kind => toString kind
+    | .syntax kind => toString kind
+    | .version kind => toString kind
+    | .handler error => toString error
+
+/-- The cause, at the line and the column of `location`, counted from one. -/
+@[no_expose] instance {E : Type} [ToString E] : ToString (ReadError E) where
+  toString self :=
+    let location := self.location
+    s!"{self.cause} at line {location.line + 1}, column {location.column + 1}"
+
 /-- Converts the error of a parser, located at `span`, into a read error. -/
 /- LEAN: Rust's private `from_parse`. It is public here as the statements about the reader's
 errors in the facts of the public interface name it. -/
