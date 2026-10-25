@@ -54,10 +54,8 @@ use blazing_smtlib::{
         SmtVersionErrorKind,
     },
     reader::{SmtReadError, SmtReadErrorCause, SmtReader},
-    token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory, SmtVersion,
-        SmtVersionPosture,
-    },
+    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
+    version::{SmtVersion, SmtVersionPosture},
 };
 
 pub use nodes::*;

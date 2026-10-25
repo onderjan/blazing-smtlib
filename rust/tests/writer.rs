@@ -15,8 +15,9 @@ use blazing_smtlib::{
     lexer::SmtLexer,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
-        SmtTokenCategory, SmtVersion, SmtWriteError, SmtWriteErrorCause,
+        SmtTokenCategory, SmtWriteError, SmtWriteErrorCause,
     },
+    version::SmtVersion,
 };
 
 const VERSIONS: [SmtVersion; 4] = [

@@ -14,8 +14,9 @@ use blazing_smtlib::{
     parser::{SmtParse, SmtParseState, SmtTermParser},
     token::{
         SmtAppendTokens, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
-        SmtReserved, SmtSyntaxToken, SmtSyntaxTokenBuf, SmtTokensBuf, SmtTokensCursor, SmtVersion,
+        SmtReserved, SmtSyntaxToken, SmtSyntaxTokenBuf, SmtTokensBuf, SmtTokensCursor,
     },
+    version::SmtVersion,
 };
 
 /// An input with every kind of token, empty ones included, with whitespace

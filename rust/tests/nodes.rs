@@ -12,7 +12,7 @@ use blazing_smtlib::{
     SmtPatternBuf, SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr,
     SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort,
     SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtStringContentBuf,
-    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, token::SmtVersion,
+    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, version::SmtVersion,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,

@@ -20,7 +20,8 @@ use std::rc::Rc;
 
 use blazing_smtlib::{
     lexer::{SmtLexer, SmtRecovering},
-    token::{SmtTokenCategory, SmtVersion},
+    token::SmtTokenCategory,
+    version::SmtVersion,
 };
 
 use lex_backend::{

@@ -7,10 +7,7 @@
 
 mod lex_backend;
 
-use blazing_smtlib::{
-    lexer::SmtLexicalErrorKind,
-    token::{SmtTokenCategory, SmtVersion},
-};
+use blazing_smtlib::{lexer::SmtLexicalErrorKind, token::SmtTokenCategory, version::SmtVersion};
 
 use lex_backend::Loc;
 

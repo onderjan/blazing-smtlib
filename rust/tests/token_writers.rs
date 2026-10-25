@@ -15,8 +15,9 @@ use blazing_smtlib::{
     token::{
         SmtAppendTokens, SmtBatchCursor, SmtCompactTokenWriter, SmtConsume, SmtConsumeFrom,
         SmtCursor, SmtGeneralReserved, SmtLayoutTokenWriter, SmtReserved, SmtSyntaxToken,
-        SmtTokensBuf, SmtTokensCursor, SmtVersion, SmtWriteErrorCause,
+        SmtTokensBuf, SmtTokensCursor, SmtWriteErrorCause,
     },
+    version::SmtVersion,
 };
 
 /// Inputs that every version from 2.5 on lexes alike, with every kind of

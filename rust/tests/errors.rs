@@ -26,9 +26,10 @@ use blazing_smtlib::{
     reader::{SmtReadError, SmtReadErrorCause, read_smt},
     token::{
         SmtBatchCursor, SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor,
-        SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersion,
-        SmtVersionRefused, SmtWriteError, SmtWriteErrorCause,
+        SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
+        SmtWriteError, SmtWriteErrorCause,
     },
+    version::SmtVersion,
 };
 
 /// The error of a consumer or handler of the tests' own, with a source of its own.

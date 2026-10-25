@@ -13,7 +13,8 @@ use blazing_smtlib::{
     SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtSymbol,
     SmtSymbols, SmtTerm,
     reader::{SmtReadError, SmtReadErrorCause, read_smt},
-    token::{SmtCommandNameReserved, SmtVersion},
+    token::SmtCommandNameReserved,
+    version::SmtVersion,
 };
 
 /// The error of the handler's own.

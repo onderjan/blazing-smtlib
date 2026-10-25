@@ -8,10 +8,7 @@
 
 mod lex_backend;
 
-use blazing_smtlib::{
-    SmtLocation,
-    token::{SmtTokenCategory, SmtVersion},
-};
+use blazing_smtlib::{SmtLocation, token::SmtTokenCategory, version::SmtVersion};
 
 use lex_backend::{Feed, Lexed, LexedToken, loc};
 

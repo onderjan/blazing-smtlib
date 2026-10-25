@@ -4,9 +4,8 @@ use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
     SmtFunctionSignatures, SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern,
     SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtStringContent,
-    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm,
-    parser::SmtParse,
-    token::{SmtCommandNameReserved, SmtVersion},
+    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, parser::SmtParse, token::SmtCommandNameReserved,
+    version::SmtVersion,
 };
 
 pub trait SmtHandler {

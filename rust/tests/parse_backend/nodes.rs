@@ -13,8 +13,8 @@
 
 use blazing_smtlib::{
     SmtIdentBuf, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind,
-    SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf,
-    token::{SmtReserved, SmtVersion},
+    SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf, token::SmtReserved,
+    version::SmtVersion,
 };
 
 /// A qualified identifier, with the sort it is qualified with by `as`.

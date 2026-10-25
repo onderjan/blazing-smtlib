@@ -12,7 +12,8 @@ use blazing_smtlib::{
         SmtCloseParenParser, SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtParse,
         SmtParseError, SmtParseState, SmtTermParser, SmtVersionErrorKind,
     },
-    token::{SmtCursor, SmtVersion, SmtVersionRefused},
+    token::{SmtCursor, SmtVersionRefused},
+    version::SmtVersion,
 };
 
 use super::nodes::{

@@ -13,8 +13,9 @@ use blazing_smtlib::{
     lexer::{SmtLexErrorCause, SmtLexRecovery, SmtLexer},
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtRecover,
-        SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory, SmtVersion,
+        SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory,
     },
+    version::SmtVersion,
 };
 
 /// What the consumer of a request does with one hand-over, by its plan.

@@ -38,8 +38,9 @@ use blazing_smtlib::{
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtToken,
-        SmtTokenCategory, SmtVersion,
+        SmtTokenCategory,
     },
+    version::SmtVersion,
 };
 
 use lex_backend::{Feed, Line, Loc, Options, driver};

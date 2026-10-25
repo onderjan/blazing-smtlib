@@ -2,7 +2,10 @@
 
 mod reserved_words;
 
-use blazing_smtlib::token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtVersion};
+use blazing_smtlib::{
+    token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved},
+    version::SmtVersion,
+};
 
 /// Returns every `SmtGeneralReserved` variant, in declaration order.
 ///

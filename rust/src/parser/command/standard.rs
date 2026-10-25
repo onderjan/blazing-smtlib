@@ -20,7 +20,8 @@ use crate::{
         },
         parse_by_token,
     },
-    token::{SmtCommandNameReserved, SmtCursor, SmtSyntaxToken, SmtVersion},
+    token::{SmtCommandNameReserved, SmtCursor, SmtSyntaxToken},
+    version::SmtVersion,
 };
 
 /// Defines the rule of one standard command: its payload parser

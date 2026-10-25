@@ -17,8 +17,9 @@ use blazing_smtlib::{
     reader::read_smt,
     token::{
         SmtAppendTokens, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
-        SmtReserved, SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor, SmtVersion,
+        SmtReserved, SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,
     },
+    version::SmtVersion,
 };
 
 /// A consumer that keeps the abstract tokens before the end of the input.

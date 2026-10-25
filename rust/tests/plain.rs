@@ -5,7 +5,7 @@ use blazing_smtlib::{
     SmtDecimalBuf, SmtDisallowedBytesError, SmtHexDigits, SmtHexDigitsBuf, SmtKeyword,
     SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumericOverflow, SmtStringContent,
     SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace, SmtWhitespaceBuf,
-    token::SmtVersion,
+    version::SmtVersion,
 };
 
 #[test]

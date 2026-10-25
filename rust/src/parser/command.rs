@@ -6,7 +6,8 @@ use crate::{
         SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, expected,
         handle_err,
     },
-    token::{SmtCursor, SmtReserved, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtReserved, SmtSyntaxToken},
+    version::SmtVersion,
 };
 
 mod datatype;

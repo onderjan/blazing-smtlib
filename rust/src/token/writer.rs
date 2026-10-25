@@ -2,8 +2,9 @@ use std::{collections::VecDeque, io::Write, ops::ControlFlow};
 
 use super::{
     SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokensCursor,
-    SmtVersion, SmtWriteError,
+    SmtWriteError,
 };
+use crate::version::SmtVersion;
 
 /// Writes tokens as SMT-LIB text in the compact form.
 ///

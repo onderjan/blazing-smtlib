@@ -25,8 +25,9 @@ use crate::{
     },
     token::{
         BatchCursorAction, InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor,
-        SmtRecover, SmtVersion,
+        SmtRecover,
     },
+    version::SmtVersion,
 };
 
 /// SMT-LIB lexer.

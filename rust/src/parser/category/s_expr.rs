@@ -6,7 +6,8 @@ use crate::{
         Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected,
         category::parse_special_constant, handle_err, parse_by_token,
     },
-    token::{SmtCursor, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtSyntaxToken},
+    version::SmtVersion,
 };
 
 /// A parser that reads an SMT-LIB S-expression.

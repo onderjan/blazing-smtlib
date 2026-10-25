@@ -32,7 +32,7 @@ use crate::{
 };
 use crate::{
     SmtLocation,
-    token::{SmtVersion, SmtVersionPosture},
+    version::{SmtVersion, SmtVersionPosture},
 };
 
 /// Determines why reading has failed.

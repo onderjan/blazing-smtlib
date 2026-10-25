@@ -28,8 +28,9 @@ use blazing_smtlib::{
     lexer::SmtLexer,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtToken,
-        SmtTokenCategory, SmtVersion,
+        SmtTokenCategory,
     },
+    version::SmtVersion,
 };
 
 /// Global allocator that counts allocations and tracks the live heap.

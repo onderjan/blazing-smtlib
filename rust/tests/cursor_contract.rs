@@ -34,8 +34,9 @@ use blazing_smtlib::{
     },
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
-        SmtVersion, SmtVersionPosture, SmtVersionRefused,
+        SmtVersionRefused,
     },
+    version::{SmtVersion, SmtVersionPosture},
 };
 
 // --- Tokens as owned values ---

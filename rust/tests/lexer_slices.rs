@@ -16,7 +16,8 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtLocation,
     lexer::{SmtLexer, SmtLexicalErrorKind},
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory, SmtVersion},
+    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
+    version::SmtVersion,
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, loc};

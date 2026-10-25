@@ -7,7 +7,8 @@ use crate::{
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected,
         parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
+    version::SmtVersion,
 };
 
 pub struct SmtSimplePatternParser;

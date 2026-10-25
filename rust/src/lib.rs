@@ -11,6 +11,7 @@ pub mod lexer;
 pub mod parser;
 pub mod reader;
 pub mod token;
+pub mod version;
 
 pub use crate::bytes::*;
 pub use crate::multiple::*;

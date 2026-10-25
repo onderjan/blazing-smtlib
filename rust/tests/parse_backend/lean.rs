@@ -18,7 +18,8 @@ use blazing_smtlib::{
         SmtCommandOutcome, SmtMissingItem, SmtNonEmptyList, SmtSyntaxErrorKind, SmtSyntaxExpected,
         SmtVersionErrorKind,
     },
-    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion},
+    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+    version::SmtVersion,
 };
 
 use super::nodes::{

@@ -6,7 +6,8 @@ use crate::{
         Arena, IdentHandle, IndexHandle, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected, parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
+    version::SmtVersion,
 };
 
 /// A parser that reads an SMT-LIB identifier.

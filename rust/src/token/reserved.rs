@@ -1,4 +1,4 @@
-use crate::token::SmtVersion;
+use crate::version::SmtVersion;
 
 /// Reserved words in SMT-LIB2, including standard command names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

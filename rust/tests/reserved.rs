@@ -19,7 +19,7 @@ use reserved_words::{COMMAND_NAMES, reserved_words};
 
 use blazing_smtlib::{
     SmtNonstandardCommandError,
-    token::{SmtVersion, SmtVersionPosture},
+    version::{SmtVersion, SmtVersionPosture},
 };
 
 /// A command with one place where a name is expected, marked `NAME`.

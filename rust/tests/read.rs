@@ -17,7 +17,7 @@ use blazing_smtlib::{
     SmtNonstandardCommandError,
     lexer::SmtLexicalErrorKind,
     parser::{SmtCommandOutcome, SmtSyntaxErrorKind},
-    token::{SmtVersion, SmtVersionPosture},
+    version::{SmtVersion, SmtVersionPosture},
 };
 
 /// Expected location as `(offset, line, column)`.

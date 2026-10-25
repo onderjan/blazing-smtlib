@@ -12,8 +12,9 @@ use blazing_smtlib::{
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtTokenCategory, SmtVersion,
+        SmtTokenCategory,
     },
+    version::SmtVersion,
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, Loc, loc};

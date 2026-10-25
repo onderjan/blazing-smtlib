@@ -18,7 +18,8 @@ use blazing_smtlib::{
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SmtTermParser, SmtVersionErrorKind,
     },
     reader::{SmtReadError, SmtReadErrorCause, SmtReader, read_smt},
-    token::{SmtCursor, SmtSyntaxToken, SmtVersion},
+    token::{SmtCursor, SmtSyntaxToken},
+    version::SmtVersion,
 };
 
 /// The error of the handlers' own.

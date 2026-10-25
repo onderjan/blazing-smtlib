@@ -66,7 +66,8 @@ pub(crate) mod tests {
         SmtNonstandardCommandError, SmtSyntaxChecker,
         lexer::SmtLexer,
         parser::{SmtParse, SmtParseError, SmtParseState},
-        token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtVersion},
+        token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
+        version::SmtVersion,
     };
 
     /// Drives `parser` over `parse_state` through the whole input with the

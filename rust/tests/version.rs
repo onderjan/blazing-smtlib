@@ -19,10 +19,8 @@ use reserved_words::reserved_words;
 use blazing_smtlib::{
     SmtNonstandardCommandError,
     parser::{SmtCommandOutcome, SmtSyntaxErrorKind},
-    token::{
-        SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory, SmtVersion,
-        SmtVersionPosture, SmtVersionPostureBuilder,
-    },
+    token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+    version::{SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder},
 };
 
 type ReadError = parse_backend::ReadError<SmtNonstandardCommandError>;

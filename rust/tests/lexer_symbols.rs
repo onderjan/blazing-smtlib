@@ -7,7 +7,7 @@
 mod lex_backend;
 mod reserved_words;
 
-use blazing_smtlib::token::{SmtTokenCategory, SmtVersion};
+use blazing_smtlib::{token::SmtTokenCategory, version::SmtVersion};
 
 // What `SmtSyntaxToken::from_token` says about a token, owned.
 use lex_backend::LexedKind as Kind;

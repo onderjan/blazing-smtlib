@@ -16,8 +16,9 @@ use blazing_smtlib::{
     parser::{SmtParse, SmtParseState, SmtSortParser, SmtTermParser},
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtToken,
-        SmtTokenCategory, SmtVersion,
+        SmtTokenCategory,
     },
+    version::SmtVersion,
 };
 
 /// A check run on a hand-over of the lexer.

@@ -28,8 +28,9 @@ use blazing_smtlib::{
     reader::SmtReader,
     token::{
         SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory,
-        SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder, SmtVersionRefused,
+        SmtVersionRefused,
     },
+    version::{SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder},
 };
 
 #[test]
