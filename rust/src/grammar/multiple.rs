@@ -131,6 +131,14 @@ impl<T> ExactSizeIterator for SmtMultipleIntoIter<'_, T> {}
 
 impl<T> FusedIterator for SmtMultipleIntoIter<'_, T> {}
 
+impl<T: Debug> Debug for SmtMultipleIntoIter<'_, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("SmtMultipleIntoIter")
+            .field(&self.0.as_slice())
+            .finish()
+    }
+}
+
 impl<'b, T> IntoIterator for &'b SmtMultiple<'_, T> {
     type Item = &'b T;
     type IntoIter = slice::Iter<'b, T>;
@@ -260,6 +268,23 @@ impl<'a, V> Iterator for SmtNamedValuesIntoIter<'a, V> {
 
 impl<V> ExactSizeIterator for SmtNamedValuesIntoIter<'_, V> {}
 
+impl<V: Debug> Debug for SmtNamedValuesIntoIter<'_, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = self.text;
+        let remaining: Vec<_> = self
+            .names
+            .0
+            .as_slice()
+            .iter()
+            .map(|name| name.symbol_view(text))
+            .zip(self.values.0.as_slice())
+            .collect();
+        f.debug_tuple("SmtNamedValuesIntoIter")
+            .field(&remaining)
+            .finish()
+    }
+}
+
 impl<V: Debug> Debug for SmtNamedValues<'_, V> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
@@ -267,6 +292,7 @@ impl<V: Debug> Debug for SmtNamedValues<'_, V> {
 }
 
 /// Owned named values, from which [`SmtNamedValues`] is viewed.
+#[derive(Clone)]
 pub struct SmtNamedValuesBuf<V> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
@@ -323,6 +349,12 @@ impl<V> SmtNamedValuesBuf<V> {
 impl<V> Default for SmtNamedValuesBuf<V> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<V: Debug> Debug for SmtNamedValuesBuf<V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.entries()).finish()
     }
 }
 
@@ -416,6 +448,25 @@ impl<'a, H: SmtHandler + ?Sized> Iterator for SmtMatchCasesIntoIter<'a, H> {
 }
 
 impl<H: SmtHandler + ?Sized> ExactSizeIterator for SmtMatchCasesIntoIter<'_, H> {}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtMatchCasesIntoIter<'_, H>
+where
+    H::Term: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let remaining: Vec<_> = self
+            .patterns
+            .0
+            .as_slice()
+            .iter()
+            .map(|pattern| Arena::<H>::pattern_view(self.text, self.simple_patterns, pattern))
+            .zip(self.terms.0.as_slice())
+            .collect();
+        f.debug_tuple("SmtMatchCasesIntoIter")
+            .field(&remaining)
+            .finish()
+    }
+}
 
 impl<H: SmtHandler + ?Sized> Debug for SmtMatchCases<'_, H>
 where
@@ -513,6 +564,34 @@ impl<H: SmtHandler + ?Sized> Default for SmtMatchCasesBuf<H> {
     }
 }
 
+impl<H: SmtHandler + ?Sized> Clone for SmtMatchCasesBuf<H>
+where
+    H::Term: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            text: self.text.clone(),
+            simple_patterns: self.simple_patterns.clone(),
+            patterns: self.patterns.clone(),
+            terms: self.terms.clone(),
+        }
+    }
+}
+
+impl<H: SmtHandler + ?Sized> Debug for SmtMatchCasesBuf<H>
+where
+    H::Term: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let cases = self
+            .patterns
+            .iter()
+            .map(|pattern| Arena::<H>::pattern_view(&self.text, &self.simple_patterns, pattern))
+            .zip(self.terms.iter());
+        f.debug_list().entries(cases).finish()
+    }
+}
+
 /// Symbols to be handled, such as the parameters of a sort definition.
 #[derive(Clone, Copy)]
 pub struct SmtSymbols<'a> {
@@ -573,6 +652,19 @@ impl<'a> Iterator for SmtSymbolsIter<'a> {
 
 impl ExactSizeIterator for SmtSymbolsIter<'_> {}
 
+impl Debug for SmtSymbolsIter<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = self.text;
+        let remaining: Vec<_> = self
+            .names
+            .as_slice()
+            .iter()
+            .map(|name| name.symbol_view(text))
+            .collect();
+        f.debug_tuple("SmtSymbolsIter").field(&remaining).finish()
+    }
+}
+
 impl Debug for SmtSymbols<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
@@ -580,6 +672,7 @@ impl Debug for SmtSymbols<'_> {
 }
 
 /// Owned symbols, from which [`SmtSymbols`] is viewed.
+#[derive(Clone)]
 pub struct SmtSymbolsBuf {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
@@ -622,6 +715,12 @@ impl SmtSymbolsBuf {
 impl Default for SmtSymbolsBuf {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Debug for SmtSymbolsBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.view(), f)
     }
 }
 
@@ -747,6 +846,17 @@ impl<'a, S> Iterator for SmtFunctionSignaturesIter<'a, S> {
 
 impl<S> ExactSizeIterator for SmtFunctionSignaturesIter<'_, S> {}
 
+impl<S: Debug> Debug for SmtFunctionSignaturesIter<'_, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let remaining: Vec<_> = (self.next..self.buf.len())
+            .filter_map(|index| self.buf.get(index))
+            .collect();
+        f.debug_tuple("SmtFunctionSignaturesIter")
+            .field(&remaining)
+            .finish()
+    }
+}
+
 impl<S: Debug> Debug for SmtFunctionSignatures<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
@@ -755,6 +865,7 @@ impl<S: Debug> Debug for SmtFunctionSignatures<'_, S> {
 
 /// Owned function signatures, from which [`SmtFunctionSignatures`]
 /// and each [`SmtFunctionSignature`] are viewed.
+#[derive(Clone)]
 pub struct SmtFunctionSignaturesBuf<S> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
@@ -841,6 +952,12 @@ impl<S> Default for SmtFunctionSignaturesBuf<S> {
     }
 }
 
+impl<S: Debug> Debug for SmtFunctionSignaturesBuf<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.view(), f)
+    }
+}
+
 /// Sort names with their arities to be handled, such as those
 /// declared by `declare-datatypes`.
 #[derive(Clone, Copy)]
@@ -907,6 +1024,17 @@ impl<'a> Iterator for SmtSortAritiesIter<'a> {
 
 impl ExactSizeIterator for SmtSortAritiesIter<'_> {}
 
+impl Debug for SmtSortAritiesIter<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let remaining: Vec<_> = (self.next..self.arities.len())
+            .filter_map(|index| self.arities.get(index))
+            .collect();
+        f.debug_tuple("SmtSortAritiesIter")
+            .field(&remaining)
+            .finish()
+    }
+}
+
 impl Debug for SmtSortArities<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
@@ -914,6 +1042,7 @@ impl Debug for SmtSortArities<'_> {
 }
 
 /// Owned sort names with their arities, from which [`SmtSortArities`] is viewed.
+#[derive(Clone)]
 pub struct SmtSortAritiesBuf {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
@@ -966,6 +1095,12 @@ impl SmtSortAritiesBuf {
 impl Default for SmtSortAritiesBuf {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Debug for SmtSortAritiesBuf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.view(), f)
     }
 }
 
@@ -1037,6 +1172,25 @@ impl<'a, S> Iterator for SmtConstructorsIter<'a, S> {
 
 impl<S> ExactSizeIterator for SmtConstructorsIter<'_, S> {}
 
+impl<S: Debug> Debug for SmtConstructorsIter<'_, S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = self.text;
+        let remaining: Vec<_> = self
+            .names
+            .as_slice()
+            .iter()
+            .zip(self.selectors.as_slice())
+            .map(|(name, selectors)| {
+                let selectors: Vec<_> = selectors.entries().collect();
+                (name.symbol_view(text), selectors)
+            })
+            .collect();
+        f.debug_tuple("SmtConstructorsIter")
+            .field(&remaining)
+            .finish()
+    }
+}
+
 impl<S: Debug> Debug for SmtConstructors<'_, S> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut list = f.debug_list();
@@ -1052,6 +1206,7 @@ impl<S: Debug> Debug for SmtConstructors<'_, S> {
 ///
 /// Each constructor's selectors are kept in storage of their own,
 /// which is reused when the constructors are cleared.
+#[derive(Clone)]
 pub struct SmtConstructorsBuf<S> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
@@ -1117,6 +1272,17 @@ impl<S> SmtConstructorsBuf<S> {
 impl<S> Default for SmtConstructorsBuf<S> {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl<S: Debug> Debug for SmtConstructorsBuf<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut list = f.debug_list();
+        for (name, selectors) in self.names.iter().zip(self.selectors.iter()) {
+            let selectors: Vec<_> = selectors.entries().collect();
+            list.entry(&(name.symbol_view(&self.text), selectors));
+        }
+        list.finish()
     }
 }
 

@@ -935,7 +935,7 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct SmtSyntaxChecker;
 
 #[derive(Debug, Clone)]

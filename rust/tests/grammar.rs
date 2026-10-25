@@ -159,6 +159,170 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtPatternApplicationBuf>();
 }
 
+/// The owned lists are `Debug` and `Clone`, and their iterators `Debug`,
+/// whenever the values they hold are, regardless of the handler type.
+#[test]
+fn lists_and_their_iterators_are_debug_with_an_opaque_handler() {
+    use blazing_smtlib::grammar::{
+        SmtConstructorsBuf, SmtConstructorsIter, SmtFunctionSignaturesBuf,
+        SmtFunctionSignaturesIter, SmtMatchCasesIntoIter, SmtMultipleIntoIter, SmtNamedValuesBuf,
+        SmtNamedValuesIntoIter, SmtSortAritiesBuf, SmtSortAritiesIter, SmtSymbolsBuf,
+        SmtSymbolsIter,
+    };
+
+    assert_debug_and_clone::<SmtNamedValuesBuf<String>>();
+    assert_debug_and_clone::<SmtMatchCasesBuf<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtSymbolsBuf>();
+    assert_debug_and_clone::<SmtFunctionSignaturesBuf<String>>();
+    assert_debug_and_clone::<SmtSortAritiesBuf>();
+    assert_debug_and_clone::<SmtConstructorsBuf<String>>();
+    assert_debug::<SmtMultipleIntoIter<'static, String>>();
+    assert_debug::<SmtNamedValuesIntoIter<'static, String>>();
+    assert_debug::<SmtMatchCasesIntoIter<'static, OpaqueHandler>>();
+    assert_debug::<SmtSymbolsIter<'static>>();
+    assert_debug::<SmtFunctionSignaturesIter<'static, String>>();
+    assert_debug::<SmtSortAritiesIter<'static>>();
+    assert_debug::<SmtConstructorsIter<'static, String>>();
+}
+
+/// The parsers, the parse state, the adapter, the lexer over it and the
+/// reader are `Debug` for any handler, as they print none of its values.
+#[test]
+fn the_parsing_machinery_is_debug_with_an_opaque_handler() {
+    use blazing_smtlib::{
+        SmtReader,
+        lexer::SmtLexer,
+        parser::{
+            SmtClosedAttributeParser, SmtClosedMultipleAttributeParser, SmtParenParser,
+            SmtParseAdapter, SmtParseState, SmtPatternParser, SmtQualifiedIdentParser,
+            SmtSExprParser, SmtSortParser, SmtSortedVarParser, SmtSymbolParser, SmtTermParser,
+            SmtTuple3Parser,
+        },
+    };
+
+    type H = OpaqueHandler;
+    type S = SmtSymbolParser;
+    assert_debug::<SmtPatternParser<H>>();
+    assert_debug::<SmtQualifiedIdentParser<H>>();
+    assert_debug::<SmtSortParser<H>>();
+    assert_debug::<SmtSortedVarParser<H>>();
+    assert_debug::<SmtSExprParser<H>>();
+    assert_debug::<SmtTermParser<H>>();
+    assert_debug::<SmtClosedAttributeParser<H>>();
+    assert_debug::<SmtClosedMultipleAttributeParser<H>>();
+    assert_debug::<SmtParenParser<H, S>>();
+    assert_debug::<SmtTuple3Parser<H, S, S, S>>();
+    assert_debug::<SmtParseState<H>>();
+    assert_debug::<SmtParseAdapter<'static, H, SmtTermParser<H>>>();
+    assert_debug::<SmtLexer<SmtParseAdapter<'static, H, SmtTermParser<H>>>>();
+    assert_debug::<SmtReader<'static, H, SmtTermParser<H>>>();
+}
+
+#[test]
+fn an_owned_list_and_its_clone_print_as_its_view_and_an_iterator_what_is_left() {
+    use blazing_smtlib::grammar::{
+        SmtConstructorsBuf, SmtFunctionSignaturesBuf, SmtNamedValuesBuf, SmtSortAritiesBuf,
+        SmtSymbolsBuf,
+    };
+
+    let x = symbol_buf(b"x", false);
+    let y = symbol_buf(b"a b", true);
+
+    let mut values = SmtNamedValuesBuf::new();
+    values.push(x.view(), "1".to_string());
+    values.push(y.view(), "2".to_string());
+    let printed = format!("{:?}", values.view_mut());
+    assert_eq!(format!("{values:?}"), printed);
+    assert_eq!(format!("{:?}", values.clone()), printed);
+    let mut copy = values.clone();
+    let mut iter = copy.view_mut().into_iter();
+    iter.next();
+    let last = format!("{:?}", (y.view(), "2"));
+    assert_eq!(
+        format!("{iter:?}"),
+        format!("SmtNamedValuesIntoIter([{last}])")
+    );
+
+    let mut cases: SmtMatchCasesBuf<OpaqueHandler> = SmtMatchCasesBuf::new();
+    cases.push(
+        SmtPattern::Simple(SmtSimplePattern::Symbol(x.view())),
+        "1".to_string(),
+    );
+    cases.push(
+        SmtPattern::Simple(SmtSimplePattern::Wildcard),
+        "2".to_string(),
+    );
+    let printed = format!("{:?}", cases.view_mut());
+    assert_eq!(format!("{cases:?}"), printed);
+    assert_eq!(format!("{:?}", cases.clone()), printed);
+    let mut copy = cases.clone();
+    let mut iter = copy.view_mut().into_iter();
+    iter.next();
+    let last = format!(
+        "{:?}",
+        (SmtPattern::Simple(SmtSimplePattern::Wildcard), "2")
+    );
+    assert_eq!(
+        format!("{iter:?}"),
+        format!("SmtMatchCasesIntoIter([{last}])")
+    );
+
+    let mut symbols = SmtSymbolsBuf::new();
+    symbols.push(x.view());
+    symbols.push(y.view());
+    let printed = format!("{:?}", symbols.view());
+    assert_eq!(format!("{symbols:?}"), printed);
+    assert_eq!(format!("{:?}", symbols.clone()), printed);
+    let mut iter = symbols.view().into_iter();
+    iter.next();
+    assert_eq!(
+        format!("{iter:?}"),
+        format!("SmtSymbolsIter([{:?}])", y.view())
+    );
+
+    let mut signatures = SmtFunctionSignaturesBuf::new();
+    signatures.push(x.view(), "Bool".to_string());
+    signatures.push_param(y.view(), "Int".to_string());
+    signatures.push(y.view(), "Int".to_string());
+    let printed = format!("{:?}", signatures.view());
+    assert_eq!(format!("{signatures:?}"), printed);
+    assert_eq!(format!("{:?}", signatures.clone()), printed);
+    let mut iter = signatures.view().into_iter();
+    iter.next();
+    let last = format!("{:?}", signatures.get(1).expect("two signatures"));
+    assert_eq!(
+        format!("{iter:?}"),
+        format!("SmtFunctionSignaturesIter([{last}])")
+    );
+
+    let mut arities = SmtSortAritiesBuf::new();
+    arities.push(x.view(), numeral_buf(b"0").view());
+    arities.push(y.view(), numeral_buf(b"2").view());
+    let printed = format!("{:?}", arities.view());
+    assert_eq!(format!("{arities:?}"), printed);
+    assert_eq!(format!("{:?}", arities.clone()), printed);
+    let mut iter = arities.view().into_iter();
+    iter.next();
+    let last = format!("{:?}", (y.view(), numeral_buf(b"2").view()));
+    assert_eq!(format!("{iter:?}"), format!("SmtSortAritiesIter([{last}])"));
+
+    let mut constructors = SmtConstructorsBuf::new();
+    constructors.push(x.view());
+    constructors.push(y.view());
+    constructors.push_selector(x.view(), "Int".to_string());
+    let printed = format!("{:?}", constructors.view_mut());
+    assert_eq!(format!("{constructors:?}"), printed);
+    assert_eq!(format!("{:?}", constructors.clone()), printed);
+    let mut copy = constructors.clone();
+    let mut iter = copy.view_mut().into_iter();
+    iter.next();
+    let last = format!("{:?}", (y.view(), [(x.view(), "Int")]));
+    assert_eq!(
+        format!("{iter:?}"),
+        format!("SmtConstructorsIter([{last}])")
+    );
+}
+
 fn symbol_buf(bytes: &[u8], quoted: bool) -> SmtSymbolBuf {
     let result = if quoted {
         SmtSymbolBuf::new_quoted(bytes.to_vec())

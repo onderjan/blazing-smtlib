@@ -1,4 +1,4 @@
-use std::{convert::Infallible, ops::ControlFlow};
+use std::{convert::Infallible, fmt, ops::ControlFlow};
 
 use crate::{
     SmtCommandHandler, SmtVersion,
@@ -29,6 +29,12 @@ use standard::{StandardCommandKind, StandardCommandParsers};
 pub struct SmtCommandParser<H: SmtCommandHandler> {
     state: CommandParserState<H>,
     standard_parsers: StandardCommandParsers<H>,
+}
+
+impl<H: SmtCommandHandler> fmt::Debug for SmtCommandParser<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtCommandParser").finish_non_exhaustive()
+    }
 }
 
 /// Why the command parser finished.
@@ -218,6 +224,13 @@ pub trait SmtCommandRule<H: SmtCommandHandler> {
 pub struct SmtCommandPayloadParser<H: SmtCommandHandler, R: SmtCommandRule<H>> {
     rule: R,
     parser: R::Parser,
+}
+
+impl<H: SmtCommandHandler, R: SmtCommandRule<H>> fmt::Debug for SmtCommandPayloadParser<H, R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtCommandPayloadParser")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtCommandPayloadParser<H, R> {

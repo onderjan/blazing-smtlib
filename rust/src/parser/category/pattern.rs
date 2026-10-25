@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler, SmtVersion,
@@ -13,6 +13,13 @@ use crate::{
 
 pub struct SmtSimplePatternParser {
     _priv: (),
+}
+
+impl fmt::Debug for SmtSimplePatternParser {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtSimplePatternParser")
+            .finish_non_exhaustive()
+    }
 }
 
 impl SmtSimplePatternParser {
@@ -89,6 +96,12 @@ impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
 /// it is in the default state.
 pub struct SmtPatternParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
+}
+
+impl<H: SmtHandler> fmt::Debug for SmtPatternParser<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtPatternParser").finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler> SmtPatternParser<H> {

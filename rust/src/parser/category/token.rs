@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler,
@@ -9,6 +9,12 @@ use crate::{
 
 pub struct SmtSymbolParser {
     _priv: (),
+}
+
+impl fmt::Debug for SmtSymbolParser {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtSymbolParser").finish_non_exhaustive()
+    }
 }
 
 impl SmtSymbolParser {
@@ -62,6 +68,12 @@ macro_rules! token_parser {
     ($parser:ident, $result:ty, $ty:ident, $pattern:pat => $value:expr) => {
         pub struct $parser {
             _priv: (),
+        }
+
+        impl fmt::Debug for $parser {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct(stringify!($parser)).finish_non_exhaustive()
+            }
         }
 
         impl $parser {

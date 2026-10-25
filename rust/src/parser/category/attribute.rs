@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler,
@@ -18,6 +18,13 @@ use crate::{
 /// it is in the default state.
 pub struct SmtClosedAttributeParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
+}
+
+impl<H: SmtHandler> fmt::Debug for SmtClosedAttributeParser<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtClosedAttributeParser")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler> SmtClosedAttributeParser<H> {
@@ -67,6 +74,13 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
 /// it is in the default state.
 pub struct SmtClosedMultipleAttributeParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
+}
+
+impl<H: SmtHandler> fmt::Debug for SmtClosedMultipleAttributeParser<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtClosedMultipleAttributeParser")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler> SmtClosedMultipleAttributeParser<H> {

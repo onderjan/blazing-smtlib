@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler,
@@ -23,6 +23,12 @@ use crate::{
 /// it is in the default state.
 pub struct SmtTermParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
+}
+
+impl<H: SmtHandler> fmt::Debug for SmtTermParser<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtTermParser").finish_non_exhaustive()
+    }
 }
 
 #[derive(Clone, Copy)]

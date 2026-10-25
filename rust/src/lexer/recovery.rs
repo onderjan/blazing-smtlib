@@ -3,6 +3,7 @@ use crate::{span::SmtLocation, token::SmtConsume};
 /// The lexer stops at its first error.
 ///
 /// This is the default and can be used with any token consumer.
+#[derive(Debug)]
 pub enum SmtFailFast {}
 
 /// The lexer recovers from errors (EXPERIMENTAL).
@@ -15,6 +16,7 @@ pub enum SmtFailFast {}
 /// since the exact semantics have not yet been set in stone.
 /// It can change or be removed in any version and should not be used.
 #[doc(hidden)]
+#[derive(Debug)]
 pub enum SmtRecovering {}
 
 pub(super) mod sealed {

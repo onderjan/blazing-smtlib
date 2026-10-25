@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler,
@@ -17,6 +17,12 @@ pub struct SmtPairParser<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> {
     first: P1,
     second: P2,
     first_result: Option<P1::Result>,
+}
+
+impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> fmt::Debug for SmtPairParser<H, P1, P2> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtPairParser").finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtPairParser<H, P1, P2> {
@@ -119,6 +125,12 @@ macro_rules! tuple_parser {
             inner: nested_pair_type!(H; $($parser),+),
         }
 
+        impl<H: SmtHandler, $($parser: SmtParse<H>),+> fmt::Debug for $name<H, $($parser),+> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.debug_struct(stringify!($name)).finish_non_exhaustive()
+            }
+        }
+
         impl<H: SmtHandler, $($parser: SmtParse<H>),+> $name<H, $($parser),+> {
             // one argument per parser, as many as the tuple has
             #[allow(clippy::too_many_arguments)]
@@ -169,6 +181,12 @@ pub struct SmtClosedParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtPairParser<H, P, SmtCloseParenParser>,
 }
 
+impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtClosedParser<H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtClosedParser").finish_non_exhaustive()
+    }
+}
+
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
@@ -208,6 +226,12 @@ pub struct SmtOpenedParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtPairParser<H, SmtOpenParenParser, P>,
 }
 
+impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtOpenedParser<H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtOpenedParser").finish_non_exhaustive()
+    }
+}
+
 impl<H: SmtHandler, P: SmtParse<H>> SmtOpenedParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
@@ -245,6 +269,12 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
 /// moves back into the default state before returning Break.
 pub struct SmtParenParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtOpenedParser<H, SmtClosedParser<H, P>>,
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtParenParser<H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtParenParser").finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtParenParser<H, P> {
@@ -287,6 +317,13 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenParser<H, P> {
 pub struct SmtClosedMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: P,
     resource: ClosedMultipleResource<P::Result>,
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtClosedMultipleParser<H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtClosedMultipleParser")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMultipleParser<H, P> {
@@ -374,6 +411,13 @@ pub struct SmtParenMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtOpenedParser<H, SmtClosedMultipleParser<H, P>>,
 }
 
+impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtParenMultipleParser<H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtParenMultipleParser")
+            .finish_non_exhaustive()
+    }
+}
+
 impl<H: SmtHandler, P: SmtParse<H>> SmtParenMultipleParser<H, P> {
     pub fn new(inner: P) -> Self {
         Self {
@@ -411,6 +455,13 @@ pub struct SmtClosedMaximumParser<H: SmtHandler, P: SmtParse<H>> {
     outside: bool,
     results: Vec<P::Result>,
     inner: P,
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtClosedMaximumParser<H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtClosedMaximumParser")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
@@ -497,6 +548,13 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
 pub struct SmtParenMaximumParser<H: SmtHandler, P: SmtParse<H>> {
     is_opened: bool,
     inner: SmtClosedMaximumParser<H, P>,
+}
+
+impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtParenMaximumParser<H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtParenMaximumParser")
+            .finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {

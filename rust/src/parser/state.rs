@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::{
     SmtHandler,
     grammar::{
@@ -28,6 +30,12 @@ pub struct SmtParseState<H: SmtHandler + ?Sized> {
     pub(crate) attribute_slot: AttributeSlot,
     pub(crate) pattern_slot: PatternSlot,
     pub(crate) term_slot: TermSlot<H>,
+}
+
+impl<H: SmtHandler + ?Sized> fmt::Debug for SmtParseState<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtParseState").finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtHandler + ?Sized> SmtParseState<H> {
@@ -635,6 +643,7 @@ pub(crate) enum PatternHandle<'t> {
         args_end: usize,
     },
 }
+#[derive(Clone, Copy)]
 pub(crate) enum PatternHandleBuf {
     Simple(SimplePatternHandle),
     Application {

@@ -18,8 +18,8 @@ pub(crate) use char_class::CharClass;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::marker::PhantomData;
-use std::ops::ControlFlow;
 use std::path::Path;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtVersion,
@@ -121,6 +121,15 @@ pub struct SmtLexer<C: SmtConsume, R: SmtLexerRecovery<C> = SmtFailFast> {
     /// The actual recovery behaviour is given by the generic type argument,
     /// this field is a zero-sized type that makes sure the argument is used.
     recovery: PhantomData<R>,
+}
+
+impl<C: SmtConsume, R: SmtLexerRecovery<C>> fmt::Debug for SmtLexer<C, R> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtLexer")
+            .field("version", &self.version())
+            .field("current_location", &self.current_location())
+            .finish_non_exhaustive()
+    }
 }
 
 /// Maximal number of tokens that can be batched.

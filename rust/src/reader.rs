@@ -208,6 +208,14 @@ pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParse
     lexer: SmtLexer<SmtParseAdapter<'a, H, P>>,
 }
 
+impl<H: SmtHandler + ?Sized, P: SmtParse<H>> fmt::Debug for SmtReader<'_, H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtReader")
+            .field("version", &self.version())
+            .finish_non_exhaustive()
+    }
+}
+
 impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
     /// Creates a reader of an SMT-LIB script, whose commands are delivered to `handler`.
     ///

@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::{
     SmtVersion,
     span::SmtSpan,
@@ -104,6 +106,14 @@ pub struct SmtLexerCursor<'a> {
     start: usize,
     next: usize,
     action: LexerCursorAction,
+}
+
+impl fmt::Debug for SmtLexerCursor<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtLexerCursor")
+            .field("version", &self.version)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<'a> SmtLexerCursor<'a> {
@@ -250,6 +260,12 @@ pub struct SmtLexerWindow<'a> {
     entries: &'a [Option<(InnerCategory, &'a [u8])>],
     spans: &'a [SmtSpan],
     next: usize,
+}
+
+impl<'a> fmt::Debug for SmtLexerWindow<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtLexerWindow").finish_non_exhaustive()
+    }
 }
 
 impl<'a> SmtLookahead<SmtLexerToken<'a>> for SmtLexerWindow<'a> {

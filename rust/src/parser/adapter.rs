@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler,
@@ -15,6 +15,12 @@ pub struct SmtParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     parse_state: SmtParseState<H>,
     parser: P,
     version_set: bool,
+}
+
+impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> fmt::Debug for SmtParseAdapter<'a, H, P> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtParseAdapter").finish_non_exhaustive()
+    }
 }
 
 impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {

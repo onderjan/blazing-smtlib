@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtCommandHandler, SmtVersionPosture,
@@ -21,6 +21,12 @@ pub struct SmtScriptParser<H: SmtCommandHandler> {
     command: SmtCommandParser<H>,
     posture: SmtVersionPosture,
     num_version_declarations: u64,
+}
+
+impl<H: SmtCommandHandler> fmt::Debug for SmtScriptParser<H> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtScriptParser").finish_non_exhaustive()
+    }
 }
 
 impl<H: SmtCommandHandler> SmtScriptParser<H> {

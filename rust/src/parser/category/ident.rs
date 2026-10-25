@@ -1,4 +1,4 @@
-use std::ops::ControlFlow;
+use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler, SmtVersion,
@@ -17,6 +17,12 @@ use crate::{
 /// it is in the default state.
 pub struct SmtIdentParser {
     _priv: (),
+}
+
+impl fmt::Debug for SmtIdentParser {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SmtIdentParser").finish_non_exhaustive()
+    }
 }
 
 impl SmtIdentParser {
