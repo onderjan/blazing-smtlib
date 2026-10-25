@@ -345,16 +345,16 @@ fn inputs_cover_every_token_type_and_error_kind() {
     }
 
     let expected_kinds = [
-        SmtLexicalErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedByte,
         SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
         SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
         SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
         SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
-        SmtLexicalErrorKind::UnclosedStringLiteral,
-        SmtLexicalErrorKind::ForbiddenCharInString,
+        SmtLexicalErrorKind::UnclosedString,
+        SmtLexicalErrorKind::ForbiddenByteInString,
         SmtLexicalErrorKind::EmptyKeyword,
         SmtLexicalErrorKind::BackslashInQuotedSymbol,
-        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+        SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol,
         SmtLexicalErrorKind::UnclosedQuotedSymbol,
         SmtLexicalErrorKind::NumeralLeadingZero,
     ];

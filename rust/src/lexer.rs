@@ -485,7 +485,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
             LexerState::StringLiteral | LexerState::StringLiteralBackslashEscape => {
                 // we are still within the string literal
                 // forbidden as the literal must be totally enclosed by double quotes
-                Err(self.error(SmtLexicalErrorKind::UnclosedStringLiteral, TokenEnd::EOF))
+                Err(self.error(SmtLexicalErrorKind::UnclosedString, TokenEnd::EOF))
             }
             LexerState::StringLiteralDoubleQuote => {
                 // string literal has ended by the previous character,
@@ -1048,7 +1048,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                     // can actually only be Other (resulting in unexpected character),
                     // as the other arms have already been handled in the fast path.
                     self.start_token(index);
-                    return Err(self.error_at(SmtLexicalErrorKind::UnexpectedCharacter, after));
+                    return Err(self.error_at(SmtLexicalErrorKind::UnexpectedByte, after));
                 }
             }
             // Read the locals for use in a future fast path.
@@ -1243,7 +1243,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                 Some(_) => {
                     // forbidden, not printable or whitespace
                     return Err(self.error_at(
-                        SmtLexicalErrorKind::ForbiddenCharInString,
+                        SmtLexicalErrorKind::ForbiddenByteInString,
                         consumed + index + 1,
                     ));
                 }
@@ -1343,7 +1343,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                 _ => {
                     // forbidden character
                     return Err(self.error_at(
-                        SmtLexicalErrorKind::ForbiddenCharInString,
+                        SmtLexicalErrorKind::ForbiddenByteInString,
                         consumed + index + 1,
                     ));
                 }
@@ -1433,7 +1433,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                 Some(_) => {
                     // forbidden character
                     return Err(self.error_at(
-                        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+                        SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol,
                         after_slice_position,
                     ));
                 }
@@ -2083,9 +2083,9 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
             // start recovering from inside the string or quoted symbol if necessary
             match failure.error.cause() {
                 SmtLexErrorCause::Lexical(kind) => match kind {
-                    SmtLexicalErrorKind::ForbiddenCharInString => RecoveryState::String,
+                    SmtLexicalErrorKind::ForbiddenByteInString => RecoveryState::String,
                     SmtLexicalErrorKind::BackslashInQuotedSymbol
-                    | SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol => {
+                    | SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol => {
                         RecoveryState::QuotedSymbol
                     }
                     _ => RecoveryState::Plain,

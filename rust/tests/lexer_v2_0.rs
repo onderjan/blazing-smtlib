@@ -226,7 +226,7 @@ fn the_same_text_is_cut_differently_by_the_two_string_regimes() {
     );
     assert_eq!(
         lex(br#""a\" b"#, SmtVersion::V2_0),
-        Err((UnclosedStringLiteral, (0, 0, 0), (6, 0, 6)))
+        Err((UnclosedString, (0, 0, 0), (6, 0, 6)))
     );
 
     // a doubled quote: one string from 2.5 on; two glued strings in 2.0
@@ -254,7 +254,7 @@ fn the_same_text_is_cut_differently_by_the_two_string_regimes() {
     );
     assert_eq!(
         lex(br#""abc\""#, SmtVersion::V2_0),
-        Err((UnclosedStringLiteral, (0, 0, 0), (6, 0, 6)))
+        Err((UnclosedString, (0, 0, 0), (6, 0, 6)))
     );
 
     // a doubled backslash is one backslash in 2.0 and two from 2.5 on
@@ -279,11 +279,11 @@ fn a_string_must_be_closed_and_delimited() {
 
     for (input, kind, end) in [
         // the end of the input inside the string, also right after a backslash
-        (&br#""abc"#[..], UnclosedStringLiteral, 4),
-        (br#"""#, UnclosedStringLiteral, 1),
-        (br#""a\"#, UnclosedStringLiteral, 3),
-        (br#""a\\"#, UnclosedStringLiteral, 4),
-        (br#""a\"b"#, UnclosedStringLiteral, 5),
+        (&br#""abc"#[..], UnclosedString, 4),
+        (br#"""#, UnclosedString, 1),
+        (br#""a\"#, UnclosedString, 3),
+        (br#""a\\"#, UnclosedString, 4),
+        (br#""a\"b"#, UnclosedString, 5),
         // a token glued to the closing quote
         (br#""a"b"#, MissingDelimiter, 4),
         (br#""a\\"b"#, MissingDelimiter, 6),
@@ -318,7 +318,7 @@ fn a_control_character_is_forbidden_in_a_string() {
             assert_eq!(
                 lex(&input, SmtVersion::V2_0),
                 Err((
-                    SmtLexicalErrorKind::ForbiddenCharInString,
+                    SmtLexicalErrorKind::ForbiddenByteInString,
                     (0, 0, 0),
                     (4, 0, 4)
                 )),

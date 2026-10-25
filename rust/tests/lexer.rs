@@ -83,14 +83,14 @@ fn unexpected_character_is_single_byte() {
     // backslash is not allowed outside of string literals
     assert_error(
         b"\\",
-        SmtLexicalErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedByte,
         (0, 0, 0),
         (1, 0, 1),
     );
     // after other tokens, still just the one byte
     assert_error(
         b"(check-sat) \\",
-        SmtLexicalErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedByte,
         (12, 0, 12),
         (13, 0, 13),
     );
@@ -197,7 +197,7 @@ fn backslash_in_quoted_symbol() {
 fn forbidden_char_in_string() {
     assert_error(
         b"\"a\x01b\"",
-        SmtLexicalErrorKind::ForbiddenCharInString,
+        SmtLexicalErrorKind::ForbiddenByteInString,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -207,7 +207,7 @@ fn forbidden_char_in_string() {
 fn forbidden_char_in_quoted_symbol() {
     assert_error(
         b"|a\x7fb|",
-        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+        SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol,
         (0, 0, 0),
         (3, 0, 3),
     );
@@ -259,7 +259,7 @@ fn keyword_name_expected_at_eof() {
 fn unclosed_string_literal_at_eof() {
     assert_error(
         b"\"abc",
-        SmtLexicalErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::UnclosedString,
         (0, 0, 0),
         (4, 0, 4),
     );
@@ -282,7 +282,7 @@ fn error_on_later_line() {
     // the string literal starts at offset 15, zero-based line 2, column 2, and is unclosed at EOF
     assert_error(
         b"(check-sat)\n\n  \"abc",
-        SmtLexicalErrorKind::UnclosedStringLiteral,
+        SmtLexicalErrorKind::UnclosedString,
         (15, 2, 2),
         (19, 2, 6),
     );
@@ -314,7 +314,7 @@ fn crlf_counts_as_one_line() {
 fn error_after_comment_line() {
     assert_error(
         b"; a comment\n\\",
-        SmtLexicalErrorKind::UnexpectedCharacter,
+        SmtLexicalErrorKind::UnexpectedByte,
         (12, 1, 0),
         (13, 1, 1),
     );

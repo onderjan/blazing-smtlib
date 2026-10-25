@@ -138,9 +138,9 @@ fn a_read_error_reads_as_its_cause_at_its_location_counted_from_one() {
         let byte_at_fault = matches!(
             err.cause(),
             SmtReadErrorCause::Lexical(
-                SmtLexicalErrorKind::ForbiddenCharInString
+                SmtLexicalErrorKind::ForbiddenByteInString
                     | SmtLexicalErrorKind::BackslashInQuotedSymbol
-                    | SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol
+                    | SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol
                     | SmtLexicalErrorKind::MissingDelimiter
             )
         );
@@ -310,12 +310,12 @@ fn every_kind_has_a_message_of_its_own() {
         SmtLexicalExpected::Base,
     ];
     let mut lexical = vec![
-        SmtLexicalErrorKind::UnexpectedCharacter,
-        SmtLexicalErrorKind::UnclosedStringLiteral,
-        SmtLexicalErrorKind::ForbiddenCharInString,
+        SmtLexicalErrorKind::UnexpectedByte,
+        SmtLexicalErrorKind::UnclosedString,
+        SmtLexicalErrorKind::ForbiddenByteInString,
         SmtLexicalErrorKind::EmptyKeyword,
         SmtLexicalErrorKind::BackslashInQuotedSymbol,
-        SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+        SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol,
         SmtLexicalErrorKind::UnclosedQuotedSymbol,
         SmtLexicalErrorKind::NumeralLeadingZero,
         SmtLexicalErrorKind::MissingDelimiter,
@@ -374,8 +374,8 @@ fn every_kind_has_a_message_of_its_own() {
         SmtNonEmptyList::TermApplication,
         SmtNonEmptyList::LetBindings,
         SmtNonEmptyList::Annotation,
-        SmtNonEmptyList::QuantifierBindings,
-        SmtNonEmptyList::LambdaBindings,
+        SmtNonEmptyList::QuantifierVars,
+        SmtNonEmptyList::LambdaVars,
         SmtNonEmptyList::FunctionSignatures,
         SmtNonEmptyList::DatatypeIntroductions,
         SmtNonEmptyList::DatatypeParameters,

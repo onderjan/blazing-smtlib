@@ -434,7 +434,7 @@ fn binder_errors() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::QuantifierBindings)
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::QuantifierVars)
         ),
         "{err:?}"
     );
@@ -442,7 +442,7 @@ fn binder_errors() {
     assert!(
         matches!(
             err,
-            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::QuantifierBindings)
+            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::QuantifierVars)
         ),
         "{err:?}"
     );
@@ -450,10 +450,7 @@ fn binder_errors() {
     // so must a lambda, with its own error kind
     let err = assert_error::<TermParser>(b"(lambda () x)", 9, 10);
     assert!(
-        matches!(
-            err,
-            SmtSyntaxErrorKind::Empty(SmtNonEmptyList::LambdaBindings)
-        ),
+        matches!(err, SmtSyntaxErrorKind::Empty(SmtNonEmptyList::LambdaVars)),
         "{err:?}"
     );
 

@@ -50,16 +50,16 @@ def tokenTypeName : TokenCategory → String
 
 /-- The lexer error kind, spelled as the Rust `Debug` form of the kind. -/
 def errorKindName : LexicalErrorKind → String
-  | .unexpectedCharacter => "UnexpectedCharacter"
+  | .unexpectedCharacter => "UnexpectedByte"
   | .expected .fractionDigit => "Expected(FractionDigit)"
   | .expected .hexadecimalDigit => "Expected(HexadecimalDigit)"
   | .expected .binaryDigit => "Expected(BinaryDigit)"
   | .expected .base => "Expected(Base)"
-  | .unclosedStringLiteral => "UnclosedStringLiteral"
-  | .forbiddenCharInString => "ForbiddenCharInString"
+  | .unclosedStringLiteral => "UnclosedString"
+  | .forbiddenCharInString => "ForbiddenByteInString"
   | .emptyKeyword => "EmptyKeyword"
   | .backslashInQuotedSymbol => "BackslashInQuotedSymbol"
-  | .forbiddenCharInQuotedSymbol => "ForbiddenCharInQuotedSymbol"
+  | .forbiddenCharInQuotedSymbol => "ForbiddenByteInQuotedSymbol"
   | .unclosedQuotedSymbol => "UnclosedQuotedSymbol"
   | .numeralLeadingZero => "NumeralLeadingZero"
   | .missingDelimiter => "MissingDelimiter"

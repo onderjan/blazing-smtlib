@@ -662,10 +662,10 @@ impl<H: SmtHandler> TermSlot<H> {
                         let Some(scope) = scope else {
                             let err_kind: SmtSyntaxErrorKind = match binder_kind {
                                 SortedBinderKind::Exists | SortedBinderKind::Forall => {
-                                    SmtSyntaxErrorKind::Empty(SmtNonEmptyList::QuantifierBindings)
+                                    SmtSyntaxErrorKind::Empty(SmtNonEmptyList::QuantifierVars)
                                 }
                                 SortedBinderKind::Lambda => {
-                                    SmtSyntaxErrorKind::Empty(SmtNonEmptyList::LambdaBindings)
+                                    SmtSyntaxErrorKind::Empty(SmtNonEmptyList::LambdaVars)
                                 }
                             };
                             return Err(SmtParseError::syntax(err_kind));

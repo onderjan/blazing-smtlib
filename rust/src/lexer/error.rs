@@ -4,15 +4,15 @@ use crate::span::{SmtLocation, SmtSpan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {
-    UnexpectedCharacter,
+    UnexpectedByte,
     /// The item was expected here.
     Expected(SmtLexicalExpected),
-    UnclosedStringLiteral,
-    ForbiddenCharInString,
+    UnclosedString,
+    ForbiddenByteInString,
     /// A colon is not followed by a keyword name.
     EmptyKeyword,
     BackslashInQuotedSymbol,
-    ForbiddenCharInQuotedSymbol,
+    ForbiddenByteInQuotedSymbol,
     UnclosedQuotedSymbol,
     NumeralLeadingZero,
     MissingDelimiter,
@@ -117,9 +117,9 @@ impl SmtLexicalErrorKind {
         let location = match self {
             // the span ends after the offending byte, which is not a line feed:
             // a line feed is allowed in both literals and delimits a token
-            SmtLexicalErrorKind::ForbiddenCharInString
+            SmtLexicalErrorKind::ForbiddenByteInString
             | SmtLexicalErrorKind::BackslashInQuotedSymbol
-            | SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol
+            | SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol
             | SmtLexicalErrorKind::MissingDelimiter => {
                 let end = span.end();
                 SmtLocation::new_unchecked(end.offset() - 1, end.line(), end.column() - 1)
@@ -137,13 +137,13 @@ impl SmtLexicalErrorKind {
 impl fmt::Display for SmtLexicalErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnexpectedCharacter => f.write_str("unexpected character"),
+            Self::UnexpectedByte => f.write_str("unexpected character"),
             Self::Expected(expected) => expected.fmt(f),
-            Self::UnclosedStringLiteral => f.write_str("unclosed string literal"),
-            Self::ForbiddenCharInString => f.write_str("forbidden character in string literal"),
+            Self::UnclosedString => f.write_str("unclosed string literal"),
+            Self::ForbiddenByteInString => f.write_str("forbidden character in string literal"),
             Self::EmptyKeyword => f.write_str("colon without keyword name"),
             Self::BackslashInQuotedSymbol => f.write_str("backslash in quoted symbol"),
-            Self::ForbiddenCharInQuotedSymbol => {
+            Self::ForbiddenByteInQuotedSymbol => {
                 f.write_str("forbidden character in quoted symbol")
             }
             Self::UnclosedQuotedSymbol => f.write_str("unclosed quoted symbol"),

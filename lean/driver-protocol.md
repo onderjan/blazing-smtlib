@@ -93,10 +93,10 @@ err <kind> <start> <end>
 The feed raised a lexer error, with this kind and span. The response ends
 here: the feeds after it are not applied and there is no closing line.
 `<kind>` is the Rust `SmtLexicalErrorKind` as its `Debug` form spells it:
-`UnexpectedCharacter`, `Expected(FractionDigit)`, `Expected(HexadecimalDigit)`,
-`Expected(BinaryDigit)`, `Expected(Base)`, `UnclosedStringLiteral`,
-`ForbiddenCharInString`, `EmptyKeyword`, `BackslashInQuotedSymbol`,
-`ForbiddenCharInQuotedSymbol`, `UnclosedQuotedSymbol`, `NumeralLeadingZero`,
+`UnexpectedByte`, `Expected(FractionDigit)`, `Expected(HexadecimalDigit)`,
+`Expected(BinaryDigit)`, `Expected(Base)`, `UnclosedString`,
+`ForbiddenByteInString`, `EmptyKeyword`, `BackslashInQuotedSymbol`,
+`ForbiddenByteInQuotedSymbol`, `UnclosedQuotedSymbol`, `NumeralLeadingZero`,
 `MissingDelimiter`, `UnexpectedTrailingToken`.
 
 ```

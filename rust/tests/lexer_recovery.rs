@@ -222,7 +222,7 @@ fn a_lexical_error_takes_effect_before_the_byte_that_raised_it() {
     // a symbol: the token is abandoned before the byte that raised the
     // error, the rest of it is skipped up to its delimiter, and no part of it
     // is handed over
-    check(b"a \x00b c", "a !2 >4 c $", &["UnexpectedCharacter@2"]);
+    check(b"a \x00b c", "a !2 >4 c $", &["UnexpectedByte@2"]);
     check(b"12abc x", "!2 >5 x $", &["MissingDelimiter@2"]);
     check(b"\"s\"t x", "!3 >4 x $", &["MissingDelimiter@3"]);
     check(b"|s|t x", "!3 >4 x $", &["MissingDelimiter@3"]);
@@ -232,12 +232,12 @@ fn a_lexical_error_takes_effect_before_the_byte_that_raised_it() {
     check(b"#b2 x", "!2 >3 x $", &["Expected(BinaryDigit)@2"]);
     check(b"#q x", "!1 >2 x $", &["Expected(Base)@1"]);
     check(b":\x00 x", "!1 >2 x $", &["EmptyKeyword@1"]);
-    check(b"\"a\x00b c\" x", "!2 >7 x $", &["ForbiddenCharInString@2"]);
+    check(b"\"a\x00b c\" x", "!2 >7 x $", &["ForbiddenByteInString@2"]);
     check(b"|a\\b c| x", "!2 >7 x $", &["BackslashInQuotedSymbol@2"]);
     check(
         b"|a\x00b c| x",
         "!2 >7 x $",
-        &["ForbiddenCharInQuotedSymbol@2"],
+        &["ForbiddenByteInQuotedSymbol@2"],
     );
 }
 
@@ -261,10 +261,10 @@ fn an_error_raised_by_the_end_of_the_input_takes_effect_at_the_end() {
     check(b"#x", "!2 >2 $", &["Expected(HexadecimalDigit)@2"]);
     check(b"#b", "!2 >2 $", &["Expected(BinaryDigit)@2"]);
     check(b":", "!1 >1 $", &["EmptyKeyword@1"]);
-    check(b"\"ab", "!3 >3 $", &["UnclosedStringLiteral@3"]);
+    check(b"\"ab", "!3 >3 $", &["UnclosedString@3"]);
     check(b"|ab", "!3 >3 $", &["UnclosedQuotedSymbol@3"]);
     // the tokens before the failing one were handed over
-    check(b"(a \"bc", "( a !6 >6 $", &["UnclosedStringLiteral@6"]);
+    check(b"(a \"bc", "( a !6 >6 $", &["UnclosedString@6"]);
 }
 
 // --- How much is skipped: the value the error is in, with nothing open ---
@@ -334,7 +334,7 @@ fn strings_quoted_symbols_and_comments_hide_what_they_enclose() {
     check(
         b"(a \"b\x00c ) d\" e) f",
         "( a !5 >15 f $",
-        &["ForbiddenCharInString@5"],
+        &["ForbiddenByteInString@5"],
     );
     check(
         b"(a |b\\c ) d| e) f",
@@ -371,7 +371,7 @@ fn a_string_is_skipped_by_the_rule_of_the_version_in_force() {
         assert_eq!(run.trace(), "( a !4 >12 !18 >18 $", "{version:?}");
         assert_eq!(
             run.errors,
-            ["Expected(Base)@4", "UnclosedStringLiteral@18"],
+            ["Expected(Base)@4", "UnclosedString@18"],
             "{version:?}"
         );
     }
@@ -495,7 +495,7 @@ fn the_end_of_the_input_ends_the_skipping() {
     // the value is never closed: the recovery is reported at the end, and
     // the end-of-file token is handed over as usual
     check(b"(a #q (b", "( a !4 >8 $", &["Expected(Base)@4"]);
-    check(b"(a \"b\x00c", "( a !5 >7 $", &["ForbiddenCharInString@5"]);
+    check(b"(a \"b\x00c", "( a !5 >7 $", &["ForbiddenByteInString@5"]);
     check(b"(a #q ; c", "( a !4 >9 $", &["Expected(Base)@4"]);
 }
 

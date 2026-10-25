@@ -1109,7 +1109,7 @@ fn an_error_under_both_versions_is_still_reported() {
         assert!(
             matches!(
                 &switched.error,
-                Some(RunError::Lexical(SmtLexicalErrorKind::UnexpectedCharacter))
+                Some(RunError::Lexical(SmtLexicalErrorKind::UnexpectedByte))
             ),
             "to {declared:?}: {:?}",
             switched.error
@@ -1266,7 +1266,7 @@ fn tokens_before_a_lexer_error_are_handed_over_first() {
     assert!(
         matches!(
             &plain.error,
-            Some(RunError::Lexical(SmtLexicalErrorKind::UnexpectedCharacter))
+            Some(RunError::Lexical(SmtLexicalErrorKind::UnexpectedByte))
         ),
         "{:?}",
         plain.error

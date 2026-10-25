@@ -344,16 +344,16 @@ const TOKEN_TYPES: [SmtTokenCategory; 13] = [
 ];
 
 const ERROR_KINDS: [SmtLexicalErrorKind; 14] = [
-    SmtLexicalErrorKind::UnexpectedCharacter,
+    SmtLexicalErrorKind::UnexpectedByte,
     SmtLexicalErrorKind::Expected(SmtLexicalExpected::FractionDigit),
     SmtLexicalErrorKind::Expected(SmtLexicalExpected::HexadecimalDigit),
     SmtLexicalErrorKind::Expected(SmtLexicalExpected::BinaryDigit),
     SmtLexicalErrorKind::Expected(SmtLexicalExpected::Base),
-    SmtLexicalErrorKind::UnclosedStringLiteral,
-    SmtLexicalErrorKind::ForbiddenCharInString,
+    SmtLexicalErrorKind::UnclosedString,
+    SmtLexicalErrorKind::ForbiddenByteInString,
     SmtLexicalErrorKind::EmptyKeyword,
     SmtLexicalErrorKind::BackslashInQuotedSymbol,
-    SmtLexicalErrorKind::ForbiddenCharInQuotedSymbol,
+    SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol,
     SmtLexicalErrorKind::UnclosedQuotedSymbol,
     SmtLexicalErrorKind::NumeralLeadingZero,
     SmtLexicalErrorKind::MissingDelimiter,

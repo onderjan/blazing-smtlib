@@ -53,7 +53,7 @@ fn lexer_error_kind_and_span_are_passed_through() {
     let err = read(b"(check-sat)\n\n  \"abc").expect_err("expected a lexer error, got Ok");
     assert!(matches!(
         err.cause(),
-        ReadErrorCause::Lexical(SmtLexicalErrorKind::UnclosedStringLiteral)
+        ReadErrorCause::Lexical(SmtLexicalErrorKind::UnclosedString)
     ));
     assert_span(&err, (15, 2, 2), (19, 2, 6));
 }
