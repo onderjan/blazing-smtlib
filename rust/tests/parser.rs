@@ -1067,6 +1067,7 @@ fn a_command_parser_outside_a_script_switches_nothing() {
         reader
             .read_all(&b"(set-info :smt-lib-version 2.6)"[..])
             .unwrap_or_else(|err| panic!("unexpected error at {:?}", err.span()))
+            .into_value()
     };
     assert!(
         matches!(outcome, SmtCommandOutcome::SetVersion(SmtVersion::V2_6)),

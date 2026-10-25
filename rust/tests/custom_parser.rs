@@ -225,7 +225,8 @@ fn errors_of_a_parser_read_directly_reach_the_caller_with_their_cause() {
     let mut handler = Custom::default();
     let taken = SmtReader::new(&mut handler, Failing::default(), SmtVersion::V2_7)
         .read_all(&b"a b"[..])
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()))
+        .into_value();
     assert_eq!(taken, 3);
 
     // each error spans the token the parser failed at

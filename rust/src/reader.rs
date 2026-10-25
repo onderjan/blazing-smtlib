@@ -185,7 +185,7 @@ pub fn read_smt<H: SmtCommandHandler>(
     buf_reader: impl BufRead,
 ) -> Result<(), SmtReadError<H::Error>> {
     SmtReader::script(handler, SmtVersionPosture::default(), SmtVersion::default())
-        .read_all(buf_reader)
+        .read_from(buf_reader)
         .map(|_| ())
 }
 
@@ -246,7 +246,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
 
     /// Opens the file at `path` and reads it.
     ///
-    /// Returns the parser result if successful.
+    /// Returns the located parser result if successful.
     ///
     /// A failure to open the file is reported as an I/O error with an empty
     /// span at the start of the input. An I/O read error is reported as
@@ -254,7 +254,10 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     ///
     /// May panic if a previous call on this reader returned an error
     /// or if the parser breaks its contract.
-    pub fn read_file(&mut self, path: &Path) -> Result<P::Result, SmtReadError<H::Error>> {
+    pub fn read_file(
+        &mut self,
+        path: &Path,
+    ) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
         let file = File::open(path)
             .map_err(|err| SmtReadError::new(SmtReadErrorCause::Io(err), SmtSpan::new_zero()))?;
 
@@ -262,12 +265,26 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         // lex/parse more efficiently with larger batches
         const BUF_READER_CAPACITY: usize = 1024 * 1024;
         let buf_reader = BufReader::with_capacity(BUF_READER_CAPACITY, file);
-        self.read_all(buf_reader)
+        self.read_from(buf_reader)
+    }
+
+    /// Reads the slice as the whole input.
+    ///
+    /// Returns the located parser result if successful.
+    ///
+    /// May panic if a previous call on this reader returned an error
+    /// or if the parser breaks its contract.
+    pub fn read_all(
+        &mut self,
+        input: &[u8],
+    ) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
+        self.read_slice(input)?;
+        self.read_eof()
     }
 
     /// Reads the content of the buffered reader.
     ///
-    /// Returns the parser result if successful.
+    /// Returns the located parser result if successful.
     ///
     /// The input is considered to end when the buffered reader returns
     /// a zero-length buffer. A failure while reading is reported as
@@ -278,10 +295,10 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     ///
     /// May panic if a previous call on this reader returned an error
     /// or if the parser breaks its contract.
-    pub fn read_all<R: BufRead>(
+    pub fn read_from<R: BufRead>(
         &mut self,
         mut buf_reader: R,
-    ) -> Result<P::Result, SmtReadError<H::Error>> {
+    ) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
         loop {
             if self.lexer.discarded_from().is_some() {
                 // the lexer does not care about any subsequent bytes, break
@@ -321,10 +338,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
 
         // end of stream, process EOF
         // this will reset the lexer and return the break value
-        let result = self.read_eof()?;
-
-        // do not return the result location as most callers will not want it
-        Ok(result.into_value())
+        self.read_eof()
     }
 
     /// Processes a byte slice as one piece of the input.

@@ -753,12 +753,31 @@ impl<'h, H: CommandHandler, P: TopParser<H>> Reader<'h, H, P> {
         }
     }
 
-    /// `SmtReader::read_all`.
-    pub fn read_all<R: BufRead>(&mut self, reader: R) -> Result<P::Result, ReadError<H::Error>> {
+    /// `SmtReader::read_all`; the Lean driver is sent the slice and then the
+    /// end of the input.
+    pub fn read_all(&mut self, input: &[u8]) -> Result<Located<P::Result>, ReadError<H::Error>> {
         match &mut self.backend {
             Backend::Rust(rust) => rust
-                .read_all(reader)
-                .map(P::from_rust)
+                .read_all(input)
+                .map(|located| Located {
+                    location: located.location().into(),
+                    value: P::from_rust(located.into_value()),
+                })
+                .map_err(ReadError::from),
+            Backend::Lean(_) => {
+                self.read_slice(input)?;
+                self.read_eof()
+            }
+        }
+    }
+
+    /// `SmtReader::read_from`, without the location, which the Lean driver
+    /// does not report.
+    pub fn read_from<R: BufRead>(&mut self, reader: R) -> Result<P::Result, ReadError<H::Error>> {
+        match &mut self.backend {
+            Backend::Rust(rust) => rust
+                .read_from(reader)
+                .map(|located| P::from_rust(located.into_value()))
                 .map_err(ReadError::from),
             Backend::Lean(session) => {
                 let result = session.read_all(reader)?;
@@ -767,12 +786,13 @@ impl<'h, H: CommandHandler, P: TopParser<H>> Reader<'h, H, P> {
         }
     }
 
-    /// `SmtReader::read_file`.
+    /// `SmtReader::read_file`, without the location, which the Lean driver
+    /// does not report.
     pub fn read_file(&mut self, path: &Path) -> Result<P::Result, ReadError<H::Error>> {
         match &mut self.backend {
             Backend::Rust(rust) => rust
                 .read_file(path)
-                .map(P::from_rust)
+                .map(|located| P::from_rust(located.into_value()))
                 .map_err(ReadError::from),
             Backend::Lean(session) => {
                 let result = session.read_file(path)?;

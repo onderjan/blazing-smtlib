@@ -438,7 +438,7 @@ fn read_all_leaves_the_rest_after_an_exit_command_unread() {
         let mut reader =
             Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
         reader
-            .read_all(&mut stream)
+            .read_from(&mut stream)
             .unwrap_or_else(|err| panic!("pieces of {size}: {err:?}"));
         assert_eq!(stream.rest(), b"\n(get-model)", "pieces of {size}");
     }
@@ -447,7 +447,7 @@ fn read_all_leaves_the_rest_after_an_exit_command_unread() {
     let mut stream = Pieces::new(vec![b"(check-sat)\n"], true);
     let mut handler = SyntaxChecker;
     let mut reader = Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
-    reader.read_all(&mut stream).expect("valid input");
+    reader.read_from(&mut stream).expect("valid input");
     assert!(stream.rest().is_empty(), "the whole input is read");
 }
 
@@ -472,7 +472,7 @@ fn read_all_returns_after_an_exit_command_without_waiting_for_more_input() {
     let mut stream = Pieces::new(vec![b"(check-sat)\n", b"(exit)\n"], false);
     let mut handler = SyntaxChecker;
     let mut reader = Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
-    reader.read_all(&mut stream).expect("valid input");
+    reader.read_from(&mut stream).expect("valid input");
     assert_eq!(
         stream.rest(),
         b"\n",
@@ -496,11 +496,11 @@ fn one_reader_reads_several_inputs_in_turn_each_from_the_origin() {
     ];
     for input in &inputs[..2] {
         reader
-            .read_all(Pieces::new(vec![input], true))
+            .read_from(Pieces::new(vec![input], true))
             .expect("valid input");
     }
     let err = reader
-        .read_all(Pieces::new(vec![inputs[2]], true))
+        .read_from(Pieces::new(vec![inputs[2]], true))
         .expect_err("a missing term is a parser error");
     assert_span(&err, (20, 1, 8), (21, 1, 9));
 
@@ -512,10 +512,10 @@ fn one_reader_reads_several_inputs_in_turn_each_from_the_origin() {
         vec![b"(check-sat)\n(exit)(check-sat)\n(exit)\n(assert )"],
         true,
     );
-    reader.read_all(&mut stream).expect("valid input");
-    reader.read_all(&mut stream).expect("valid input");
+    reader.read_from(&mut stream).expect("valid input");
+    reader.read_from(&mut stream).expect("valid input");
     let err = reader
-        .read_all(&mut stream)
+        .read_from(&mut stream)
         .expect_err("a missing term is a parser error");
     assert_span(&err, (9, 1, 8), (10, 1, 9));
 }
@@ -615,7 +615,7 @@ fn read_all_after_an_exit_command_reads_nothing_more() {
         .read_slice(b"(check-sat)\n(exit) (assert")
         .expect("valid up to the exit command");
     let mut rest = Pieces::new(vec![b" ) #q\n(check-sat)"], true);
-    reader.read_all(&mut rest).expect("the script must end");
+    reader.read_from(&mut rest).expect("the script must end");
     assert_eq!(rest.rest(), b" ) #q\n(check-sat)", "nothing more is read");
 
     // the next input is read from the origin
@@ -623,4 +623,58 @@ fn read_all_after_an_exit_command_reads_nothing_more() {
         .read_slice(b"(assert )")
         .expect_err("a missing term is a parser error");
     assert_span(&err, (8, 0, 8), (9, 0, 9));
+}
+
+#[test]
+fn a_whole_slice_finishes_where_the_same_input_read_in_pieces_does() {
+    let cases: [(&[u8], Loc); 3] = [
+        // after the exit command, the rest of the input is discarded
+        (b"(check-sat) (exit) x ) ( 1", (18, 0, 18)),
+        // without it, the script finishes at the end of the input
+        (b"(check-sat) ", (12, 0, 12)),
+        (b"(check-sat)\n", (12, 1, 0)),
+    ];
+    for (input, finished) in cases {
+        let mut handler = SyntaxChecker;
+        let mut reader =
+            Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+        let located = reader.read_all(input).expect("the script must end");
+        assert_eq!(
+            loc(located.location()),
+            finished,
+            "{:?}",
+            input.escape_ascii()
+        );
+    }
+}
+
+/// The locations `read_from` and `read_file` return, which the Lean driver
+/// does not report: this test checks the Rust interface itself.
+#[test]
+fn reading_a_buffer_or_a_file_finishes_where_reading_the_slice_does() {
+    use blazing_smtlib::{SmtReadError, SmtReader, SmtSyntaxChecker, span::SmtLocated};
+
+    type Read<'h> = SmtReader<'h, SmtSyntaxChecker>;
+    type Finished = Result<SmtLocated<()>, SmtReadError<SmtNonstandardCommandError>>;
+
+    /// Where a fresh script reader finishes reading as `how` says.
+    fn finished(how: impl FnOnce(&mut Read<'_>) -> Finished) -> Loc {
+        let mut handler = SmtSyntaxChecker;
+        let mut reader =
+            SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+        let located =
+            how(&mut reader).unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+        let location = located.location();
+        (location.offset(), location.line(), location.column())
+    }
+
+    let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("read-finishes.smt2");
+    for input in [&b"(check-sat) (exit) x ) ( 1"[..], b"(check-sat)\n", b""] {
+        let from_slice = finished(|reader| reader.read_all(input));
+        let from_buffer = finished(|reader| reader.read_from(input));
+        std::fs::write(&path, input).expect("the test file can be written");
+        let from_file = finished(|reader| reader.read_file(&path));
+        assert_eq!(from_buffer, from_slice, "{:?}", input.escape_ascii());
+        assert_eq!(from_file, from_slice, "{:?}", input.escape_ascii());
+    }
 }
