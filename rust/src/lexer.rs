@@ -5,15 +5,21 @@ mod helpers;
 mod recovery;
 
 pub use cursor::{SmtLexerCursor, SmtLexerToken, SmtLexerWindow};
-pub use error::{SmtLexerError, SmtLexerErrorCause, SmtLexicalErrorKind, SmtLexicalExpected};
+pub use error::{
+    SmtLexerError, SmtLexerErrorCause, SmtLexerReadError, SmtLexerReadErrorCause,
+    SmtLexicalErrorKind, SmtLexicalExpected,
+};
 pub use recovery::{SmtFailFast, SmtLexerRecovery, SmtRecover, SmtRecovering};
 
 pub(crate) use cursor::{InnerCategory, LexerCursorAction};
 
 pub(crate) use char_class::CharClass;
 
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 use std::marker::PhantomData;
 use std::ops::ControlFlow;
+use std::path::Path;
 
 use crate::{
     SmtVersion,
@@ -259,6 +265,69 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     ) -> Result<SmtLocated<C::Result>, SmtLexerError<C::Error>> {
         self.lex_slice(input)?;
         self.lex_eof()
+    }
+
+    /// Lexes the content of the buffered reader as the whole input, including
+    /// EOF at the end.
+    ///
+    /// The input is considered to end when the buffered reader returns
+    /// a zero-length buffer. A failure while reading is reported as
+    /// an I/O error with an empty span at the position reached.
+    ///
+    /// The buffer content is consumed up to where the consumer requests
+    /// discarding the rest or fully if no such request was made.
+    ///
+    /// Otherwise, behaves as [`lex_all`](Self::lex_all).
+    pub fn lex_from<B: BufRead>(
+        &mut self,
+        mut buf_reader: B,
+    ) -> Result<SmtLocated<C::Result>, SmtLexerReadError<C::Error>> {
+        loop {
+            if self.discarded_from().is_some() {
+                // the consumer does not care about any subsequent bytes
+                break;
+            }
+            let buffer = match buf_reader.fill_buf() {
+                Ok(buffer) => buffer,
+                Err(err) => {
+                    let span = SmtSpan::new_empty(self.current_location());
+                    return Err(SmtLexerReadError::new(
+                        SmtLexerReadErrorCause::Io(err),
+                        span,
+                    ));
+                }
+            };
+            if buffer.is_empty() {
+                break;
+            }
+            // consume the bytes lexed, which are fewer than the buffer
+            // holds when discarding begins inside it
+            let start_offset = self.current_location().offset();
+            self.lex_slice(buffer)?;
+            let len = self
+                .current_location()
+                .offset()
+                .saturating_sub(start_offset) as usize;
+            buf_reader.consume(len);
+        }
+        Ok(self.lex_eof()?)
+    }
+
+    /// Opens the file at `path` and lexes it as the whole input, as
+    /// [`lex_from`](Self::lex_from) does.
+    ///
+    /// A failure to open the file is reported as an I/O error with an empty
+    /// span at the start of the input.
+    pub fn lex_file(
+        &mut self,
+        path: &Path,
+    ) -> Result<SmtLocated<C::Result>, SmtLexerReadError<C::Error>> {
+        let file = File::open(path).map_err(|err| {
+            SmtLexerReadError::new(SmtLexerReadErrorCause::Io(err), SmtSpan::new_zero())
+        })?;
+        // a large buffer gives the lexer large batches
+        const BUF_READER_CAPACITY: usize = 1024 * 1024;
+        self.lex_from(BufReader::with_capacity(BUF_READER_CAPACITY, file))
     }
 
     /// Returns a reference to the token consumer.

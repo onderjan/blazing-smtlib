@@ -1,4 +1,4 @@
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, io};
 
 use crate::span::{SmtLocation, SmtSpan};
 
@@ -192,6 +192,104 @@ impl<E: Error + 'static> Error for SmtLexerError<E> {
         match &self.cause {
             SmtLexerErrorCause::Lexical(_) => None,
             SmtLexerErrorCause::Consumer(err) => err.source(),
+        }
+    }
+}
+
+/// Error that ended lexing the input from a buffered reader or a file.
+#[derive(Debug)]
+pub struct SmtLexerReadError<E> {
+    cause: SmtLexerReadErrorCause<E>,
+    span: SmtSpan,
+}
+
+/// The reason why lexing from a buffered reader or a file failed: an I/O
+/// error, a lexical error or a consumer error.
+#[derive(Debug)]
+pub enum SmtLexerReadErrorCause<E> {
+    /// Reading from the file or the buffered reader failed.
+    Io(io::Error),
+    /// The input is lexically malformed.
+    Lexical(SmtLexicalErrorKind),
+    /// The token consumer returned an error.
+    Consumer(E),
+}
+
+impl<E> SmtLexerReadError<E> {
+    pub(super) fn new(cause: SmtLexerReadErrorCause<E>, span: SmtSpan) -> Self {
+        Self { cause, span }
+    }
+
+    /// The reason why lexing failed.
+    pub fn cause(&self) -> &SmtLexerReadErrorCause<E> {
+        &self.cause
+    }
+
+    /// Converts into the reason why lexing failed.
+    pub fn into_cause(self) -> SmtLexerReadErrorCause<E> {
+        self.cause
+    }
+
+    /// Span where the error occurred.
+    ///
+    /// For I/O errors, the span is empty, at the position where reading failed.
+    pub fn span(&self) -> SmtSpan {
+        self.span
+    }
+
+    /// The most useful location for deciphering the error.
+    ///
+    /// Guaranteed to be within the span.
+    pub fn location(&self) -> SmtLocation {
+        match &self.cause {
+            SmtLexerReadErrorCause::Lexical(kind) => kind.location_in(self.span),
+            SmtLexerReadErrorCause::Io(_) | SmtLexerReadErrorCause::Consumer(_) => {
+                self.span.start()
+            }
+        }
+    }
+}
+
+impl<E> From<SmtLexerError<E>> for SmtLexerReadError<E> {
+    fn from(err: SmtLexerError<E>) -> Self {
+        let span = err.span();
+        let cause = match err.into_cause() {
+            SmtLexerErrorCause::Lexical(kind) => SmtLexerReadErrorCause::Lexical(kind),
+            SmtLexerErrorCause::Consumer(err) => SmtLexerReadErrorCause::Consumer(err),
+        };
+        Self::new(cause, span)
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtLexerReadErrorCause<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "I/O: {err}"),
+            Self::Lexical(kind) => kind.fmt(f),
+            Self::Consumer(err) => err.fmt(f),
+        }
+    }
+}
+
+impl<E: fmt::Display> fmt::Display for SmtLexerReadError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let location = self.location();
+        write!(
+            f,
+            "{} at line {}, column {}",
+            self.cause,
+            location.line() + 1,
+            location.column() + 1
+        )
+    }
+}
+
+impl<E: Error + 'static> Error for SmtLexerReadError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.cause {
+            SmtLexerReadErrorCause::Io(err) => err.source(),
+            SmtLexerReadErrorCause::Lexical(_) => None,
+            SmtLexerReadErrorCause::Consumer(err) => err.source(),
         }
     }
 }
