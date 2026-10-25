@@ -17,7 +17,7 @@ use blazing_smtlib::{
     },
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtSymbol},
-    reader::read_smt,
+    read_smt,
     token::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
         SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,

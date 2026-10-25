@@ -1,9 +1,6 @@
 use std::path::PathBuf;
 
-use blazing_smtlib::{
-    SmtSyntaxChecker,
-    reader::{SmtReadErrorCause, read_smt_file},
-};
+use blazing_smtlib::{SmtReadErrorCause, SmtSyntaxChecker, read_smt_file};
 fn main() -> Result<(), u32> {
     let mut args = std::env::args();
     if args.len() != 2 {

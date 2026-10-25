@@ -39,10 +39,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use blazing_smtlib::{
-    SmtNonstandardCommandError,
-    reader::{SmtReadError, SmtReadErrorCause, read_smt_file},
-};
+use blazing_smtlib::{SmtNonstandardCommandError, SmtReadError, SmtReadErrorCause, read_smt_file};
 use rayon::ThreadPoolBuilder;
 use rayon::prelude::*;
 use trace_hash::TraceHash;

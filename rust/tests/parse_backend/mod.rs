@@ -40,7 +40,7 @@ use std::ops::ControlFlow;
 use std::path::Path;
 
 use blazing_smtlib::{
-    SmtNonstandardCommandError,
+    SmtNonstandardCommandError, SmtReadError, SmtReadErrorCause, SmtReader,
     grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind},
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
@@ -54,7 +54,6 @@ use blazing_smtlib::{
         SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser, SmtTuple7Parser, SmtTuple8Parser,
         SmtVersionErrorKind,
     },
-    reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     span::{SmtLocation, SmtSpan},
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
     version::{SmtVersion, SmtVersionPosture},
@@ -807,9 +806,7 @@ pub fn read_smt<H: CommandHandler, R: BufRead>(
 ) -> Result<(), ReadError<H::Error>> {
     match lean_driver() {
         Some(path) => lean::read_smt(path, handler, reader),
-        None => {
-            blazing_smtlib::reader::read_smt(&mut Adapt(handler), reader).map_err(ReadError::from)
-        }
+        None => blazing_smtlib::read_smt(&mut Adapt(handler), reader).map_err(ReadError::from),
     }
 }
 
@@ -821,8 +818,7 @@ pub fn read_smt_file<H: CommandHandler>(
 ) -> Result<(), ReadError<H::Error>> {
     match lean_driver() {
         Some(driver) => lean::read_smt_file(driver, handler, path),
-        None => blazing_smtlib::reader::read_smt_file(&mut Adapt(handler), path)
-            .map_err(ReadError::from),
+        None => blazing_smtlib::read_smt_file(&mut Adapt(handler), path).map_err(ReadError::from),
     }
 }
 

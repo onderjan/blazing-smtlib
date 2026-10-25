@@ -10,7 +10,8 @@
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler,
+    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
+    SmtReader,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtMatchCases, SmtPattern,
         SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars, SmtTerm,
@@ -20,7 +21,7 @@ use blazing_smtlib::{
         SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtParse, SmtParseError,
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SmtTermParser, SmtVersionErrorKind,
     },
-    reader::{SmtReadError, SmtReadErrorCause, SmtReader, read_smt},
+    read_smt,
     token::{SmtCursor, SmtSyntaxToken},
     version::SmtVersion,
 };

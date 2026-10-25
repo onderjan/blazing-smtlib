@@ -15,8 +15,8 @@ use std::io::{self, BufRead, Read};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtNonstandardCommandError, SmtPartialCommandError, SmtSyntaxChecker, SmtWriteError,
-    SmtWriteErrorCause,
+    SmtNonstandardCommandError, SmtPartialCommandError, SmtReadError, SmtReadErrorCause,
+    SmtSyntaxChecker, SmtWriteError, SmtWriteErrorCause,
     grammar::SmtEmptyArgumentsError,
     lexer::{SmtLexError, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
@@ -26,7 +26,7 @@ use blazing_smtlib::{
         SmtMissingItem, SmtNonEmptyList, SmtParseError, SmtSyntaxErrorKind, SmtSyntaxExpected,
         SmtVersionErrorKind,
     },
-    reader::{SmtReadError, SmtReadErrorCause, read_smt},
+    read_smt,
     span::{SmtInvalidLocation, SmtInvalidSpan, SmtLocation},
     token::{
         SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,

@@ -19,7 +19,7 @@ use std::{
 };
 
 use blazing_smtlib::{
-    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError,
+    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtReadError,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
         SmtFunctionSignatures, SmtIdent, SmtIndex, SmtMatchCases, SmtMultiple, SmtPattern,
@@ -28,7 +28,7 @@ use blazing_smtlib::{
     },
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
-    reader::{SmtReadError, read_smt_file},
+    read_smt_file,
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
     version::SmtVersion,
 };

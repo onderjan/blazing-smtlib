@@ -7,10 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use blazing_smtlib::{
-    SmtSyntaxChecker,
-    reader::{SmtReadErrorCause, read_smt},
-};
+use blazing_smtlib::{SmtReadErrorCause, SmtSyntaxChecker, read_smt};
 
 /// Parses the in-memory file with [`SmtSyntaxChecker`], panicking on any
 /// error: benchmark files must parse.

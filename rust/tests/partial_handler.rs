@@ -8,14 +8,14 @@
 use std::collections::HashSet;
 
 use blazing_smtlib::{
-    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler,
+    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtFunctionSignature, SmtFunctionSignatures,
         SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities,
         SmtSortedVars, SmtSymbols, SmtTerm,
     },
     lexicon::{SmtKeyword, SmtSymbol},
-    reader::{SmtReadError, SmtReadErrorCause, read_smt},
+    read_smt,
     token::SmtCommandNameReserved,
     version::SmtVersion,
 };
