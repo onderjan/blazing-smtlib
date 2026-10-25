@@ -797,7 +797,7 @@ def Internal.appendSmt (self : Token) (out : ByteArray) (version : Version) :
 
 /- LEAN: Rust's `writer` is any `Write`; here an `IO.FS.Stream`, as the reader reads one
 (`Reader.BufReader.new`). The token is written in one call of the stream's `write`, where Rust
-writes it in pieces. -/
+writes it in pieces; the end of the input, which Rust writes in none, calls no `write`. -/
 /--
 Writes the token as SMT-LIB text in the given version.
 
@@ -815,6 +815,8 @@ in the given version or if the underlying writer returns one.
 -/
 def writeSmt {n : Type → Type} [Monad n] [MonadLiftT IO n] (self : Token)
     (writer : IO.FS.Stream) (version : Version) : n (Except Writer.WriteError Unit) := do
+  -- the end of the input has no text, and the writer is not called for it
+  if let .endOfFile := self then return .ok ()
   match Internal.appendSmt self ByteArray.empty version with
   | .error word => return .error ⟨.notInVersion word⟩
   | .ok bytes =>
