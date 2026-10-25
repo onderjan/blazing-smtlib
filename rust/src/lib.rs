@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod traits;
+mod writer;
 
 pub mod grammar;
 pub mod lexer;
@@ -12,3 +13,4 @@ pub mod token;
 pub mod version;
 
 pub use crate::traits::*;
+pub use crate::writer::*;

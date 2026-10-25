@@ -1,10 +1,83 @@
-use std::{collections::VecDeque, io::Write, ops::ControlFlow};
-
-use super::{
-    SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokensCursor,
-    SmtWriteError,
+use std::{
+    error::Error,
+    fmt,
+    io::{self, Write},
+    ops::ControlFlow,
 };
-use crate::version::SmtVersion;
+
+use crate::{
+    token::{
+        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
+        SmtTokensCursor,
+    },
+    version::SmtVersion,
+};
+
+/// Determines why writing a token has failed.
+#[derive(Debug)]
+pub enum SmtWriteErrorCause {
+    /// Writing to the writer failed.
+    Io(io::Error),
+    /// The reserved word is not reserved in the version, so no text in it is the token.
+    NotInVersion(SmtReserved),
+}
+
+/// An error that ended writing a token.
+#[derive(Debug)]
+pub struct SmtWriteError(SmtWriteErrorCause);
+
+impl SmtWriteError {
+    #[inline]
+    pub(crate) fn new(cause: SmtWriteErrorCause) -> Self {
+        Self(cause)
+    }
+
+    /// Determines why writing has failed.
+    pub fn cause(&self) -> &SmtWriteErrorCause {
+        &self.0
+    }
+
+    /// Convert into the enumeration that determines why writing has failed.
+    pub fn into_cause(self) -> SmtWriteErrorCause {
+        self.0
+    }
+}
+
+impl From<io::Error> for SmtWriteError {
+    fn from(err: io::Error) -> Self {
+        Self(SmtWriteErrorCause::Io(err))
+    }
+}
+
+impl fmt::Display for SmtWriteErrorCause {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(err) => write!(f, "I/O: {err}"),
+            Self::NotInVersion(reserved) => {
+                write!(
+                    f,
+                    "`{}` is not reserved in written version",
+                    reserved.as_str()
+                )
+            }
+        }
+    }
+}
+
+impl fmt::Display for SmtWriteError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl Error for SmtWriteError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.0 {
+            SmtWriteErrorCause::Io(err) => err.source(),
+            SmtWriteErrorCause::NotInVersion(_) => None,
+        }
+    }
+}
 
 /// Writes tokens as SMT-LIB text in the compact form.
 ///
@@ -79,8 +152,7 @@ impl<W: Write> SmtCompactTokenWriter<W> {
     /// Writes the tokens of the value.
     pub fn write<V: SmtAppendTokens + ?Sized>(&mut self, value: &V) -> Result<(), SmtWriteError> {
         let kept = std::mem::replace(&mut self.cursor, SmtTokensCursor::new(self.version));
-        let mut cursor = recycle(kept);
-        cursor.version = self.version;
+        let mut cursor = kept.recycle(self.version);
         value.append_tokens(&mut cursor);
         let mut result = Ok(());
         while let Some(token) = cursor.next() {
@@ -89,7 +161,7 @@ impl<W: Write> SmtCompactTokenWriter<W> {
                 break;
             }
         }
-        self.cursor = recycle(cursor);
+        self.cursor = cursor.recycle(self.version);
         result
     }
 
@@ -253,8 +325,7 @@ impl<W: Write> SmtLayoutTokenWriter<W> {
     /// Writes the tokens of the value.
     pub fn write<V: SmtAppendTokens + ?Sized>(&mut self, value: &V) -> Result<(), SmtWriteError> {
         let kept = std::mem::replace(&mut self.cursor, SmtTokensCursor::new(self.version));
-        let mut cursor = recycle(kept);
-        cursor.version = self.version;
+        let mut cursor = kept.recycle(self.version);
         value.append_tokens(&mut cursor);
         let mut result = Ok(());
         while let Some(token) = cursor.next() {
@@ -263,7 +334,7 @@ impl<W: Write> SmtLayoutTokenWriter<W> {
                 break;
             }
         }
-        self.cursor = recycle(cursor);
+        self.cursor = cursor.recycle(self.version);
         result
     }
 
@@ -329,26 +400,5 @@ impl<W: Write, Z: SmtCursor> SmtConsumeFrom<Z> for SmtLayoutTokenWriter<W> {
             }
         }
         Ok(ControlFlow::Continue(()))
-    }
-}
-
-/// Empties the cursor for tokens of another lifetime, keeping its allocation.
-fn recycle<'b>(cursor: SmtTokensCursor<'_>) -> SmtTokensCursor<'b> {
-    let SmtTokensCursor {
-        mut tokens,
-        version,
-        ..
-    } = cursor;
-    tokens.clear();
-    // an empty deque becomes a vector without moving or reallocating, and an
-    // empty vector mapped and collected keeps its allocation in the new type
-    let tokens: Vec<SmtSyntaxToken<'b>> = Vec::from(tokens)
-        .into_iter()
-        .map(|_| SmtSyntaxToken::EndOfFile)
-        .collect();
-    SmtTokensCursor {
-        tokens: VecDeque::from(tokens),
-        discarding: false,
-        version,
     }
 }

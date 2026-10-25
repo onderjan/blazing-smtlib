@@ -10,15 +10,13 @@ use std::io::{self, Write};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
+    SmtWriteError, SmtWriteErrorCause,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{
         SmtBinDigitsBuf, SmtCommentBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf,
         SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
     },
-    token::{
-        SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory,
-        SmtWriteError, SmtWriteErrorCause,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory},
     version::SmtVersion,
 };
 

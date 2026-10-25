@@ -1,12 +1,7 @@
-use std::{
-    collections::VecDeque,
-    error::Error,
-    fmt,
-    io::{self, Write},
-    ops::ControlFlow,
-};
+use std::{collections::VecDeque, error::Error, fmt, io::Write, ops::ControlFlow};
 
 use crate::{
+    SmtWriteError, SmtWriteErrorCause,
     lexer::SmtLexerToken,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
@@ -18,10 +13,8 @@ use crate::{
 };
 
 mod reserved;
-mod writer;
 
 pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved};
-pub use writer::{SmtCompactTokenWriter, SmtLayoutTokenWriter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtTokenCategory {
@@ -187,7 +180,9 @@ impl<'a> SmtSyntaxToken<'a> {
                 if !reserved.is_in_version(version) {
                     // the reserved word is not in the version
                     // there is no way to write it
-                    return Err(SmtWriteError(SmtWriteErrorCause::NotInVersion(*reserved)));
+                    return Err(SmtWriteError::new(SmtWriteErrorCause::NotInVersion(
+                        *reserved,
+                    )));
                 }
                 writer.write_all(reserved.as_str().as_bytes())?;
             }
@@ -402,67 +397,6 @@ impl Default for SmtTokensBuf {
 impl fmt::Debug for SmtTokensBuf {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list().entries(self.iter()).finish()
-    }
-}
-
-/// Determines why writing a token has failed.
-#[derive(Debug)]
-pub enum SmtWriteErrorCause {
-    /// Writing to the writer failed.
-    Io(io::Error),
-    /// The reserved word is not reserved in the version, so no text in it is the token.
-    NotInVersion(SmtReserved),
-}
-
-/// An error that ended writing a token.
-#[derive(Debug)]
-pub struct SmtWriteError(SmtWriteErrorCause);
-
-impl SmtWriteError {
-    /// Determines why writing has failed.
-    pub fn cause(&self) -> &SmtWriteErrorCause {
-        &self.0
-    }
-
-    /// Convert into the enumeration that determines why writing has failed.
-    pub fn into_cause(self) -> SmtWriteErrorCause {
-        self.0
-    }
-}
-
-impl From<io::Error> for SmtWriteError {
-    fn from(err: io::Error) -> Self {
-        Self(SmtWriteErrorCause::Io(err))
-    }
-}
-
-impl fmt::Display for SmtWriteErrorCause {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Io(err) => write!(f, "I/O: {err}"),
-            Self::NotInVersion(reserved) => {
-                write!(
-                    f,
-                    "`{}` is not reserved in written version",
-                    reserved.as_str()
-                )
-            }
-        }
-    }
-}
-
-impl fmt::Display for SmtWriteError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-impl Error for SmtWriteError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.0 {
-            SmtWriteErrorCause::Io(err) => err.source(),
-            SmtWriteErrorCause::NotInVersion(_) => None,
-        }
     }
 }
 
@@ -821,8 +755,8 @@ pub trait SmtConsume {
     /// to the whitespace and comments. The caller must hand
     /// over the whitespace and comment tokens present between
     /// true syntactic tokens (unless the consumer specifically
-    /// allows them to be omitted, as e.g. [`SmtLayoutTokenWriter`]
-    /// and [`SmtCompactTokenWriter`] do).
+    /// allows them to be omitted, as e.g. [`SmtLayoutTokenWriter`](crate::SmtLayoutTokenWriter)
+    /// and [`SmtCompactTokenWriter`](crate::SmtCompactTokenWriter) do).
     ///
     /// If false, the consumer operates over abstract tokens:
     /// it is not interested in whitespace and comments,
@@ -865,5 +799,25 @@ impl<Z: SmtCursor, T: SmtConsumeFrom<Z> + ?Sized> SmtConsumeFrom<Z> for &mut T {
     #[inline]
     fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<Self::Result>, Self::Error> {
         (**self).consume(cursor)
+    }
+}
+
+impl SmtTokensCursor<'_> {
+    /// Empties the cursor for tokens of another lifetime and the given version,
+    /// keeping its allocation.
+    pub(crate) fn recycle<'b>(self, version: SmtVersion) -> SmtTokensCursor<'b> {
+        let mut tokens = self.tokens;
+        tokens.clear();
+        // an empty deque becomes a vector without moving or reallocating, and an
+        // empty vector mapped and collected keeps its allocation in the new type
+        let tokens: Vec<SmtSyntaxToken<'b>> = Vec::from(tokens)
+            .into_iter()
+            .map(|_| SmtSyntaxToken::EndOfFile)
+            .collect();
+        SmtTokensCursor {
+            tokens: VecDeque::from(tokens),
+            discarding: false,
+            version,
+        }
     }
 }
