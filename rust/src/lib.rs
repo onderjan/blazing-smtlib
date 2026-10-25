@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
+mod handler;
 mod reader;
-mod traits;
 mod version;
 mod writer;
 
@@ -12,7 +12,7 @@ pub mod parser;
 pub mod span;
 pub mod token;
 
+pub use crate::handler::*;
 pub use crate::reader::*;
-pub use crate::traits::*;
 pub use crate::version::*;
 pub use crate::writer::*;
