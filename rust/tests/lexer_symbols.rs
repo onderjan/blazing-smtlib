@@ -1,6 +1,6 @@
 //! Public-API tests of symbol tokens: the lexer produces unquoted and quoted
 //! symbols alike, whatever they spell, with the content of a quoted symbol
-//! excluding its pipes; `SmtSyntaxToken::from_token` classifies an unquoted symbol
+//! excluding its pipes; `SmtSyntaxToken::from_lexer_token` classifies an unquoted symbol
 //! spelled like a reserved word as that reserved word, and a quoted one never.
 //! The same holds wherever the input is cut into slices.
 
@@ -9,7 +9,7 @@ mod reserved_words;
 
 use blazing_smtlib::{token::SmtTokenCategory, version::SmtVersion};
 
-// What `SmtSyntaxToken::from_token` says about a token, owned.
+// What `SmtSyntaxToken::from_lexer_token` says about a token, owned.
 use lex_backend::LexedKind as Kind;
 use reserved_words::reserved_words;
 

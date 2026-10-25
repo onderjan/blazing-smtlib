@@ -7,13 +7,13 @@ use std::{
 };
 
 use crate::{
+    lexer::SmtLexerToken,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
         SmtHexDigits, SmtHexDigitsBuf, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf,
         SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace,
         SmtWhitespaceBuf,
     },
-    span::{SmtLocation, SmtSpan},
     version::SmtVersion,
 };
 
@@ -42,42 +42,6 @@ pub enum SmtTokenCategory {
     EndOfFile,
 }
 
-/// SmtTokenCategory but without End of File.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum InnerCategory {
-    ParenOpen,
-    ParenClose,
-    Numeral,
-    Decimal,
-    Hexadecimal,
-    Binary,
-    String,
-    Keyword,
-    UnquotedSymbol,
-    QuotedSymbol,
-    Whitespace,
-    Comment,
-}
-
-impl InnerCategory {
-    fn into_category(self) -> SmtTokenCategory {
-        match self {
-            InnerCategory::ParenOpen => SmtTokenCategory::ParenOpen,
-            InnerCategory::ParenClose => SmtTokenCategory::ParenClose,
-            InnerCategory::Numeral => SmtTokenCategory::Numeral,
-            InnerCategory::Decimal => SmtTokenCategory::Decimal,
-            InnerCategory::Hexadecimal => SmtTokenCategory::Hexadecimal,
-            InnerCategory::Binary => SmtTokenCategory::Binary,
-            InnerCategory::String => SmtTokenCategory::String,
-            InnerCategory::Keyword => SmtTokenCategory::Keyword,
-            InnerCategory::UnquotedSymbol => SmtTokenCategory::UnquotedSymbol,
-            InnerCategory::QuotedSymbol => SmtTokenCategory::QuotedSymbol,
-            InnerCategory::Whitespace => SmtTokenCategory::Whitespace,
-            InnerCategory::Comment => SmtTokenCategory::Comment,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub enum SmtSyntaxToken<'a> {
     ParenOpen,
@@ -98,7 +62,7 @@ pub enum SmtSyntaxToken<'a> {
 impl<'a> SmtSyntaxToken<'a> {
     /// Construct the token kind from the token and version.
     #[inline]
-    pub fn from_token(token: SmtToken<'a>, version: SmtVersion) -> Self {
+    pub fn from_lexer_token(token: SmtLexerToken<'a>, version: SmtVersion) -> Self {
         let content = token.content();
         match token.category() {
             SmtTokenCategory::ParenOpen => SmtSyntaxToken::ParenOpen,
@@ -502,49 +466,6 @@ impl Error for SmtWriteError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SmtToken<'a> {
-    /// Entry where End of File is kept as None.
-    ///
-    /// This is for performance reasons: instead of having to
-    /// overwrite the whole token when the referenced buffer
-    /// is no longer available, we have to only overwrite
-    /// the Option variant byte to None.
-    entry: &'a Option<(InnerCategory, &'a [u8])>,
-    span: &'a SmtSpan,
-}
-
-impl<'a> SmtToken<'a> {
-    #[inline]
-    pub(crate) fn new(
-        entry: &'a Option<(InnerCategory, &'a [u8])>,
-        span: &'a SmtSpan,
-    ) -> SmtToken<'a> {
-        Self { entry, span }
-    }
-
-    #[inline]
-    pub fn category(&self) -> SmtTokenCategory {
-        match self.entry {
-            Some((ty, _)) => ty.into_category(),
-            None => SmtTokenCategory::EndOfFile,
-        }
-    }
-
-    #[inline]
-    pub fn content(&self) -> &'a [u8] {
-        match self.entry {
-            Some((_, content)) => content,
-            None => &[],
-        }
-    }
-
-    #[inline]
-    pub fn span(&self) -> SmtSpan {
-        *self.span
-    }
-}
-
 /// Producer refused to switch to a requested version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtVersionRefused;
@@ -664,175 +585,6 @@ impl<T> SmtLookahead<T> for () {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum BatchCursorAction {
-    None,
-    Relex,
-    Discard,
-}
-
-/// A cursor into a batch of tokens, from which elements are consumed sequentially.
-///
-/// A parser reads a batch through a cursor: it consumes the tokens one at
-/// a time, can look at the next one, and can attempt to take several at once.
-/// However, it is not guaranteed how many tokens the batch will actually have,
-/// so an attempt is only useful for fast paths that fall back to slow paths
-/// with the same behaviour if the tokens are not available.
-pub struct SmtBatchCursor<'a> {
-    version: SmtVersion,
-    entries: &'a [Option<(InnerCategory, &'a [u8])>],
-    spans: &'a [SmtSpan],
-    start: usize,
-    next: usize,
-    action: BatchCursorAction,
-}
-
-impl<'a> SmtBatchCursor<'a> {
-    /// Returns a cursor at the start of the batch given as its entries and
-    /// their spans, of equal length.
-    #[inline]
-    pub(crate) fn new(
-        version: SmtVersion,
-        entries: &'a [Option<(InnerCategory, &'a [u8])>],
-        spans: &'a [SmtSpan],
-    ) -> Self {
-        debug_assert_eq!(entries.len(), spans.len());
-        Self {
-            version,
-            entries,
-            spans,
-            start: 0,
-            next: 0,
-            action: BatchCursorAction::None,
-        }
-    }
-
-    /// The token at `index` of the batch, if any.
-    #[inline]
-    fn at(&self, index: usize) -> Option<SmtToken<'a>> {
-        match (self.entries.get(index), self.spans.get(index)) {
-            (Some(entry), Some(span)) => Some(SmtToken::new(entry, span)),
-            _ => None,
-        }
-    }
-
-    /// Span of the last consumed token in this handover (if any).
-    #[inline]
-    pub(crate) fn consumed_span(&self) -> Option<SmtSpan> {
-        if self.next > self.start {
-            self.at(self.next - 1).map(|token| token.span())
-        } else {
-            None
-        }
-    }
-
-    // Ensures no more tokens are produced.
-    #[inline]
-    fn truncate(&mut self) {
-        self.entries = &self.entries[..self.next];
-        self.spans = &self.spans[..self.next];
-    }
-
-    #[inline]
-    pub(crate) fn action(&self) -> BatchCursorAction {
-        self.action
-    }
-
-    /// The entries of the tokens of the batch consumed so far.
-    #[inline]
-    pub(crate) fn consumed_entries(&self) -> &'a [Option<(InnerCategory, &'a [u8])>] {
-        &self.entries[..self.next]
-    }
-
-    /// Resets the number of consumed tokens to zero.
-    #[inline]
-    pub(crate) fn reset_consumed(&mut self) {
-        self.start = self.next;
-    }
-}
-
-impl<'a> SmtCursor for SmtBatchCursor<'a> {
-    type Token = SmtToken<'a>;
-    type Lookahead = SmtTokenWindow<'a>;
-
-    #[inline]
-    fn syntax<'t>(&self, token: &'t SmtToken) -> SmtSyntaxToken<'t> {
-        SmtSyntaxToken::from_token(*token, self.version)
-    }
-
-    #[inline]
-    fn peek(&self) -> Option<SmtToken<'a>> {
-        self.at(self.next)
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    #[inline]
-    fn next(&mut self) -> Option<SmtToken<'a>> {
-        let token = self.at(self.next)?;
-        self.next += 1;
-        Some(token)
-    }
-
-    #[inline]
-    fn attempt<R>(&mut self, extract: impl Fn(&mut SmtTokenWindow<'a>) -> Option<R>) -> Option<R> {
-        let mut window = SmtTokenWindow {
-            version: self.version,
-            entries: self.entries,
-            spans: self.spans,
-            next: self.next,
-        };
-        let result = extract(&mut window)?;
-        // the extractor succeeded, consume what it took
-        self.next = window.next;
-        Some(result)
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.next >= self.entries.len()
-    }
-
-    #[inline]
-    fn consume_all(&mut self) {
-        self.next = self.entries.len()
-    }
-
-    fn version(&self) -> SmtVersion {
-        self.version
-    }
-
-    fn set_version(&mut self, version: SmtVersion) -> Result<(), SmtVersionRefused> {
-        // the lexer supports all versions,
-        // but needs to relex when switching between 2.0 and 2.5+
-        let is_current_2_0 = self.version == SmtVersion::V2_0;
-        let is_new_2_0 = version == SmtVersion::V2_0;
-        if is_current_2_0 != is_new_2_0 {
-            // we need to relex; if already relexing/discarding, do nothing
-            if matches!(self.action, BatchCursorAction::None) {
-                self.truncate();
-                self.action = BatchCursorAction::Relex;
-            }
-        }
-        self.version = version;
-        Ok(())
-    }
-
-    fn discard_rest(&mut self) {
-        // just truncate and set to discard
-        self.truncate();
-        self.action = BatchCursorAction::Discard;
-    }
-}
-
-/// The tokens ahead of a cursor, as the extractor of [`SmtBatchCursor::attempt`]
-/// sees them: they can only be taken in order.
-pub struct SmtTokenWindow<'a> {
-    version: SmtVersion,
-    entries: &'a [Option<(InnerCategory, &'a [u8])>],
-    spans: &'a [SmtSpan],
-    next: usize,
-}
-
 pub(crate) struct SingleTokenCursor<'a, Z: SmtCursor> {
     cursor: &'a Z,
     token: Option<Z::Token>,
@@ -874,21 +626,6 @@ impl<'a, Z: SmtCursor> SmtCursor for SingleTokenCursor<'a, Z> {
 
     fn discard_rest(&mut self) {
         panic!("single-token cursor cannot discard the rest of the input")
-    }
-}
-
-impl<'a> SmtLookahead<SmtToken<'a>> for SmtTokenWindow<'a> {
-    fn next(&mut self) -> Option<SmtToken<'a>> {
-        let token = match (self.entries.get(self.next), self.spans.get(self.next)) {
-            (Some(entry), Some(span)) => SmtToken::new(entry, span),
-            _ => return None,
-        };
-        self.next += 1;
-        Some(token)
-    }
-
-    fn syntax<'t>(&self, token: &'t SmtToken<'a>) -> SmtSyntaxToken<'t> {
-        SmtSyntaxToken::from_token(*token, self.version)
     }
 }
 
@@ -1128,55 +865,5 @@ impl<Z: SmtCursor, T: SmtConsumeFrom<Z> + ?Sized> SmtConsumeFrom<Z> for &mut T {
     #[inline]
     fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<Self::Result>, Self::Error> {
         (**self).consume(cursor)
-    }
-}
-
-/// A token consumer that can recover after an error (EXPERIMENTAL).
-///
-/// This is an experimental feature for processing of SMT-LIB scripts
-/// with error recovery: after an error, the current command is abandoned
-/// and the lexer closes all open parentheses before announcing recovery.
-/// If the command remains unclosed at the end of input, recovery is made
-/// before the end of input is handed over (only the unclosed command is
-/// abandoned and dropped).
-///
-/// Lexer recovery is implemented but experimental
-/// since the exact semantics have not yet been set in stone.
-/// It can change or be removed in any version and should not be used.
-#[doc(hidden)]
-pub trait SmtRecover: SmtConsume {
-    /// Abandons everything the consumer has not finished.
-    ///
-    /// Called when the input is lexically malformed or the consumer itself
-    /// returns an error, before the failing call returns. The location is
-    /// where the failure occurred: the input from there on is skipped, up
-    /// to the location given to [`recover`](Self::recover).
-    ///
-    /// The tokens consumed so far that belong to an unfinished top-level
-    /// value (typically, an SMT-LIB command) are to be abandoned, as if
-    /// they never were handed over.
-    fn abandon(&mut self, location: SmtLocation);
-
-    /// Finishes the recovery after abandoning.
-    ///
-    /// Called exactly once after every [`abandon`](Self::abandon) before the
-    /// new token is handed over after the recovery. The tokens handed over
-    /// after the recovery are to be considered to follow the tokens before
-    /// the abandoned top-level value started, as if the abandoned top-level
-    /// value was never started. The input between abandonment and recovery
-    /// is not handed over in any way.
-    fn recover(&mut self, location: SmtLocation);
-}
-
-/// Mutable references over token consumers that can recover can recover.
-impl<T: SmtRecover + ?Sized> SmtRecover for &mut T {
-    #[inline]
-    fn abandon(&mut self, location: SmtLocation) {
-        (**self).abandon(location)
-    }
-
-    #[inline]
-    fn recover(&mut self, location: SmtLocation) {
-        (**self).recover(location)
     }
 }

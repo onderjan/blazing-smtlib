@@ -43,8 +43,8 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use blazing_smtlib::{
-    lexer::SmtLexer,
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
+    lexer::{SmtLexer, SmtLexerCursor},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
     version::SmtVersion,
 };
 
@@ -63,10 +63,10 @@ impl SmtConsume for DiscardTokens {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for DiscardTokens {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for DiscardTokens {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         // the end-of-file token is handed over alone
         let at_end = cursor

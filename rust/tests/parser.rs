@@ -20,7 +20,7 @@ use parse_backend::{
 use blazing_smtlib::{
     SmtHandler, SmtNonstandardCommandError,
     grammar::{SmtPatternBuf, SmtQuantifierKind},
-    lexer::SmtLexer,
+    lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{
         SmtCommandOutcome, SmtParse, SmtParseError, SmtParseState, SmtScriptParser,
@@ -29,8 +29,7 @@ use blazing_smtlib::{
     reader::SmtReader,
     span::SmtSpan,
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory,
-        SmtVersionRefused,
+        SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
     },
     version::{SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder},
 };
@@ -1266,8 +1265,8 @@ impl SmtConsume for Observing<'_> {
     const IS_CONCRETE: bool = true;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Observing<'_> {
-    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Observing<'_> {
+    fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
         // the handler learns the version at the start of every input
         if !self.version_set {
             self.handler.set_version(cursor.version());

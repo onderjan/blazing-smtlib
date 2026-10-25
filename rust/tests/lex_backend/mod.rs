@@ -32,12 +32,9 @@ use std::ops::ControlFlow;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
-    lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind, SmtLexicalExpected},
+    lexer::{SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
     span::SmtLocation,
-    token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
-        SmtTokenCategory,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory},
     version::SmtVersion,
 };
 
@@ -186,13 +183,13 @@ impl<const WHITESPACE: bool> SmtConsume for Collect<'_, WHITESPACE> {
     const IS_CONCRETE: bool = WHITESPACE;
 }
 
-impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Collect<'_, WHITESPACE> {
+impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtLexerCursor<'a>> for Collect<'_, WHITESPACE> {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
-            let kind = match SmtSyntaxToken::from_token(token, self.version) {
+            let kind = match SmtSyntaxToken::from_lexer_token(token, self.version) {
                 SmtSyntaxToken::Symbol(symbol) => LexedKind::Symbol(symbol.as_slice().to_vec()),
                 SmtSyntaxToken::Reserved(reserved) => LexedKind::Reserved(reserved),
                 SmtSyntaxToken::Keyword(keyword) => LexedKind::Keyword(keyword.as_slice().to_vec()),

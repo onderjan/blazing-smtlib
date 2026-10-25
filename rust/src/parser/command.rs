@@ -271,8 +271,9 @@ mod tests {
     use super::*;
     use crate::{
         SmtSyntaxChecker,
+        lexer::{InnerCategory, SmtLexerCursor, SmtLexerToken},
         span::SmtSpan,
-        token::{InnerCategory, SingleTokenCursor, SmtBatchCursor, SmtToken},
+        token::SingleTokenCursor,
     };
 
     #[test]
@@ -286,8 +287,8 @@ mod tests {
         // after the break, so the next command body parses without a restart
         for _ in 0..2 {
             let span = SmtSpan::new_zero();
-            let close = SmtToken::new(&Some((InnerCategory::ParenClose, &[])), &span);
-            let cursor = SmtBatchCursor::new(SmtVersion::V2_7, &[], &[]);
+            let close = SmtLexerToken::new(&Some((InnerCategory::ParenClose, &[])), &span);
+            let cursor = SmtLexerCursor::new(SmtVersion::V2_7, &[], &[]);
             let flow = parser
                 .parse(
                     &mut handler,

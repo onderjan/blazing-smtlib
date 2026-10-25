@@ -8,11 +8,10 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind},
     span::SmtSpan,
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtTokenCategory,
+        SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved, SmtTokenCategory,
     },
     version::SmtVersion,
 };
@@ -29,10 +28,10 @@ impl SmtConsume for TakeTokens {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for TakeTokens {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for TakeTokens {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         cursor.consume_all();
         Ok(ControlFlow::Continue(()))
@@ -599,10 +598,10 @@ impl SmtConsume for RejectTokens {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for RejectTokens {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for RejectTokens {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         match cursor.next() {
             Some(token) => Err(token.span()),
@@ -675,10 +674,10 @@ impl SmtConsume for TakeNothing {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for TakeNothing {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for TakeNothing {
     fn consume(
         &mut self,
-        _cursor: &mut SmtBatchCursor<'a>,
+        _cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         assert!(
             !self.called,
@@ -906,10 +905,10 @@ impl SmtConsume for RejectEof {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for RejectEof {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for RejectEof {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while let Some(token) = cursor.next() {
             if token.category() == SmtTokenCategory::EndOfFile {

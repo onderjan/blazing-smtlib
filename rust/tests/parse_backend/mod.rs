@@ -42,7 +42,7 @@ use std::path::Path;
 use blazing_smtlib::{
     SmtNonstandardCommandError,
     grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind},
-    lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
@@ -56,7 +56,7 @@ use blazing_smtlib::{
     },
     reader::{SmtReadError, SmtReadErrorCause, SmtReader},
     span::{SmtLocation, SmtSpan},
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
     version::{SmtVersion, SmtVersionPosture},
 };
 
@@ -1242,10 +1242,10 @@ impl<'h, H: Handler, P: SmtParse<Adapt<'h, H>>> SmtConsume for Drive<'_, 'h, H, 
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a, 'h, H: Handler, P: SmtParse<Adapt<'h, H>>> SmtConsumeFrom<SmtBatchCursor<'a>>
+impl<'a, 'h, H: Handler, P: SmtParse<Adapt<'h, H>>> SmtConsumeFrom<SmtLexerCursor<'a>>
     for Drive<'_, 'h, H, P>
 {
-    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
+    fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, Self::Error> {
         while !cursor.is_empty() {
             if self.remaining == 0 {
                 // count the tokens left after the wanted results, and break at

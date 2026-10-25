@@ -17,7 +17,7 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtNonstandardCommandError, SmtPartialCommandError, SmtSyntaxChecker,
     grammar::SmtEmptyArgumentsError,
-    lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind, SmtLexicalExpected},
+    lexer::{SmtLexError, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
         SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtNumericOverflow, SmtSymbolBuf,
     },
@@ -28,9 +28,9 @@ use blazing_smtlib::{
     reader::{SmtReadError, SmtReadErrorCause, read_smt},
     span::{SmtInvalidLocation, SmtInvalidSpan, SmtLocation},
     token::{
-        SmtBatchCursor, SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor,
-        SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
-        SmtWriteError, SmtWriteErrorCause,
+        SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
+        SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused, SmtWriteError,
+        SmtWriteErrorCause,
     },
     version::SmtVersion,
 };
@@ -166,8 +166,8 @@ impl<E> SmtConsume for RejectNumerals<E> {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a, E> SmtConsumeFrom<SmtBatchCursor<'a>> for RejectNumerals<E> {
-    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, E> {
+impl<'a, E> SmtConsumeFrom<SmtLexerCursor<'a>> for RejectNumerals<E> {
+    fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, E> {
         while let Some(token) = cursor.next() {
             if let SmtSyntaxToken::Numeral(_) = cursor.syntax(&token) {
                 return Err((self.0)());

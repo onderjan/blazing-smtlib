@@ -34,12 +34,11 @@ use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
-    lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
-    span::{SmtLocated, SmtLocation},
-    token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtToken,
-        SmtTokenCategory,
+    lexer::{
+        SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexerToken, SmtLexicalErrorKind,
     },
+    span::{SmtLocated, SmtLocation},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtTokenCategory},
     version::SmtVersion,
 };
 
@@ -66,7 +65,7 @@ struct Recorded {
     span: RecordedSpan,
 }
 
-fn record(token: SmtToken) -> Recorded {
+fn record(token: SmtLexerToken) -> Recorded {
     Recorded {
         ty: token.category(),
         content: token.content().to_vec(),
@@ -142,10 +141,10 @@ impl SmtConsume for Recorder<'_> {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Recorder<'_> {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Recorder<'_> {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, ()> {
         // the end-of-file token is handed over alone
         let at_end = cursor
@@ -162,7 +161,7 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Recorder<'_> {
 impl Recorder<'_> {
     /// Records the hand-over, takes its tokens as the plan says, and answers
     /// as it says.
-    fn reply(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, ()> {
+    fn reply(&mut self, cursor: &mut SmtLexerCursor<'_>) -> Result<ControlFlow<()>, ()> {
         // Record every token of the hand-over, also those the reply will not
         // take. A consumer has no way to look at tokens without consuming
         // them, so the recording goes through an attempt that takes every

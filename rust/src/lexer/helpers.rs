@@ -1,12 +1,9 @@
-use crate::{
-    lexer::{
-        LexerState, SmtLexicalErrorKind, SmtLexicalExpected,
-        char_class::{
-            CharClass, RUN_BINARY_DIGIT, RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_HEX_DIGIT,
-            RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
-        },
+use crate::lexer::{
+    InnerCategory, LexerState, SmtLexicalErrorKind, SmtLexicalExpected,
+    char_class::{
+        CharClass, RUN_BINARY_DIGIT, RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_HEX_DIGIT,
+        RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN, RUN_SIMPLE_SYMBOL, RUN_STRING_PLAIN,
     },
-    token::InnerCategory,
 };
 
 /// What a byte does in the normal state.

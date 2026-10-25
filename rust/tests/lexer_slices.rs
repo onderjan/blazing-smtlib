@@ -14,9 +14,9 @@ use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    lexer::{SmtLexer, SmtLexicalErrorKind},
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexicalErrorKind},
     span::SmtLocation,
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
     version::SmtVersion,
 };
 
@@ -704,10 +704,10 @@ impl SmtConsume for RejectNth {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for RejectNth {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for RejectNth {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         while cursor.next().is_some() {
             if self.remaining == 0 {

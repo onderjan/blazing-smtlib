@@ -20,7 +20,7 @@ use std::rc::Rc;
 
 use blazing_smtlib::{
     SmtHandler, SmtSyntaxChecker,
-    lexer::SmtLexer,
+    lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{
         SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
         SmtStringContentBuf, SmtSymbolBuf,
@@ -36,8 +36,7 @@ use blazing_smtlib::{
         SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser, SmtTuple7Parser, SmtTuple8Parser,
     },
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
-        SmtVersionRefused,
+        SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtVersionRefused,
     },
     version::{SmtVersion, SmtVersionPosture},
 };
@@ -108,8 +107,8 @@ impl SmtConsume for Collect {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Collect {
-    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Infallible> {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Collect {
+    fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, Infallible> {
         while let Some(token) = cursor.next() {
             let owned = Owned::from_syntax(cursor.syntax(&token));
             let at_end = matches!(owned, Some(Owned::EndOfFile));

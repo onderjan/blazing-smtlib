@@ -26,10 +26,10 @@ use blazing_smtlib::{
         SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
         SmtSpecialConstant, SmtSymbols, SmtTerm,
     },
-    lexer::SmtLexer,
+    lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     reader::{SmtReadError, read_smt_file},
-    token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
     version::SmtVersion,
 };
 
@@ -149,8 +149,8 @@ impl SmtConsume for TokenDigest {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for TokenDigest {
-    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Infallible> {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for TokenDigest {
+    fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, Infallible> {
         let mut at_end = false;
         while let Some(token) = cursor.next() {
             let syntax = cursor.syntax(&token);
@@ -1063,8 +1063,8 @@ impl SmtConsume for Rebuild<'_> {
     const IS_CONCRETE: bool = true;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Rebuild<'_> {
-    fn consume(&mut self, cursor: &mut SmtBatchCursor<'a>) -> Result<ControlFlow<()>, Infallible> {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Rebuild<'_> {
+    fn consume(&mut self, cursor: &mut SmtLexerCursor<'a>) -> Result<ControlFlow<()>, Infallible> {
         let mut at_end = false;
         while let Some(token) = cursor.next() {
             let syntax = cursor.syntax(&token);

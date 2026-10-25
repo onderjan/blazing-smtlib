@@ -10,12 +10,12 @@ use std::io::{self, Write};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    lexer::SmtLexer,
+    lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtCommentBuf, SmtNumeralBuf, SmtSymbol},
     token::{
-        SmtAppendTokens, SmtBatchCursor, SmtCompactTokenWriter, SmtConsume, SmtConsumeFrom,
-        SmtCursor, SmtGeneralReserved, SmtLayoutTokenWriter, SmtReserved, SmtSyntaxToken,
-        SmtTokensBuf, SmtTokensCursor, SmtWriteErrorCause,
+        SmtAppendTokens, SmtCompactTokenWriter, SmtConsume, SmtConsumeFrom, SmtCursor,
+        SmtGeneralReserved, SmtLayoutTokenWriter, SmtReserved, SmtSyntaxToken, SmtTokensBuf,
+        SmtTokensCursor, SmtWriteErrorCause,
     },
     version::SmtVersion,
 };
@@ -50,10 +50,10 @@ impl SmtConsume for Keep {
     const IS_CONCRETE: bool = true;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Keep {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Keep {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<SmtTokensBuf>, Infallible> {
         while let Some(token) = cursor.next() {
             let token = cursor.syntax(&token);

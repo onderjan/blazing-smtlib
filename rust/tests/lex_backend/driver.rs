@@ -9,11 +9,13 @@ use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use blazing_smtlib::{
-    lexer::{SmtLexErrorCause, SmtLexRecovery, SmtLexer},
+    lexer::{
+        SmtLexErrorCause, SmtLexRecovery, SmtLexer, SmtLexerCursor, SmtLexerToken, SmtRecover,
+    },
     span::SmtLocation,
     token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtRecover,
-        SmtReserved, SmtSyntaxToken, SmtToken, SmtTokenCategory,
+        SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtReserved, SmtSyntaxToken,
+        SmtTokenCategory,
     },
     version::SmtVersion,
 };
@@ -91,8 +93,8 @@ fn version_name(version: SmtVersion) -> &'static str {
     std::str::from_utf8(version.as_decimal().as_slice()).expect("a version decimal is ASCII")
 }
 
-fn token_line(token: SmtToken<'_>, version: SmtVersion) -> String {
-    let reserved = match SmtSyntaxToken::from_token(token, version) {
+fn token_line(token: SmtLexerToken<'_>, version: SmtVersion) -> String {
+    let reserved = match SmtSyntaxToken::from_lexer_token(token, version) {
         SmtSyntaxToken::Reserved(SmtReserved::General(_)) => "general",
         SmtSyntaxToken::Reserved(SmtReserved::CommandName(_)) => "command",
         _ => "-",
@@ -117,10 +119,10 @@ impl<const WHITESPACE: bool> SmtConsume for Scripted<WHITESPACE> {
     const IS_CONCRETE: bool = WHITESPACE;
 }
 
-impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Scripted<WHITESPACE> {
+impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtLexerCursor<'a>> for Scripted<WHITESPACE> {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         // the end-of-file token is handed over alone
         let at_end = cursor
@@ -137,7 +139,7 @@ impl<'a, const WHITESPACE: bool> SmtConsumeFrom<SmtBatchCursor<'a>> for Scripted
 impl<const WHITESPACE: bool> Scripted<WHITESPACE> {
     /// Takes the tokens of a hand-over as the behaviour says, and answers as
     /// it says.
-    fn take(&mut self, cursor: &mut SmtBatchCursor<'_>) -> Result<ControlFlow<()>, &'static str> {
+    fn take(&mut self, cursor: &mut SmtLexerCursor<'_>) -> Result<ControlFlow<()>, &'static str> {
         // the version the tokens of this hand-over were lexed under
         let version = cursor.version();
         match &self.behaviour {

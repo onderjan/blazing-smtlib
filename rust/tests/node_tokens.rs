@@ -15,12 +15,12 @@ use blazing_smtlib::{
         SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort,
         SmtSortedVars, SmtSortedVarsBuf, SmtTerm,
     },
-    lexer::SmtLexer,
+    lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtSymbol},
     reader::read_smt,
     token::{
-        SmtAppendTokens, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
-        SmtReserved, SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,
+        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
+        SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,
     },
     version::SmtVersion,
 };
@@ -37,10 +37,10 @@ impl SmtConsume for Keep {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Keep {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Keep {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<SmtTokensBuf>, Infallible> {
         while let Some(token) = cursor.next() {
             match cursor.syntax(&token) {

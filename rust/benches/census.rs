@@ -25,11 +25,8 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use blazing_smtlib::{
-    lexer::SmtLexer,
-    token::{
-        SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtToken,
-        SmtTokenCategory,
-    },
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexerToken},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory},
     version::SmtVersion,
 };
 
@@ -111,10 +108,10 @@ impl SmtConsume for Census {
     const IS_CONCRETE: bool = false;
 }
 
-impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Census {
+impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for Census {
     fn consume(
         &mut self,
-        cursor: &mut SmtBatchCursor<'a>,
+        cursor: &mut SmtLexerCursor<'a>,
     ) -> Result<ControlFlow<Self::Result>, Self::Error> {
         // the end-of-file token is handed over alone
         let at_end = cursor
@@ -134,11 +131,11 @@ impl<'a> SmtConsumeFrom<SmtBatchCursor<'a>> for Census {
 
 impl Census {
     /// Tallies one token.
-    fn tally(&mut self, token: SmtToken) {
+    fn tally(&mut self, token: SmtLexerToken) {
         self.tokens += 1;
         let expecting_command_name = self.expecting_command_name;
         self.expecting_command_name = false;
-        let type_name = match SmtSyntaxToken::from_token(token, SmtVersion::V2_7) {
+        let type_name = match SmtSyntaxToken::from_lexer_token(token, SmtVersion::V2_7) {
             SmtSyntaxToken::ParenOpen => {
                 self.expecting_command_name = self.depth == 0;
                 self.depth += 1;

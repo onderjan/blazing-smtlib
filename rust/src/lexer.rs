@@ -1,10 +1,14 @@
 mod char_class;
+mod cursor;
 mod error;
 mod helpers;
 mod recovery;
 
+pub use cursor::{SmtLexerCursor, SmtLexerToken, SmtLexerWindow};
 pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind, SmtLexicalExpected};
-pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering};
+pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecover, SmtRecovering};
+
+pub(crate) use cursor::{InnerCategory, LexerCursorAction};
 
 pub(crate) use char_class::CharClass;
 
@@ -23,10 +27,7 @@ use crate::{
         },
     },
     span::{SmtLocated, SmtLocation, SmtSpan},
-    token::{
-        BatchCursorAction, InnerCategory, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor,
-        SmtRecover,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor},
     version::SmtVersion,
 };
 
@@ -233,7 +234,7 @@ enum LexerState {
     Failed,
 }
 
-impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>> SmtLexer<C> {
+impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     /// Constructs a lexer that stops at its first error.
     pub fn new(consumer: C, version: SmtVersion) -> Self {
         // construct the lexer normally
@@ -346,7 +347,7 @@ impl<C: SmtConsume, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     }
 }
 
-impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLexer<C, R> {
+impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexRecovery<C>> SmtLexer<C, R> {
     /// Lexes the given slice, sending the lexed tokens to the consumer.
     ///
     /// If the consumer produces a result, the result is held back until EOF.
@@ -1776,7 +1777,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                 let entry = Some((ty, self.token_content.as_slice()));
                 Self::flush_cursor(
                     &mut self.consumer,
-                    SmtBatchCursor::new(self.version, std::slice::from_ref(&entry), spans),
+                    SmtLexerCursor::new(self.version, std::slice::from_ref(&entry), spans),
                     &mut self.version,
                     &mut self.consumed_depth,
                     &mut self.lexed_depth,
@@ -1807,7 +1808,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         }
         Self::flush_cursor(
             &mut self.consumer,
-            SmtBatchCursor::new(self.version, &batch.entries[..len], &self.spans[..len]),
+            SmtLexerCursor::new(self.version, &batch.entries[..len], &self.spans[..len]),
             &mut self.version,
             &mut self.consumed_depth,
             &mut self.lexed_depth,
@@ -1817,7 +1818,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
 
     fn flush_cursor(
         consumer: &mut C,
-        mut cursor: SmtBatchCursor,
+        mut cursor: SmtLexerCursor,
         version: &mut SmtVersion,
         consumed_depth: &mut u64,
         lexed_depth: &mut u64,
@@ -1863,17 +1864,17 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
                         *held = Some(SmtLocated::new(result, consumed_span.end()));
                     }
                     match cursor.action() {
-                        BatchCursorAction::None => {
+                        LexerCursorAction::None => {
                             // zero the number of consumed tokens in the cursor
                             cursor.reset_consumed();
                             // continue flushing until nothing remains
                             continue;
                         }
-                        BatchCursorAction::Relex => {
+                        LexerCursorAction::Relex => {
                             // we need to stop and relex here
                             Ok(Stop::Relex)
                         }
-                        BatchCursorAction::Discard => {
+                        LexerCursorAction::Discard => {
                             // we need to discard from now on
                             Ok(Stop::Discard)
                         }
@@ -1904,7 +1905,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
         Ok(())
     }
 
-    fn finish_cursor(cursor: SmtBatchCursor, consumed_depth: &mut u64, lexed_depth: &mut u64) {
+    fn finish_cursor(cursor: SmtLexerCursor, consumed_depth: &mut u64, lexed_depth: &mut u64) {
         if !R::RECOVERS {
             // just drop the cursor
             return;
@@ -1938,7 +1939,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>, R: SmtLexRecovery<C>> SmtLex
 
         Self::flush_cursor(
             &mut self.consumer,
-            SmtBatchCursor::new(self.version, std::slice::from_ref(&entry), spans),
+            SmtLexerCursor::new(self.version, std::slice::from_ref(&entry), spans),
             &mut self.version,
             &mut self.consumed_depth,
             &mut self.lexed_depth,
