@@ -254,19 +254,19 @@ fn the_compact_writer_ends_the_line_and_starts_anew_at_the_end_of_an_input() {
 
 #[test]
 fn the_line_writer_writes_abstract_tokens_on_one_line() {
-    // the lexed tokens end with the end of the input, which ends the line
+    // the lexed tokens end with the end of the input, which writes nothing
     let cases: [(&[u8], &str); 8] = [
         (b"", ""),
-        (b"( )", "()\n"),
+        (b"( )", "()"),
         (
             b"(set-logic QF_UF)\n  (assert   (= x  (f  y)))  x  42",
-            "(set-logic QF_UF) (assert (= x (f y))) x 42\n",
+            "(set-logic QF_UF) (assert (= x (f y))) x 42",
         ),
-        (b"((a)(b) c)", "((a) (b) c)\n"),
-        (b"(f (g) h)", "(f (g) h)\n"),
-        (b"( ( ) )", "(())\n"),
-        (b"(! x :named |a b|)\"s\"", "(! x :named |a b|) \"s\"\n"),
-        (b") x (y", ") x (y\n"),
+        (b"((a)(b) c)", "((a) (b) c)"),
+        (b"(f (g) h)", "(f (g) h)"),
+        (b"( ( ) )", "(())"),
+        (b"(! x :named |a b|)\"s\"", "(! x :named |a b|) \"s\""),
+        (b") x (y", ") x (y"),
     ];
     for (input, expected) in cases {
         let tokens = lexed(input, SmtVersion::V2_7, false);
@@ -284,12 +284,12 @@ fn the_line_writer_writes_abstract_tokens_on_one_line() {
 #[test]
 fn the_line_writer_ends_a_comment_with_a_line_feed_only_before_a_token() {
     let cases: [(&[u8], &str); 6] = [
-        (b"; head\n(check-sat)", "; head\n(check-sat)\n"),
-        (b"(assert ; in\n x) ; tail\r\n", "(assert ; in\nx) ; tail\n"),
-        (b"(a;b\n)", "(a ;b\n)\n"),
-        (b"x;comment at the end", "x ;comment at the end\n"),
-        (b";\n;", ";\n;\n"),
-        (b"(f x ;c\r y)", "(f x ;c\ny)\n"),
+        (b"; head\n(check-sat)", "; head\n(check-sat)"),
+        (b"(assert ; in\n x) ; tail\r\n", "(assert ; in\nx) ; tail"),
+        (b"(a;b\n)", "(a ;b\n)"),
+        (b"x;comment at the end", "x ;comment at the end"),
+        (b";\n;", ";\n;"),
+        (b"(f x ;c\r y)", "(f x ;c\ny)"),
     ];
     for (input, expected) in cases {
         let tokens = lexed(input, SmtVersion::V2_7, true);
@@ -302,7 +302,7 @@ fn the_line_writer_ends_a_comment_with_a_line_feed_only_before_a_token() {
         let lexed_text = written_lexed(&[input], SmtVersion::V2_7, SmtWriteStyle::Line);
         assert_eq!(String::from_utf8_lossy(&lexed_text), expected);
     }
-    // without an end of the input, a comment at the end is not ended
+    // nor is it ended without an end of the input
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
     let comment = SmtCommentBuf::new(b" c".to_vec()).expect("a comment");
     let tokens = [
@@ -313,13 +313,20 @@ fn the_line_writer_ends_a_comment_with_a_line_feed_only_before_a_token() {
 }
 
 #[test]
-fn the_line_writer_ends_the_line_at_the_end_of_an_input() {
-    let written = written_lexed(
-        &[b"(a (b", b"(c) d", b"e"],
-        SmtVersion::V2_7,
-        SmtWriteStyle::Line,
-    );
-    assert_eq!(String::from_utf8_lossy(&written), "(a (b\n(c) d\ne\n");
+fn the_line_writer_starts_each_input_on_a_line_of_its_own() {
+    // the line is ended when the next input begins, not at the end of one
+    let cases: [(&[&[u8]], &str); 4] = [
+        (&[b"(a (b", b"(c) d", b"e"], "(a (b\n(c) d\ne"),
+        // an empty input writes nothing, not even a line
+        (&[b"", b"x", b"", b"", b"y", b""], "x\ny"),
+        // a comment at the end of an input is ended once
+        (&[b"x ;c", b"y ;d\n"], "x ;c\ny ;d"),
+        (&[b";c", b";d"], ";c\n;d"),
+    ];
+    for (inputs, expected) in cases {
+        let written = written_lexed(inputs, SmtVersion::V2_7, SmtWriteStyle::Line);
+        assert_eq!(String::from_utf8_lossy(&written), expected, "{inputs:?}");
+    }
 }
 
 #[test]
@@ -538,7 +545,7 @@ fn the_writers_write_each_value_handed_to_write_in_turn() {
     writer
         .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
         .expect("writing into a vector succeeds");
-    assert_eq!(writer.into_inner(), b"12 x x (f x)\n");
+    assert_eq!(writer.into_inner(), b"12 x x (f x)");
 }
 
 #[test]

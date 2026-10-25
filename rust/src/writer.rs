@@ -92,8 +92,10 @@ pub enum SmtWriteStyle {
     /// The writer can be handed tokens without their whitespace and comments;
     /// it then writes them all on one line, with no line feed at the end.
     ///
-    /// At the end of an input, the writer ends the line it is on, so that the
-    /// next input starts on a line of its own.
+    /// At the end of an input, the writer writes nothing, and starts the next
+    /// input on a new line: it writes a line feed before the next token unless
+    /// it has written nothing yet. The output thus never ends with a line feed,
+    /// and can end with a comment without its line ending.
     Line,
     /// Writes tokens in the compact form.
     ///
@@ -288,6 +290,8 @@ enum LinePosition {
     AfterToken,
     /// After a comment, written without its line ending.
     AfterComment,
+    /// After the end of an input, not at the start of a line.
+    AfterInput,
 }
 
 impl LinePosition {
@@ -306,17 +310,18 @@ impl LinePosition {
         match token {
             SmtSyntaxToken::Whitespace(_) => return Ok(false),
             SmtSyntaxToken::EndOfFile => {
+                // the line is ended only if another input follows
                 if *self != Self::Start {
-                    writer.write_all(b"\n")?;
+                    *self = Self::AfterInput;
                 }
-                *self = Self::Start;
                 return Ok(true);
             }
             _ => {}
         }
         match (*self, token) {
-            // anything after a comment would be a part of it
-            (Self::AfterComment, _) => writer.write_all(b"\n")?,
+            // anything after a comment would be a part of it,
+            // and each input starts on a line of its own
+            (Self::AfterComment | Self::AfterInput, _) => writer.write_all(b"\n")?,
             (Self::AfterToken, SmtSyntaxToken::ParenClose) => {}
             (Self::AfterToken, _) => writer.write_all(b" ")?,
             _ => {}
