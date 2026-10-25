@@ -1056,10 +1056,16 @@ fn read_request<H: CommandHandler>(
     ending(lines, request, values)
 }
 
-/// The result of a `done <result>` line, with its fields joined.
-fn done(line: &str, request: &str) -> String {
+/// The result of a `done <result> <location>` line, with its fields joined,
+/// and the location.
+fn done(line: &str, request: &str) -> (String, Location) {
     match line.strip_prefix("done ") {
-        Some(result) => result.to_string(),
+        Some(rest) => {
+            let (result, location) = rest
+                .rsplit_once(' ')
+                .unwrap_or_else(|| panic!("the Lean driver answered {request:?} with {line:?}"));
+            (result.to_string(), Fields::new(location).location())
+        }
         None if line == "none" => {
             panic!("the Lean reader reports that its parser continued on the end of the input")
         }
@@ -1144,20 +1150,20 @@ impl<'h, H: CommandHandler> Session<'h, H> {
     /// The result fields of the parser and where it finished.
     pub fn read_eof(&mut self) -> Result<(String, Location), ReadError<H::Error>> {
         let line = self.request("eof", None)?;
-        let result = done(&line, "eof");
-        let (result, location) = result
-            .rsplit_once(' ')
-            .unwrap_or_else(|| panic!("the Lean driver answered eof with {line:?}"));
-        let location = Fields::new(location).location();
-        Ok((result.to_string(), location))
+        Ok(done(&line, "eof"))
     }
 
-    pub fn read_all<R: BufRead>(&mut self, mut reader: R) -> Result<String, ReadError<H::Error>> {
+    /// The result fields of the parser and where it finished.
+    pub fn read_from<R: BufRead>(
+        &mut self,
+        mut reader: R,
+    ) -> Result<(String, Location), ReadError<H::Error>> {
         let line = self.request("all", Some(&mut reader))?;
         Ok(done(&line, "all"))
     }
 
-    pub fn read_file(&mut self, path: &Path) -> Result<String, ReadError<H::Error>> {
+    /// The result fields of the parser and where it finished.
+    pub fn read_file(&mut self, path: &Path) -> Result<(String, Location), ReadError<H::Error>> {
         let request = format!("file {}", hex(path.as_os_str().as_encoded_bytes()));
         let line = self.request(&request, None)?;
         Ok(done(&line, &request))

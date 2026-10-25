@@ -43,8 +43,8 @@ theorem readerOf_eq (version : Lexicon.Version) :
 /-- The parse adapter's lexer after the step of a call on a slice, also where it fails. -/
 def slicedP (p : PLexer) (slice : ByteSlice) : PLexer :=
   (Lexer.Internal.run p (Lexer.Internal.lexSliceStep (H := RecAdapter) (m := Id)
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice) :
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice) :
     Id _).2
 
 /-- The parse adapter's lexer after the step of a call at the end of the input, also where it
@@ -52,8 +52,8 @@ fails. -/
 def eofedP (p : PLexer) : PLexer :=
   (Lexer.Internal.run p (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
     (E := Parser.ParseError Unit)
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) : Id _).2
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast)) : Id _).2
 
 /-- The reader's call on a slice is its lexer's, and a failure carries the handler of the lexer
 that the failed step leaves. -/
@@ -65,8 +65,8 @@ theorem readSlice_ofLexer (lexer : PLexer) (slice : ByteSlice) :
           (Lexer.Internal.handler (slicedP lexer slice)).handler⟩ := by
   simp only [Reader.readSlice, Reader.Internal.ofLexer, Lexer.lexSlice, slicedP]
   generalize (Lexer.Internal.run lexer (Lexer.Internal.lexSliceStep (H := RecAdapter) (m := Id)
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice) : Id _) = r
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice) : Id _) = r
   rcases r with ⟨e | held, l⟩ <;> rfl
 
 /-- The reader's call at the end of the input is its lexer's, and a failure carries the handler
@@ -80,8 +80,8 @@ theorem readEof_ofLexer (lexer : PLexer) :
   simp only [Reader.readEof, Reader.Internal.ofLexer, Lexer.lexEof, eofedP]
   generalize (Lexer.Internal.run lexer (Lexer.Internal.lexEofStep (H := RecAdapter) (m := Id)
     (R := Unit) (E := Parser.ParseError Unit)
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) : Id _) = r
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast)) : Id _) = r
   rcases r with ⟨e | flow, l⟩ <;> rfl
 
 /-- The calls the handler of the lexer holds, in order. -/

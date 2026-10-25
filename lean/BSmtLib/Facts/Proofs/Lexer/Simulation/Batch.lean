@@ -3,6 +3,8 @@ module
 public import BSmtLib.Token.ConsumeFrom
 public import BSmtLib.Lexer
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.Helpers
 
@@ -33,9 +35,11 @@ storage: on cursors that agree it gives the same result and consumer state and c
 agree.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+
 namespace BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 
-open BSmtLib.Token.BatchCursor.Internal
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal
     (consumedEndOf consumedSpanOf discardRequested foldConsumedCategories Follows relexRequested remaining resetConsumed)
 
 /-! ## Batches -/
@@ -561,23 +565,23 @@ macro "content_agree " h:term : tactic =>
 variable {g g' g₀ g₀' : Token.BatchTag}
 
 /-- The index of the token in its batch. -/
-noncomputable def tokenIndex (t : Token g) : Nat := Token.rec (fun i _ => i) t
+noncomputable def tokenIndex (t : LexerToken g) : Nat := LexerToken.rec (fun i _ => i) t
 
 /-- The index of the first token of the cursor's hand-over. -/
-noncomputable def cFirst (c : Token.BatchCursor g) : Nat :=
-  Token.BatchCursor.rec (fun _ _ _ f _ _ _ _ _ => f) c
+noncomputable def cFirst (c : LexerCursor g) : Nat :=
+  Lexer.Cursor.LexerCursor.rec (fun _ _ _ f _ _ _ _ _ => f) c
 
 /-- The index after the last token the cursor yields. -/
-noncomputable def cStop (c : Token.BatchCursor g) : Nat :=
-  Token.BatchCursor.rec (fun _ _ _ _ s _ _ _ _ => s) c
+noncomputable def cStop (c : LexerCursor g) : Nat :=
+  Lexer.Cursor.LexerCursor.rec (fun _ _ _ _ s _ _ _ _ => s) c
 
 /-- The index of the cursor's next token. -/
-noncomputable def cNext (c : Token.BatchCursor g) : Nat :=
-  Token.BatchCursor.rec (fun _ _ _ _ _ n _ _ _ => n) c
+noncomputable def cNext (c : LexerCursor g) : Nat :=
+  Lexer.Cursor.LexerCursor.rec (fun _ _ _ _ _ n _ _ _ => n) c
 
 /-- The two cursors are the same but for their batches, which agree, and yield no token beyond
 the length of their batch. -/
-structure CursorAgree (c : Token.BatchCursor g) (d : Token.BatchCursor g') : Prop where
+structure CursorAgree (c : LexerCursor g) (d : LexerCursor g') : Prop where
   version : c.version = d.version
   batch : Agree (BSmtLib.Lexer.Internal.intoBatch c) (BSmtLib.Lexer.Internal.intoBatch d)
   first : cFirst c = cFirst d
@@ -587,24 +591,24 @@ structure CursorAgree (c : Token.BatchCursor g) (d : Token.BatchCursor g') : Pro
   discard : discardRequested c = discardRequested d
   bounded : cStop c ≤ (BSmtLib.Lexer.Internal.intoBatch c).len
 
-theorem cNext_le_cStop (c : Token.BatchCursor g) : cNext c ≤ cStop c := by
+theorem cNext_le_cStop (c : LexerCursor g) : cNext c ≤ cStop c := by
   cases c with
   | _ v b tg f s n r dc bd => exact bd.2.1
 
-theorem hasNext_iff (c : Token.BatchCursor g) : c.HasNext ↔ cNext c < cStop c := by
+theorem hasNext_iff (c : LexerCursor g) : c.HasNext ↔ cNext c < cStop c := by
   cases c
   exact Iff.rfl
 
-theorem CursorAgree.hasNext_iff {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.hasNext_iff {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d) :
     c.HasNext ↔ d.HasNext := by
   rw [Batch.hasNext_iff, Batch.hasNext_iff, h.next, h.stop]
 
-theorem cursorAgree_new (v : Token.Version) {b c : Token.Internal.TokenBatch} (h : Agree b c) :
-    CursorAgree (Token.BatchCursor.Internal.new v b) (Token.BatchCursor.Internal.new v c) :=
+theorem cursorAgree_new (v : Version) {b c : Token.Internal.TokenBatch} (h : Agree b c) :
+    CursorAgree (Lexer.Cursor.LexerCursor.Internal.new v b) (Lexer.Cursor.LexerCursor.Internal.new v c) :=
   ⟨rfl, h, rfl, h.len, rfl, rfl, rfl, Nat.le_refl _⟩
 
-theorem CursorAgree.takeNext {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.takeNext {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d)
     (hc : c.HasNext) (hd : d.HasNext) :
     tokenIndex (c.next hc).1 = tokenIndex (d.next hd).1 ∧
@@ -616,7 +620,7 @@ theorem CursorAgree.takeNext {c : Token.BatchCursor g} {d : Token.BatchCursor g'
   subst hf hs hn
   exact ⟨rfl, hv, hb, rfl, rfl, rfl, hr, hdc, hbd⟩
 
-theorem CursorAgree.resetConsumed {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.resetConsumed {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d) : CursorAgree (resetConsumed c) (resetConsumed d) := by
   cases c
   cases d
@@ -626,20 +630,20 @@ theorem CursorAgree.resetConsumed {c : Token.BatchCursor g} {d : Token.BatchCurs
   exact ⟨hv, hb, rfl, rfl, rfl, hr, hdc, hbd⟩
 
 /-- Cursors with the same tag are over the same batch. -/
-theorem intoBatch_eq (c d : Token.BatchCursor g) : BSmtLib.Lexer.Internal.intoBatch c =
+theorem intoBatch_eq (c d : LexerCursor g) : BSmtLib.Lexer.Internal.intoBatch c =
     BSmtLib.Lexer.Internal.intoBatch d :=
   Token.Internal.TokenBatch.tag_injective ((BSmtLib.Lexer.Internal.tag_intoBatch c).trans
       (BSmtLib.Lexer.Internal.tag_intoBatch d).symm)
 
-theorem version_resetConsumed (c : Token.BatchCursor g) : (resetConsumed c).version = c.version :=
+theorem version_resetConsumed (c : LexerCursor g) : (resetConsumed c).version = c.version :=
     (rfl)
 
-theorem cStop_le_of_follows {c d : Token.BatchCursor g} (h : Follows c d) : cStop c ≤ cStop d := by
+theorem cStop_le_of_follows {c d : LexerCursor g} (h : Follows c d) : cStop c ≤ cStop d := by
   cases c
   cases d
   exact h.2.1
 
-theorem cNext_lt_of_consumed {c d : Token.BatchCursor g}
+theorem cNext_lt_of_consumed {c d : LexerCursor g}
     (h : c.Consumed d) : cNext d < cNext c := by
   cases c
   cases d
@@ -647,7 +651,7 @@ theorem cNext_lt_of_consumed {c d : Token.BatchCursor g}
 
 /-- A cursor that follows one over a batch, at most to its length, yields no token beyond the
 length of the batch. -/
-theorem bounded_of_follows {c d : Token.BatchCursor g} (h : Follows c d)
+theorem bounded_of_follows {c d : LexerCursor g} (h : Follows c d)
     (hd : cStop d ≤ (BSmtLib.Lexer.Internal.intoBatch d).len) : cStop c ≤
     (BSmtLib.Lexer.Internal.intoBatch c).len := by
   rw [intoBatch_eq c d]
@@ -666,15 +670,15 @@ def spanAt (b : Token.Internal.TokenBatch) (i : Nat) : Span :=
   Span.Internal.ofNumbers b.startOffsets[i]! b.startLines[i]! b.startColumns[i]! b.endOffsets[i]!
     b.endLines[i]! b.endColumns[i]!
 
-theorem category_eq (c : Token.BatchCursor g) (t : Token g) :
+theorem category_eq (c : LexerCursor g) (t : LexerToken g) :
     c.category t = categoryAt (BSmtLib.Lexer.Internal.intoBatch c) (tokenIndex t) := by
   cases t; exact Token.Internal.TokenBatch.categoryOf_eq ..
 
-theorem content_eq (c : Token.BatchCursor g) (t : Token g) :
+theorem content_eq (c : LexerCursor g) (t : LexerToken g) :
     c.content t = contentAt (BSmtLib.Lexer.Internal.intoBatch c) (tokenIndex t) := by
   cases t; exact Token.Internal.TokenBatch.contentOf_eq ..
 
-theorem span_eq (c : Token.BatchCursor g) (t : Token g) :
+theorem span_eq (c : LexerCursor g) (t : LexerToken g) :
     c.span t = spanAt (BSmtLib.Lexer.Internal.intoBatch c) (tokenIndex t) := by
   cases t; exact Token.Internal.TokenBatch.spanOf_eq ..
 
@@ -695,33 +699,33 @@ theorem Agree.spanAt {b c : Token.Internal.TokenBatch} (h : Agree b c) {i : Nat}
     e.endOffsets, e.endLines, e.endColumns]
 
 /-- The category of a token below the length of the batches agrees. -/
-theorem CursorAgree.category {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.category {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d)
-    {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
+    {t : LexerToken g} {t' : LexerToken g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : c.category t = d.category t'
     := by
   rw [category_eq, category_eq, ← et, h.batch.categoryAt ht]
 
-theorem CursorAgree.content {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.content {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d)
-    {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
+    {t : LexerToken g} {t' : LexerToken g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) :
     (c.content t).toByteArray = (d.content t').toByteArray :=
     by
   rw [content_eq, content_eq, ← et, h.batch.contentAt ht]
 
-theorem CursorAgree.span {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
-    {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
+theorem CursorAgree.span {c : LexerCursor g} {d : LexerCursor g'} (h : CursorAgree c d)
+    {t : LexerToken g} {t' : LexerToken g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : c.span t = d.span t' := by
   rw [span_eq, span_eq, ← et, h.batch.spanAt ht]
 
 /-- The token the cursor yields next is at the index of its next token. -/
-theorem tokenIndex_next (c : Token.BatchCursor g) (hc : c.HasNext) :
+theorem tokenIndex_next (c : LexerCursor g) (hc : c.HasNext) :
     tokenIndex (c.next hc).1 = cNext c := by
   cases c; rfl
 
 /-- The token the cursor yields next is below the length of its batch. -/
-theorem tokenIndex_next_lt {c : Token.BatchCursor g} (hc : c.HasNext)
+theorem tokenIndex_next_lt {c : LexerCursor g} (hc : c.HasNext)
     (hb : cStop c ≤ (BSmtLib.Lexer.Internal.intoBatch c).len) : tokenIndex (c.next hc).1 <
     (BSmtLib.Lexer.Internal.intoBatch c).len := by
   have := (Batch.hasNext_iff c).mp hc
@@ -729,12 +733,12 @@ theorem tokenIndex_next_lt {c : Token.BatchCursor g} (hc : c.HasNext)
   omega
 
 /-- The token the cursor has next is at the index of its next token. -/
-theorem tokenIndex_peek (c : Token.BatchCursor g) (hc : c.HasNext) :
+theorem tokenIndex_peek (c : LexerCursor g) (hc : c.HasNext) :
     tokenIndex (c.peek hc) = cNext c := by
   cases c; rfl
 
 /-- The span of the token the cursors have next agrees. -/
-theorem CursorAgree.span_peek {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.span_peek {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d)
     (hc : c.HasNext) (hd : d.HasNext) : c.span (c.peek hc) = d.span (d.peek hd) := by
   have := (Batch.hasNext_iff c).mp hc
@@ -743,12 +747,12 @@ theorem CursorAgree.span_peek {c : Token.BatchCursor g} {d : Token.BatchCursor g
   rw [tokenIndex_peek]
   omega
 
-theorem consumedEndOf_eq {c c₀ : Token.BatchCursor g} (hc : c.Consumed c₀) :
+theorem consumedEndOf_eq {c c₀ : LexerCursor g} (hc : c.Consumed c₀) :
     (consumedEndOf c) hc = (spanAt (BSmtLib.Lexer.Internal.intoBatch c) (cNext c - 1)).end := by
   cases c; exact congrArg Span.«end» (Token.Internal.TokenBatch.spanOf_eq ..)
 
 /-- The end of the last token consumed agrees. -/
-theorem CursorAgree.consumedEndOf {c c₀ : Token.BatchCursor g} {d d₀ : Token.BatchCursor g'}
+theorem CursorAgree.consumedEndOf {c c₀ : LexerCursor g} {d d₀ : LexerCursor g'}
     (h : CursorAgree c d) (hc : c.Consumed c₀) (hd : d.Consumed d₀) :
     (consumedEndOf c) hc = consumedEndOf d hd := by
   have hlt := cNext_lt_of_consumed hc
@@ -757,12 +761,12 @@ theorem CursorAgree.consumedEndOf {c c₀ : Token.BatchCursor g} {d d₀ : Token
   have hi : cNext c - 1 < (BSmtLib.Lexer.Internal.intoBatch c).len := by omega
   rw [consumedEndOf_eq, consumedEndOf_eq, ← h.next, h.batch.spanAt hi]
 
-theorem consumedSpanOf_eq {c c₀ : Token.BatchCursor g} (hc : c.Consumed c₀) :
+theorem consumedSpanOf_eq {c c₀ : LexerCursor g} (hc : c.Consumed c₀) :
     (consumedSpanOf c) hc = spanAt (BSmtLib.Lexer.Internal.intoBatch c) (cNext c - 1) := by
   cases c; exact Token.Internal.TokenBatch.spanOf_eq ..
 
 /-- The span of the last token consumed agrees. -/
-theorem CursorAgree.consumedSpanOf {c c₀ : Token.BatchCursor g} {d d₀ : Token.BatchCursor g'}
+theorem CursorAgree.consumedSpanOf {c c₀ : LexerCursor g} {d d₀ : LexerCursor g'}
     (h : CursorAgree c d) (hc : c.Consumed c₀) (hd : d.Consumed d₀) :
     (consumedSpanOf c) hc = consumedSpanOf d hd := by
   have hlt := cNext_lt_of_consumed hc
@@ -779,15 +783,15 @@ theorem foldl_congr {α β : Type} {f g : β → α → β} :
     rw [h init a (List.mem_cons_self ..)]
     exact foldl_congr l _ fun b x hx => h b x (List.mem_cons_of_mem _ hx)
 
-theorem foldConsumedCategories_eq {β : Type} (c : Token.BatchCursor g) (init : β)
+theorem foldConsumedCategories_eq {β : Type} (c : LexerCursor g) (init : β)
     (f : β → Token.TokenCategory → β) : foldConsumedCategories c init f =
       (List.range (cNext c)).foldl (fun acc index => f acc
           (categoryAt (BSmtLib.Lexer.Internal.intoBatch c) index))
         init := by
-  cases c; exact Token.BatchCursor.foldConsumedCategories_eq ..
+  cases c; exact Lexer.Cursor.LexerCursor.foldConsumedCategories_eq ..
 
-theorem CursorAgree.foldConsumedCategories {β : Type} {c : Token.BatchCursor g}
-    {d : Token.BatchCursor g'}
+theorem CursorAgree.foldConsumedCategories {β : Type} {c : LexerCursor g}
+    {d : LexerCursor g'}
     (h : CursorAgree c d) (init : β) (f : β → Token.TokenCategory → β) :
     (foldConsumedCategories c) init f = foldConsumedCategories d init f := by
   have hle := cNext_le_cStop c
@@ -798,10 +802,10 @@ theorem CursorAgree.foldConsumedCategories {β : Type} {c : Token.BatchCursor g}
   have := List.mem_range.mp hi
   rw [h.batch.categoryAt (by omega)]
 
-theorem remaining_eq (c : Token.BatchCursor g) : remaining c = cStop c - cNext c := by
+theorem remaining_eq (c : LexerCursor g) : remaining c = cStop c - cNext c := by
   cases c; rfl
 
-theorem CursorAgree.remaining {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.remaining {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d) :
     (remaining c) = remaining d := by
   rw [remaining_eq, remaining_eq, h.stop, h.next]
@@ -814,8 +818,8 @@ that agree, from the same consumer state, it gives the same result and consumer 
 cursors that agree. Both runs are the projections of one computation of such pairs.
 -/
 def ConsumesAlike (H : Type) (m : Type → Type) (R E : Type) [Monad m] [Token.Consume H R E]
-    [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] : Prop :=
-  ∀ {g g' : Token.BatchTag} (c : Token.BatchCursor g) (d : Token.BatchCursor g') (hc : c.HasNext)
+    [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] : Prop :=
+  ∀ {g g' : Token.BatchTag} (c : LexerCursor g) (d : LexerCursor g') (hc : c.HasNext)
     (hd : d.HasNext), CursorAgree c d → ∀ s : H,
     ∃ y : m {z : (Except E (ControlFlow R) × {c' // c'.Consumed c}) ×
         (Except E (ControlFlow R) × {d' // d'.Consumed d}) × H //

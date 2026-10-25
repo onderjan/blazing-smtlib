@@ -21,8 +21,11 @@ Everything else is the Rust port's, and so are the lexer's type and its construc
 -/
 
 open BSmtLib.Lexer.Error
-open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested resetConsumed remaining
+    relexRequested
     EndsAfter consumedSpanOf foldConsumedCategories consumedEndOf)
+
+open BSmtLib.Lexer.Cursor (LexerCursor)
 
 namespace BSmtLib.Lexer.Internal.X1BatchInCore
 
@@ -33,14 +36,14 @@ open BSmtLib.Lexer.Recovery (FailFast Recovering)
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat}
 
 /- LEAN: Rust's `flush_cursor` loops while the cursor is not empty; here the loop is the
 recursion, which ends as every call of the consumer consumes a token, by the proof the
 consumer returns. The interruption is returned rather than thrown, so that the caller can
 take the batch back first. A stop is after the floor, as every token of the batch ends after
-it (`BatchCursor.Consumed.lt_consumedEndOf`). -/
+it (`LexerCursor.Consumed.lt_consumedEndOf`). -/
 /--
 Hands the cursor over to the consumer until nothing remains in it or the consumer stops.
 
@@ -49,9 +52,9 @@ the consumer breaks, the tokens it left in the cursor are trailing input.
 
 Returns the stop, if the consumer stopped, and the cursor as the consumer left it.
 -/
-def flushCursor {batch : Token.BatchTag} (cursor : Token.BatchCursor batch)
+def flushCursor {batch : Token.BatchTag} (cursor : LexerCursor batch)
     (hfloor : ∀ p, floor = some p → EndsAfter cursor p) :
-    WRustPort.LexM H m R E floor low (Option (Interrupted R E floor) × Token.BatchCursor batch) :=
+    WRustPort.LexM H m R E floor low (Option (Interrupted R E floor) × LexerCursor batch) :=
         do
   -- flush the cursor until nothing remains
   if h : cursor.HasNext then
@@ -91,10 +94,11 @@ def flushCursor {batch : Token.BatchTag} (cursor : Token.BatchCursor batch)
               -- zero the number of consumed tokens in the cursor
               -- continue flushing until nothing remains
               have : remaining (resetConsumed next) < remaining cursor := by
-                rw [Token.BatchCursor.remaining_resetConsumed]
+                rw [Lexer.Cursor.LexerCursor.remaining_resetConsumed]
                 exact consumed.remaining_lt
               flushCursor (resetConsumed next) fun p hp =>
-                Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
+                Lexer.Cursor.LexerCursor.endsAfter_resetConsumed
+                  (consumed.follows.endsAfter (hfloor p hp))
           | .break result =>
             if h : next.HasNext then
               -- the tokens the consumer left are trailing input
@@ -143,9 +147,9 @@ def handOver (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray)
     (hfloor : ∀ p, floor = some p → batch.EndsAfter p) : WRustPort.LexM H m R E floor low
     Token.Internal.TokenBatch := do
   let (stop, cursor) ←
-      flushCursor (Token.BatchCursor.Internal.new (← WRustPort.getCore).version batch) fun
+      flushCursor (Lexer.Cursor.LexerCursor.Internal.new (← WRustPort.getCore).version batch) fun
       p hp =>
-    Token.BatchCursor.endsAfter_new (hfloor p hp) _
+    Lexer.Cursor.LexerCursor.endsAfter_new (hfloor p hp) _
   if (← WRustPort.getCore).recovers then
     match stop with
     | some _ =>
@@ -322,14 +326,14 @@ Lexes the given slice, sending the lexed tokens to the consumer, as `WRustPort.L
 does.
 -/
 def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H
-    (Token.BatchCursor batch) m] [Recovery.Recovers recovery]
-    [Recovery.LexRecovery recovery H m]
+    (LexerCursor batch) m] [Recovery.Recovers recovery]
+    [Recovery.LexerRecovery recovery H m]
     (self : WRustPort.Lexer H recovery) (slice : ByteSlice) :
-    m (Except (LexError E × WRustPort.Lexer.AfterError H recovery)
+    m (Except (LexerError E × WRustPort.Lexer.AfterError H recovery)
       (WRustPort.Lexer H recovery)) := do
   let step := WRustPort.lexSliceStep (ops := X1BatchInCore.ops)
-      (Recovery.LexRecovery.abandon recovery)
-    (Recovery.LexRecovery.recover recovery) slice
+      (Recovery.LexerRecovery.abandon recovery)
+    (Recovery.LexerRecovery.recover recovery) slice
   let (result, self) ← self.run step
   return match result with
     | .ok held => .ok { self with held := held.or self.held }
@@ -338,14 +342,14 @@ def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H
 /--
 Lexes end-of-file, sending the lexed tokens to the consumer, as `WRustPort.Lexer.lexEof` does.
 -/
-def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch)
-    m] [Recovery.Recovers recovery] [Recovery.LexRecovery recovery H m]
+def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (LexerCursor batch)
+    m] [Recovery.Recovers recovery] [Recovery.LexerRecovery recovery H m]
     (self : WRustPort.Lexer H recovery) :
-    m (Except (LexError E × WRustPort.Lexer.AfterEofError H recovery)
+    m (Except (LexerError E × WRustPort.Lexer.AfterEofError H recovery)
       (Option (Span.Located R) × WRustPort.Lexer H recovery)) := do
   let step := WRustPort.lexEofStep (ops := X1BatchInCore.ops)
-      (Recovery.LexRecovery.abandon recovery)
-    (Recovery.LexRecovery.recover recovery)
+      (Recovery.LexerRecovery.abandon recovery)
+    (Recovery.LexerRecovery.recover recovery)
   let (result, self) ← self.run step
   return match result with
     | .ok flow => .ok (WRustPort.Lexer.eofResult self.held flow, { self with held := none })
@@ -358,22 +362,23 @@ Lexes the end of the input again, which completes the recovery, as
 `WRustPort.Lexer.PendingEof.lexEof` does.
 -/
 def PendingEof.lexEof [Monad m] [∀ batch, Token.ConsumeFrom H
-    (Token.BatchCursor batch) m] [Token.Recover H m]
+    (LexerCursor batch) m] [Lexer.Recovery.Recover H m]
     (self : WRustPort.Lexer.PendingEof H) :
-    m (Except (LexError E × WRustPort.Lexer H Recovering)
+    m (Except (LexerError E × WRustPort.Lexer H Recovering)
       (Option (Span.Located R) × WRustPort.Lexer H Recovering)) := do
-  let step := WRustPort.lexEofStep (ops := X1BatchInCore.ops) (Token.Recover.abandon (H := H))
-    (Token.Recover.recover (H := H))
+  let step := WRustPort.lexEofStep (ops := X1BatchInCore.ops)
+    (Lexer.Recovery.Recover.abandon (H := H))
+    (Lexer.Recovery.Recover.recover (H := H))
   let (result, lexer) ← self.lexer.run step
   return match result with
     | .ok flow => .ok (WRustPort.Lexer.eofResult lexer.held flow, { lexer with held := none })
     | .error err => .error (err, { lexer with held := none })
 
 /-- Lexes the whole input including EOF at the end, as `WRustPort.Lexer.lexAll` does. -/
-def lexAll [Monad m] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+def lexAll [Monad m] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
     (self : WRustPort.Lexer H)
     (input : ByteSlice) :
-    m (Except (LexError E × WRustPort.Lexer.AfterError H FailFast)
+    m (Except (LexerError E × WRustPort.Lexer.AfterError H FailFast)
       (Option (Span.Located R) × WRustPort.Lexer H)) := do
   match ← lexSlice self input with
   | .ok self => lexEof self

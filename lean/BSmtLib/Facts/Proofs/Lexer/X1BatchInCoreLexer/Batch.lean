@@ -5,6 +5,8 @@ import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.X1BatchInCore
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Span
 
 @[expose] public section
@@ -16,6 +18,8 @@ The loop of the normal state of both lexers holds the batch and appends the toke
 path (`pushFast`) and of the slow path (`pushBorrowed`) to it, and puts it back into the lexer
 state where the loop ends (`leave`, `leavePending`).
 -/
+
+open BSmtLib.Lexer.Cursor (LexerCursor)
 
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Batch
 
@@ -63,10 +67,10 @@ theorem pushLocated_congr {batch : Token.Internal.TokenBatch} {ty : Token.TokenC
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (start : Nat) (b : USize)
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem leave_sim (offset : Nat) (base position : USize) (batch : Token.Internal.TokenBatch)
     (ok : PosOk start base position) (hframe hframe' hbatch hbatch') :
     SimP (BaseIs b) (fun _ => BaseIs position) (boundMap start (floor := floor) (low := low)) id
@@ -78,7 +82,7 @@ theorem leave_sim (offset : Nat) (base position : USize) (batch : Token.Internal
   refine modifyBound_sim start _ _ (fun c _ => ?_) fun _ _ => rfl
   simp only [coreMap, ok.sub]
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem leavePending_sim (state : Lexer.Internal.Helpers.LexerState) (s : Span.Location)
     (offset : Nat)
     (base position : USize) (batch : Token.Internal.TokenBatch) (ok : PosOk start base position)
@@ -184,7 +188,7 @@ theorem pushBorrowed_sim (slice : ByteSlice) (batch : Token.Internal.TokenBatch)
     dsimp only [heldMap]
     exact pushLocated_congr (start_add_ix hcs).symm (start_add_ix hce).symm el
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- `leave`, with the indices of the second lexer given by equations. -/
 theorem leave_sim' (offset : Nat) (base position : USize) (batch : Token.Internal.TokenBatch)
     (base' position' : Nat) (eb : ix start base = base') (ep : ix start position = position')
@@ -196,7 +200,7 @@ theorem leave_sim' (offset : Nat) (base position : USize) (batch : Token.Interna
   subst eb ep
   exact leave_sim start b offset base position batch ok _ _ _ _
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- `leavePending`, with the indices of the second lexer given by equations. -/
 theorem leavePending_sim' (state : Lexer.Internal.Helpers.LexerState) (s : Span.Location)
     (offset : Nat)
@@ -254,7 +258,7 @@ theorem pushFast_sim' (slice : ByteSlice) (batch : Token.Internal.TokenBatch) (u
   exact pushFast_sim b slice batch u offset base ty cs ce s e emit _ _ hcs hce oks oke
     _ _ _ _ _ _ _ _
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem storeUnfinishedSymbolRun_sim (slice : ByteSlice) (h : slice.stop < USize.size)
     (entry : UInt8) (offset : Nat) (base index after runEndAt : USize)
     (batch : Token.Internal.TokenBatch)

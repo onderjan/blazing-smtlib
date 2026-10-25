@@ -2,6 +2,8 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.VHold
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -30,7 +32,7 @@ open BSmtLib.Facts.Proofs.Lexer.VNaive.Streaming BSmtLib.Lexer.Internal.VNaive
 /-- Whether no lexeme of the list is the end of file. -/
 def NoEof (ls : List Lexeme) : Prop := ∀ l ∈ ls, (l.category == .endOfFile) = false
 
-theorem byteStepW_noEof {version : Token.Version} {ws : Bool} {st st' : St}
+theorem byteStepW_noEof {version : Version} {ws : Bool} {st st' : St}
     {location : Span.Location}
     {c : UInt8} {ls : List Lexeme} (h : byteStepW version ws st location c = some (st', ls)) :
     NoEof ls := by
@@ -80,7 +82,7 @@ theorem lexemesOf_withBefore (ls : List Lexeme)
   | ok x => obtain ⟨_, _, _⟩ := x; rfl
   | error _ => rfl
 
-theorem lexBytesW_noEof (version : Token.Version) (ws : Bool) (bytes : List UInt8) :
+theorem lexBytesW_noEof (version : Version) (ws : Bool) (bytes : List UInt8) :
     ∀ (st : St) (location : Span.Location),
       NoEof (lexemesOf (lexBytesW version ws st location bytes)) := by
   induction bytes with
@@ -99,7 +101,7 @@ theorem lexBytesW_noEof (version : Token.Version) (ws : Bool) (bytes : List UInt
       · exact byteStepW_noEof hb l hl
       · exact ih st' (location.afterByte c) l hl
 
-theorem lexemeHanded_some {version : Token.Version} {l : Lexeme} {hd : Handed}
+theorem lexemeHanded_some {version : Version} {l : Lexeme} {hd : Handed}
     (h : lexemeHanded version l = some hd) :
     hd.start = toLocation l.start ∧ hd.end = toLocation l.end ∧
       (hd.type = .endOfFile ↔ (l.category == .endOfFile) = true) := by
@@ -114,7 +116,7 @@ theorem lexemeHanded_some {version : Token.Version} {l : Lexeme} {hd : Handed}
       (try cases ht) <;> (try subst ht) <;>
       (dsimp only; decide)
 
-theorem lexemeHanded_of_taken {version : Token.Version} {l : Lexeme} (h : (Taken l)) :
+theorem lexemeHanded_of_taken {version : Version} {l : Lexeme} (h : (Taken l)) :
     ∃ hd, lexemeHanded version l = some hd := by
   unfold Lexeme.Taken at h
   unfold lexemeHanded
@@ -122,7 +124,7 @@ theorem lexemeHanded_of_taken {version : Token.Version} {l : Lexeme} (h : (Taken
   | none => rw [ht] at h; cases h
   | some t => exact ⟨_, rfl⟩
 
-theorem lexemeHanded_none_of_not_taken {version : Token.Version} {l : Lexeme} (h : ¬ (Taken l)) :
+theorem lexemeHanded_none_of_not_taken {version : Version} {l : Lexeme} (h : ¬ (Taken l)) :
     lexemeHanded version l = none := by
   unfold Lexeme.Taken at h
   unfold lexemeHanded
@@ -131,10 +133,10 @@ theorem lexemeHanded_none_of_not_taken {version : Token.Version} {l : Lexeme} (h
   | some t => rw [ht] at h; exact absurd rfl h
 
 /-- The entries of the lexemes, as the consumer is handed them. -/
-def entriesOf (concrete : Bool) (version : Token.Version) (ls : List Lexeme) : List Handed :=
+def entriesOf (concrete : Bool) (version : Version) (ls : List Lexeme) : List Handed :=
   ls.filterMap (lexemeEntry concrete version)
 
-theorem entriesOf_false (version : Token.Version) (ls : List Lexeme) :
+theorem entriesOf_false (version : Version) (ls : List Lexeme) :
     entriesOf false version ls = handedOf version ls := by
   unfold entriesOf handedOf
   congr 1
@@ -142,17 +144,17 @@ theorem entriesOf_false (version : Token.Version) (ls : List Lexeme) :
   unfold lexemeEntry
   cases lexemeHanded version l <;> rfl
 
-theorem lexemeEntry_of_handed {concrete : Bool} {version : Token.Version} {l : Lexeme} {hd : Handed}
+theorem lexemeEntry_of_handed {concrete : Bool} {version : Version} {l : Lexeme} {hd : Handed}
     (h : lexemeHanded version l = some hd) : lexemeEntry concrete version l = some hd := by
   simp [lexemeEntry, h]
 
-theorem lexemeEntry_of_not_taken {version : Token.Version} {l : Lexeme} (h : ¬ (Taken l)) :
+theorem lexemeEntry_of_not_taken {version : Version} {l : Lexeme} (h : ¬ (Taken l)) :
     lexemeEntry true version l = some (lexemeLayout l) := by
   simp [lexemeEntry, lexemeHanded_none_of_not_taken h]
 
 /-- After a lexeme other than the end of file, the run from a boundary goes on as the run from
 the boundary at the end of the lexeme, which is after the boundary. -/
-theorem stream_restart {version : Token.Version} {ws : Bool} {input : List UInt8} {ended : Bool}
+theorem stream_restart {version : Version} {ws : Bool} {input : List UInt8} {ended : Bool}
     {o : Nat} {l : Lexeme} {rest : List Lexeme}
     (h : (stream version ws input ended o).1 = l :: rest) (hl : l.category ≠ .endOfFile)
     (ho : o ≤ input.length) :
@@ -191,7 +193,7 @@ theorem stream_restart {version : Token.Version} {ws : Bool} {input : List UInt8
   · omega
 
 /-- The end of file is the last lexeme of the run from a boundary, at the end of the input. -/
-theorem stream_eof_head {version : Token.Version} {ws : Bool} {input : List UInt8} {ended : Bool}
+theorem stream_eof_head {version : Version} {ws : Bool} {input : List UInt8} {ended : Bool}
     {o : Nat} {l : Lexeme} {rest : List Lexeme}
     (h : (stream version ws input ended o).1 = l :: rest)
     (hl : (l.category == .endOfFile) = true) :
@@ -261,7 +263,7 @@ theorem stream_eof_head {version : Token.Version} {ws : Bool} {input : List UInt
 
 /-- For a consumer that takes whitespace and comments, the entries ready from a boundary are the
 lexemes of the run from it. -/
-theorem ready_stream_true (version : Token.Version) (input : List UInt8) (ended : Bool) :
+theorem ready_stream_true (version : Version) (input : List UInt8) (ended : Bool) :
     ∀ n o, input.length - o < n → o ≤ input.length →
       (BSmtLibSpec.Lexer.withLayout true input ended o
           (BSmtLibSpec.Lexer.segment fedRun (fromVersion version) input ended o)).handed =
@@ -327,7 +329,7 @@ theorem ready_stream_true (version : Token.Version) (input : List UInt8) (ended 
 
 /-- The entries ready from a boundary are the lexemes of the run from it, as the consumer is
 handed them. -/
-theorem ready_stream (concrete : Bool) (version : Token.Version) (input : List UInt8) (ended : Bool)
+theorem ready_stream (concrete : Bool) (version : Version) (input : List UInt8) (ended : Bool)
     (o : Nat) (ho : o ≤ input.length) :
     BSmtLibSpec.Lexer.readyFrom fedRun concrete (fromVersion version) input ended o =
       { handed := entriesOf concrete version (stream version concrete input ended o).1

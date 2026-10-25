@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Proofs.Reader.Param.Relate
 import all BSmtLib.Lexer
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Facts.Proofs.Reader.Param.Stop
 
 @[expose] public section
@@ -20,14 +22,16 @@ related and the adapter stands where the driver over items standing for the toke
 the lexer's steps on the two are related (`link_consumers`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Handler.Relate
 
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState)
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
@@ -46,8 +50,8 @@ variable {H : Type} [CommandHandler H Id]
 
 /-! ## The adapter's call is its loop -/
 
-theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
-    ∀ (n : Nat) (parser : ScriptParser H) (cursor : Token.BatchCursor b)
+theorem rest_eq {b : Token.BatchTag} (origin : LexerCursor b) :
+    ∀ (n : Nat) (parser : ScriptParser H) (cursor : LexerCursor b)
       (consumed : Token.Cursor.Consumed cursor origin) (handler : H), remaining cursor < n →
       let r := (Stop.rest (m := Id) origin parser cursor consumed).run handler
       ((r.1.1, r.1.2.1, r.1.2.2.val), r.2) = (loop parser cursor).run handler
@@ -65,14 +69,14 @@ theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
       cases after with
       | goOn parser' =>
         exact rest_eq origin n parser' later _ handler'
-          (Nat.lt_of_lt_of_le (Token.BatchCursor.Consumed.remaining_lt taken)
+          (Nat.lt_of_lt_of_le (Lexer.Cursor.LexerCursor.Consumed.remaining_lt taken)
               (Nat.le_of_lt_succ hn))
       | stop answer parser' => rfl
     · rw [Parser.Blank.Loop.next?_not cursor h, dite_eq_right_of_eq_false (eq_false h)]
       rfl
 
 theorem told_eq {b : Token.BatchTag} (adapter : ParseAdapter H (ScriptParser H))
-    (cursor : Token.BatchCursor b) : Stop.told adapter cursor = toldAt adapter cursor.version := by
+    (cursor : LexerCursor b) : Stop.told adapter cursor = toldAt adapter cursor.version := by
   unfold Stop.told toldAt
   cases ParseAdapter.Internal.versionSet adapter <;> rfl
 
@@ -82,7 +86,7 @@ attribute [local instance high] Param.Stop.consumeFrom
 
 /-- A call of the reader proofs' adapter is its loop over the cursor, from its parser and its
 handler told the cursor's version unless it was told the version already. -/
-theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext)
+theorem consume_eq {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext)
     (adapter : ParseAdapter H (ScriptParser H)) :
     let q := (Token.ConsumeFrom.consume (m := Id) cursor h :
       StateT (ParseAdapter H (ScriptParser H)) Id _).run adapter
@@ -109,7 +113,7 @@ theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : curs
     have := rest_eq cursor (remaining later + 1) parser' later taken handler' (Nat.lt_succ_self _)
     simp only at this
     exact congrArg (fun x : (Except (ParseError (Handler.Error H)) (ControlFlow Unit) ×
-      ScriptParser H × Token.BatchCursor b) × H =>
+      ScriptParser H × LexerCursor b) × H =>
         (x.1.1, x.1.2.2, (ParseAdapter.Internal.mk x.2 x.1.2.1
           (ParseAdapter.Internal.versionSetAfter x.1.1) (ParseAdapter.Internal.parseState adapter) :
             ParseAdapter H (ScriptParser H)))) this

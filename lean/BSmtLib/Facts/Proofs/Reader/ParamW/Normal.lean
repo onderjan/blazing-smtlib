@@ -13,6 +13,8 @@ for its loop `lexNormalFrom`. The recursive functions are related by recursion o
 recurse on.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.ParamW.Normal
 
 open BSmtLib.Lexer
@@ -26,8 +28,8 @@ section
 
 variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂] {R₁ R₂ E₁ E₂ : Type}
   [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, Token.ConsumeFrom H₁
-      (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+      (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂]
   {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂} {floor : Option Nat} {low : Nat}
 
 theorem loadLocals_sim :
@@ -107,8 +109,8 @@ theorem finishWhitespace_sim (hc : ConsumersW L) (tokenEnd start base h) :
   unfold finishWhitespace; lsimW
 
 omit [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂]
-  [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂] in
+  [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂] in
 theorem leave_sim (offset base position batch hframe hbatch) :
     LSim L (· = ·)
       (leave (H := H₁) (m := m₁) (R := R₁) (E := E₁) (floor := floor) (low := low)
@@ -118,8 +120,8 @@ theorem leave_sim (offset base position batch hframe hbatch) :
   unfold leave; lsimW
 
 omit [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂]
-  [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂] in
+  [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂] in
 theorem leavePending_sim (state start offset base position batch hframe hbatch hstart hfloor) :
     LSim L (· = ·)
       (leavePending (H := H₁) (m := m₁) (R := R₁) (E := E₁) (floor := floor) (low := low)
@@ -140,8 +142,8 @@ theorem pushBorrowed_sim (hc : ConsumersW L)
   unfold pushBorrowed; lsimW
 
 omit [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂]
-  [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂] in
+  [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂] in
 theorem storeUnfinishedSymbolRun_sim
     (input entry offset base index after runEndAt batch hframe hindex hrun hbatch) :
     LSim L (· = ·)

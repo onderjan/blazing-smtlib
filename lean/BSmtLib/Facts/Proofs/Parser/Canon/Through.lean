@@ -16,6 +16,8 @@ the parse adapter and the lexer with the canonical adapter from states whose can
 agree (`lexThrough_link`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Through
 
 open BSmtLib.Lexer BSmtLib.Lexer.Error
@@ -27,7 +29,7 @@ open BSmtLib.Facts.Proofs.Reader.Param.Basic (ERel)
 
 section
 
-variable {H R E : Type} [Token.Consume H R E] [∀ b, Token.ConsumeFrom H (Token.BatchCursor b) Id]
+variable {H R E : Type} [Token.Consume H R E] [∀ b, Token.ConsumeFrom H (LexerCursor b) Id]
 
 /-- The result to return at the end of the input: the one held, else the one the consumer broke
 with. -/
@@ -40,7 +42,7 @@ def eofResultT (held : Option (Span.Located R)) (flow : ControlFlow (Span.Locate
 
 /-- The lexer fed the slices by the step of its call on a slice: the lexer after the last, or the
 first error. -/
-def lexFeed : BSmtLib.Lexer H → List ByteList → Except (LexError E) (BSmtLib.Lexer H)
+def lexFeed : BSmtLib.Lexer H → List ByteList → Except (LexerError E) (BSmtLib.Lexer H)
   | l, [] => .ok l
   | l, slice :: slices =>
     match Internal.run l (Internal.lexSliceStep (R := R) (E := E) abandonI recoverI
@@ -51,7 +53,7 @@ def lexFeed : BSmtLib.Lexer H → List ByteList → Except (LexError E) (BSmtLib
 /-- The lexer fed the slices and then the end of the input: the result, the lexer before the end
 of the input and after it, or the first error. -/
 def lexThrough (l : BSmtLib.Lexer H) (slices : List ByteList) :
-    Except (LexError E) (Option (Span.Located R) × BSmtLib.Lexer H × BSmtLib.Lexer H) :=
+    Except (LexerError E) (Option (Span.Located R) × BSmtLib.Lexer H × BSmtLib.Lexer H) :=
   match lexFeed l slices with
   | .error e => .error e
   | .ok before =>
@@ -63,8 +65,8 @@ def lexThrough (l : BSmtLib.Lexer H) (slices : List ByteList) :
 /-- Two reads through to the end that end alike: the same error, or the same result with lexers
 related before and after the end of the input. -/
 def ThroughRel (Rel : BSmtLib.Lexer H → BSmtLib.Lexer H → Prop) :
-    Except (LexError E) (Option (Span.Located R) × BSmtLib.Lexer H × BSmtLib.Lexer H) →
-      Except (LexError E) (Option (Span.Located R) × BSmtLib.Lexer H × BSmtLib.Lexer H) → Prop
+    Except (LexerError E) (Option (Span.Located R) × BSmtLib.Lexer H × BSmtLib.Lexer H) →
+      Except (LexerError E) (Option (Span.Located R) × BSmtLib.Lexer H × BSmtLib.Lexer H) → Prop
   | .error e, .error e' => e = e'
   | .ok (r, b, a), .ok (r', b', a') => r = r' ∧ Rel b b' ∧ Rel a a'
   | _, _ => False
@@ -144,7 +146,7 @@ theorem run_eq {H : Type} {R E α : Type} [Token.Consume H R E] (l : BSmtLib.Lex
         Internal.ofParts ((x.run (Internal.core l)).run (Internal.handler l)).2
           ((x.run (Internal.core l)).run (Internal.handler l)).1.2 (Internal.held l)) := (rfl)
 
-theorem lexErrRel_eq {e₁ e₂ : LexError (ParseError Unit)} (h : LexErrRel link.re e₁ e₂) :
+theorem lexErrRel_eq {e₁ e₂ : LexerError (ParseError Unit)} (h : LexErrRel link.re e₁ e₂) :
     e₁ = e₂ := by
   obtain ⟨c₁, s₁, f₁⟩ := e₁
   obtain ⟨c₂, s₂, f₂⟩ := e₂
@@ -211,9 +213,9 @@ theorem lexFeed_link : ∀ (slices : List ByteList) {l₁ : BSmtLib.Lexer RecAda
 /-- A read with the parse adapter and one with the canonical adapter that end alike: the same
 error, or the same result with lexers related before and after the end of the input. -/
 def ThroughLink :
-    Except (LexError (ParseError Unit))
+    Except (LexerError (ParseError Unit))
         (Option (Span.Located Unit) × BSmtLib.Lexer RecAdapter × BSmtLib.Lexer RecAdapter) →
-      Except (LexError (ParseError Unit))
+      Except (LexerError (ParseError Unit))
         (Option (Span.Located Unit) × BSmtLib.Lexer CanonAdapter ×
           BSmtLib.Lexer CanonAdapter) → Prop
   | .error e, .error e' => e = e'

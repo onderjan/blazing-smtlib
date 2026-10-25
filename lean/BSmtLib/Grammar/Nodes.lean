@@ -1,8 +1,8 @@
 module
 
-public import BSmtLib.Plain
+public import BSmtLib.Lexicon.Value
 public import BSmtLib.Token.Reserved
-public import BSmtLib.Multiple
+public import BSmtLib.Grammar.Multiple
 public import BSmtLib.Token.AppendTokens
 
 public section
@@ -19,9 +19,9 @@ already handled, and the parts of commands.
 (`SmtSymbolBuf`). Lean has no borrows: a view is a byte slice, which keeps the storage it
 points into alive for as long as the view lives. -/
 
-namespace BSmtLib.Nodes
+namespace BSmtLib.Grammar.Nodes
 
-open BSmtLib.Plain (SymbolBuf Symbol NumeralBuf Numeral DecimalBuf Decimal HexDigitsBuf
+open BSmtLib.Lexicon.Value (SymbolBuf Symbol NumeralBuf Numeral DecimalBuf Decimal HexDigitsBuf
   HexDigits BinDigitsBuf BinDigits StringContentBuf StringContent Keyword)
 
 inductive IndexBuf where
@@ -77,7 +77,7 @@ def get? (self : IndicesBuf) (index : Nat) : Option Index := self.entries[index]
 
 @[no_expose] instance : Inhabited IndicesBuf := ⟨new⟩
 
-/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Multiple`. -/
+/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Grammar.Multiple`. -/
 @[no_expose] instance {m : Type → Type} [Monad m] : ForIn m IndicesBuf Index where
   forIn self init f := ForIn.forIn self.entries init f
 
@@ -256,7 +256,7 @@ theorem Internal.len_ofViews (patterns : Array SimplePattern) :
 
 @[no_expose] instance : Inhabited SimplePatternsBuf := ⟨new⟩
 
-/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Multiple`. -/
+/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Grammar.Multiple`. -/
 @[no_expose] instance {m : Type → Type} [Monad m] : ForIn m SimplePatternsBuf SimplePattern where
   forIn self init f := ForIn.forIn self.entries init f
 
@@ -372,14 +372,6 @@ inductive QuantifierKind where
   | «forall»
   deriving BEq, Hashable, Repr
 
-/-- Sorts to be handled. -/
-/- LEAN: parameterised by the handled sorts, where Rust's is by the handler. -/
-abbrev Sorts (HandledSort : Type) := Multiple HandledSort
-
-/-- Terms to be handled. -/
-/- LEAN: parameterised by the handled terms, where Rust's is by the handler. -/
-abbrev Terms (HandledTerm : Type) := Multiple HandledTerm
-
 /-- A term to be handled. -/
 /- LEAN: Rust's variants hold the structures `SmtQualifiedIdent { ident, sort }` and
 `SmtApplication { function, args }`; here their fields are the constructors' own, as Lean does
@@ -395,7 +387,7 @@ inductive Term (HandledSort HandledTerm : Type) where
 
   It is guaranteed that `args` are nonempty.
   -/
-  | application (function : Ident) (sort : Option HandledSort) (args : Terms HandledTerm)
+  | application (function : Ident) (sort : Option HandledSort) (args : Multiple HandledTerm)
       (nonempty : 0 < args.len)
   deriving Repr
 
@@ -403,17 +395,9 @@ inductive Term (HandledSort HandledTerm : Type) where
 holds; here the term, as the application is handed over flat. -/
 /-- The term that applies the function to the arguments; an error if there are none. -/
 def Term.newApplication {HandledSort HandledTerm : Type} (function : Ident)
-    (sort : Option HandledSort) (args : Terms HandledTerm) :
+    (sort : Option HandledSort) (args : Multiple HandledTerm) :
     Except EmptyArgumentsError (Term HandledSort HandledTerm) :=
   if h : 0 < args.len then .ok (.application function sort args h) else .error {}
-
-/-- S-expressions to be handled. -/
-/- LEAN: parameterised by the handled s-expressions, where Rust's is by the handler. -/
-abbrev SExprs (HandledSExpr : Type) := Multiple HandledSExpr
-
-/-- Attributes to be handled. -/
-/- LEAN: parameterised by the handled attributes, where Rust's is by the handler. -/
-abbrev Attributes (HandledAttribute : Type) := Multiple HandledAttribute
 
 /-- An s-expression as the handler receives it, its items already handled. -/
 inductive SExpr (HandledSExpr : Type) where
@@ -421,7 +405,7 @@ inductive SExpr (HandledSExpr : Type) where
   | symbol (symbol : Symbol)
   | reserved (word : Token.Reserved)
   | keyword (name : Keyword)
-  | sExprs (items : SExprs HandledSExpr)
+  | sExprs (items : Multiple HandledSExpr)
   deriving Repr
 
 /--
@@ -431,14 +415,15 @@ handled. A list value is handed over as its items.
 inductive AttributeValue (HandledSExpr : Type) where
   | specialConstant (constant : SpecialConstant)
   | symbol (symbol : Symbol)
-  | sExprs (items : SExprs HandledSExpr)
+  | sExprs (items : Multiple HandledSExpr)
   deriving Repr
 
 /-! ## Tokens of the nodes -/
 
 section AppendTokens
 
-open BSmtLib.Token (AppendTokens SyntaxToken TokensCursor)
+open BSmtLib.Token (AppendTokens TokensCursor)
+open BSmtLib (Token)
 
 private def appendIndex (index : Index) (tokens : TokensCursor) : TokensCursor :=
   tokens.push (match index with
@@ -578,4 +563,4 @@ append_tokens_by_view Pattern PatternBuf appendPattern
 
 end AppendTokens
 
-end BSmtLib.Nodes
+end BSmtLib.Grammar.Nodes

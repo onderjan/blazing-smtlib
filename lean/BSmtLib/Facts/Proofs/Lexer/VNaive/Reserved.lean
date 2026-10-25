@@ -48,7 +48,7 @@ def slotOf (s : ByteSlice) : Nat :=
   if h : 0 < s.size then (Token.Reserved.Internal.reservedSlot s h).val else 0
 
 /-- The lookup reads the table at the slot of a slice with a byte. -/
-theorem fromBytes_eq (s : ByteSlice) (v : Token.Version) (h : s.size ≠ 0) :
+theorem fromBytes_eq (s : ByteSlice) (v : Version) (h : s.size ≠ 0) :
     Token.Reserved.fromBytes? s v =
       (let e := Token.Reserved.Internal.reservedTable[slotOf s]!
        if e.1.toByteSlice == s && v ≥ e.2.2 then some e.2.1 else none) := by

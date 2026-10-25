@@ -27,7 +27,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Blank.Steps
 open Basic States Simp Tactic
 open BSmtLib.Parser.Internal (PM)
 
-open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Attribute.Internal
 open BSmtLib.Parser.Category.Combinator.Internal
@@ -70,7 +70,7 @@ theorem expectString_blank {token : Internal.Input} :
     BSim (expectString (H := H) token) (expectString (H := Shell) token) := by
   unfold expectString; blank_step []
 
-theorem IdentState_step_blank {version : Token.Version} {state : IdentState}
+theorem IdentState_step_blank {version : Version} {state : IdentState}
     {token : Internal.Input} :
     BSim (IdentState.step (H := H) version state token)
       (IdentState.step (H := Shell) version state token) := by
@@ -84,7 +84,7 @@ theorem sortComplete_blank [NoFails H] {levels : List (SortLevel (Handler.«Sort
       (sortComplete (H := Shell) levels' head arguments') := by
   subst hl ha; unfold sortComplete; blank_step []
 
-theorem sortStep_blank [NoFails H] {version : Token.Version} {state : SortState (Handler.«Sort» H)}
+theorem sortStep_blank [NoFails H] {version : Version} {state : SortState (Handler.«Sort» H)}
     {token : Internal.Input} {state' : SortState Unit} (hs : state' = blank state) :
     BSim (sortStep (H := H) version state token) (sortStep (H := Shell) version state' token) := by
   subst hs; unfold sortStep; blank_step []
@@ -95,7 +95,7 @@ theorem sortStep_blank [NoFails H] {version : Token.Version} {state : SortState 
       sExprComplete (blank levels) (blank x) := by
   cases levels <;> simp [sExprComplete, blankStep, Blanks.blank]
 
-theorem sExprStep_blank [NoFails H] {version : Token.Version}
+theorem sExprStep_blank [NoFails H] {version : Version}
     {state : SExprState (Handler.SExpr H)} {token : Internal.Input} {state' : SExprState Unit}
     (hs : state' = blank state) :
     BSim (sExprStep (H := H) version state token)
@@ -103,7 +103,7 @@ theorem sExprStep_blank [NoFails H] {version : Token.Version}
   subst hs; unfold sExprStep; blank_step []
 
 set_option maxHeartbeats 4000000 in
-theorem attributeStep_blank [NoFails H] {single : Bool} {version : Token.Version}
+theorem attributeStep_blank [NoFails H] {single : Bool} {version : Version}
     {state : AttributeState (Handler.SExpr H) (Handler.Attribute H)} {token : Internal.Input}
     {state' : AttributeState Unit Unit} (hs : state' = blank state) :
     BSim (attributeStep (H := H) single version state token)
@@ -111,20 +111,20 @@ theorem attributeStep_blank [NoFails H] {single : Bool} {version : Token.Version
   subst hs; unfold attributeStep; blank_step []
 
 set_option maxHeartbeats 4000000 in
-theorem PatternState_step_blank {version : Token.Version} {state : PatternState}
+theorem PatternState_step_blank {version : Version} {state : PatternState}
     {token : Internal.Input} :
     BSim (PatternState.step (H := H) version state token)
       (PatternState.step (H := Shell) version state token) := by
   unfold PatternState.step; blank_step []
 
-theorem qualIdentStep_blank [NoFails H] {version : Token.Version}
+theorem qualIdentStep_blank [NoFails H] {version : Version}
     {state : QualIdentState (Handler.«Sort» H)} {token : Internal.Input}
     {state' : QualIdentState Unit} (hs : state' = blank state) :
     BSim (qualIdentStep (H := H) version state token)
       (qualIdentStep (H := Shell) version state' token) := by
   subst hs; unfold qualIdentStep; blank_step []
 
-theorem sortedVarStep_blank [NoFails H] {version : Token.Version}
+theorem sortedVarStep_blank [NoFails H] {version : Version}
     {state : SortedVarState (Handler.«Sort» H)} {token : Internal.Input}
     {state' : SortedVarState Unit} (hs : state' = blank state) :
     BSim (sortedVarStep (H := H) version state token)
@@ -153,8 +153,8 @@ theorem termComplete_blank [NoFails H] {levels : List (TermLevelOf H)} {term : H
   subst hl; unfold termComplete; blank_step []
 
 theorem startBinder_blank [NoFails H] {binder : SortedBinder}
-    {variables : Array (Plain.Symbol × Handler.«Sort» H)}
-    {variables' : Array (Plain.Symbol × Unit)}
+    {variables : Array (Lexicon.Value.Symbol × Handler.«Sort» H)}
+    {variables' : Array (Lexicon.Value.Symbol × Unit)}
     (hv : variables' = blank variables) :
     BSim (startBinder (H := H) binder variables) (startBinder (H := Shell) binder variables') := by
   subst hv; unfold startBinder; blank_step []
@@ -170,7 +170,7 @@ theorem termOpened_blank {state : TermStateOf H} {token : Internal.Input}
   subst hs; unfold termOpened; blank_step []
 
 set_option maxHeartbeats 8000000 in
-theorem termStep_blank [NoFails H] {version : Token.Version} {state : TermStateOf H}
+theorem termStep_blank [NoFails H] {version : Version} {state : TermStateOf H}
     {token : Internal.Input} {state' : TermStateOf Shell} (hs : state' = blank state) :
     BSim (termStep (H := H) version state token) (termStep (H := Shell) version state' token) := by
   subst hs; unfold termStep; blank_step [sortedVarStep_blank]

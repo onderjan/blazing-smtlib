@@ -36,9 +36,9 @@ open BSmtLibSpec.Facts.Proofs.Parser.Equations (term_identifier term_application
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 theorem asTerm_valid (literal : Tree.PropLiteral) (v : BSmtLibSpec.Lexicon.Version) :
     literal.asTerm.Valid v := by
@@ -69,7 +69,7 @@ theorem literal_element (hA : TermAgrees h) :
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine ⟨⟨_, [], rfl, by simp⟩, do
         tick points (.symbol symbol)
-        Parser.Internal.call (Traits.Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none)), ?_,
+        Parser.Internal.call (Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none)), ?_,
       Runs.token (by simp [literalStep, LiteralState.init, TermState.init, termStep,
         Parser.Category.Term.Internal.termComplete])⟩
     simp [Tree.PropLiteral.asTerm, term_identifier, qualIdentifier, takeAll,
@@ -82,17 +82,17 @@ theorem literal_element (hA : TermAgrees h) :
     obtain ⟨notSymbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hnegationToken
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hnameToken
     have hnot := Symbol.isNot_of_name hvalid
-    let function : Nodes.Ident := ⟨notSymbol, #[]⟩
+    let function : Grammar.Nodes.Ident := ⟨notSymbol, #[]⟩
     refine ⟨⟨_, _, rfl, by simp⟩, do
         tick points .parenOpen
         tick points (.symbol notSymbol)
         tick points (.symbol symbol)
         let t ← Parser.Internal.call
-          (Traits.Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none))
+          (Handler.handleTerm (.qualifiedIdent ⟨symbol, #[]⟩ none))
         tick points .parenClose
         Parser.Internal.call
-          (Traits.Handler.handleTerm (.application function none (.new #[t])
-            (Multiple.len_pos_new (by simp)))), ?_, ?_⟩
+          (Handler.handleTerm (.application function none (.new #[t])
+            (Grammar.Multiple.len_pos_new (by simp)))), ?_, ?_⟩
     · simp [Tree.PropLiteral.asTerm, term_application, term_identifier, qualIdentifier, takeAll,
         Traversal.terms, Tree.Identifier.tokens, adaptRun_take hnameToken,
         adaptRun_take hnegationToken, adaptRun_take (token := .parenOpen) rfl,
@@ -113,11 +113,11 @@ theorem literal_element (hA : TermAgrees h) :
       fun _ => Runs.append (middle := fun t =>
         (⟨.close, ⟨.start, [TermLevel.application function none #[t]]⟩⟩ :
           Parser.Command.Internal.Standard.LiteralStateOf H))
-      (Runs.token (program := Parser.Internal.call (Traits.Handler.handleTerm
+      (Runs.token (program := Parser.Internal.call (Handler.handleTerm
         (.qualifiedIdent ⟨symbol, #[]⟩ none)))
         (by simp [literalStep, termStep, Parser.Category.Term.Internal.termComplete]))
-      fun t => Runs.token (program := Parser.Internal.call (Traits.Handler.handleTerm
-        (.application function none (.new #[t]) (Multiple.len_pos_new (by simp)))))
+      fun t => Runs.token (program := Parser.Internal.call (Handler.handleTerm
+        (.application function none (.new #[t]) (Grammar.Multiple.len_pos_new (by simp)))))
         (by simp [literalStep, termStep, Parser.Category.Term.Internal.termComplete])).congr ?_ rfl
     simp
 
@@ -125,9 +125,9 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 theorem checkSatAssumingLiterals_payload (hA : Agrees h) (literals : List Tree.PropLiteral)
     (hversion : ¬ versionAtLeast (Bridge.version version) .v2_7)

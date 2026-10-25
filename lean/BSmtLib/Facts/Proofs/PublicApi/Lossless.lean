@@ -38,8 +38,8 @@ open BSmtLib.Facts.Proofs.Lexer
 /-- The naive lexer with the concrete collector, fed the bytes as one slice and then the end of
 the input, fails with the span of the pure run's failure: at a byte, or where finishing the token
 in progress at the end fails. -/
-theorem single_error (version : Token.Version) (bs : List UInt8)
-    (e : LexError (Option concreteCollector.Error))
+theorem single_error (version : Version) (bs : List UInt8)
+    (e : LexerError (Option concreteCollector.Error))
     (he : ((runInputE VOps (VOps.new concreteCollector {} version) true [bs]).run []).1.1 =
       .error e) :
     match lexBytesF version true .idle Span.Location.initial bs with
@@ -88,7 +88,7 @@ theorem single_error (version : Token.Version) (bs : List UInt8)
 
 /-- The collector's run on slices hands over entries that tile the input, ending at its end; or,
 where it fails, entries that tile it from its start up to at most where the error starts. -/
-theorem lossless (version : Token.Version) (slices : List ByteList) :
+theorem lossless (version : Version) (slices : List ByteList) :
     match collect version slices with
     | (.ok _, entries) => Tiles entries 0 slices.flatten.length
     | (.error error, entries) => ∃ stop, Tiles entries 0 stop ∧ stop ≤ error.span.start.offset := by

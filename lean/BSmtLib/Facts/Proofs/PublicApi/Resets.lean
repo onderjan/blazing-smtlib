@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore
 public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Ports
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.VNaive
@@ -24,6 +26,8 @@ agree with it but for storage (`WRustPortX1BatchInCore`). One Rust port's lexer 
 makes their calls give the same results (`ZRel`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.PublicApi.Resets
 
 open BSmtLib.Lexer BSmtLib.Lexer.Error
@@ -36,7 +40,7 @@ variable {g g' : Token.BatchTag}
 
 /-! ## The collector reads only the tokens of a cursor -/
 
-theorem collector_consume_agree (c : Token.BatchCursor g) (d : Token.BatchCursor g')
+theorem collector_consume_agree (c : LexerCursor g) (d : LexerCursor g')
     (hc : c.HasNext) (hd : d.HasNext) (h : CursorAgree c d) (a : Collector)
     (entries : List Entry) :
     (((Token.ConsumeFrom.consume (H := Collector) (m := CollectM) c hc).run a).run
@@ -102,10 +106,10 @@ def ZRel (l₁ l₂ : BSmtLib.Lexer Collector) : Prop :=
     X1BatchInCoreLexer.Top.LexerRel l₂ x₂
 
 /-- What a fresh lexer gives up after failing. -/
-abbrev abandonC := Recovery.LexRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast
+abbrev abandonC := Recovery.LexerRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast
 
 /-- What a fresh lexer reports after recovering. -/
-abbrev recoverC := Recovery.LexRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast
+abbrev recoverC := Recovery.LexerRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast
 
 /-- Related lexers lex a slice that ends below `USize.size` alike: the same result, the same
 entries written down, and related lexers again. -/
@@ -337,7 +341,7 @@ abbrev VOps := BSmtLib.Facts.Lexer.Adapters.VNaive.lexOps
 /-- The library's lexer with the adapter's consumer for the concrete collector, fed an input to
 the end without failing, has the version it was constructed with as its initial one, and does not
 recover. -/
-theorem fields_after (version : Token.Version) (slices : List BSmtLibSpec.Regex.Chars)
+theorem fields_after (version : Version) (slices : List BSmtLibSpec.Regex.Chars)
     (hok : ((ZOps.runInput (ZOps.new concreteCollector {} version) true slices).run
       []).1.1.isFailed = false) :
     (Internal.core ((ZOps.runInput (ZOps.new concreteCollector {} version) true slices).run
@@ -423,7 +427,7 @@ resets the state. -/
 theorem tail_ok (x : InnerM Collector CollectM
       (Except (Failure Empty) (ControlFlow (Span.Located Unit))))
     (K : Except (Failure Empty) (ControlFlow (Span.Located Unit)) →
-      InnerM Collector CollectM (Except (LexError Empty) (ControlFlow (Span.Located Unit))))
+      InnerM Collector CollectM (Except (LexerError Empty) (ControlFlow (Span.Located Unit))))
     (hok : ∀ flow, K (.ok flow) = (Internal.reset >>= fun _ => Pure.pure (.ok flow)))
     (herr : ∀ f c h entries, ∃ e, (irun (K (.error f)) c h entries).1.1.1 = .error e)
     {c : LexerCore} {h : Collector} {entries : List Entry}
@@ -502,7 +506,7 @@ theorem collectWith_ok : ∀ (slices : List ByteList) (l : BSmtLib.Lexer Collect
 
 /-- A reset state of a lexer constructed with the version, which does not recover, corresponds
 to the state of a new Rust port's lexer but for its storage. -/
-theorem coreRel_reset (version : Token.Version) (c₀ : LexerCore)
+theorem coreRel_reset (version : Version) (c₀ : LexerCore)
     (hiv : c₀.initialVersion = version) (hrec : c₀.recovers = false) :
     WRustPortX1BatchInCore.Core.CoreRel
       (Lexer.Internal.WRustPort.Lexer.new Collector.mk version).core
@@ -527,7 +531,7 @@ theorem coreRel_reset (version : Token.Version) (c₀ : LexerCore)
 
 /-- The library's lexer with the collector after an input it read to the end, and a new one
 constructed with the same version, are related. -/
-theorem zRel_after (version : Token.Version) (first : List ByteList)
+theorem zRel_after (version : Version) (first : List ByteList)
     (result : Option (Span.Located Unit)) (lexer : BSmtLib.Lexer Collector) (log : List Entry)
     (h : (collectWith (BSmtLib.Lexer.new Collector.mk version) first).run [] =
       (.ok (result, lexer), log)) :
@@ -554,7 +558,7 @@ theorem zRel_after (version : Token.Version) (first : List ByteList)
 
 /-- The library's lexer with the collector, after an input it read to the end, lexes the next
 input as a new lexer constructed with the same version does. -/
-theorem resets (version : Token.Version) (first : List ByteList) (log : List Entry)
+theorem resets (version : Version) (first : List ByteList) (log : List Entry)
     (result : Option (Span.Located Unit)) (lexer : BSmtLib.Lexer Collector)
     (h : (collectWith (BSmtLib.Lexer.new Collector.mk version) first).run [] =
       (.ok (result, lexer), log))

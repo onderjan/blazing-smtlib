@@ -13,7 +13,7 @@ its own `(` and with a maximum number of elements or none.
 
 namespace BSmtLib.Parser.Category.Combinator
 
-open BSmtLib.Traits BSmtLib.Parser.Category.Token
+open BSmtLib.Handler BSmtLib.Parser.Category.Token
 open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
@@ -372,16 +372,33 @@ variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
 end
 
 /-- A parser of the inner parser's value enclosed in `(` and `)` (`SmtParenParser`). -/
-abbrev ParenParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
-    [Parse P H m E R] :=
-  OpenedParser H (ClosedParser H P)
+structure ParenParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
+    [Parse P H m E R] where
+  private mk ::
+  private inner : OpenedParser H (ClosedParser H P)
 
-/-- The parser before the `(`, with the closed parser that parses after it. -/
-/- LEAN: Rust's `SmtParenParser` is a type alias, made with `SmtOpenedParser::new` from the closed
-parser; this is that function under the alias's name. -/
-def ParenParser.new {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
-    [Parse P H m E R] (closed : ClosedParser H P) : ParenParser H P :=
-  OpenedParser.new closed
+section
+
+variable {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type} [Parse P H m E R]
+
+/-- The parser before the `(`. -/
+def ParenParser.new (inner : P) : ParenParser H P := ⟨.new (.new inner)⟩
+
+instance [Inhabited P] : Inhabited (ParenParser H P) := ⟨.new default⟩
+
+end
+
+section
+
+variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
+  [Parse P H m (Handler.Error H) R]
+
+@[no_expose] instance : Parse (ParenParser H P) H m (Handler.Error H) R where
+  parse self state cursor := do
+    let (answer, inner, state, next) ← Parse.parse self.inner state cursor
+    return (answer, ⟨inner⟩, state, next)
+
+end
 
 /--
 A parser of values of the inner parser up to a `)`, which finishes with their results
@@ -439,16 +456,33 @@ end
 
 /-- A parser of values of the inner parser enclosed in `(` and `)`, which finishes with their
 results (`SmtParenMultipleParser`). -/
-abbrev ParenMultipleParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
-    [Parse P H m E R] :=
-  OpenedParser H (ClosedMultipleParser H P)
+structure ParenMultipleParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m]
+    {E R : Type} [Parse P H m E R] where
+  private mk ::
+  private inner : OpenedParser H (ClosedMultipleParser H P)
 
-/-- The parser before the `(`, with the closed parser that parses after it. -/
-/- LEAN: Rust's `SmtParenMultipleParser` is a type alias, made with `SmtOpenedParser::new` from
-the closed parser; this is that function under the alias's name. -/
-def ParenMultipleParser.new {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
-    [Parse P H m E R] (closed : ClosedMultipleParser H P) : ParenMultipleParser H P :=
-  OpenedParser.new closed
+section
+
+variable {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type} [Parse P H m E R]
+
+/-- The parser before the `(`. -/
+def ParenMultipleParser.new (inner : P) : ParenMultipleParser H P := ⟨.new (.new inner)⟩
+
+instance [Inhabited P] : Inhabited (ParenMultipleParser H P) := ⟨.new default⟩
+
+end
+
+section
+
+variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
+  [Parse P H m (Handler.Error H) R]
+
+@[no_expose] instance : Parse (ParenMultipleParser H P) H m (Handler.Error H) (Array R) where
+  parse self state cursor := do
+    let (answer, inner, state, next) ← Parse.parse self.inner state cursor
+    return (answer, ⟨inner⟩, state, next)
+
+end
 
 /--
 A parser of at most a maximum number of values of the inner parser up to a `)`, which finishes
@@ -478,7 +512,7 @@ The maximum is only applied when deciding whether a next value is allowed: it do
 the values parsed before or the value being parsed, so the parser may finish with more values
 than the maximum set while it parses.
 -/
-def ClosedMaximumParser.setMaximum (self : ClosedMaximumParser H P) (maxElements : Nat) :
+def ClosedMaximumParser.setMaxElements (self : ClosedMaximumParser H P) (maxElements : Nat) :
     ClosedMaximumParser H P :=
   { self with maximum := maxElements }
 
@@ -545,9 +579,9 @@ The maximum is only applied when deciding whether a next value is allowed: it do
 the values parsed before or the value being parsed, so the parser may finish with more values
 than the maximum set while it parses.
 -/
-def ParenMaximumParser.setMaximum (self : ParenMaximumParser H P) (maxElements : Nat) :
+def ParenMaximumParser.setMaxElements (self : ParenMaximumParser H P) (maxElements : Nat) :
     ParenMaximumParser H P :=
-  { self with inner := self.inner.setMaximum maxElements }
+  { self with inner := self.inner.setMaxElements maxElements }
 
 /-- The maximum number of values. -/
 def ParenMaximumParser.maxElements (self : ParenMaximumParser H P) : Nat :=

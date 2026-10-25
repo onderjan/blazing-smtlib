@@ -16,6 +16,8 @@ position in the slice's array and `X1BatchInCore` as an index into the slice.
 The helpers of the two lexers that read and change the state are simulated here.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer
 
 /- The code of the Rust port runs over operations given as an instance argument; in this link it
@@ -89,7 +91,7 @@ theorem coreMap_locationAt {start : Nat} {c : ZCore} {p : USize} (hb : start ≤
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat}
 
 /-! The operations of `X1BatchInCore`, as the Rust port's code calls
@@ -106,14 +108,14 @@ theorem loadLocals_eq :
       (low := low) : Lexer.Internal.WRustPort.LexM H m R E floor low Unit) = pure () :=
   rfl
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- Whether the consumer takes whitespace and comments, read by the library's lexer. -/
 theorem consumes_eq_lexer :
     BSmtLib.Lexer.Internal.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E)
       (floor := floor) (low := low) = pure (Token.Consume.isConcrete (H := H)) :=
   (rfl)
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- Whether the consumer takes whitespace and comments, read by the Rust port. -/
 theorem consumes_eq_x1 :
     Lexer.Internal.WRustPort.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E)

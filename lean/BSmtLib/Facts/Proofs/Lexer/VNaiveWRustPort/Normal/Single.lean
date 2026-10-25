@@ -33,10 +33,10 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- `normalSpec_lt` at the end of the slice. -/
-theorem normalSpec_end (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_end (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat)
     (hget₀ : get? input index = none) :
     NormalSpec C v hd iv input offset base hframe index := by
@@ -68,7 +68,7 @@ theorem normalSpec_end (v : Token.Version) (input : ByteSlice) (offset base : Na
   rename_i c hget; rw [hget₀] at hget; cases hget
 
 /-- `normalSpec_lt` at a closing parenthesis. -/
-theorem normalSpec_parenClose (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_parenClose (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
@@ -134,7 +134,7 @@ theorem normalSpec_parenClose (v : Token.Version) (input : ByteSlice) (offset ba
   intro hcp; exact absurd (by rw [h41]; decide) hcp
 
 /-- `normalSpec_lt` at an opening parenthesis. -/
-theorem normalSpec_parenOpen (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_parenOpen (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
@@ -203,7 +203,7 @@ theorem normalSpec_parenOpen (v : Token.Version) (input : ByteSlice) (offset bas
   intro hop; exact absurd (by rw [h40]; decide) hop
 
 /-- `normalSpec_lt` at a line feed off the fast path. -/
-theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_lineFeed (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)
@@ -288,7 +288,7 @@ theorem normalSpec_lineFeed (v : Token.Version) (input : ByteSlice) (offset base
 
 set_option maxHeartbeats 400000 in
 /-- `normalSpec_lt` at a byte that starts no token. -/
-theorem normalSpec_other (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_other (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat)
     {c₀ : UInt8} (hget₀ : get? input index = some c₀) (hc40₀ : c₀ ≠ 40) (hc41₀ : c₀ ≠ 41)
     (hfoff₀ : (Lexer.Internal.Helpers.fastFlags c₀ &&& Lexer.Internal.Helpers.FAST_ON != 0) = false)
@@ -349,7 +349,7 @@ theorem normalSpec_other (v : Token.Version) (input : ByteSlice) (offset base : 
       ne_eq] at hother
     obtain ⟨⟨⟨⟨⟨⟨⟨hw, h59⟩, h35⟩, h34⟩, h58⟩, h124⟩, hdig⟩, hsym⟩ := hother
     have herr : start v C.concrete location input[index] =
-        .error (failAtByte .unexpectedCharacter location location) := by
+        .error (failAtByte .unexpectedByte location location) := by
       rw [hc]
       simp [start, hw, h59, h35, h34, h58, h124, hdig, hsym, hc40, hc41]
     unfold Lexer.Internal.WRustPort.startToken Lexer.Internal.WRustPort.modifyContent

@@ -15,7 +15,7 @@ namespace BSmtLib.Token.ConsumeFrom
 /- LEAN: Rust's `SmtConsumeFrom<Z: SmtCursor>: SmtConsume`. The supertrait is the instance
 argument `Consume H R E`, which fixes the result and the error; the monad `m` is a parameter
 marked `outParam`, as the consumer type determines it. A lexer requires the class for the
-cursors of all its batches, as Rust requires `for<'a> SmtConsumeFrom<SmtBatchCursor<'a>>`. The
+cursors of all its batches, as Rust requires `for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>`. The
 Rust blanket `impl SmtConsumeFrom<Z> for &mut T` has no counterpart, as Lean has no
 references. -/
 /-- A sequential consumer of tokens for given producers. -/

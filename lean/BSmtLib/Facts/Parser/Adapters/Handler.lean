@@ -49,13 +49,13 @@ abbrev bridgedCall {returns : Returns} (request : Call values returns) :
 instance needs them before it exists, so they cannot be the bridge's functions themselves. -/
 
 /-- The spec's term node for a term node of the parser, with the values of `values`. -/
-def termNodeOf : Nodes.Term values.sort values.term → TermNode values
+def termNodeOf : Grammar.Nodes.Term values.sort values.term → TermNode values
   | .specialConstant c => .constant (Bridge.constant c)
   | .qualifiedIdent i s => .identifier (Bridge.identifier i) s
   | .application i s args _ => .application (Bridge.identifier i) s args.asSlice.toList
 
 /-- The spec's S-expression node for one of the parser, with the values of `values`. -/
-def sExprNodeOf : Nodes.SExpr values.sExpr → SExprNode values
+def sExprNodeOf : Grammar.Nodes.SExpr values.sExpr → SExprNode values
   | .specialConstant c => .constant (Bridge.constant c)
   | .symbol s => .symbol (Bridge.symbol s)
   | .reserved w => .reserved (Bridge.reserved w)
@@ -63,14 +63,14 @@ def sExprNodeOf : Nodes.SExpr values.sExpr → SExprNode values
   | .sExprs items => .list items.asSlice.toList
 
 /-- The spec's attribute value node for one of the parser, with the values of `values`. -/
-def attributeValueOf : Nodes.AttributeValue values.sExpr → AttributeValueNode values
+def attributeValueOf : Grammar.Nodes.AttributeValue values.sExpr → AttributeValueNode values
   | .specialConstant c => .constant (Bridge.constant c)
   | .symbol s => .symbol (Bridge.symbol s)
   | .sExprs items => .list items.asSlice.toList
 
 /-- The bridged handler's values are those of `h₀`; it answers each call of terms, and the
 version, by turning the values into the spec's and asking `h₀`. -/
-instance : Traits.Handler (Bridged h₀ nonstandard) m where
+instance : Handler (Bridged h₀ nonstandard) m where
   Error := ε
   SExpr := values.sExpr
   Attribute := values.«attribute»
@@ -100,7 +100,7 @@ instance : Traits.Handler (Bridged h₀ nonstandard) m where
 
 /-- The bridged handler answers each command by turning the values into the spec's and asking
 `h₀`; a non-standard command fails with `nonstandard`. -/
-instance : Traits.CommandHandler (Bridged h₀ nonstandard) m where
+instance : Handler.CommandHandler (Bridged h₀ nonstandard) m where
   NonstandardParser := Empty
   nonstandardCommand _ := throw nonstandard
   commandAssert t := bridgedCall h₀ nonstandard (.commandAssert t)
@@ -181,7 +181,7 @@ abbrev recordingCall {returns : Returns} (request : Call Recorded returns) :
 /-- The library handler of terms whose state is the log of a recording run: each call writes
 down what the spec's recording handler writes down for it and returns what it returns, the number
 of calls before it. It fails on nothing. -/
-instance recordingLibraryTerms : Traits.Handler (List Event) Id where
+instance recordingLibraryTerms : Handler (List Event) Id where
   Error := Unit
   SExpr := Nat
   Attribute := Nat
@@ -212,7 +212,7 @@ instance recordingLibraryTerms : Traits.Handler (List Event) Id where
 /-- The library handler of commands whose state is the log of a recording run: each call writes
 down what the spec's recording handler writes down for it. A non-standard command fails with
 `()`. -/
-instance recordingLibrary : Traits.CommandHandler (List Event) Id where
+instance recordingLibrary : Handler.CommandHandler (List Event) Id where
   NonstandardParser := Empty
   nonstandardCommand _ := throw ()
   commandAssert t := recordingCall (.commandAssert t)

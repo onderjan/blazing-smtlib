@@ -36,8 +36,8 @@ open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Facts.Proofs.Parser.Tokens.Stand
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {points : Points (StateT H m)} {version : Version}
 
 /-! ## Identifiers -/
 
@@ -48,8 +48,8 @@ and appends them to those found so far.
 theorem indices_runs : (indices : List Tree.Index) →
     (∀ index ∈ indices, index.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (indices.flatMap Tree.Index.tokens) →
-    ∀ (symbol : Plain.Symbol) (found : Array Nodes.Index),
-    ∃ parsed : Array Nodes.Index, parsed.toList.map Bridge.index = indices ∧
+    ∀ (symbol : Lexicon.Value.Symbol) (found : Array Grammar.Nodes.Index),
+    ∃ parsed : Array Grammar.Nodes.Index, parsed.toList.map Bridge.index = indices ∧
       Runs points (IdentState.step (H := H) version) (.indices symbol found) tokens
         (ticks points tokens) fun _ => pure (.more (.indices symbol (found ++ parsed)))
   | [], _, _, hs, symbol, found => by
@@ -96,7 +96,7 @@ theorem indexed_runs {name : Tree.Symbol} {indices : List Tree.Index}
     {symbolToken : Parser.Internal.Input} {tokens : List Parser.Internal.Input}
     (hsymbol : Bridge.received symbolToken = some (.token (.symbol name)))
     (hs : Stands tokens (indices.flatMap Tree.Index.tokens)) :
-    ∃ head : Nodes.Ident, Bridge.identifier head = ⟨name, indices⟩ ∧
+    ∃ head : Grammar.Nodes.Ident, Bridge.identifier head = ⟨name, indices⟩ ∧
       Runs points (IdentState.step (H := H) version) .afterUnderscore
         (symbolToken :: (tokens ++ [.parenClose]))
         (ticks points (symbolToken :: (tokens ++ [.parenClose])))
@@ -130,10 +130,10 @@ def sortPush {S : Type} (levels : List (SortLevel S)) (sort : S) : Parser.Intern
     let level := { level with arguments := level.arguments.push sort }
     .more { mode := .start, levels := level :: outer }
 
-theorem sortComplete_eq (levels : List (SortLevel (Traits.Handler.«Sort» H)))
-    (head : Nodes.Ident) (arguments : Array (Traits.Handler.«Sort» H)) :
+theorem sortComplete_eq (levels : List (SortLevel (Handler.«Sort» H)))
+    (head : Grammar.Nodes.Ident) (arguments : Array (Handler.«Sort» H)) :
     sortComplete levels head arguments =
-      Parser.Internal.call (Traits.Handler.handleSort head (.new arguments)) >>=
+      Parser.Internal.call (Handler.handleSort head (.new arguments)) >>=
         fun r => pure (sortPush levels r) := by
   cases levels <;> simp [sortComplete, sortPush]
 
@@ -159,7 +159,7 @@ theorem Stands.indexed {name : Tree.Symbol} {indices : List Tree.Index} (hne : i
   rw [Parser.Internal.Input.received_word (word := .general .underscore) hunderscore]
   exact ⟨symbolToken, indexTokens, rfl, hsymbol, hindexTokens⟩
 
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /--
 From the state after an application's `(`, the sort parser reads the tokens of its head, an
@@ -167,8 +167,8 @@ identifier, and opens the application.
 -/
 theorem head_runs {name : Tree.Identifier} (hname : name.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens name.tokens)
-    (levels : List (SortLevel (Traits.Handler.«Sort» H))) :
-    ∃ head : Nodes.Ident, Bridge.identifier head = name ∧
+    (levels : List (SortLevel (Handler.«Sort» H))) :
+    ∃ head : Grammar.Nodes.Ident, Bridge.identifier head = name ∧
       Runs points (sortStep version) { mode := .opened, levels } tokens
         (ticks points tokens)
         fun _ => pure (.more { mode := .start, levels := ⟨head, #[]⟩ :: levels }) := by
@@ -214,7 +214,7 @@ traversal's effects, then completes the sort on that stack.
 -/
 theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (Bridge.version version) →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens sort.tokens →
-    ∀ levels : List (SortLevel (Traits.Handler.«Sort» H)),
+    ∀ levels : List (SortLevel (Handler.«Sort» H)),
     Runs points (sortStep version) { mode := .start, levels } tokens
       (adaptRun (Traversal.sort points h sort))
       fun r => pure (sortPush levels r)
@@ -223,7 +223,7 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
     obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol htoken
     refine (Runs.token (step := sortStep version) (state := { mode := .start, levels })
       (token := .symbol symbol)
-      (program := Parser.Internal.call (Traits.Handler.handleSort ⟨symbol, #[]⟩ (.new #[])))
+      (program := Parser.Internal.call (Handler.handleSort ⟨symbol, #[]⟩ (.new #[])))
       (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def, sortComplete_eq])).congr ?_ rfl
     simp [sort_nil, Tree.Identifier.tokens, adaptRun_takeAll (Stands.cons htoken nil),
       hA.handleSort,
@@ -242,7 +242,7 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
         cases step <;> rfl)
       hruns
     have hident := Runs.bind_next
-      (following := fun _ => Parser.Internal.call (Traits.Handler.handleSort head (.new #[])))
+      (following := fun _ => Parser.Internal.call (Handler.handleSort head (.new #[])))
       (next := fun r => pure (sortPush levels r)) (hembed.congr rfl (by
         funext
         simp [Parser.Internal.Step.wrap, sortComplete_eq]))
@@ -263,12 +263,12 @@ theorem sort_runs (hA : TermAgrees h) : (sort : Tree.«Sort») → sort.Valid (B
     obtain ⟨head, hhead, hheadRuns⟩ := head_runs (H := H) (points := points) hvalid.1 hsHead
       levels
     obtain ⟨firstTokens, restTokens, rfl, hs₁, hs₂⟩ := Stands.split hsArguments
-    have hclose : ∀ r (handled : List (Traits.Handler.«Sort» H)),
+    have hclose : ∀ r (handled : List (Handler.«Sort» H)),
         Runs points (sortStep version)
           { mode := .start, levels := ⟨head, #[].push r ++ handled.toArray⟩ :: levels }
           [.parenClose]
           (do tick points .parenClose
-              Parser.Internal.call (Traits.Handler.handleSort
+              Parser.Internal.call (Handler.handleSort
                 head (.new (#[].push r ++ handled.toArray))))
           fun r => pure (sortPush levels r) :=
       fun r handled => Runs.token (by simp [Parser.Category.«Sort».Internal.sortStep.eq_def,
@@ -296,8 +296,8 @@ the tokens of sorts with the traversal's effects, and appends them to those argu
 theorem sorts_runs (hA : TermAgrees h) : (sorts : List Tree.«Sort») →
     Tree.«Sort».ValidAll (Bridge.version version) sorts →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.«Sort».tokensAll sorts) →
-    ∀ (head : Nodes.Ident) (found : Array (Traits.Handler.«Sort» H))
-      (levels : List (SortLevel (Traits.Handler.«Sort» H))),
+    ∀ (head : Grammar.Nodes.Ident) (found : Array (Handler.«Sort» H))
+      (levels : List (SortLevel (Handler.«Sort» H))),
     Runs points (sortStep version)
       { mode := .start, levels := ⟨head, found⟩ :: levels } tokens
       (adaptRun (Traversal.sorts points h sorts))

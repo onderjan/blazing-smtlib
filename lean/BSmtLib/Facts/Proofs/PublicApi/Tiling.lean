@@ -48,7 +48,7 @@ def front : St → Span.Location → Nat
   | .idle, location => location.offset
   | .token p, _ => p.start.offset
 
-theorem start_ne_idle (v : Token.Version) (location : Span.Location) (c : UInt8) :
+theorem start_ne_idle (v : Version) (location : Span.Location) (c : UInt8) :
     start v true location c ≠ .idle := by
   intro h
   simp only [start] at h
@@ -69,7 +69,7 @@ theorem finish_ne_none (p : Pending) (location : Span.Location) :
   repeat' split at h
   all_goals (cases h <;> simp_all)
 
-theorem start_error_start {v : Token.Version} {ws : Bool} {location : Span.Location} {c : UInt8}
+theorem start_error_start {v : Version} {ws : Bool} {location : Span.Location} {c : UInt8}
     {f : LexFailure} (h : start v ws location c = .error f) :
     f.span.start.offset = location.offset := by
   simp only [start] at h
@@ -92,7 +92,7 @@ theorem finish_error_start {ws : Bool} {p : Pending} {location : Span.Location}
   all_goals first | (cases h; rfl) | cases h
 
 /-- A step from no token in progress tiles from where it starts. -/
-theorem startStep_tiles {v : Token.Version} {location : Span.Location} {c : UInt8} {st' : St}
+theorem startStep_tiles {v : Version} {location : Span.Location} {c : UInt8} {st' : St}
     {ls : List Lexeme} (h : startStepW v true location c = some (st', ls)) :
     Tiles (ls.map lexEntry) location.offset (front st' (location.afterByte c)) := by
   unfold startStepW at h
@@ -110,7 +110,7 @@ theorem startStep_tiles {v : Token.Version} {location : Span.Location} {c : UInt
   | error f => rw [hs] at h; cases h
 
 /-- A step of the pure run tiles from its front to the next one. -/
-theorem byteStep_tiles {v : Token.Version} {st st' : St} {location : Span.Location} {c : UInt8}
+theorem byteStep_tiles {v : Version} {st st' : St} {location : Span.Location} {c : UInt8}
     {ls : List Lexeme} (h : byteStepW v true st location c = some (st', ls)) :
     Tiles (ls.map lexEntry) (front st location) (front st' (location.afterByte c)) := by
   cases st with
@@ -141,7 +141,7 @@ theorem byteStep_tiles {v : Token.Version} {st st' : St} {location : Span.Locati
 
 /-- Where a step fails, the lexemes it finishes before tile from its front up to where the
 failure's span starts, at most. -/
-theorem byteStep_fail_tiles {v : Token.Version} {st : St} {location : Span.Location} {c : UInt8}
+theorem byteStep_fail_tiles {v : Version} {st : St} {location : Span.Location} {c : UInt8}
     (h : byteStepW v true st location c = none) :
     ∃ X, Tiles ((failedBeforeW true st location c).map lexEntry) (front st location) X ∧
       X ≤ (failW v true st location c).span.start.offset := by
@@ -190,7 +190,7 @@ theorem advanceLoc_cons (location : Span.Location) (c : UInt8) (cs : List UInt8)
 
 /-- The pure run with whitespace and comments tiles from its front: to the front where it ends,
 at the location after the bytes, or up to where its failure's span starts, at most. -/
-theorem lexBytesF_tiles (v : Token.Version) : ∀ (bs : List UInt8) (st : St)
+theorem lexBytesF_tiles (v : Version) : ∀ (bs : List UInt8) (st : St)
     (location : Span.Location),
     match lexBytesF v true st location bs with
     | .ok (st', location', ls) =>

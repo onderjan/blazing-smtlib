@@ -90,19 +90,19 @@ structure Constructor (S : Type) where
 /-! ## Views replaced by contents -/
 
 /-- The symbol's content. -/
-def ofSymbol (s : Plain.Symbol) : Symbol := ⟨contentOf s.asSlice, s.isQuoted⟩
+def ofSymbol (s : Lexicon.Value.Symbol) : Symbol := ⟨contentOf s.asSlice, s.isQuoted⟩
 
 /-- The index's content. -/
-def ofIndex : Nodes.Index → Index
+def ofIndex : Grammar.Nodes.Index → Index
   | .numeral digits => .numeral (contentOf digits.asSlice)
   | .symbol s => .symbol (ofSymbol s)
 
 /-- The identifier's content. -/
-def ofIdentifier (i : Nodes.Ident) : Identifier :=
+def ofIdentifier (i : Grammar.Nodes.Ident) : Identifier :=
   ⟨ofSymbol i.name, i.indices.toList.map ofIndex⟩
 
 /-- The constant's content. -/
-def ofConstant : Nodes.SpecialConstant → Constant
+def ofConstant : Grammar.Nodes.SpecialConstant → Constant
   | .numeral d => .numeral (contentOf d.asSlice)
   | .decimal d => .decimal (contentOf d.asSlice)
   | .hexadecimal d => .hexadecimal (contentOf d.asSlice)
@@ -110,23 +110,23 @@ def ofConstant : Nodes.SpecialConstant → Constant
   | .string c => .string (contentOf c.asSlice)
 
 /-- The symbol or wildcard's content. -/
-def ofSymbolOrWildcard : Nodes.SimplePattern → SymbolOrWildcard
+def ofSymbolOrWildcard : Grammar.Nodes.SimplePattern → SymbolOrWildcard
   | .symbol s => .symbol (ofSymbol s)
   | .wildcard => .wildcard
 
 /-- The pattern's content. -/
-def ofPattern : Nodes.Pattern → Pattern
+def ofPattern : Grammar.Nodes.Pattern → Pattern
   | .simple s => .single (ofSymbolOrWildcard s)
   | .application ⟨c, args, _⟩ => .constructor (ofSymbol c) (args.toList.map ofSymbolOrWildcard)
 
 /-- The term node's content. -/
-def ofTermNode {S T : Type} : Nodes.Term S T → TermNode S T
+def ofTermNode {S T : Type} : Grammar.Nodes.Term S T → TermNode S T
   | .specialConstant c => .constant (ofConstant c)
   | .qualifiedIdent i s => .identifier (ofIdentifier i) s
   | .application i s args _ => .application (ofIdentifier i) s args.asSlice.toList
 
 /-- The s-expression node's content. -/
-def ofSExprNode {X : Type} : Nodes.SExpr X → SExprNode X
+def ofSExprNode {X : Type} : Grammar.Nodes.SExpr X → SExprNode X
   | .specialConstant c => .constant (ofConstant c)
   | .symbol s => .symbol (ofSymbol s)
   | .reserved w => .reserved w
@@ -134,21 +134,21 @@ def ofSExprNode {X : Type} : Nodes.SExpr X → SExprNode X
   | .sExprs items => .list items.asSlice.toList
 
 /-- The attribute value node's content. -/
-def ofAttributeValueNode {X : Type} : Nodes.AttributeValue X → AttributeValueNode X
+def ofAttributeValueNode {X : Type} : Grammar.Nodes.AttributeValue X → AttributeValueNode X
   | .specialConstant c => .constant (ofConstant c)
   | .symbol s => .symbol (ofSymbol s)
   | .sExprs items => .list items.asSlice.toList
 
 /-- The pairs with their symbols' contents. -/
-def ofPairs {α : Type} (items : Array (Plain.Symbol × α)) : List (Symbol × α) :=
+def ofPairs {α : Type} (items : Array (Lexicon.Value.Symbol × α)) : List (Symbol × α) :=
   items.toList.map fun (s, a) => (ofSymbol s, a)
 
 /-- The signature's content. -/
-def ofSignature {S : Type} (sig : Multiple.FunctionSignature S) : Signature S :=
+def ofSignature {S : Type} (sig : Grammar.Multiple.FunctionSignature S) : Signature S :=
   ⟨ofSymbol sig.name, ofPairs sig.params, sig.resultSort⟩
 
 /-- The constructor's content. -/
-def ofConstructor {S : Type} (c : Plain.Symbol × Multiple.SortedVars S) : Constructor S :=
+def ofConstructor {S : Type} (c : Lexicon.Value.Symbol × Grammar.Multiple.SortedVars S) : Constructor S :=
   ⟨ofSymbol c.1, ofPairs c.2.toArray⟩
 
 open Content
@@ -165,7 +165,7 @@ class ContentHandler (C : Type) where
   «Sort» : Type
   Term : Type
   Scope : Type
-  setVersion : Token.Version → StateM C Unit
+  setVersion : Version → StateM C Unit
   handleSort : Content.Identifier → List «Sort» → ExceptT Error (StateM C) «Sort»
   handleTerm : Content.TermNode «Sort» Term → ExceptT Error (StateM C) Term
   handleSExpr : Content.SExprNode SExpr → ExceptT Error (StateM C) SExpr
@@ -174,9 +174,9 @@ class ContentHandler (C : Type) where
   annotateTerm : Term → List Attribute → ExceptT Error (StateM C) Term
   startLet : List (Content.Symbol × Term) → ExceptT Error (StateM C) Scope
   endLet : Scope → Term → ExceptT Error (StateM C) Term
-  startQuantifier : Nodes.QuantifierKind → List (Content.Symbol × «Sort») →
+  startQuantifier : Grammar.Nodes.QuantifierKind → List (Content.Symbol × «Sort») →
     ExceptT Error (StateM C) Scope
-  endQuantifier : Nodes.QuantifierKind → Scope → Term → ExceptT Error (StateM C) Term
+  endQuantifier : Grammar.Nodes.QuantifierKind → Scope → Term → ExceptT Error (StateM C) Term
   startLambda : List (Content.Symbol × «Sort») → ExceptT Error (StateM C) Scope
   endLambda : Scope → Term → ExceptT Error (StateM C) Term
   startMatch : Term → ExceptT Error (StateM C) Unit
@@ -233,7 +233,7 @@ variable {C : Type} [ContentHandler C]
 
 /-- A content handler as a library handler of terms: each call is the content handler's, told
 the contents of the views. -/
-instance instHandler : Traits.Handler C Id where
+instance instHandler : Handler C Id where
   Error := Error C
   SExpr := SExpr C
   Attribute := Attribute C
@@ -259,7 +259,7 @@ instance instHandler : Traits.Handler C Id where
 
 /-- A content handler as a library handler of commands: each call is the content handler's,
 told the contents of the views. -/
-instance instCommandHandler : Traits.CommandHandler C Id where
+instance instCommandHandler : Handler.CommandHandler C Id where
   NonstandardParser := Empty
   nonstandardCommand s := throw (nonstandardCommand (ofSymbol s))
   commandAssert t := commandAssert t

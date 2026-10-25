@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Nodes
+public import BSmtLib.Grammar.Nodes
 
 public section
 
@@ -12,8 +12,8 @@ The definitions whose body is a term, by the call that ends them.
 
 namespace BSmtLib.Parser.Command.Internal.Definition
 
-open BSmtLib.Plain (Symbol)
-open BSmtLib.Nodes
+open BSmtLib.Lexicon.Value (Symbol)
+open BSmtLib.Grammar.Nodes
 
 /-- The definitions whose body is a term, by the call that ends them: `define-const` with its
 name and its handled sort. -/

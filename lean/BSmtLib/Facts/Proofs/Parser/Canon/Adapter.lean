@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Parser
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Token.Cursor
 
 @[expose] public section
@@ -17,6 +19,8 @@ agree from states that are the same up to the views in the parser (`canonA`), gi
 answer, cursors that agree, and states that are the same up to the views again
 (`consume_agree`).
 -/
+
+open BSmtLib.Lexer.Cursor (LexerCursor)
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Adapter
 
@@ -35,14 +39,14 @@ def canonA (a : RecAdapter) : RecAdapter :=
 variable {g g' : Token.BatchTag}
 
 /-- The handler's log when the adapter's parse of a cursor in the version begins. -/
-def startLog (a : RecAdapter) (version : Token.Version) : List Event :=
+def startLog (a : RecAdapter) (version : Version) : List Event :=
   ((if ParseAdapter.Internal.versionSet a then pure ()
-    else Traits.Handler.setVersion (H := List Event) version :
+    else Handler.setVersion (H := List Event) version :
     StateT (List Event) Id Unit).run a.handler).2
 
 /-- A call of the adapter: its parse from its parser and its log, the version told first unless
 it was. -/
-theorem consume_run (c : Token.BatchCursor g) (h : c.HasNext) (a : RecAdapter) :
+theorem consume_run (c : LexerCursor g) (h : c.HasNext) (a : RecAdapter) :
     let r := (Parse.parse a.parser (ParseAdapter.Internal.parseState a) c).run
       (startLog a c.version)
     (Token.ConsumeFrom.consume (m := Id) c h : StateT RecAdapter Id _).run a =
@@ -52,8 +56,8 @@ theorem consume_run (c : Token.BatchCursor g) (h : c.HasNext) (a : RecAdapter) :
   intro r
   rfl
 
-theorem consume_agree {c₁ : Token.BatchCursor g} {c₂ : Token.BatchCursor g'}
-    (h₁ : c₁.HasNext) (h₂ : c₂.HasNext) {Rel : Token.BatchCursor g → Token.BatchCursor g' → Prop}
+theorem consume_agree {c₁ : LexerCursor g} {c₂ : LexerCursor g'}
+    (h₁ : c₁.HasNext) (h₂ : c₂.HasNext) {Rel : LexerCursor g → LexerCursor g' → Prop}
     (hR : CursorRel Rel) (hc : Rel c₁ c₂) {a₁ a₂ : RecAdapter}
     (ha : canonA a₁ = canonA a₂) :
     ((Token.ConsumeFrom.consume (m := Id) c₁ h₁ : StateT RecAdapter Id _).run a₁).1.1 =

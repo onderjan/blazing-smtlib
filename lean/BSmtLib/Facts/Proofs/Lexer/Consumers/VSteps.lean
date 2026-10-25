@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Boundary
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Span
 
 @[expose] public section
@@ -16,10 +18,12 @@ lexeme handed over alone (`reply`, `consume_single`), the hand-over (`handOverAt
 `handOverAt_holding`), and the step on a byte in each state of the lexer.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.VSteps
 
 open BSmtLib.Facts.Lexer.Adapters
-open BSmtLib.Token.BatchCursor.Internal (discardRequested)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Facts.Proofs.Lexer.Consumers.Pure BSmtLib.Facts.Proofs.Lexer.VNaive.Run
 open BSmtLib.Lexer.Internal.VNaive
@@ -32,7 +36,7 @@ section
 variable {g : Token.BatchTag}
 
 theorem switched_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed)
-    (cursor : Token.BatchCursor g) :
+    (cursor : LexerCursor g) :
     (Answering.switched consumer taken cursor).val.version =
         ((consumer.switchTo taken).map toVersion).getD cursor.version ∧
       (discardRequested (Answering.switched consumer taken cursor).val) =
@@ -46,14 +50,14 @@ theorem switched_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed
     simp only [hs, Option.map_some, Option.getD_some]
     split
     · rename_i n hn
-      simp only [Token.BatchCursor.setVersion, Except.ok.injEq] at hn
+      simp only [Lexer.Cursor.LexerCursor.setVersion, Except.ok.injEq] at hn
       subst hn
       refine ⟨rfl, ?_⟩; split <;> rfl
     · rename_i hn
-      simp [Token.BatchCursor.setVersion] at hn
+      simp [Lexer.Cursor.LexerCursor.setVersion] at hn
 
 theorem requests_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed)
-    (cursor : Token.BatchCursor g) :
+    (cursor : LexerCursor g) :
     (Answering.requests consumer taken cursor).val.version =
         ((consumer.switchTo taken).map toVersion).getD cursor.version ∧
       (discardRequested (Answering.requests consumer taken cursor).val) =
@@ -72,9 +76,9 @@ end
 /-- What the consumer does with the lexeme handed over alone under the version, after the entries
 `taken`: its answer, the version after it, whether it has the rest discarded, and the entries
 taken after it. -/
-def reply (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Version) (taken : List Handed)
+def reply (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) (taken : List Handed)
     (l : Lexeme) :
-    Except (Option consumer.Error) (ControlFlow consumer.Result) × Token.Version × Bool × List
+    Except (Option consumer.Error) (ControlFlow consumer.Result) × Version × Bool × List
         Handed :=
   match lexemeEntry consumer.concrete version l with
   | none => (.error none, version, false, taken)
@@ -90,30 +94,30 @@ def reply (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Version) (tak
         consumer.discards (taken ++ [h]), taken ++ [h])
 
 /-- The consumer takes the lexeme handed over alone as `reply` says. -/
-theorem consume_single (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Version)
+theorem consume_single (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version)
     (l : Lexeme)
     (hl : l.Valid) (taken : List Handed) :
-    let r := (Answering.consume consumer (Token.BatchCursor.Internal.new version (l.batch hl))
+    let r := (Answering.consume consumer (Lexer.Cursor.LexerCursor.Internal.new version (l.batch hl))
       (l.hasNext hl version)).run taken
     (r.1.1, r.1.2.val.version, discardRequested r.1.2.val, r.2) =
       reply consumer version taken l := by
   intro r
   have hk := entry_batch consumer version l hl
-  have hnone : ¬ ((Token.BatchCursor.Internal.new version (l.batch hl)).next
+  have hnone : ¬ ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch hl)).next
       (l.hasNext hl version)).2.1.HasNext :=
     Nat.lt_irrefl _
   have hv :
-      ((Token.BatchCursor.Internal.new version (l.batch hl)).next
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch hl)).next
       (l.hasNext hl version)).2.1.version =
     version := rfl
-  have hd : discardRequested ((Token.BatchCursor.Internal.new version (l.batch hl)).next
+  have hd : discardRequested ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch hl)).next
         (l.hasNext hl version)).2.1 = false := rfl
-  have hpk : ((Token.BatchCursor.Internal.new version (l.batch hl)).next (l.hasNext hl version)).1 =
-    (Token.BatchCursor.Internal.new version (l.batch hl)).peek (l.hasNext hl version) := rfl
+  have hpk : ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch hl)).next (l.hasNext hl version)).1 =
+    (Lexer.Cursor.LexerCursor.Internal.new version (l.batch hl)).peek (l.hasNext hl version) := rfl
   simp only [r]
   rw [Answering.consume]
   generalize hn :
-      (Token.BatchCursor.Internal.new version (l.batch hl)).next (l.hasNext hl version) = n
+      (Lexer.Cursor.LexerCursor.Internal.new version (l.batch hl)).next (l.hasNext hl version) = n
     at hnone hv hd hpk
   obtain ⟨token, next, consumed⟩ := n
   dsimp only at hnone hv hd hpk ⊢
@@ -188,14 +192,14 @@ theorem vRun_pure {α : Type} (a : α × Core) (taken : List Handed) :
     vRun consumer (pure a) taken = (a, taken) := rfl
 
 /-- The core after the lexeme handed over, as `reply` says: the version, and discarding. -/
-def coreAfter (core : Core) (l : Lexeme) (version : Token.Version) (discards : Bool) : Core :=
+def coreAfter (core : Core) (l : Lexeme) (version : Version) (discards : Bool) : Core :=
   let core1 := { core with version, depth := depthAfter core.depth l.category }
   if discards then { core1 with activity := .discarding l.end, startedBefore := trivial }
   else core1
 
 /-- The core after the lexeme handed over, at which the consumer failed: the version, and
 discarding unless the lexer discards already. -/
-def coreAfterError (core : Core) (l : Lexeme) (version : Token.Version) (discards : Bool) : Core :=
+def coreAfterError (core : Core) (l : Lexeme) (version : Version) (discards : Bool) : Core :=
   let core1 := { core with version, depth := depthAfter core.depth l.category }
   if discards then
     { core1 with activity := .discarding (core.activity.discardStart l.end)
@@ -205,7 +209,7 @@ def coreAfterError (core : Core) (l : Lexeme) (version : Token.Version) (discard
 theorem handOver_run (core : Core) (l : Lexeme) (hl : l.Valid) (taken : List Handed) :
     ((handOver (H := Answering consumer) core l hl).run {}).run taken =
       let r :=
-          (Answering.consume consumer (Token.BatchCursor.Internal.new core.version (l.batch hl))
+          (Answering.consume consumer (Lexer.Cursor.LexerCursor.Internal.new core.version (l.batch hl))
         (l.hasNext hl core.version)).run taken
       (((r.1.1, discardRequested r.1.2.val,
         { core with version := r.1.2.val.version, depth := depthAfter core.depth l.category }),
@@ -232,7 +236,7 @@ theorem handOverAt_reply (core : Core) (l : Lexeme) (hl : l.Valid) (hh : core.ho
   rw [vRun_bind, handOver_run]
   dsimp only at hc ⊢
   rw [← hc]
-  generalize (Answering.consume consumer (Token.BatchCursor.Internal.new core.version (l.batch hl))
+  generalize (Answering.consume consumer (Lexer.Cursor.LexerCursor.Internal.new core.version (l.batch hl))
     (l.hasNext hl core.version)).run taken = r
   obtain ⟨⟨answer, after, hafter⟩, taken'⟩ := r
   dsimp only

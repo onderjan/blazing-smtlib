@@ -1,13 +1,13 @@
 module
 
-public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Token
 
 public section
 
 /- LEAN: in Rust, `SmtTokensBuf` is in `token` with the tokens it holds; here it has a module of
-its own next to `SyntaxToken`'s, which the root module `BSmtLib` imports. -/
+its own next to `Token`'s, which the root module `BSmtLib` imports. -/
 
-open BSmtLib.Plain
+open BSmtLib.Lexicon.Value
 
 namespace BSmtLib.Token.TokensBuf
 
@@ -40,7 +40,7 @@ structure Internal.Handle where
 after it. -/
 /-- The text with the bytes of the token after it, and the token's handle. -/
 @[inline]
-def Internal.Handle.createByPush (text : ByteArray) (token : SyntaxToken) :
+def Internal.Handle.createByPush (text : ByteArray) (token : Token) :
     ByteArray × Internal.Handle :=
   let push (kind : Internal.Kind) (bytes : ByteSlice) : ByteArray × Internal.Handle :=
     -- `copySlice` with `exact := false` grows the capacity by doubling, as `Vec` does
@@ -59,7 +59,7 @@ def Internal.Handle.createByPush (text : ByteArray) (token : SyntaxToken) :
   | .keyword value => push .keyword value.asSlice
   | .symbol value =>
     push (if value.isQuoted then .quotedSymbol else .unquotedSymbol) value.asSlice
-  | .reserved reserved => empty (.reserved reserved)
+  | .reserved word => empty (.reserved word)
   | .whitespace value => push .whitespace value.asSlice
   | .comment value => push .comment value.asSlice
   | .endOfFile => empty .endOfFile
@@ -67,7 +67,7 @@ def Internal.Handle.createByPush (text : ByteArray) (token : SyntaxToken) :
 /- LEAN: Rust's private `TokenHandle::view`. -/
 /-- Views the token whose bytes are in the text. -/
 @[inline]
-def Internal.Handle.view (self : Internal.Handle) (text : ByteArray) : SyntaxToken :=
+def Internal.Handle.view (self : Internal.Handle) (text : ByteArray) : Token :=
   -- the bytes were pushed from a view of the same kind, so they are allowed
   let bytes := text.toByteSlice self.start self.end
   match self.kind with
@@ -81,7 +81,7 @@ def Internal.Handle.view (self : Internal.Handle) (text : ByteArray) : SyntaxTok
   | .keyword => .keyword (Keyword.Internal.newUnchecked bytes)
   | .unquotedSymbol => .symbol (Symbol.Internal.newUnchecked false bytes)
   | .quotedSymbol => .symbol (Symbol.Internal.newUnchecked true bytes)
-  | .reserved reserved => .reserved reserved
+  | .reserved word => .reserved word
   | .whitespace => .whitespace (Whitespace.Internal.newUnchecked bytes)
   | .comment => .comment (Comment.Internal.newUnchecked bytes)
   | .endOfFile => .endOfFile
@@ -95,7 +95,7 @@ structure _root_.BSmtLib.Token.TokensBuf where
 def new : TokensBuf := ⟨.empty, #[]⟩
 
 /-- Copies the token after the others. -/
-def push (self : TokensBuf) (token : SyntaxToken) : TokensBuf :=
+def push (self : TokensBuf) (token : Token) : TokensBuf :=
   let (text, handle) := Internal.Handle.createByPush self.text token
   ⟨text, self.handles.push handle⟩
 
@@ -105,13 +105,13 @@ def len (self : TokensBuf) : Nat := self.handles.size
 
 def isEmpty (self : TokensBuf) : Bool := self.handles.isEmpty
 
-def get? (self : TokensBuf) (index : Nat) : Option SyntaxToken :=
+def get? (self : TokensBuf) (index : Nat) : Option Token :=
   self.handles[index]?.map (·.view self.text)
 
 @[no_expose] instance : Inhabited TokensBuf := ⟨new⟩
 
-/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Multiple`. -/
-@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m TokensBuf SyntaxToken where
+/- LEAN: Rust's `iter`, as for the containers of `BSmtLib.Grammar.Multiple`. -/
+@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m TokensBuf Token where
   forIn self init f := ForIn.forIn (self.handles.map (·.view self.text)) init f
 
 /- LEAN: Rust's `Debug`, which lists the tokens. -/

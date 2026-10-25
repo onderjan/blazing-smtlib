@@ -11,7 +11,9 @@ import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Command.Internal.Function
 import all BSmtLib.Parser.Internal.Fused.Basic
 import all BSmtLib.Parser.Internal.Fused.Category
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -26,21 +28,23 @@ proofs go by the state, then by the token's category and the reserved word it sp
 
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Category
 
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
+open BSmtLib.Token (BatchTag Cursor)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib.Version (VersionPosture)
 open BSmtLib.Facts.Proofs.Parser.Fused.Run
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandler H m]
 
 omit [LawfulMonad m] in
-theorem identStep_run {batch : BatchTag} (version : Token.Version)
+theorem identStep_run {batch : BatchTag} (version : Version)
     (s : Parser.Category.Ident.Internal.IdentState)
-    (next : BatchCursor batch) (token : Token batch) (h : H) :
+    (next : LexerCursor batch) (token : LexerToken batch) (h : H) :
     (Parser.Category.Ident.Internal.IdentState.step (H := H) version s
         (inputOf version next token)).run.run h =
       pure (PureOutcome.toRun (Category.identStep version s (next.category token) next token),
@@ -49,7 +53,7 @@ theorem identStep_run {batch : BatchTag} (version : Token.Version)
     Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
   generalize next.category token = cat
   generalize next.content token = c
-  cases s <;> cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts,
+  cases s <;> cases cat <;> simp only [Token.Internal.fromParts,
       Parser.Internal.Input.ofSyntax] <;>
     (try rcases Token.Reserved.fromBytes? c version with _ | (w | w)) <;>
     simp [Parser.Category.Ident.Internal.IdentState.step,
@@ -58,7 +62,7 @@ theorem identStep_run {batch : BatchTag} (version : Token.Version)
 
 theorem sortComplete_run
     (levels : List (Parser.Category.Sort.Internal.SortLevel (Handler.«Sort» H)))
-    (head : Nodes.Ident) (arguments : Array (Handler.«Sort» H)) (h : H) :
+    (head : Grammar.Nodes.Ident) (arguments : Array (Handler.«Sort» H)) (h : H) :
     (Parser.Category.Sort.Internal.sortComplete levels head arguments).run.run h =
       HandledOutcome.toRun <$> Category.sortComplete h levels head arguments := by
   unfold Parser.Category.Sort.Internal.sortComplete Category.sortComplete runHandler
@@ -69,9 +73,9 @@ theorem sortComplete_run
   | error e => simp [HandledOutcome.toRun]
   | ok sort => cases levels <;> simp [HandledOutcome.toRun]
 
-theorem sortStep_run {batch : BatchTag} (version : Token.Version)
+theorem sortStep_run {batch : BatchTag} (version : Version)
     (s : Parser.Category.Sort.Internal.SortState (Handler.«Sort» H))
-    (next : BatchCursor batch) (token : Token batch) (h : H) :
+    (next : LexerCursor batch) (token : LexerToken batch) (h : H) :
     (Parser.Category.Sort.Internal.sortStep version s (inputOf version next token)).run.run h =
       HandledOutcome.toRun <$> Category.sortStep version h s (next.category token) next token := by
   obtain ⟨mode, levels⟩ := s
@@ -92,7 +96,7 @@ theorem sortStep_run {batch : BatchTag} (version : Token.Version)
       inputOf]
     generalize next.category token = cat
     generalize next.content token = c
-    cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts,
+    cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? c version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, sortComplete_run, syntaxError]
@@ -103,15 +107,15 @@ theorem sortStep_run {batch : BatchTag} (version : Token.Version)
       inputOf]
     generalize next.category token = cat
     generalize next.content token = c
-    cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts,
+    cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? c version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, syntaxError, Parser.Internal.Input.isWord]
     all_goals (split <;> simp_all [HandledOutcome.toRun])
 
-theorem sortsStep_run {batch : BatchTag} (version : Token.Version)
+theorem sortsStep_run {batch : BatchTag} (version : Version)
     (s : Parser.Category.Combinator.Internal.ListState (Category.SortStateOf H) (Handler.«Sort» H))
-    (next : BatchCursor batch) (token : Token batch) (h : H) :
+    (next : LexerCursor batch) (token : LexerToken batch) (h : H) :
     (Parser.Category.Combinator.Internal.ListState.step .init
         (Parser.Category.Sort.Internal.sortStep version) none s
         (inputOf version next token)).run.run h =
@@ -122,7 +126,7 @@ theorem sortsStep_run {batch : BatchTag} (version : Token.Version)
   | false =>
     simp only [inputOf]
     generalize next.category token = cat
-    cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts,
+    cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectOpen, syntaxError]
@@ -154,8 +158,8 @@ theorem sortsStep_run {batch : BatchTag} (version : Token.Version)
         funext o
         cases o <;> simp [HandledOutcome.toRun]
 
-theorem sortedVarStep_run {batch : BatchTag} (version : Token.Version)
-    (s : Category.SortedVarOf H) (next : BatchCursor batch) (token : Token batch) (h : H) :
+theorem sortedVarStep_run {batch : BatchTag} (version : Version)
+    (s : Category.SortedVarOf H) (next : LexerCursor batch) (token : LexerToken batch) (h : H) :
     (Parser.Category.SortedVar.Internal.sortedVarStep version s
         (inputOf version next token)).run.run h =
       HandledOutcome.toRun <$>
@@ -171,15 +175,15 @@ theorem sortedVarStep_run {batch : BatchTag} (version : Token.Version)
   | _ =>
     simp only [Category.symbolOf?, Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
     generalize next.category token = cat
-    cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts,
+    cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectOpen,
         Parser.Category.Token.Internal.expectClose, Parser.Category.Token.Internal.expectSymbol,
             syntaxError]
-theorem sortedVarsStep_run {batch : BatchTag} (version : Token.Version)
+theorem sortedVarsStep_run {batch : BatchTag} (version : Version)
     (s : Category.SortedVarsOf H)
-    (next : BatchCursor batch) (token : Token batch) (h : H) :
+    (next : LexerCursor batch) (token : LexerToken batch) (h : H) :
     (Parser.Category.Combinator.Internal.ListState.step .start
         (Parser.Category.SortedVar.Internal.sortedVarStep version) none s
         (inputOf version next token)).run.run h =
@@ -191,7 +195,7 @@ theorem sortedVarsStep_run {batch : BatchTag} (version : Token.Version)
   | false =>
     simp only [inputOf]
     generalize next.category token = cat
-    cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts,
+    cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectOpen, syntaxError]
@@ -223,10 +227,10 @@ theorem sortedVarsStep_run {batch : BatchTag} (version : Token.Version)
         funext o
         cases o <;> simp [HandledOutcome.toRun]
 
-theorem signatureStep_run {batch : BatchTag} (version : Token.Version)
+theorem signatureStep_run {batch : BatchTag} (version : Version)
     (s : Parser.Command.Internal.Function.SignatureState (Handler.«Sort» H))
-    (next : BatchCursor batch)
-    (token : Token batch) (h : H) :
+    (next : LexerCursor batch)
+    (token : LexerToken batch) (h : H) :
     (Parser.Command.Internal.Function.signatureStep version s
         (inputOf version next token)).run.run h =
       HandledOutcome.toRun <$>
@@ -236,7 +240,7 @@ theorem signatureStep_run {batch : BatchTag} (version : Token.Version)
   | start =>
     simp only [Category.symbolOf?, Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
     cases next.category token <;>
-      simp only [Token.SyntaxToken.Internal.fromParts, Parser.Internal.Input.ofSyntax] <;>
+      simp only [Token.Internal.fromParts, Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectSymbol, syntaxError]
   | parameters symbol state =>
@@ -252,12 +256,12 @@ theorem signatureStep_run {batch : BatchTag} (version : Token.Version)
     funext o
     cases o <;> simp [HandledOutcome.toRun]
 
-theorem qualIdentStep_run {batch : BatchTag} (version : Token.Version)
+theorem qualIdentStep_run {batch : BatchTag} (version : Version)
     (s : Parser.Category.QualifiedIdent.Internal.QualIdentState (Handler.«Sort» H))
-    (next : BatchCursor batch) (token : Token batch) (h : H)
+    (next : LexerCursor batch) (token : LexerToken batch) (h : H)
     (r : Category.PureOutcome
         (Parser.Category.QualifiedIdent.Internal.QualIdentState (Handler.«Sort» H))
-      Nodes.Ident)
+      Grammar.Nodes.Ident)
     (fused : Category.qualIdentStep (H := H) version s (next.category token) next token = some r) :
     (Parser.Category.QualifiedIdent.Internal.qualIdentStep (H := H) version s
         (inputOf version next token)).run.run h = pure (qualToRun (H := H) r, h) := by

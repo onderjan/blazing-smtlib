@@ -39,8 +39,8 @@ theorem chunks_relE (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex
       LooseRel l x → x.held = acc.or (BSmtLib.Lexer.Internal.held l) →
       ∀ r (l' : Lexer.lexOps.Lexer consumer) t',
         (BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
-            (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) s.toByteArray.toByteSlice p
+            (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) s.toByteArray.toByteSlice p
               acc)).run t =
           ((r, l'), t') →
         ∃ x' : X1BatchInCore.lexOps.Lexer consumer, LooseRel l' x' ∧
@@ -139,8 +139,8 @@ theorem slice_cutE (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.
     have hs' : ¬ s.toByteArray.toByteSlice.stop < USize.size := by
       rw [Chunks.stop_toByteSlice, List.size_toByteArray]; exact hs
     have hz' : (BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
-        (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-        (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) s.toByteArray.toByteSlice 0
+        (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+        (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) s.toByteArray.toByteSlice 0
             none)).run t =
         ((r, l'), t') := by
       rw [← hz]
@@ -174,8 +174,8 @@ theorem runInput_cutE (ended : Bool) : ∀ (slices : List BSmtLibSpec.Regex.Char
     | true =>
       rw [runInputE_nil_true, runInputE_nil_true]
       have hc := run_lexEofStep (m := AnswerM) (R := consumer.Result)
-        (E := Option consumer.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-        (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) l x h
+        (E := Option consumer.Error) (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+        (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) l x h
       obtain ⟨⟨e1, e2⟩, e3⟩ := mcouple_answerM hc t
       change ((Lexer.lexOps.lexEofStep l).run t).1.1 =
         ((X1BatchInCore.lexOps.lexEofStep x).run t).1.1 at e1

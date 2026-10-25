@@ -36,11 +36,11 @@ open BSmtLib.Parser
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLibSpec.Parser.Traversal
 
-variable {H : Type} {m : Type → Type} [Monad m] [Traits.Handler H m] {σ ρ τ χ α β : Type}
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m] {σ ρ τ χ α β : Type}
 variable (points : Points (StateT H m))
 
 /-- The traversal's run as a run of the parser: its failures as the parser's. -/
-def adaptRun (run : Run (StateT H m) (Traits.Handler.Error H) α) : PM H α :=
+def adaptRun (run : Run (StateT H m) (Handler.Error H) α) : PM H α :=
   ExceptT.adapt causeOf run
 
 /-- The arrival of the token, if it stands for something in the spec. -/
@@ -90,15 +90,15 @@ open BSmtLib.Parser
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLibSpec.Parser.Traversal
 
-variable {H P R : Type} {m : Type → Type} [Monad m] [Traits.Handler H m]
-variable [Parser.Internal.ParseByToken P H m (Traits.Handler.Error H) R]
+variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
+variable [Parser.Internal.ParseByToken P H m (Handler.Error H) R]
 variable (points : Points (StateT H m)) (producer : Producer (StateT H m))
 
 /--
 The parser in the version, from its state, over the tokens: the result and the tokens after
 the parser's end, or `none` if the tokens run out before it ends.
 -/
-def driveParse : Token.Version → P → List Parser.Internal.Input → PM H (Option
+def driveParse : Version → P → List Parser.Internal.Input → PM H (Option
     (R × List Parser.Internal.Input))
   | _, _, [] => pure none
   | version, parser, token :: tokens => do
@@ -125,9 +125,9 @@ def driveParse : Token.Version → P → List Parser.Internal.Input → PM H (Op
 The parser over an input read from the version, as the parse adapter runs it: the handler is
 told the version first, then the parser takes the tokens.
 -/
-def driveInput (version : Token.Version) (parser : P) (tokens : List Parser.Internal.Input) :
+def driveInput (version : Version) (parser : P) (tokens : List Parser.Internal.Input) :
     PM H (Option (R × List Parser.Internal.Input)) := do
-  ExceptT.lift (Traits.Handler.setVersion (H := H) version)
+  ExceptT.lift (Handler.setVersion (H := H) version)
   driveParse points producer version parser tokens
 
 end
@@ -138,7 +138,7 @@ open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (VersionPosture)
+open BSmtLib.Version (VersionPosture)
 
 /-- The event is a processing. -/
 def isProcessing : Event → Bool
@@ -147,23 +147,23 @@ def isProcessing : Event → Bool
 
 /-- The events of a recording run of the script parser over the items, from the events before
 it, in order. -/
-def recordedRun (version : Token.Version) (parser : ScriptParser (List Event))
+def recordedRun (version : Version) (parser : ScriptParser (List Event))
     (items : List Parser.Internal.Input) (events : List Event) : List Event :=
   ((driveParse recordingPoints recordingProducer version parser items).run.run events).2.reverse
 
 /-- The posture that restricts nothing: every version, any number of declarations. -/
 def unrestrictedPosture : VersionPosture :=
-  (Token.VersionPostureBuilder.new.clearAllowed.addAllowed .v2_0 |>.addAllowed .v2_5
+  (Version.VersionPostureBuilder.new.clearAllowed.addAllowed .v2_0 |>.addAllowed .v2_5
     |>.addAllowed .v2_6 |>.addAllowed .v2_7 |>.setMaxDeclarations none).build
 
 /-- The events a recording run starts with, read from the version: the handler's switch to it. -/
-abbrev startEvents (version : Token.Version) : List Event :=
+abbrev startEvents (version : Version) : List Event :=
   [.handlerSwitch (Bridge.version version)]
 
 /-- The events of a recording run of the script parser over the items, under the posture that
 restricts nothing, read from the version, the handler told the version first: what `record` is
 for the traversal. -/
-def parserRecord (version : Token.Version) (items : List Parser.Internal.Input) : List Event :=
+def parserRecord (version : Version) (items : List Parser.Internal.Input) : List Event :=
   recordedRun version (ScriptParser.new unrestrictedPosture) items (startEvents version)
 
 end

@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.X1BatchInCore
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -24,6 +26,8 @@ states when they are those (`FastRel`): the Rust port's locals are the line and 
 of its state wherever it reads them.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Instance
 
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted)
@@ -38,11 +42,11 @@ def FastRel (a : Lexer.Internal.WRustPort.FastState) (_ : Unit) (l ls : Nat) : P
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool}
       {Er : Core.St floor low → Core.St floor low → Prop}
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- The Rust port loads its locals: the line and the line start of its state. -/
 theorem load_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop) :
     SimR (m := m) (H := H) (ε := Interrupted R E floor) Er
@@ -56,7 +60,7 @@ theorem load_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal
     obtain ⟨rfl, rfl⟩ := h'
     exact ⟨⟨h.1.2.1, h.1.2.2⟩, h⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- The Rust port stores its locals back, which are the line and line start of its state. -/
 theorem store_sim (l ls : Nat) (Bx : Token.Internal.TokenBatch → Token.Internal.TokenBatch → Prop)
     (a : Lexer.Internal.WRustPort.FastState) (hab : FastRel a () l ls) :
@@ -137,7 +141,7 @@ end
 other, for every consumer that reads the cursors it is handed only below the length of their
 batches. -/
 theorem opsSim_rust_x1BatchInCore {H : Type} {m : Type → Type} {R E : Type} [Monad m]
-    [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+    [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
     (hcons : ConsumesAlike H m R E) :
     OpsSim (Lexer.Internal.WRustPort.Rust.ops (H := H) (m := m) (R := R) (E := E))
       Lexer.Internal.X1BatchInCore.ops FastRel where

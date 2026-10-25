@@ -17,6 +17,8 @@ related, and given related recovery actions, are related: the same result, with 
 results and errors, the same lexer state, and the consumers' states related as the relator says.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.ParamW.Calls
 
 open BSmtLib.Lexer
@@ -81,8 +83,8 @@ theorem skipSlice_sim (slice skip) :
   unfold skipSlice; lsimW
 
 variable [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, Token.ConsumeFrom H₁
-    (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+    (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂]
 
 theorem lexEofInner_sim (hc : ConsumersW L) :
     SSim L (FlowLRel L) (lexEofInner (H := H₁) (m := m₁) (R := R₁) (E := E₁))

@@ -141,12 +141,12 @@ def StInv (version : BSmtLibSpec.Lexicon.Version) : St → Chars → Chars → P
   | .token p, before, text =>
     p.start = locAfter before ∧ ModeInv version p.mode text p.content.data.toList
 
-theorem runFrom_nil (version : Token.Version) (st : St) (location : Span.Location) :
+theorem runFrom_nil (version : Version) (st : St) (location : Span.Location) :
     runFrom version st location [] = endStep st location := by
   simp only [runFrom, feedBytes, Option.bind_some]
   cases endStep st location <;> rfl
 
-theorem runFrom_cons (version : Token.Version) (st : St) (location : Span.Location) (c : UInt8)
+theorem runFrom_cons (version : Version) (st : St) (location : Span.Location) (c : UInt8)
     (r : List UInt8) :
     runFrom version st location (c :: r) =
       (byteStep version st location c).bind fun (st', ls) =>

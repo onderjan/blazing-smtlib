@@ -4,6 +4,8 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Consume
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Span
 
 @[expose] public section
@@ -21,10 +23,12 @@ cursor stops it at the end of that token; a break before another token makes tha
 trailing input.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.HandOver
 
 open BSmtLib.Facts.Lexer.Adapters
-open BSmtLib.Token.BatchCursor.Internal
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal
     (discardRequested resetConsumed relexRequested EndsAfter consumedEndOf)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort (callConsumer)
@@ -102,10 +106,10 @@ section
 variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : Token.BatchTag}
 
 /-- The call of the consumer. -/
-theorem wp_callConsumer {cursor : Token.BatchCursor g} {h : cursor.HasNext} {s : WP.BS floor low}
+theorem wp_callConsumer {cursor : LexerCursor g} {h : cursor.HasNext} {s : WP.BS floor low}
     {coll : List Handed}
     {Q : (Except (Option C.Error) (ControlFlow C.Result) ×
-      {c : Token.BatchCursor g // c.Consumed cursor}) → WP.BS floor low → List Handed → Prop}
+      {c : LexerCursor g // c.Consumed cursor}) → WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop}
     (hq : Q ((Answering.consume C cursor h).run coll).1 s
       ((Answering.consume C cursor h).run coll).2) :
@@ -127,25 +131,25 @@ section
 variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : Token.BatchTag}
 
 /-- The state with the version. -/
-def withVersion (s : WP.BS floor low) (v : Token.Version) : WP.BS floor low :=
+def withVersion (s : WP.BS floor low) (v : Version) : WP.BS floor low :=
   ⟨{ s.val with version := v }, s.property⟩
 
 /-- The state with the version, discarding from `d` if `d` is some, from where it began. -/
-def withDiscards (s : WP.BS floor low) (v : Token.Version)
+def withDiscards (s : WP.BS floor low) (v : Version)
     (d : Option Span.Location) : WP.BS floor low :=
   ⟨{ s.val with version := v, discardedFrom := discardsAfter s.val.discardedFrom d }, s.property⟩
 
 /-- The state after the stop, with the version: discarding if the stop makes the lexer discard
 (`Stop.discards`), from where it began. -/
-def withStop (st : Stop C) (s : WP.BS floor low) (v : Token.Version) : WP.BS floor low :=
+def withStop (st : Stop C) (s : WP.BS floor low) (v : Version) : WP.BS floor low :=
   withDiscards s v st.discards
 
 /-- The lexemes a cursor over a batch that holds `ls` yields. -/
-noncomputable def yields (c : Token.BatchCursor g) (ls : List Lexeme) : List Lexeme :=
+noncomputable def yields (c : LexerCursor g) (ls : List Lexeme) : List Lexeme :=
   (ls.take (cStop c)).drop (cNext c)
 
 /-- What the hand-over of a cursor leaves, as `pending` says. -/
-def FlushPost (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (ver : Token.Version)
+def FlushPost (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (ver : Version)
     (coll : List Handed)
     (xs : List Lexeme) (s : WP.BS floor low) (Q : Unit → WP.BS floor low → List Handed → Prop)
     (QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop) : Prop :=
@@ -162,7 +166,7 @@ theorem take_drop_split {α : Type} (ls : List α) {i k a : Nat} (hik : i ≤ k)
   omega
 
 theorem wp_stopWith {Q : Unit → WP.BS floor low → List Handed → Prop}
-    {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop} (c0 : Token.BatchCursor g)
+    {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop} (c0 : LexerCursor g)
     (e : WP.Intr C floor)
     (s : WP.BS floor low) (coll : List Handed) (hrec : s.val.recovers = false) (h : QE e s coll) :
     WP (Lexer.Internal.WRustPort.Rust.stopWith (H := Answering C) (m := AnswerM) (R := C.Result)
@@ -186,7 +190,7 @@ theorem withVersion_self (s : WP.BS floor low) : withVersion s s.val.version = s
 
 /-- The hand-over of a cursor over a batch that holds lexemes, by a lexer that does not recover:
 as `pending` says of the lexemes the cursor yields (`FlushPost`). -/
-theorem flushCursor_wp : ∀ (n : Nat) (cursor : Token.BatchCursor g), cStop cursor - cNext cursor =
+theorem flushCursor_wp : ∀ (n : Nat) (cursor : LexerCursor g), cStop cursor - cNext cursor =
     n →
     ∀ (ls : List Lexeme), Holds (BSmtLib.Lexer.Internal.intoBatch cursor) ls → cStop cursor ≤
         ls.length →
@@ -402,7 +406,7 @@ variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {g : 
 
 /-- The interruption `e` is where the consumer stops on the lexemes, with `p` what it has done
 then, and `d` where the stop makes the lexer discard from, if it does. -/
-def Stops (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (ver : Token.Version) (coll : List Handed)
+def Stops (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (ver : Version) (coll : List Handed)
     (ls : List Lexeme) (e : WP.Intr C floor) (p : Prog) (d : Option Span.Location) : Prop :=
   match pending C hd ver coll ls with
   | .cont _ => False
@@ -410,7 +414,7 @@ def Stops (C : BSmtLibSpec.Lexer.Consumer) (hd : Bool) (ver : Token.Version) (co
   | .stop st p' => p = p' ∧ d = st.discards ∧ Matches st e
 
 /-- A stop on lexemes is a stop on them followed by more. -/
-theorem Stops.append {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls : List Lexeme}
+theorem Stops.append {hd : Bool} {ver : Version} {coll : List Handed} {ls : List Lexeme}
     {e : WP.Intr C floor} {p : Prog} {d : Option Span.Location} (h : Stops C hd ver coll ls e p d)
     (ys : List Lexeme) : Stops C hd ver coll (ls ++ ys) e p d := by
   unfold Stops at h ⊢
@@ -486,12 +490,12 @@ theorem handAll_cont {hd : Bool} : ∀ (ls : List Lexeme) (p p' : Prog),
     | stop st p1 => rw [h1, handAll_stop] at h; cases h
 
 /-- What the consumer does after lexemes it goes on through keeps the lexical rules. -/
-theorem pending_cont {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls : List Lexeme}
+theorem pending_cont {hd : Bool} {ver : Version} {coll : List Handed} {ls : List Lexeme}
     {p' : Prog} (h : pending C hd ver coll ls = .cont p') : (p'.ver == .v2_0) = (ver == .v2_0) :=
   handAll_cont ls _ p' h
 
 /-- The hand-over of a cursor over a batch that holds lexemes, as two cases. -/
-theorem flushCursor_wp' (cursor : Token.BatchCursor g) (ls : List Lexeme)
+theorem flushCursor_wp' (cursor : LexerCursor g) (ls : List Lexeme)
     (hb : Holds (BSmtLib.Lexer.Internal.intoBatch cursor) ls) (hs : cStop cursor ≤ ls.length)
     (hrel : relexRequested cursor = false) (hdis : discardRequested cursor = false)
     (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (s : WP.BS floor low) (coll : List Handed)
@@ -516,9 +520,9 @@ theorem flushCursor_wp' (cursor : Token.BatchCursor g) (ls : List Lexeme)
     intro e he
     exact herr e p' st.discards (by rw [hp]; exact ⟨rfl, rfl, he⟩)
 
-theorem yields_new (v : Token.Version) (T : Token.Internal.TokenBatch) (ls : List Lexeme)
+theorem yields_new (v : Version) (T : Token.Internal.TokenBatch) (ls : List Lexeme)
     (hT : Holds T ls) :
-    yields (Token.BatchCursor.Internal.new v T) ls = ls := by
+    yields (Lexer.Cursor.LexerCursor.Internal.new v T) ls = ls := by
   rw [yields, cStop_new, cNext_new, List.drop_zero, hT.len, List.take_length]
 
 end

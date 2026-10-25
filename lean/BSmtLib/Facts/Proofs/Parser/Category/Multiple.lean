@@ -48,7 +48,7 @@ theorem firstToken_eq {cursor after : Z} {raw : Cursor.Token Z}
     rw [hnext] at heq
     cases heq
 
-theorem ofSyntax_parenClose {token : Token.SyntaxToken}
+theorem ofSyntax_parenClose {token : Token}
     (h : Parser.Internal.Input.ofSyntax token = .parenClose) : token = .parenClose := by
   cases token <;> first | rfl | cases h
 
@@ -73,7 +73,7 @@ abbrev valuesTokens {α : Type} (values : List (List Parser.Internal.Input × α
 
 /-- The values finish with the inner parser, back as it was, and none starts with a `)`. -/
 def ValuesParse {H P R E : Type} {m : Type → Type} [Monad m] [Parse P H m E R]
-    (version : Token.Version) (parser : P)
+    (version : Version) (parser : P)
     (values : List (List Parser.Internal.Input × ExceptT (ParseErrorCause E) (StateT H m) R)) :
     Prop :=
   ∀ value ∈ values, Outcome.Finishes version parser value.1 value.2 parser ∧
@@ -81,10 +81,10 @@ def ValuesParse {H P R E : Type} {m : Type → Type} [Monad m] [Parse P H m E R]
 
 section
 
-variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-  [Parse P H m (Traits.Handler.Error H) R]
+variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+  [Parse P H m (Handler.Error H) R]
 
-theorem values_handlerOnly {version : Token.Version} {p : P}
+theorem values_handlerOnly {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
     HandlerOnly (values.mapM fun (value : List Parser.Internal.Input × PM H R) => value.2) := by
   induction values with
@@ -119,10 +119,10 @@ macro "loop_resp" : tactic => `(tactic| (
       onOutcome_finished _ _ _ _ hz, parseState_eq s .new]))
 
 /-- The values, then what the loop does at the cursor after them, with the items it has. -/
-private theorem multiple_loop {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem multiple_loop {version : Version} {p : P} {Z : Type} [Cursor Z]
     {origin last : Z}
     (finale : Array R →
-      StateT H m (Outcome (Array R) (ClosedMultipleParser H P) Z (Traits.Handler.Error H)))
+      StateT H m (Outcome (Array R) (ClosedMultipleParser H P) Z (Handler.Error H)))
     (hfinale : ∀ (items : Array R) (state : ParseState H) (hc : Cursor.Consumed last origin),
       outcomeAny <$> Internal.repeatTurns ClosedMultipleParser.turn origin
           ({ inner := p, outside := true, items } : ClosedMultipleParser H P) state last hc =
@@ -193,10 +193,10 @@ private theorem multiple_parse_eq (p : P) (items : Array R) {Z : Type} [Cursor Z
 
 /-- The parse of a list with a first value: the values, then what the loop does at the cursor
 after them. -/
-private theorem multiple_first {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem multiple_first {version : Version} {p : P} {Z : Type} [Cursor Z]
     {cursor last : Z}
     (finale : Array R →
-      StateT H m (Outcome (Array R) (ClosedMultipleParser H P) Z (Traits.Handler.Error H)))
+      StateT H m (Outcome (Array R) (ClosedMultipleParser H P) Z (Handler.Error H)))
     (hfinale : ∀ (items : Array R) (state : ParseState H) (hc : Cursor.Consumed last cursor),
       outcomeAny <$> Internal.repeatTurns ClosedMultipleParser.turn cursor
           ({ inner := p, outside := true, items } : ClosedMultipleParser H P) state last hc =
@@ -245,7 +245,7 @@ private theorem multiple_first {version : Token.Version} {p : P} {Z : Type} [Cur
       · dsimp only
         rw [onOutcome_finished _ _ _ _ hc₁]
         simp only [pure_bind]
-        rw [show ∀ X : StateT H m (Except (ParseError (Traits.Handler.Error H))
+        rw [show ∀ X : StateT H m (Except (ParseError (Handler.Error H))
               (ControlFlow (Array R)) × ClosedMultipleParser H P × ParseState H ×
               { z : Z // Cursor.Consumed z cursor }),
             (outcome <$> (X >>= fun x => match x with
@@ -267,7 +267,7 @@ private theorem multiple_first {version : Token.Version} {p : P} {Z : Type} [Cur
 
 
 /-- Between values, a `)` ends the list with its items. -/
-private theorem loop_close {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem loop_close {version : Version} {p : P} {Z : Type} [Cursor Z]
     {origin last next : Z} (items : Array R) (state : ParseState H)
     (hc : Cursor.Consumed last origin) (htakes : Takes version last [.parenClose] next) :
     outcomeAny <$> Internal.repeatTurns ClosedMultipleParser.turn origin
@@ -283,7 +283,7 @@ private theorem loop_close {version : Token.Version} {p : P} {Z : Type} [Cursor 
       ofSyntax_parenClose htoken]
     simp [outcomeAny, ClosedMultipleParser.new]
 
-private theorem first_close {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem first_close {version : Version} {p : P} {Z : Type} [Cursor Z]
     {cursor next : Z} (items : Array R) (state : ParseState H)
     (htakes : Takes version cursor [.parenClose] next) :
     outcome <$> Parse.parse ({ inner := p, outside := true, items } : ClosedMultipleParser H P)
@@ -314,7 +314,7 @@ private theorem loop_end {p : P} {Z : Type} [Cursor Z] {origin last : Z} (items 
 
 /-- Between values, the inner parser rejects tokens that do not start with `)`: the loop
 rejects them. -/
-private theorem loop_rejects {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem loop_rejects {version : Version} {p : P} {Z : Type} [Cursor Z]
     {origin last next : Z} {tokens : List Parser.Internal.Input} {program : PM H Unit}
     {kind : SyntaxErrorKind} (h : Outcome.Rejects version p tokens program kind)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
@@ -351,7 +351,7 @@ private theorem loop_rejects {version : Token.Version} {p : P} {Z : Type} [Curso
 
 /-- Between values, the inner parser wants more on tokens that do not start with `)`: the loop
 wants more, as the inner parser, within a value. -/
-private theorem loop_waits {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem loop_waits {version : Version} {p : P} {Z : Type} [Cursor Z]
     {origin last final : Z} {tokens : List Parser.Internal.Input} {α : Type}
     {program : PM H α} {after : α → P} (h : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
@@ -385,7 +385,7 @@ private theorem loop_waits {version : Token.Version} {p : P} {Z : Type} [Cursor 
       · simp [onOutcome, outcomeAny, answer]
 
 
-private theorem first_rejects {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem first_rejects {version : Version} {p : P} {Z : Type} [Cursor Z]
     {cursor next : Z} {tokens : List Parser.Internal.Input} {program : PM H Unit}
     {kind : SyntaxErrorKind} (h : Outcome.Rejects version p tokens program kind)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
@@ -419,7 +419,7 @@ private theorem first_rejects {version : Token.Version} {p : P} {Z : Type} [Curs
         rw [onOutcome_rejected _ _ _ (fun _ => hcf)]
         simp [outcome, answer]
 
-private theorem first_waits {version : Token.Version} {p : P} {Z : Type} [Cursor Z]
+private theorem first_waits {version : Version} {p : P} {Z : Type} [Cursor Z]
     {cursor final : Z} {tokens : List Parser.Internal.Input} {α : Type}
     {program : PM H α} {after : α → P} (h : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
@@ -457,11 +457,11 @@ private theorem first_waits {version : Token.Version} {p : P} {Z : Type} [Cursor
 /-- A handler-only program's run, bound to a continuation that answers handler failures as
 failures: the continuation on the program's calls. -/
 private theorem run_bind_calls {β γ : Type} {x : PM H β}
-    {calls : ExceptT (Traits.Handler.Error H) (StateT H m) β}
+    {calls : ExceptT (Handler.Error H) (StateT H m) β}
     (hcalls : x.run = (fun e => match e with
         | .ok a => .ok a
         | .error error => .error (.handler error)) <$> calls.run)
-    (F : β → StateT H m γ) (G : Traits.Handler.Error H → StateT H m γ)
+    (F : β → StateT H m γ) (G : Handler.Error H → StateT H m γ)
     (S : SyntaxErrorKind → StateT H m γ) (V : VersionErrorKind → StateT H m γ) :
     (x.run >>= fun e => match e with
       | .ok found => F found
@@ -475,7 +475,7 @@ private theorem run_bind_calls {β γ : Type} {x : PM H β}
   refine bind_congr fun e => ?_
   rcases e with error | a <;> rfl
 
-private theorem items_finishes {version : Token.Version} {p : P}
+private theorem items_finishes {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (items : Array R) :
     Outcome.Finishes version ({ inner := p, outside := true, items } : ClosedMultipleParser H P)
@@ -500,7 +500,7 @@ private theorem items_finishes {version : Token.Version} {p : P}
     refine bind_congr fun e => ?_
     rcases e with error | found <;> rfl
 
-private theorem items_rejects {version : Token.Version} {p : P}
+private theorem items_rejects {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p tokens program kind)
@@ -527,7 +527,7 @@ private theorem items_rejects {version : Token.Version} {p : P}
     refine bind_congr fun e => ?_
     rcases e with error | found <;> rfl
 
-private theorem items_waits_end {version : Token.Version} {p : P}
+private theorem items_waits_end {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (items : Array R) :
     Outcome.Waits version ({ inner := p, outside := true, items } : ClosedMultipleParser H P)
@@ -553,7 +553,7 @@ private theorem items_waits_end {version : Token.Version} {p : P}
     refine bind_congr fun e => ?_
     rcases e with error | found <;> rfl
 
-private theorem items_waits_inner {version : Token.Version} {p : P}
+private theorem items_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after)
@@ -599,10 +599,10 @@ private theorem items_waits_inner {version : Token.Version} {p : P}
 
 /-- The list parser within a value: the inner parser finishes it, then the values, then what
 the loop does at the cursor after them. -/
-private theorem resume_first {version : Token.Version} {p q : P} {Z : Type} [Cursor Z]
+private theorem resume_first {version : Version} {p q : P} {Z : Type} [Cursor Z]
     {cursor last : Z}
     (finale : Array R →
-      StateT H m (Outcome (Array R) (ClosedMultipleParser H P) Z (Traits.Handler.Error H)))
+      StateT H m (Outcome (Array R) (ClosedMultipleParser H P) Z (Handler.Error H)))
     (hfinale : ∀ (items : Array R) (state : ParseState H) (hc : Cursor.Consumed last cursor),
       outcomeAny <$> Internal.repeatTurns ClosedMultipleParser.turn cursor
           ({ inner := p, outside := true, items } : ClosedMultipleParser H P) state last hc =
@@ -646,7 +646,7 @@ private theorem resume_first {version : Token.Version} {p q : P} {Z : Type} [Cur
     · dsimp only
       rw [onOutcome_finished _ _ _ _ hc₁]
       simp only [pure_bind]
-      rw [show ∀ X : StateT H m (Except (ParseError (Traits.Handler.Error H))
+      rw [show ∀ X : StateT H m (Except (ParseError (Handler.Error H))
             (ControlFlow (Array R)) × ClosedMultipleParser H P × ParseState H ×
             { z : Z // Cursor.Consumed z cursor }),
           (outcome <$> (X >>= fun x => match x with
@@ -666,7 +666,7 @@ private theorem resume_first {version : Token.Version} {p q : P} {Z : Type} [Cur
       rcases e with (kind | kind | error) | found <;> simp
 
 /-- The closed list parser on its values and the `)` after them. -/
-theorem closedMultiple_parses {version : Token.Version} {p : P}
+theorem closedMultiple_parses {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
     Outcome.Finishes version (ClosedMultipleParser.new (H := H) p)
       (valuesTokens values ++ [.parenClose])
@@ -677,7 +677,7 @@ theorem closedMultiple_parses {version : Token.Version} {p : P}
 
 /-- The closed list parser on its values and then tokens that its inner parser rejects, not
 starting with `)`. -/
-theorem closedMultiple_rejects_inner {version : Token.Version} {p : P}
+theorem closedMultiple_rejects_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p tokens program kind)
@@ -690,7 +690,7 @@ theorem closedMultiple_rejects_inner {version : Token.Version} {p : P}
 The closed list parser on its values and no more: it wants more, as a parser that finishes on
 further values and the `)`, and rejects further values and tokens that its inner parser rejects.
 -/
-theorem closedMultiple_waits_between {version : Token.Version} {p : P}
+theorem closedMultiple_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
     ∃ after : List R → ClosedMultipleParser H P,
       Outcome.Waits version (ClosedMultipleParser.new (H := H) p) (valuesTokens values)
@@ -718,7 +718,7 @@ The closed list parser on its values and then tokens on which its inner parser w
 starting with `)`: it wants more, as a parser that finishes once the inner parser finishes its
 value and further values and the `)` follow.
 -/
-theorem closedMultiple_waits_inner {version : Token.Version} {p : P}
+theorem closedMultiple_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after)
@@ -757,72 +757,88 @@ theorem closedMultiple_waits_inner {version : Token.Version} {p : P}
     rcases e with error | results <;> simp [answer, Except.map]
 
 
+/-- The list parser enclosed in `(` and `)` answers as the opened parser it wraps. -/
+private theorem parenMultiple_wraps :
+    Wraps (H := H) fun inner : OpenedParser H (ClosedMultipleParser H P) =>
+      (⟨inner⟩ : ParenMultipleParser H P) := by
+  intro inner Z _ state cursor
+  rw [show Parse.parse (⟨inner⟩ : ParenMultipleParser H P) state cursor =
+      Parse.parse inner state cursor >>= fun x =>
+        pure (x.1, (⟨x.2.1⟩ : ParenMultipleParser H P), x.2.2.1, x.2.2.2) from rfl, map_bind,
+    Functor.map_map, map_eq_pure_bind]
+  refine bind_congr fun x => ?_
+  obtain ⟨a, p, s, ⟨z, hz⟩⟩ := x
+  rcases a with (_ | _) | (_ | _) <;> simp only [map_pure] <;> rfl
+
 /-- The list parser enclosed in `(` and `)` on a `(`, its values and the `)`. -/
-theorem parenMultiple_parses {version : Token.Version} {p : P}
+theorem parenMultiple_parses {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
-    Outcome.Finishes version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
+    Outcome.Finishes version (ParenMultipleParser.new (H := H) p)
       (.parenOpen :: (valuesTokens values ++ [.parenClose]))
       ((fun results => results.toArray) <$> values.mapM fun value => value.2)
-      (ParenMultipleParser.new (ClosedMultipleParser.new p)) :=
-  opened_parses (closedMultiple_parses hvalues) (by simp)
+      (ParenMultipleParser.new p) :=
+  wraps_finishes parenMultiple_wraps (opened_parses (closedMultiple_parses hvalues) (by simp))
 
 /-- The list parser enclosed in `(` and `)` on a first token that is not `(`. -/
-theorem parenMultiple_rejects_open {version : Token.Version} {p : P}
+theorem parenMultiple_rejects_open {version : Version} {p : P}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
-    Outcome.Rejects version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
+    Outcome.Rejects version (ParenMultipleParser.new (H := H) p)
       [token] (pure () : PM H Unit)
       (.expected #[.token .parenOpen]) :=
-  opened_rejects_open htoken
+  wraps_rejects parenMultiple_wraps (opened_rejects_open htoken)
 
 /-- The list parser enclosed in `(` and `)` on a `(`, values and then tokens that its inner
 parser rejects, not starting with `)`. -/
-theorem parenMultiple_rejects_inner {version : Token.Version} {p : P}
+theorem parenMultiple_rejects_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p tokens program kind)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
-    Outcome.Rejects version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
+    Outcome.Rejects version (ParenMultipleParser.new (H := H) p)
       (.parenOpen :: (valuesTokens values ++ tokens))
       (do let _ ← values.mapM fun value => value.2; program) kind := by
-  refine opened_rejects_inner (closedMultiple_rejects_inner hvalues h hfirst) ?_
+  refine wraps_rejects parenMultiple_wraps
+    (opened_rejects_inner (closedMultiple_rejects_inner hvalues h hfirst) ?_)
   obtain ⟨token, tokens', rfl, _⟩ := hfirst
   simp
 
 /-- The list parser enclosed in `(` and `)` on its `(` and no more: it wants more, as a parser
 that finishes on values and the `)`. -/
-theorem parenMultiple_waits_open {version : Token.Version} {p : P} :
+theorem parenMultiple_waits_open {version : Version} {p : P} :
     ∃ after : Unit → ParenMultipleParser H P,
-      Outcome.Waits version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
+      Outcome.Waits version (ParenMultipleParser.new (H := H) p)
         [.parenOpen]
         (pure () : PM H Unit) after ∧
       ∀ {values : List (List Parser.Internal.Input × PM H R)}, ValuesParse version p values →
         Outcome.Finishes version (after ()) (valuesTokens values ++ [.parenClose])
           ((fun results => results.toArray) <$> values.mapM fun value => value.2)
-          (ParenMultipleParser.new (ClosedMultipleParser.new p)) := by
+          (ParenMultipleParser.new p) := by
   obtain ⟨after, hwaits, hfin, _⟩ := opened_waits_after_open (H := H) (version := version)
     (p := ClosedMultipleParser.new (H := H) p)
-  exact ⟨after, hwaits, fun hv => hfin (closedMultiple_parses hv)⟩
+  exact ⟨fun a => ⟨after a⟩, wraps_waits parenMultiple_wraps hwaits,
+    fun hv => wraps_finishes parenMultiple_wraps (hfin (closedMultiple_parses hv))⟩
 
 /-- The list parser enclosed in `(` and `)` on its `(` and values, at least one, and no more:
 it wants more, as a parser that finishes on further values and the `)`. -/
-theorem parenMultiple_waits_between {version : Token.Version} {p : P}
+theorem parenMultiple_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hne : values ≠ []) :
     ∃ after : List R → ParenMultipleParser H P,
-      Outcome.Waits version (ParenMultipleParser.new (ClosedMultipleParser.new (H := H) p))
+      Outcome.Waits version (ParenMultipleParser.new (H := H) p)
         (.parenOpen :: valuesTokens values) (values.mapM fun value => value.2) after ∧
       ∀ found {values' : List (List Parser.Internal.Input × PM H R)},
         ValuesParse version p values' →
         Outcome.Finishes version (after found) (valuesTokens values' ++ [.parenClose])
           ((fun results => (found ++ results).toArray) <$> values'.mapM fun value => value.2)
-          (ParenMultipleParser.new (ClosedMultipleParser.new p)) := by
+          (ParenMultipleParser.new p) := by
   obtain ⟨after, hwaits, hfin, _⟩ := closedMultiple_waits_between hvalues
   have htok : valuesTokens values ≠ [] := by
     obtain ⟨value, values', rfl⟩ := List.exists_cons_of_ne_nil hne
     obtain ⟨_, token, tokens, hvalue, _⟩ := hvalues value (List.mem_cons_self ..)
     simp [valuesTokens, hvalue]
   obtain ⟨after', hwaits', hfin', _⟩ := opened_waits_inner hwaits htok
-  exact ⟨after', hwaits', fun found _ hv => hfin' found (hfin found hv)⟩
+  exact ⟨fun a => ⟨after' a⟩, wraps_waits parenMultiple_wraps hwaits',
+    fun found _ hv => wraps_finishes parenMultiple_wraps (hfin' found (hfin found hv))⟩
 
 end
 

@@ -22,15 +22,15 @@ open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Outer
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Top
 
-theorem new_eq {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Token.Version) :
+theorem new_eq {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Version) :
     Lexer.Internal.WRustPort.Lexer.new consumer version =
       { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.new consumer version)
         core := coreMap 0 (BSmtLib.Lexer.Internal.core (BSmtLib.Lexer.new consumer version))
         held := BSmtLib.Lexer.Internal.held (BSmtLib.Lexer.new consumer version) } :=
   (rfl)
 
-theorem newRecovering_eq {H R E : Type} [Token.Consume H R E] {m : Type → Type} [Token.Recover H m]
-    (consumer : H) (version : Token.Version) :
+theorem newRecovering_eq {H R E : Type} [Token.Consume H R E] {m : Type → Type} [Lexer.Recovery.Recover H m]
+    (consumer : H) (version : Version) :
     Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version =
       { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.newRecovering
           (m := m) consumer version)
@@ -40,14 +40,14 @@ theorem newRecovering_eq {H R E : Type} [Token.Consume H R E] {m : Type → Type
           (BSmtLib.Lexer.newRecovering (m := m) consumer version) } :=
   (rfl)
 
-theorem lexerRel_new {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Token.Version) :
+theorem lexerRel_new {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Version) :
     LexerRel (BSmtLib.Lexer.new consumer version) (Lexer.Internal.WRustPort.Lexer.new consumer
         version) :=
   ⟨rfl, rel_coreMap 0 _, rfl⟩
 
 theorem lexerRel_newRecovering {H R E : Type} [Token.Consume H R E]
-    {m : Type → Type} [Token.Recover H m]
-    (consumer : H) (version : Token.Version) :
+    {m : Type → Type} [Lexer.Recovery.Recover H m]
+    (consumer : H) (version : Version) :
     LexerRel (BSmtLib.Lexer.newRecovering (m := m) consumer version)
       (Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version) :=
   ⟨rfl, rel_coreMap 0 _, rfl⟩

@@ -6,6 +6,8 @@ import all BSmtLib.Parser
 import all BSmtLib.Parser.Script
 import all BSmtLib.Facts.Proofs.Reader.Param.Stop
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Parser.Adapter
 
 @[expose] public section
@@ -21,16 +23,18 @@ stops at the same token with the same answer, its errors blanked, and the same c
 blanked parsers (`takeOne_blank`, `rest_blank`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Parser.Blank.Loop
 
 open Basic States Simp Tactic Steps Commands
 open BSmtLib.Parser.Internal (PM)
 
-open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Parser.Command BSmtLib.Parser.Script
 open BSmtLib.Parser.Command.Internal
 open BSmtLib.Facts.Proofs.Reader.Param (Stop.takeOne Stop.rest)
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 
 /-- Results of the two runs, the first with a handler, the second with the blank handler: values
 related by `Q`, or failures with the same cause, blanked. -/
@@ -61,7 +65,7 @@ def FlowB : Internal.Flow (PM H) (ScriptParser H) Unit →
 theorem reset_blank (p : ScriptParser H) :
     blank (Internal.ParseByToken.reset p) = Internal.ParseByToken.reset (blank p) := (rfl)
 
-theorem setVersion_resume_blank (declared : Token.Version) (p : ScriptParser H) :
+theorem setVersion_resume_blank (declared : Version) (p : ScriptParser H) :
     BSim (do
         ExceptT.lift (Handler.setVersion (H := H) declared)
         return Internal.Step.more
@@ -79,7 +83,7 @@ theorem setVersion_resume_blank (declared : Token.Version) (p : ScriptParser H) 
   rfl
 
 /-- The script parser's step, blanked. -/
-theorem step_blank [NoFails H] (version : Token.Version) (p : ScriptParser H)
+theorem step_blank [NoFails H] (version : Version) (p : ScriptParser H)
     (token : Internal.Input) (h : H) :
     ERelB FlowB ((ScriptParser.Internal.step version p token).run.run h).1
       ((ScriptParser.Internal.step version (blank p) token).run.run {}).1 := by
@@ -120,7 +124,7 @@ theorem step_blank [NoFails H] (version : Token.Version) (p : ScriptParser H)
       | endOfFile => trivial
 
 /-- A token's arrival at the script parser and its step, blanked. -/
-theorem block_blank [NoFails H] (version : Token.Version) (p : ScriptParser H)
+theorem block_blank [NoFails H] (version : Version) (p : ScriptParser H)
     (input : Internal.Input) (h : H) :
     ERelB FlowB
       ((do Internal.ParseByToken.arrive p input
@@ -224,22 +228,22 @@ open BSmtLib.Facts.Proofs.Reader.Param (Stop.consume Stop.finish Stop.told)
 
 variable {b : Token.BatchTag}
 
-theorem next?_hasNext (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
+theorem next?_hasNext (cursor : LexerCursor b) (h : cursor.HasNext) :
     Token.Cursor.next? cursor = some (cursor.next h) := by
-  show Token.BatchCursor.next? cursor = _
-  unfold Token.BatchCursor.next?
+  show Lexer.Cursor.LexerCursor.next? cursor = _
+  unfold Lexer.Cursor.LexerCursor.next?
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
-theorem next?_not (cursor : Token.BatchCursor b) (h : ¬ cursor.HasNext) :
+theorem next?_not (cursor : LexerCursor b) (h : ¬ cursor.HasNext) :
     Token.Cursor.next? cursor = none := by
-  show Token.BatchCursor.next? cursor = _
-  unfold Token.BatchCursor.next?
+  show Lexer.Cursor.LexerCursor.next? cursor = _
+  unfold Lexer.Cursor.LexerCursor.next?
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
 /-- The loop over the rest of a cursor, blanked: the same answer, its errors blanked, the same
 cursor, and blanked parsers. -/
-theorem rest_blank [NoFails H] (origin : Token.BatchCursor b) :
-    ∀ (n : Nat) (p : ScriptParser H) (cursor : Token.BatchCursor b)
+theorem rest_blank [NoFails H] (origin : LexerCursor b) :
+    ∀ (n : Nat) (p : ScriptParser H) (cursor : LexerCursor b)
       (consumed : Token.Cursor.Consumed cursor origin) (h : H), remaining cursor < n →
       ((Stop.rest (m := Id) origin (blank p) cursor consumed).run {}).1.1 =
           blankAnswer ((Stop.rest (m := Id) origin p cursor consumed).run h).1.1 ∧
@@ -268,7 +272,7 @@ theorem rest_blank [NoFails H] (origin : Token.BatchCursor b) :
       cases a₁ <;> cases a₂ <;> simp only [AfterB] at ha
       · subst ha
         exact rest_blank origin n _ later₁ _ h₁
-          (Nat.lt_of_lt_of_le (Token.BatchCursor.Consumed.remaining_lt taken₁)
+          (Nat.lt_of_lt_of_le (Lexer.Cursor.LexerCursor.Consumed.remaining_lt taken₁)
             (Nat.le_of_lt_succ hn))
       · obtain ⟨rfl, rfl⟩ := ha
         exact ⟨rfl, rfl, rfl⟩
@@ -281,7 +285,7 @@ def blankAdapter (a : ParseAdapter H (ScriptParser H)) : ParseAdapter Shell (Scr
 
 /-- A call of the reader proofs' adapter (`Param.Stop`), blanked: the same answer, its errors
 blanked, the same cursor, and the adapter blanked. -/
-theorem consume_blank [NoFails H] (cursor : Token.BatchCursor b) (hc : cursor.HasNext)
+theorem consume_blank [NoFails H] (cursor : LexerCursor b) (hc : cursor.HasNext)
     (a : ParseAdapter H (ScriptParser H)) :
     ((Stop.consume cursor hc).run (blankAdapter a)).1.1 =
         blankAnswer ((Stop.consume cursor hc).run a).1.1 ∧

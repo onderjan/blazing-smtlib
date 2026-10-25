@@ -18,6 +18,8 @@ fails (`Cause.CauseOf`, `causeOfT`), unless the stand-in consumer was handed whi
 comment. That error is unique (`causeOf_unique`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Phi
 
 open BSmtLibSpec
@@ -40,15 +42,15 @@ instance : Token.Consume (Phi version) Unit (Option ScriptError × List Handed) 
   isConcrete := false
 
 /-- Takes the tokens as the stand-in consumer does; an error comes with the tokens taken. -/
-def consume {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
+def consume {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) :
     StateT (Phi version) AnswerM
       (Except (Option ScriptError × List Handed) (ControlFlow Unit) ×
-        {c : Token.BatchCursor b // c.Consumed cursor}) :=
+        {c : LexerCursor b // c.Consumed cursor}) :=
   fun s taken =>
     let r := ((Flagged.consume (scriptConsumer version) cursor h).run s.fl).run taken
     (((r.1.1.1.mapError fun e => (e, r.2), r.1.1.2), ⟨r.1.2⟩), r.2)
 
-instance {b : Token.BatchTag} : Token.ConsumeFrom (Phi version) (Token.BatchCursor b) AnswerM where
+instance {b : Token.BatchTag} : Token.ConsumeFrom (Phi version) (LexerCursor b) AnswerM where
   consume cursor h := consume cursor h
 
 /-- A computation of `Phi version` as one of the stand-in consumer. -/
@@ -108,7 +110,7 @@ def linkPhi (version : Lexicon.Version) :
       (Parser.ParseError Unit) :=
   { rc := relatorPhi version, rr := fun _ _ => True, re := ReE version }
 
-theorem lift_consume {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext)
+theorem lift_consume {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext)
     (fl : Flagged (scriptConsumer version)) (taken : List Handed) :
     ((lift (Token.ConsumeFrom.consume (m := AnswerM) cursor h :
       StateT (Phi version) AnswerM _)).run fl).run taken =

@@ -6,7 +6,8 @@ public import BSmtLib.Facts.Proofs.Parser.Blank.Loop
 public import BSmtLib.Facts.Proofs.Parser.Blank.Recording
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Facts.Proofs.Reader.Param.Stop
 
 @[expose] public section
@@ -23,6 +24,8 @@ the items taken leaves it with (`Drive.drive`, `At`). The recording run over the
 (`Blank`), and the facts about it (`Link.script_token`) say where the adapter stops.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Handler.Loop
 
 open BSmtLib.Facts.Proofs.Reader (Param.Flagged.isError Param.Link.Viable)
@@ -30,9 +33,9 @@ open BSmtLib.Facts.Proofs.Reader (Param.Flagged.isError Param.Link.Viable)
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause)
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
@@ -55,10 +58,10 @@ variable {H : Type} [CommandHandler H Id]
 
 /-- The loop of the reader proofs' adapter over the tokens of a cursor, from the parser: each
 token taken in turn, until the cursor has none or the handover stops. -/
-def loop {b : Token.BatchTag} (parser : ScriptParser H) (cursor : Token.BatchCursor b) :
+def loop {b : Token.BatchTag} (parser : ScriptParser H) (cursor : LexerCursor b) :
     StateT H Id
       (Except (ParseError (Handler.Error H)) (ControlFlow Unit) × ScriptParser H ×
-        Token.BatchCursor b) :=
+        LexerCursor b) :=
   if h : cursor.HasNext then
     match cursor.next h with
     | (token, ⟨next, consumed⟩) => do
@@ -67,9 +70,9 @@ def loop {b : Token.BatchTag} (parser : ScriptParser H) (cursor : Token.BatchCur
       | (.stop answer parser', ⟨later, _⟩) => return (answer, parser', later)
   else return (.ok .continue, parser, cursor)
 termination_by remaining cursor
-decreasing_by exact Token.BatchCursor.Consumed.remaining_lt _taken
+decreasing_by exact Lexer.Cursor.LexerCursor.Consumed.remaining_lt _taken
 
-theorem loop_step {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cursor.HasNext)
+theorem loop_step {b : Token.BatchTag} {cursor : LexerCursor b} (h : cursor.HasNext)
     (parser : ScriptParser H) (handler : H) :
     (loop parser cursor).run handler =
       match (Stop.takeOne (m := Id) parser cursor (cursor.next h).1
@@ -88,7 +91,7 @@ theorem loop_step {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : curso
 /-! ## Where the adapter stands -/
 
 /-- The handler told the version, unless it was told the version of the input already. -/
-def toldAt (adapter : ParseAdapter H (ScriptParser H)) (version : Token.Version) : H :=
+def toldAt (adapter : ParseAdapter H (ScriptParser H)) (version : Version) : H :=
   if ParseAdapter.Internal.versionSet adapter then adapter.handler
   else ((Handler.setVersion (H := H) version).run adapter.handler).2
 
@@ -103,7 +106,7 @@ def hRun (version : Lexicon.Version) (init : H) (items : List LibItem) :=
 handler the driver leaves, as the handler the adapter's next loop begins with; after the end of
 the script, the handler the driver leaves. The recording run over the items goes on in the same
 version, its parser the driver's with the values blanked, or ends as the driver does. -/
-def At (version : Lexicon.Version) (init : H) (items : List LibItem) (v : Token.Version)
+def At (version : Lexicon.Version) (init : H) (items : List LibItem) (v : Version)
     (adapter : ParseAdapter H (ScriptParser H)) : Prop :=
   match hRun version init items, recRun version items with
   | (.ok (.inl (v', parser)), handler), (.ok (.inl (vr, pr)), _) =>
@@ -140,7 +143,7 @@ theorem blankAnswer_flow {ε ε' : Type} {a : Except (ParseError ε) (ControlFlo
 
 /-- The driver's run over one more item. -/
 theorem hRun_snoc (version : Lexicon.Version) (init : H) (items : List LibItem) (item : LibItem)
-    {v : Token.Version} {parser : ScriptParser H} {s : H}
+    {v : Version} {parser : ScriptParser H} {s : H}
     (h : hRun version init items = (.ok (.inl (v, parser)), s)) :
     hRun version init (items ++ [item]) =
       match (tokenStep v parser item.val).run.run s with
@@ -162,7 +165,7 @@ agree while what is taken stands for a start of the script, and the handler is w
 over the items leaves it. -/
 theorem loop_agree [NoFails H] {version : Lexicon.Version} {commands : List Tree.Command}
     (hscript : Script version commands) (init : H) {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed) (items : List LibItem)
+    ∀ (n : Nat) (cursor : LexerCursor b) (taken : List Handed) (items : List LibItem)
       (pr : ScriptParser (List Event)) (log : List Event) (parser : ScriptParser H) (s : H),
       remaining cursor < n →
       items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf) →
@@ -205,7 +208,7 @@ theorem loop_agree [NoFails H] {version : Lexicon.Version} {commands : List Tree
         rw [← hitemdef] at htake
         change _ = paOf pr (cursor.next h).2.val
           ((recAfter cursor.version pr item.val).run.run log) at htake
-        have hver : ∀ {v' : Token.Version} {p' : ScriptParser (List Event)} {log' : List Event},
+        have hver : ∀ {v' : Version} {p' : ScriptParser (List Event)} {log' : List Event},
             (recAfter cursor.version pr item.val).run.run log = (.ok (.inl (v', p')), log') →
             v' = match Parser.Adapters.Run.switchOf log'.reverse with
               | some switched => toVersion switched

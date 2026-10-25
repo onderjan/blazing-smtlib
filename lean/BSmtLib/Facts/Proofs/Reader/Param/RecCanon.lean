@@ -43,7 +43,7 @@ theorem CSim.map_canon {α : Type} [Canon α] (x : RPM α) : CSim x (canon <$> x
 
 /-- What the driver does after an item's processing, from a parser and an item, and from their
 canonicalisations. -/
-theorem afterProcessing_canon (version : Token.Version) (parser : ScriptParser (List Event))
+theorem afterProcessing_canon (version : Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
     CSim (afterProcessing recordingProducer version parser token)
       (afterProcessing recordingProducer version (canon parser) (canon token)) := by
@@ -71,7 +71,7 @@ theorem afterProcessing_canon (version : Token.Version) (parser : ScriptParser (
 
 /-- The driver's run over one item, from a parser and an item, and from their
 canonicalisations. -/
-theorem recAfter_canon (version : Token.Version) (parser : ScriptParser (List Event))
+theorem recAfter_canon (version : Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
     CSim (recAfter version parser token) (recAfter version (canon parser) (canon token)) := by
   unfold recAfter afterToken
@@ -102,7 +102,7 @@ theorem canonSlice_of_chars {s t : ByteSlice} (h : Bridge.chars s = Bridge.chars
     rw [hd]
   rw [this]
 
-theorem canonSymbol_of_symbol {s t : Plain.Symbol} (h : Bridge.symbol s = Bridge.symbol t) :
+theorem canonSymbol_of_symbol {s t : Lexicon.Value.Symbol} (h : Bridge.symbol s = Bridge.symbol t) :
     canonSymbol s = canonSymbol t := by
   simp only [Bridge.symbol, BSmtLibSpec.Grammar.Tree.Symbol.mk.injEq] at h
   obtain ⟨hc, hq⟩ := h
@@ -130,7 +130,7 @@ theorem canonInput_of_received {a b : Internal.Input}
     | simp only [canonInput, Canon.canon, canonConstant, canonSlice_of_chars h]
     | simp only [canonInput, Canon.canon, canonSymbol_of_symbol h]
     | exact congrArg
-        (fun s => Internal.Input.keyword (BSmtLib.Plain.Keyword.Internal.newUnchecked s))
+        (fun s => Internal.Input.keyword (BSmtLib.Lexicon.Value.Keyword.Internal.newUnchecked s))
         (canonSlice_of_chars h)
     | rw [BSmtLib.Facts.Proofs.Parser.Reserved.Bridge.reserved_injective h]
 
@@ -140,7 +140,7 @@ open BSmtLib.Facts.Proofs.Parser.Rejection.Script (driveScript)
 
 /-- The script parser's recording run over items, from a parser, and over their
 canonicalisations from its canonicalisation. -/
-theorem driveScript_canon : ∀ (items : List Internal.Input) (version : Token.Version)
+theorem driveScript_canon : ∀ (items : List Internal.Input) (version : Version)
     (parser : ScriptParser (List Event)),
     CSim (driveScript version parser items) (driveScript version (canon parser) (canon items))
   | [], version, parser => CSim.pure rfl

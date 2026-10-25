@@ -15,6 +15,8 @@ state, so it reads the cursors only below the length of their batches
 (`canonAdapter_consumesAlike`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Canonical
 
 open BSmtLib.Parser BSmtLib.Parser.Adapter
@@ -32,15 +34,15 @@ instance : Token.Consume CanonAdapter Unit (ParseError Unit) where
   isConcrete := false
 
 /-- A call of the canonical adapter: the parse adapter's call, its state then canonicalised. -/
-def canonConsume {b : Token.BatchTag} (c : Token.BatchCursor b) (h : c.HasNext) :
+def canonConsume {b : Token.BatchTag} (c : LexerCursor b) (h : c.HasNext) :
     StateT CanonAdapter Id
       (Except (ParseError Unit) (ControlFlow Unit) ×
-        {c' // Token.BatchCursor.Consumed c' c}) :=
+        {c' // Lexer.Cursor.LexerCursor.Consumed c' c}) :=
   fun s =>
     let q := (Token.ConsumeFrom.consume (m := Id) c h : StateT RecAdapter Id _).run s.adapter
     (q.1, ⟨canonA q.2⟩)
 
-instance {b : Token.BatchTag} : Token.ConsumeFrom CanonAdapter (Token.BatchCursor b) Id where
+instance {b : Token.BatchTag} : Token.ConsumeFrom CanonAdapter (LexerCursor b) Id where
   consume c h := canonConsume c h
 
 theorem canonA_canonA (a : RecAdapter) : canonA (canonA a) = canonA a := by

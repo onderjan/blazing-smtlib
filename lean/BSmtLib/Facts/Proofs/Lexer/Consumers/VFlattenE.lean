@@ -27,13 +27,13 @@ variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- Two feedings of the naive lexer that give the same result or error, take the same tokens and
 leave the same lexer state, and the same lexer if they have not failed. -/
-def WeakEqE (r₁ r₂ : (Except (Lexer.Error.LexError (Option consumer.Error))
+def WeakEqE (r₁ r₂ : (Except (Lexer.Error.LexerError (Option consumer.Error))
     (Option (Span.Located consumer.Result)) × VNaive.lexOps.Lexer consumer) × List Handed) :
     Prop :=
   r₁.1.1 = r₂.1.1 ∧ r₁.2 = r₂.2 ∧ r₁.1.2.core = r₂.1.2.core ∧
     (r₁.1.1.isOk = true → r₁.1.2 = r₂.1.2)
 
-theorem WeakEqE.trans {r₁ r₂ r₃ : (Except (Lexer.Error.LexError (Option consumer.Error))
+theorem WeakEqE.trans {r₁ r₂ r₃ : (Except (Lexer.Error.LexerError (Option consumer.Error))
     (Option (Span.Located consumer.Result)) × VNaive.lexOps.Lexer consumer) × List Handed}
     (h₁ : WeakEqE consumer r₁ r₂) (h₂ : WeakEqE consumer r₂ r₃) : WeakEqE consumer r₁ r₃ :=
   ⟨h₁.1.trans h₂.1, h₁.2.1.trans h₂.2.1, h₁.2.2.1.trans h₂.2.2.1,

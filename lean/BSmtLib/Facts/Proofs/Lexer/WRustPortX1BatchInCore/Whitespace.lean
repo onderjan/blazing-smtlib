@@ -13,6 +13,8 @@ marks the line feeds it passes and puts the token into the batch the loop of the
 holds; both runs do the same, with the batches the loops hold.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Whitespace
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
@@ -25,7 +27,7 @@ open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
@@ -40,7 +42,7 @@ def WsQ (strict : Bool) {α β : Type} (val : α → Nat × Token.Internal.Token
   | some x, some y => (val x).1 = (val' y).1 ∧ Core.HR (val x).2 (val' y).2 ∧ Core.SR0 s t
   | _, _ => False
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem startWhitespaceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (offset base index : Nat) (start : Span.Location) :
     ∀ k (b b' : Token.Internal.TokenBatch) («end» : Nat), input.size - «end» = k → Core.HR b b' →
@@ -75,7 +77,7 @@ theorem startWhitespaceFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
       (Core.leavePending_sim l ls _ _ _ _ _ _ _ hb _ _ _ _ _ _ _ _))
       (SimR.pure fun s t h => ⟨h.1.1, h.2⟩))
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem startWhitespace_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (offset base index : Nat) (b b' : Token.Internal.TokenBatch) (hb : Core.HR b b')
     (hrun hframe hindex hbatch hbatch') :

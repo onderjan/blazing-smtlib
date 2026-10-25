@@ -18,7 +18,9 @@ import all BSmtLib.Parser.Command.Internal.Datatype
 import all BSmtLib.Parser.Command.Internal.Function
 import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -30,6 +32,8 @@ script parser, from every state, fails on it (`scriptStep_layout`), and so the a
 after an action on its cursor (`Param.Stop`), handed such a token, stops with an error at it, the
 cursor after the token (`takeOne_layout`).
 -/
+
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Layout
 
@@ -54,7 +58,7 @@ open BSmtLib.Parser.Category.Token BSmtLib.Parser.Command BSmtLib.Parser.Command
 open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Parser.Command.Internal
 open BSmtLib.Parser.Command.Internal.Function BSmtLib.Parser.Command.Internal.Standard BSmtLib.Parser.Script
-open BSmtLib.Traits
+open BSmtLib.Handler
 
 attribute [local instance high] Stop.consumeFrom
 
@@ -137,12 +141,12 @@ macro_rules
     | (apply fails_bind; apply bodiesStep_layout)
     | (apply fails_bind; apply payloadStep_layout))
 
-theorem identStep_layout (version : Token.Version) (self : IdentState) :
+theorem identStep_layout (version : Version) (self : IdentState) :
     Fails (IdentState.step (H := LH) (m := Id) version self .layout) := by
   cases self <;> simp only [IdentState.step, Parser.Internal.Input.isWord] <;> (try split) <;>
     first | exact fails_syntaxError _ | simp_all
 
-theorem sortStep_layout (version : Token.Version) (self : SortState (Handler.«Sort» LH)) :
+theorem sortStep_layout (version : Version) (self : SortState (Handler.«Sort» LH)) :
     Fails (sortStep (H := LH) (m := Id) version self .layout) := by
   obtain ⟨mode, levels⟩ := self
   unfold sortStep
@@ -150,13 +154,13 @@ theorem sortStep_layout (version : Token.Version) (self : SortState (Handler.«S
       ite_false])
   all_goals fails_tac
 
-theorem sExprStep_layout (version : Token.Version) (self : SExprState (Handler.SExpr LH)) :
+theorem sExprStep_layout (version : Version) (self : SExprState (Handler.SExpr LH)) :
     Fails (sExprStep (H := LH) (m := Id) version self .layout) := by
   unfold sExprStep
   dsimp only
   fails_tac
 
-theorem attributeStep_layout (single : Bool) (version : Token.Version)
+theorem attributeStep_layout (single : Bool) (version : Version)
     (self : AttributeState (Handler.SExpr LH) (Handler.Attribute LH)) :
     Fails (attributeStep (H := LH) (m := Id) single version self .layout) := by
   obtain ⟨mode, attributes⟩ := self
@@ -164,21 +168,21 @@ theorem attributeStep_layout (single : Bool) (version : Token.Version)
   cases mode <;> dsimp only <;> (try simp only [expectClose, Bool.and_eq_true])
   all_goals (try split) <;> (try split) <;> fails_tac
 
-theorem patternStep_layout (version : Token.Version) (self : PatternState) :
+theorem patternStep_layout (version : Version) (self : PatternState) :
     Fails (PatternState.step (H := LH) (m := Id) version self .layout) := by
   unfold PatternState.step
   cases self <;> dsimp only <;>
     (try simp only [PatternState.symbolOrWildcard?, Parser.Internal.Input.isWord, Bool.and_false,
       Bool.false_eq_true, ite_false]) <;> fails_tac
 
-theorem qualIdentStep_layout (version : Token.Version) (self : QualIdentState (Handler.«Sort» LH)) :
+theorem qualIdentStep_layout (version : Version) (self : QualIdentState (Handler.«Sort» LH)) :
     Fails (qualIdentStep (H := LH) (m := Id) version self .layout) := by
   unfold qualIdentStep
   cases self <;> dsimp only <;>
     (try simp only [Parser.Internal.Input.isWord, Bool.false_eq_true, ite_false,
         expectClose]) <;> fails_tac
 
-theorem sortedVarStep_layout (version : Token.Version) (self : SortedVarState (Handler.«Sort» LH)) :
+theorem sortedVarStep_layout (version : Version) (self : SortedVarState (Handler.«Sort» LH)) :
     Fails (sortedVarStep (H := LH) (m := Id) version self .layout) := by
   unfold sortedVarStep
   cases self <;> dsimp only <;> (try simp only [expectClose, expectOpen, expectSymbol]) <;>
@@ -195,7 +199,7 @@ theorem listStep_layout {σ ρ : Type} (init : σ)
       Bool.false_eq_true])
   all_goals (try split) <;> (try split) <;> first | fails_tac | exact fails_bind (hinner _) _
 
-theorem termStep_layout (version : Token.Version) (self : TermStateOf LH) :
+theorem termStep_layout (version : Version) (self : TermStateOf LH) :
     Fails (termStep (H := LH) (m := Id) version self .layout) := by
   obtain ⟨mode, levels⟩ := self
   unfold termStep
@@ -214,31 +218,31 @@ theorem sortDecStep_layout (self : SortDecState) :
   cases self <;> dsimp only <;> (try simp only [expectClose, expectOpen, expectSymbol,
     expectNumeral]) <;> fails_tac
 
-theorem literalStep_layout (version : Token.Version) (self : LiteralStateOf LH) :
+theorem literalStep_layout (version : Version) (self : LiteralStateOf LH) :
     Fails (literalStep (H := LH) (m := Id) version self .layout) := by
   obtain ⟨shape, term⟩ := self
   unfold literalStep
   cases shape <;> dsimp only <;> fails_tac
 
-theorem signatureStep_layout (version : Token.Version) (self : SignatureState (Handler.«Sort» LH)) :
+theorem signatureStep_layout (version : Version) (self : SignatureState (Handler.«Sort» LH)) :
     Fails (signatureStep (H := LH) (m := Id) version self .layout) := by
   unfold signatureStep
   cases self <;> dsimp only <;> (try simp only [expectSymbol]) <;> fails_tac
 
-theorem functionDecStep_layout (version : Token.Version)
+theorem functionDecStep_layout (version : Version)
     (self : FunctionDecState (Handler.«Sort» LH)) :
     Fails (functionDecStep (H := LH) (m := Id) version self .layout) := by
   unfold functionDecStep
   cases self <;> dsimp only <;> (try simp only [expectClose, expectOpen]) <;> fails_tac
 
-theorem constructorStep_layout (version : Token.Version)
+theorem constructorStep_layout (version : Version)
     (self : ConstructorState (Handler.«Sort» LH)) :
     Fails (constructorStep (H := LH) (m := Id) version self .layout) := by
   unfold constructorStep
   cases self <;> dsimp only <;> (try simp only [expectOpen, expectSymbol]) <;> fails_tac
 
-theorem datatypeStep_layout (start : Array Plain.Symbol → Parser.Quiet.RPM Unit)
-    (version : Token.Version)
+theorem datatypeStep_layout (start : Array Lexicon.Value.Symbol → Parser.Quiet.RPM Unit)
+    (version : Version)
     (self : DatatypeState (Handler.«Sort» LH)) :
     Fails (datatypeStep (H := LH) (m := Id) start version self .layout) := by
   unfold datatypeStep
@@ -246,18 +250,18 @@ theorem datatypeStep_layout (start : Array Plain.Symbol → Parser.Quiet.RPM Uni
       Parser.Internal.Input.isWord,
     Bool.false_eq_true, ite_false]) <;> fails_tac
 
-theorem bodyStep_layout (version : Token.Version) (self : TermStateOf LH) :
+theorem bodyStep_layout (version : Version) (self : TermStateOf LH) :
     Fails (bodyStep (H := LH) (m := Id) version self .layout) := by
   unfold bodyStep
   fails_tac
 
-theorem bodiesStep_layout (count : Nat) (version : Token.Version)
+theorem bodiesStep_layout (count : Nat) (version : Version)
     (self : ListState (TermStateOf LH) Unit) :
     Fails (bodiesStep (H := LH) (m := Id) count version self .layout) := by
   unfold bodiesStep
   exact listStep_layout _ _ (bodyStep_layout version) _ _
 
-theorem payloadStep_layout (version : Token.Version) (self : PayloadOf LH) :
+theorem payloadStep_layout (version : Version) (self : PayloadOf LH) :
     Fails (payloadStep (H := LH) (m := Id) version self .layout) := by
   unfold payloadStep
   cases self <;> dsimp only <;> (try simp only [expectClose, expectSymbol,
@@ -267,7 +271,7 @@ theorem payloadStep_layout (version : Token.Version) (self : PayloadOf LH) :
     | exact fails_bind
         (listStep_layout _ _ (fun _ => fails_bind (datatypeStep_layout _ _ _) _) _ _) _
 
-theorem commandStep_layout (version : Token.Version) (self : CommandStateOf LH) :
+theorem commandStep_layout (version : Version) (self : CommandStateOf LH) :
     Fails (commandStep (H := LH) (m := Id) version self .layout) := by
   unfold commandStep
   cases self
@@ -275,22 +279,22 @@ theorem commandStep_layout (version : Token.Version) (self : CommandStateOf LH) 
   case nonstandard parser => exact Empty.elim parser
   all_goals dsimp only <;> fails_tac
 
-theorem scriptStep_layout (version : Token.Version) (parser : ScriptParser LH) :
+theorem scriptStep_layout (version : Version) (parser : ScriptParser LH) :
     Fails (ScriptParser.Internal.step (H := LH) (m := Id) version parser .layout) := by
   unfold ScriptParser.Internal.step
   exact fails_bind (commandStep_layout _ _) _
 
-theorem ofSyntax_layout {b : Token.BatchTag} (cursor : Token.BatchCursor b) (token : Token b)
+theorem ofSyntax_layout {b : Token.BatchTag} (cursor : LexerCursor b) (token : LexerToken b)
     (h : Lexer.Adapters.toHanded cursor token = none) :
     Parser.Internal.Input.ofSyntax (cursor.syntax token) = .layout := by
   unfold Lexer.Adapters.toHanded at h
-  simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken] at h ⊢
+  simp only [Lexer.Cursor.LexerCursor.«syntax», Token.fromLexerToken] at h ⊢
   generalize cursor.category token = category at h ⊢
   cases category <;> simp only [Lexer.Adapters.toTokenType, Option.map_none,
     Option.map_some, reduceCtorEq] at h <;> rfl
 
 theorem takeOne_layout {b : Token.BatchTag} (parser : ScriptParser LH)
-    (cursor next : Token.BatchCursor b) (token : Token b) (consumed : next.Consumed cursor)
+    (cursor next : LexerCursor b) (token : LexerToken b) (consumed : next.Consumed cursor)
     (events : List Event) (hl : Parser.Internal.Input.ofSyntax (next.syntax token) = .layout) :
     ∃ e events', (Stop.takeOne (H := LH) (m := Id) (P := ScriptParser LH)
       parser cursor token next consumed).run events =

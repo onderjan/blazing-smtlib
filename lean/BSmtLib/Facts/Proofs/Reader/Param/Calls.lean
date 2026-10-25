@@ -16,6 +16,8 @@ actions, are related: the same result, with related held results and errors, the
 state, and the consumers' states related as the relator says.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Calls
 
 open BSmtLib.Lexer
@@ -36,15 +38,15 @@ abbrev EofFlowRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) :
 
 /-- The same result of a call on a slice, with related held results and errors. -/
 abbrev SliceRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) :
-    Except (LexError E₁) (Option (Span.Located R₁)) → Except (LexError E₂)
+    Except (LexerError E₁) (Option (Span.Located R₁)) → Except (LexerError E₂)
         (Option (Span.Located R₂)) →
       Prop :=
   ERel (LexErrRel L.re) (ORel (LocRel L.rr))
 
 /-- The same result of a call at the end of the input, with related results and errors. -/
 abbrev EofRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) :
-    Except (LexError E₁) (ControlFlow (Span.Located R₁)) →
-      Except (LexError E₂) (ControlFlow (Span.Located R₂)) → Prop :=
+    Except (LexerError E₁) (ControlFlow (Span.Located R₁)) →
+      Except (LexerError E₂) (ControlFlow (Span.Located R₂)) → Prop :=
   ERel (LexErrRel L.re) (FlowRel (LocRel L.rr))
 
 variable {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂}
@@ -96,8 +98,8 @@ theorem failCall_sim (abandon₁ : Span.Location → StateT H₁ m₁ Unit)
     exact SSim.pure ⟨hx, rfl, rfl⟩
 
 variable [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, Token.ConsumeFrom H₁
-    (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+    (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂]
 
 theorem lexEofInner_sim (hc : Consumers L) :
     SSim L (FlowLRel L) (Internal.lexEofInner (H := H₁) (m := m₁) (R := R₁) (E := E₁))
@@ -158,7 +160,7 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
           if core.recoveryState.isSome = true then do
             Internal.reset
             pure (.error
-              (BSmtLib.Lexer.Error.LexError.Internal.new failure.cause failure.span none))
+              (BSmtLib.Lexer.Error.LexerError.Internal.new failure.cause failure.span none))
           else do
             pure (.error (← Internal.failCall abandon₁ failure true)))
       (do
@@ -168,7 +170,7 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
           if core.recoveryState.isSome = true then do
             Internal.reset
             pure (.error
-              (BSmtLib.Lexer.Error.LexError.Internal.new failure.cause failure.span none))
+              (BSmtLib.Lexer.Error.LexerError.Internal.new failure.cause failure.span none))
           else do
             pure (.error (← Internal.failCall abandon₂ failure true))) := by
     refine SSim.bind (executeStep_sim _ _ (lexEofInner_sim hc)) ?_

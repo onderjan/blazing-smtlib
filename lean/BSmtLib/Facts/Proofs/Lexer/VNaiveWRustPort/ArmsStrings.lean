@@ -6,6 +6,8 @@ import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.WRustPort.Slice
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -50,7 +52,7 @@ theorem advance_legacyRun {ws : Bool} (q : Pending) (location : Span.Location) (
   advance_legacyString_run ws q location c hm
     (by simp only [isLegacyRun, Bool.and_eq_true] at hc; exact hc.1)
 
-theorem feedFrom_advance_congr {v : Token.Version} {ws : Bool} {s : ByteSlice} {i : Nat}
+theorem feedFrom_advance_congr {v : Version} {ws : Bool} {s : ByteSlice} {i : Nat}
     (hi : i < s.size)
     {p p' : Pending} {location : Span.Location}
     (h : advance ws p location s[i] = advance ws p' location s[i]) :
@@ -78,7 +80,7 @@ theorem state_beq_iff {a b : Lexer.Internal.Helpers.LexerState} : (a == b) = tru
     cases a <;> decide
 
 /-- The derived equality test of the versions is equality. -/
-theorem version_beq_iff {a b : Token.Version} : (a == b) = true ↔ a = b := by
+theorem version_beq_iff {a b : Version} : (a == b) = true ↔ a = b := by
   constructor
   · intro h
     cases a <;> cases b <;> first | rfl | exact absurd h (by decide)
@@ -89,14 +91,14 @@ theorem version_beq_iff {a b : Token.Version} : (a == b) = true ↔ a = b := by
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- What the loop of a string under version 2.0 keeps, from the index `consumed`: if the lexer
 state is in the string from `tokenStart`, and the naive lexer's run from the step's index
 `start0` is its run from the string `q` at `consumed`, then the loop ends the step as the naive
 lexer does. -/
-def LegacySpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool)
-    (iv : Token.Version) (ver : Token.Version)
+def LegacySpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool)
+    (iv : Version) (ver : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Span.Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin consumed : Nat) : Prop :=
@@ -118,7 +120,7 @@ def LegacySpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool)
       (fun e s' coll' => StepFails C v hd iv input st0 loc0 start0 ver coll held e s'.val coll')
 
 set_option maxHeartbeats 4000000 in
-theorem legacySpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) (start0 : Nat)
+theorem legacySpec_lt (v : Version) (ver : Version) (input : ByteSlice) (start0 : Nat)
     (st0 : St)
     (loc0 : Span.Location) (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location)
     (base : Nat) (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin : Nat) :
@@ -358,7 +360,7 @@ theorem legacySpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
       have hf : advance C.concrete ⟨.legacyString, tokenStart,
           contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index -
               X.1))
-          input[index] = .error (failAtByte .forbiddenCharInString tokenStart
+          input[index] = .error (failAtByte .forbiddenByteInString tokenStart
               (afterColumns locX (index - X.1))) := by
         rw [hIc]
         simp [advance, legacyStringByte, h34', h92', htext]
@@ -507,8 +509,8 @@ theorem legacySpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
 if the lexer state is in the string from `tokenStart`, and the naive lexer's run from the
 step's index `start0` is its run from the string `q` at `consumed`, then the loop ends the step
 as the naive lexer does. -/
-def StringSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool)
-    (iv : Token.Version) (ver : Token.Version)
+def StringSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool)
+    (iv : Version) (ver : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Span.Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin consumed : Nat) : Prop :=
@@ -529,7 +531,7 @@ def StringSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool)
       (fun e s' coll' => StepFails C v hd iv input st0 loc0 start0 ver coll held e s'.val coll')
 
 set_option maxHeartbeats 4000000 in
-theorem stringSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) (start0 : Nat)
+theorem stringSpec_lt (v : Version) (ver : Version) (input : ByteSlice) (start0 : Nat)
     (st0 : St)
     (loc0 : Span.Location) (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location)
     (base : Nat) (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin : Nat) :
@@ -665,7 +667,7 @@ theorem stringSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
         have hf : advance C.concrete ⟨.string, tokenStart,
             contentBytes s'.val.tokenContent ++ bytesOf input X.1 index⟩ (afterColumns locX (index -
                 X.1))
-            input[index] = .error (failAtByte .forbiddenCharInString tokenStart
+            input[index] = .error (failAtByte .forbiddenByteInString tokenStart
                 (afterColumns locX (index - X.1))) := by
           rw [hIc]
           simp [advance, h34', htext]
@@ -802,7 +804,7 @@ theorem stringSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSli
     rfl
 
 /-- The arm of `lexStep` for a string literal. -/
-theorem arm_stringLiteral (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_stringLiteral (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)

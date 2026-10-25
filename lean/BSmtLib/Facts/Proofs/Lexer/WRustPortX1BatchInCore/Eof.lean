@@ -15,6 +15,8 @@ simulation is not strict (`ErZ false`). Every interruption is thrown from states
 have no tokens, so that the lexer states the call returns with have none either.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Eof
 
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted Failure Stop)
@@ -27,11 +29,11 @@ open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- From states that correspond, whose batches have no tokens, with any line and line start. -/
 theorem SimR.of_sr0 {floor : Option Nat} {low : Nat} {α β : Type}
     {Er : Core.St floor low → Core.St floor low → Prop}
@@ -59,7 +61,7 @@ batches without tokens. -/
 def CallRel (a b : Except (Failure E) (ControlFlow R) × Core) : Prop :=
   a.1 = b.1 ∧ Core.CoreRel a.2 b.2 ∧ a.2.batch.len = 0
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexEofInner_sim (ho : OpsSim o₁ o₂ LRel) (w x : Core) (hwx : Core.CoreRel w x)
     (hlen : w.batch.len = 0) :
     Couple CallRel (Lexer.Internal.WRustPort.lexEofInner (ops := o₁) (H := H) (m := m) (R := R)

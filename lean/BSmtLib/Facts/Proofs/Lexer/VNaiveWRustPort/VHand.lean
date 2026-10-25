@@ -29,7 +29,7 @@ variable (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- The lexer state `c'` after a hand-over from `core`: the location, the activity and the
 version it was created with kept, under the version `ver`, holding a result if `hold`. -/
-structure VSame (core c' : Core) (ver : Token.Version) (hold : Bool) (act : Activity) : Prop where
+structure VSame (core c' : Core) (ver : Version) (hold : Bool) (act : Activity) : Prop where
   location : c'.location = core.location
   activity : c'.activity = act
   version : c'.version = ver
@@ -67,7 +67,7 @@ def HandV (core : Core) (l : Lexeme)
     | .relex l0 => l0 = l ∧ ∃ c', r = ((.ok none, c'), p.taken) ∧
         VSame core c' p.ver core.holding core.activity
 
-theorem switchedTo_eq (ver : Token.Version) (o : Option BSmtLibSpec.Lexicon.Version) :
+theorem switchedTo_eq (ver : Version) (o : Option BSmtLibSpec.Lexicon.Version) :
     (o.map toVersion).getD ver = switchedTo ver o := by
   cases o <;> rfl
 

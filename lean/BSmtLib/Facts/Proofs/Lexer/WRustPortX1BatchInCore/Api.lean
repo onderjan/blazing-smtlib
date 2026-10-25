@@ -19,6 +19,8 @@ results with lexers that correspond again (`run_lexSliceStep_x1BatchInCore`,
 `pendingLexEof_couple`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Api
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
@@ -60,7 +62,7 @@ def AfterEofRel {H R E : Type} [Token.Consume H R E] (recovery : Type) [Recovers
 /-- The results of the calls of the two lexers correspond: results related by `OK`, or the same
 error, with what the lexers give back related by `AR`. -/
 def ResRel {E A B α : Type} (OK : α → α → Prop) (AR : A → B → Prop) :
-    Except (LexError E × A) α → Except (LexError E × B) α → Prop
+    Except (LexerError E × A) α → Except (LexerError E × B) α → Prop
   | .ok a, .ok b => OK a b
   | .error (e, a), .error (e', b) => e = e' ∧ AR a b
   | _, _ => False
@@ -107,7 +109,7 @@ theorem afterEofError_rel {H R E : Type} [Token.Consume H R E] (recovery : Type)
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {recovery : Type}
 
 /-- The step of a call on a slice of the Rust port and of the lexer with the batch in its state,
@@ -139,7 +141,7 @@ theorem run_lexEofStep_x1BatchInCore (hcons : ConsumesAlike H m R E)
   run_lexEofStep_sim (opsSim_rust_x1BatchInCore hcons) abandon recover self self' h
 
 theorem lexSlice_couple (hcons : ConsumesAlike H m R E) [Recovers recovery]
-    [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.LexerRecovery recovery H m]
     (self self' : Lexer.Internal.WRustPort.Lexer H recovery) (h : LexRel self self')
     (slice : ByteSlice) :
     Simulation.Couple.MCouple (ResRel LexRel (AfterRel recovery))
@@ -161,7 +163,7 @@ theorem lexSlice_couple (hcons : ConsumesAlike H m R E) [Recovers recovery]
   · exact Simulation.Couple.MCouple.pure ⟨hl.1, hl.2.1, by rw [hl.2.2]⟩
 
 theorem lexEof_couple (hcons : ConsumesAlike H m R E) [Recovers recovery]
-    [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.LexerRecovery recovery H m]
     (self self' : Lexer.Internal.WRustPort.Lexer H recovery) (h : LexRel self self') :
     Simulation.Couple.MCouple (ResRel EofRel (AfterEofRel recovery))
         (Lexer.Internal.WRustPort.Lexer.lexEof self)
@@ -180,7 +182,7 @@ theorem lexEof_couple (hcons : ConsumesAlike H m R E) [Recovers recovery]
       ⟨hl.1, hl.2.1, rfl⟩ _⟩
   · exact Simulation.Couple.MCouple.pure ⟨by rw [hl.2.2], hl.1, hl.2.1, rfl⟩
 
-theorem pendingLexEof_couple (hcons : ConsumesAlike H m R E) [Token.Recover H m]
+theorem pendingLexEof_couple (hcons : ConsumesAlike H m R E) [Lexer.Recovery.Recover H m]
     (self self' : Lexer.Internal.WRustPort.Lexer.PendingEof H) (h : LexRel self.lexer self'.lexer) :
     Simulation.Couple.MCouple (ResRel (EofRel (recovery := Lexer.Recovery.Recovering)) LexRel)
       (Lexer.Internal.WRustPort.Lexer.PendingEof.lexEof self)

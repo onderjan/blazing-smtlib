@@ -26,11 +26,14 @@ import BSmtLib
 
 open BSmtLib
 open BSmtLib.Token
-open BSmtLib.Lexer.Error (LexError)
+open BSmtLib.Lexer.Error (LexerError)
+open BSmtLib.Lexer.Cursor (LexerCursor)
+open BSmtLib.Grammar (Index Ident Pattern SpecialConstant)
+open BSmtLib.Span (Located)
 
 /- The loops over a cursor's tokens end as each step consumes a token: they descend by the
 producer's consumption, which is well-founded. -/
-local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
+local instance {batch : BatchTag} : WellFoundedRelation (LexerCursor batch) :=
   ⟨Cursor.Consumed, Cursor.consumed_wf⟩
 
 /-! ## The syntax checker of the benchmark: the library's `SyntaxChecker`, and one in `IO` -/
@@ -41,7 +44,7 @@ structure SyntaxCheckerIO where
   commands : IO.Ref Nat
 
 instance : Handler SyntaxCheckerIO IO where
-  Error := Plain.Symbol
+  Error := Lexicon.Value.Symbol
   SExpr := Unit
   Attribute := Unit
   «Sort» := Unit
@@ -66,7 +69,7 @@ instance : Handler SyntaxCheckerIO IO where
 
 /-- A command counted. -/
 @[inline]
-def countCommand : ExceptT Plain.Symbol (StateT SyntaxCheckerIO IO) Unit := do
+def countCommand : ExceptT Lexicon.Value.Symbol (StateT SyntaxCheckerIO IO) Unit := do
   let h ← get
   (h.commands.modify (· + 1) : IO Unit)
 
@@ -136,7 +139,7 @@ structure PortParser (H : Type) {m : Type → Type} [CommandHandler H m] where
 
 /-- The script parser, parsing by its loop over single tokens. -/
 def PortParser.new {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
-    (posture : Token.VersionPosture) : PortParser H :=
+    (posture : Version.VersionPosture) : PortParser H :=
   ⟨Parser.ScriptParser.new (H := H) posture⟩
 
 instance {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m] :
@@ -237,8 +240,8 @@ instance : Consume CountTokens Unit Empty where
   isConcrete := false
 
 /-- Takes every token of the cursor, counting. -/
-def countRest {batch : BatchTag} (origin : BatchCursor batch) (n : Nat) (cursor : BatchCursor batch)
-    (consumed : cursor.Consumed origin) : Nat × { c : BatchCursor batch // c.Consumed origin } :=
+def countRest {batch : BatchTag} (origin : LexerCursor batch) (n : Nat) (cursor : LexerCursor batch)
+    (consumed : cursor.Consumed origin) : Nat × { c : LexerCursor batch // c.Consumed origin } :=
   if h : cursor.HasNext then
     let (_, ⟨next, taken⟩) := cursor.next h
     countRest origin (n + 1) next (taken.trans consumed)
@@ -246,7 +249,7 @@ def countRest {batch : BatchTag} (origin : BatchCursor batch) (n : Nat) (cursor 
 termination_by cursor
 decreasing_by exact taken
 
-instance {batch : BatchTag} : ConsumeFrom CountTokens (BatchCursor batch) Id where
+instance {batch : BatchTag} : ConsumeFrom CountTokens (LexerCursor batch) Id where
   consume cursor h := do
     let (_, ⟨next, consumed⟩) := cursor.next h
     let (n, done) := countRest cursor 1 next consumed
@@ -272,33 +275,33 @@ def runOnce (reader : String) (data : ByteArray) : IO Unit := do
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
   | "port" =>
     let adapter : Parser.ParseAdapter SyntaxChecker (PortParser SyntaxChecker) :=
-      Parser.ParseAdapter.new {} (PortParser.new Token.VersionPosture.default)
+      Parser.ParseAdapter.new {} (PortParser.new Version.VersionPosture.default)
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
   | "fused" =>
     let adapter : Parser.ParseAdapter SyntaxChecker (Parser.ScriptParser SyntaxChecker) :=
-      Parser.ParseAdapter.new {} (Parser.ScriptParser.new Token.VersionPosture.default)
+      Parser.ParseAdapter.new {} (Parser.ScriptParser.new Version.VersionPosture.default)
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
   | "read" =>
     expectOk reader (Id.run (Reader.readSmt (n := Id) ({} : SyntaxChecker) input)).1
   | "term-port" =>
     let adapter : Parser.ParseAdapter TermCommandChecker (PortParser TermCommandChecker) :=
-      Parser.ParseAdapter.new {} (PortParser.new Token.VersionPosture.default)
+      Parser.ParseAdapter.new {} (PortParser.new Version.VersionPosture.default)
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
   | "term-fused" =>
     let adapter : Parser.ParseAdapter TermCommandChecker (Parser.ScriptParser TermCommandChecker) :=
-      Parser.ParseAdapter.new {} (Parser.ScriptParser.new Token.VersionPosture.default)
+      Parser.ParseAdapter.new {} (Parser.ScriptParser.new Version.VersionPosture.default)
     expectOk reader (Id.run ((Lexer.new adapter default).lexAll input))
   | "term-read" =>
     expectOk reader (Id.run (Reader.readSmt (n := Id) ({} : TermCommandChecker) input)).1
   | "port-io" =>
     let handler : SyntaxCheckerIO := { commands := ← IO.mkRef 0 }
     let adapter : Parser.ParseAdapter SyntaxCheckerIO (PortParser SyntaxCheckerIO) :=
-      Parser.ParseAdapter.new handler (PortParser.new Token.VersionPosture.default)
+      Parser.ParseAdapter.new handler (PortParser.new Version.VersionPosture.default)
     expectOk reader (← (Lexer.new adapter default).lexAll input)
   | "fused-io" =>
     let handler : SyntaxCheckerIO := { commands := ← IO.mkRef 0 }
     let adapter : Parser.ParseAdapter SyntaxCheckerIO (Parser.ScriptParser SyntaxCheckerIO) :=
-      Parser.ParseAdapter.new handler (Parser.ScriptParser.new Token.VersionPosture.default)
+      Parser.ParseAdapter.new handler (Parser.ScriptParser.new Version.VersionPosture.default)
     expectOk reader (← (Lexer.new adapter default).lexAll input)
   | other => throw (IO.userError s!"unknown reader {other}")
 
@@ -335,7 +338,7 @@ structure Rec where
 def showBytes (slice : ByteSlice) : String :=
   slice.toByteArray.foldl (init := "") fun s b => s.push (Char.ofNat b.toNat)
 
-def showSym (s : Plain.Symbol) : String :=
+def showSym (s : Lexicon.Value.Symbol) : String :=
   "|" ++ showBytes s.asSlice ++ (if s.isQuoted then "|q" else "|")
 
 def showIndex : Index → String
@@ -357,22 +360,22 @@ def showNats (xs : Array Nat) : String := toString xs.toList
 
 def nat (x : Nat) : String := toString x
 
-def showPairs (xs : Array (Plain.Symbol × Nat)) : String :=
+def showPairs (xs : Array (Lexicon.Value.Symbol × Nat)) : String :=
   " ".intercalate (xs.toList.map fun (s, n) => showSym s ++ ":" ++ toString n)
 
-def showSoW : Nodes.SimplePattern → String
+def showSoW : Grammar.Nodes.SimplePattern → String
   | .symbol s => showSym s
   | .wildcard => "_"
 
 def showPattern : Pattern → String
   | .simple s => showSoW s
-  | .application c args =>
-    "(" ++ showSym c ++ " " ++ " ".intercalate (args.toList.map showSoW) ++ ")"
+  | .application app =>
+    "(" ++ showSym app.constructor ++ " " ++ " ".intercalate (app.args.toList.map showSoW) ++ ")"
 
-def showSig (s : Multiple.FunctionSignature Nat) : String :=
+def showSig (s : Grammar.Multiple.FunctionSignature Nat) : String :=
   showSym s.name ++ " (" ++ showPairs s.params ++ ") " ++ toString s.resultSort
 
-def showCons (c : Plain.Symbol × Multiple.SortedVars Nat) : String :=
+def showCons (c : Lexicon.Value.Symbol × Grammar.Multiple.SortedVars Nat) : String :=
   showSym c.1 ++ " (" ++ showPairs c.2.toArray ++ ")"
 
 /-- Writes the call down and returns its number, or fails if it is the one to fail at. -/
@@ -400,7 +403,7 @@ instance : Handler Rec IO where
   handleTerm node := recCall (match node with
     | .specialConstant c => "term " ++ showConst c
     | .qualifiedIdent i s => s!"term id {showIdent i} {s.map fun x => nat x}"
-    | .application f s args =>
+    | .application f s args _ =>
       s!"term app {showIdent f} {s.map fun x => nat x} {showNats args.asSlice}")
   handleSExpr node := recCall (match node with
     | .specialConstant c => "sexpr " ++ showConst c
@@ -486,7 +489,7 @@ instance : CommandHandler Rec IO where
 
 /-- What a read gave: the calls, then the result. -/
 def showResult {E R L : Type} (showE : E → String)
-    (result : Except (LexError (Parser.ParseError E) × L)
+    (result : Except (LexerError (Parser.ParseError E) × L)
       (Option (Located R) × α)) : String :=
   match result with
   | .ok (none, _) => "ok none"
@@ -502,9 +505,9 @@ def showResult {E R L : Type} (showE : E → String)
     s!"error {cause} at {repr err.span}"
 
 /-- Feeds the data to the lexer in pieces of `piece` bytes (all at once for 0), then the end. -/
-def feed {C R E : Type} [Consume C R E] [∀ batch, ConsumeFrom C (BatchCursor batch) IO]
+def feed {C R E : Type} [Consume C R E] [∀ batch, ConsumeFrom C (LexerCursor batch) IO]
     (lexer : Lexer C) (data : ByteArray) (piece : Nat) :
-    IO (Except (LexError E × Unit) (Option (Located R) × Lexer C)) := do
+    IO (Except (LexerError E × Unit) (Option (Located R) × Lexer C)) := do
   if piece == 0 then
     return (← lexer.lexAll data.toByteSlice).map id |>.mapError fun (e, _) => (e, ())
   let mut lexer := lexer
@@ -521,7 +524,7 @@ def feed {C R E : Type} [Consume C R E] [∀ batch, ConsumeFrom C (BatchCursor b
 
 /-- What the read gave, as text. -/
 def showRead {C R : Type} [Consume C R (Parser.ParseError String)]
-    [∀ batch, ConsumeFrom C (BatchCursor batch) IO] (adapter : C) (data : ByteArray)
+    [∀ batch, ConsumeFrom C (LexerCursor batch) IO] (adapter : C) (data : ByteArray)
     (version : Version) (piece : Nat) : IO String := do
   return showResult id (← feed (Lexer.new adapter version) data piece)
 
@@ -532,7 +535,7 @@ def readWith (reader : String) (data : ByteArray) (version : Version) (piece fai
     IO (Array String × String) := do
   let log ← IO.mkRef #[]
   let handler : Rec := { log, failAt }
-  let posture := Token.VersionPosture.default
+  let posture := Version.VersionPosture.default
   let result ← match reader with
     | "port" =>
       let adapter : Parser.ParseAdapter Rec (PortParser Rec) :=

@@ -28,7 +28,7 @@ lexers of the chain and Lean.
 
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection
 open BSmtLib.Facts.Parser.Adapters.Run BSmtLib.Facts.Parser.Adapters.Run.Rejection
-open BSmtLib.Lexer.Error BSmtLib.Plain
+open BSmtLib.Lexer.Error BSmtLib.Lexicon.Value
 
 namespace BSmtLib.Facts.Reader.Adapters
 
@@ -52,7 +52,7 @@ def recordingAdapter : RecAdapter :=
 its public calls: the result at the end of the input and the lexer, or the first error. -/
 def paFeed (lexer : PLexer) :
     List Regex.Chars →
-      Except (LexError (Parser.ParseError Unit)) (Option (Span.Located Unit) × PLexer)
+      Except (LexerError (Parser.ParseError Unit)) (Option (Span.Located Unit) × PLexer)
   | [] =>
     match (Lexer.lexEof lexer : Id _) with
     | .ok result => .ok result

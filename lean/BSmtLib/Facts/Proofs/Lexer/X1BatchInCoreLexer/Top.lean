@@ -18,6 +18,8 @@ couplings of the steps (`Calls`). So do the steps of the calls themselves, run b
 gives back the lexer also after a failed call (`run_lexSliceStep`, `run_lexEofStep`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Top
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple (MCouple MCouple.map)
@@ -147,10 +149,10 @@ end
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
 theorem lexSlice_sim {recovery : Type} [Recovers recovery]
-    [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.LexerRecovery recovery H m]
     (l : BSmtLib.Lexer H recovery)
     (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
@@ -160,8 +162,8 @@ theorem lexSlice_sim {recovery : Type} [Recovers recovery]
     resultMap afterErrorZb lexerZb <$> Lexer.Internal.X1BatchInCore.Lexer.lexSlice x slice =
       resultMap afterErrorMap lexerMap <$> BSmtLib.Lexer.lexSlice l slice := by
   have hc := lexSliceStep_couple (H := H) (m := m) (R := R) (E := E)
-    (Lexer.Recovery.LexRecovery.abandon recovery)
-    (Lexer.Recovery.LexRecovery.recover recovery) slice hs
+    (Lexer.Recovery.LexerRecovery.abandon recovery)
+    (Lexer.Recovery.LexerRecovery.recover recovery) slice hs
   obtain ⟨xh, xc, xd⟩ := x
   simp only at hh hx hd
   subst hh hd
@@ -182,7 +184,7 @@ theorem lexSlice_sim {recovery : Type} [Recovers recovery]
     rw [hcx]
 
 theorem lexEof_sim {recovery : Type} [Recovers recovery]
-    [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.LexerRecovery recovery H m]
     (l : BSmtLib.Lexer H recovery) (x : Lexer.Internal.WRustPort.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
     (hx : Rel (BSmtLib.Lexer.Internal.core l) x.core)
@@ -191,7 +193,7 @@ theorem lexEof_sim {recovery : Type} [Recovers recovery]
         Lexer.Internal.X1BatchInCore.Lexer.lexEof x =
       resultMap afterEofMap (fun p => (p.1, lexerMap p.2)) <$> BSmtLib.Lexer.lexEof l := by
   have hc := lexEofStep_couple (H := H) (m := m) (R := R) (E := E)
-    (Lexer.Recovery.LexRecovery.abandon recovery) (Lexer.Recovery.LexRecovery.recover recovery)
+    (Lexer.Recovery.LexerRecovery.abandon recovery) (Lexer.Recovery.LexerRecovery.recover recovery)
   obtain ⟨xh, xc, xd⟩ := x
   simp only at hh hx hd
   subst hh hd
@@ -231,9 +233,9 @@ end
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- Steps that are coupled, run on related lexers by `run`, give results related as the
 coupling relates them, and related lexers. -/
 theorem run_couple {recovery : Type} {α β : Type} {Rr : α → β → Prop}

@@ -4,9 +4,11 @@ public import BSmtLib.Facts.Proofs.Reader.Param.Adapter
 public import BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
 public import BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
 import all BSmtLib.Parser
-import all BSmtLib.Plain
+import all BSmtLib.Lexicon.Value
 import all BSmtLib.Token.Reserved
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -19,6 +21,8 @@ cursor: both read the same recording run of the parser, the stand-in consumer on
 items as the spec reads them, the adapter on its cursor's items, and the parser's properties
 (`Facts.Parser.follows_the_traversal`) say that the two runs make the same events and end alike.
 -/
+
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Link
 
@@ -34,7 +38,7 @@ open BSmtLib.Facts.Parser.Adapters.Run BSmtLib.Facts.Parser.Adapters.Run.Rejecti
 open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Facts.Proofs.Parser.Rejection.Lexical
 open BSmtLib.Facts.Proofs.Parser.Rejection.Library BSmtLib.Facts.Proofs.Parser.Rejection.Script
 open BSmtLib.Facts.Proofs.Parser.Reserved BSmtLib.Facts.Proofs.Parser.Trace
-open BSmtLib.Facts.Proofs.Reader.Consumer BSmtLib.Facts.Reader.Adapters BSmtLib.Plain
+open BSmtLib.Facts.Proofs.Reader.Consumer BSmtLib.Facts.Reader.Adapters BSmtLib.Lexicon.Value
 
 /-- The recording run on items that stand for a start of what a parser takes: the traversal's
 events before the next item, and waiting, or at the end, ending as what it takes does. -/
@@ -75,7 +79,7 @@ theorem reservedTable_bytes : ∀ e ∈ Token.Reserved.Internal.reservedTable.to
   decide +kernel
 
 /-- A reserved word the library's lookup finds is the one the spec's bytes decode to. -/
-theorem fromBytes_decode {s : ByteSlice} {v : Token.Version} {w : Token.Reserved}
+theorem fromBytes_decode {s : ByteSlice} {v : Version} {w : Token.Reserved}
     (h : Token.Reserved.fromBytes? s v = some w) :
     decodeReserved (Lexer.Adapters.toContent s) = some w := by
   by_cases h0 : s.size = 0
@@ -114,12 +118,12 @@ theorem fromBytes_decode {s : ByteSlice} {v : Token.Version} {w : Token.Reserved
 
 /-- The parse adapter's item for a token stands for what the spec's form of the token stands
 for. -/
-theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (token : Token b)
+theorem received_ofSyntax {b : Token.BatchTag} (cursor : LexerCursor b) (token : LexerToken b)
     {handed : Handed} (h : toHanded cursor token = some handed) :
     Bridge.received (Parser.Internal.Input.ofSyntax (cursor.syntax token)) = some (rcv
         (itemOf handed)) := by
   unfold toHanded at h
-  simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken] at h ⊢
+  simp only [Lexer.Cursor.LexerCursor.«syntax», Token.fromLexerToken] at h ⊢
   generalize cursor.category token = category at h ⊢
   generalize cursor.content token = content at h ⊢
   have hc : Bridge.chars (bytesOf (Lexer.Adapters.toContent content)) =
@@ -129,15 +133,15 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : Token.BatchCursor b) (t
   case unquotedSymbol =>
     cases hw : Token.Reserved.fromBytes? content cursor.version with
     | none =>
-      simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
+      simp only [Token.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, Bridge.received, rcv, Option.getD_some,
         Bridge.symbol, Symbol.asSlice, Symbol.isQuoted, Symbol.Internal.newUnchecked,
         hc]
     | some word =>
-      simp only [Token.SyntaxToken.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
+      simp only [Token.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, fromBytes_decode hw, Bridge.received, rcv,
         Option.getD_some]
-  all_goals simp only [Token.SyntaxToken.Internal.fromParts, Parser.Internal.Input.ofSyntax, itemOf,
+  all_goals simp only [Token.Internal.fromParts, Parser.Internal.Input.ofSyntax, itemOf,
       Bridge.received, rcv,
     Option.getD_some, Bridge.constant, Bridge.keyword, Bridge.symbol, Numeral.asSlice,
     Numeral.Internal.newUnchecked, Decimal.asSlice, Decimal.Internal.newUnchecked,
@@ -175,7 +179,7 @@ theorem parse_recRun (version : Lexicon.Version) (items : List LibItem) :
 
 /-- The recording run over one more item, from where the run over the items goes on. -/
 theorem recRun_snoc (version : Lexicon.Version) (items : List LibItem) (item : LibItem)
-    {v : Token.Version} {parser : ScriptParser (List Event)} {log : List Event}
+    {v : Version} {parser : ScriptParser (List Event)} {log : List Event}
     (h : recRun version items = (.ok (.inl (v, parser)), log)) :
     recRun version (items ++ [item]) =
       match (recAfter v parser item.val).run.run log with
@@ -212,7 +216,7 @@ theorem script_token {version : Lexicon.Version} {commands : List Tree.Command}
     (hviable : Viable commands (taken ++ [handed])) {items : List LibItem} {item : LibItem}
     (hst : items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf))
     (hitem : rcv item.val = rcv (itemOf handed))
-    {v : Token.Version} {parser : ScriptParser (List Event)} {log : List Event}
+    {v : Version} {parser : ScriptParser (List Event)} {log : List Event}
     (hrun : recRun version items = (.ok (.inl (v, parser)), log)) :
     Parser.Adapters.Run.switchOf ((recAfter v parser item.val).run.run log).2.reverse =
         (scriptConsumer version).switchTo (taken ++ [handed]) ∧

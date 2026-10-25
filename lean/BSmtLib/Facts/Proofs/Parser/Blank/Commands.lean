@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Parser.Blank.Steps
 import all BSmtLib.Parser
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Category.Term
 import all BSmtLib.Parser.Command
@@ -23,11 +25,11 @@ whose calls never fail, relates to the step run with the blank handler on the bl
 
 namespace BSmtLib.Facts.Proofs.Parser.Blank.Commands
 
-open BSmtLib.Multiple (FunctionSignature)
+open BSmtLib.Grammar.Multiple (FunctionSignature)
 open Basic States Simp Tactic Steps
 open BSmtLib.Parser.Internal (PM)
 
-open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.SortedVar
 open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.SortedVar.Internal
@@ -48,16 +50,16 @@ theorem SortDecState_step_blank {state : SortDecState} {token : Internal.Input} 
     BSim (SortDecState.step (H := H) state token) (SortDecState.step (H := Shell) state token) := by
   unfold SortDecState.step; blank_step []
 
-theorem constructorStep_blank [NoFails H] {version : Token.Version}
+theorem constructorStep_blank [NoFails H] {version : Version}
     {state : ConstructorState (Handler.«Sort» H)} {token : Internal.Input}
     {state' : ConstructorState Unit} (hs : state' = blank state) :
     BSim (constructorStep (H := H) version state token)
       (constructorStep (H := Shell) version state' token) := by
   subst hs; unfold constructorStep; blank_step []
 
-theorem datatypeStep_blank [NoFails H] {start : Array Plain.Symbol → PM H Unit}
-    {start' : Array Plain.Symbol → PM Shell Unit} (hstart : ∀ ps, BSim (start ps) (start' ps))
-    {version : Token.Version} {state : DatatypeState (Handler.«Sort» H)} {token : Internal.Input}
+theorem datatypeStep_blank [NoFails H] {start : Array Lexicon.Value.Symbol → PM H Unit}
+    {start' : Array Lexicon.Value.Symbol → PM Shell Unit} (hstart : ∀ ps, BSim (start ps) (start' ps))
+    {version : Version} {state : DatatypeState (Handler.«Sort» H)} {token : Internal.Input}
     {state' : DatatypeState Unit} (hs : state' = blank state) :
     BSim (datatypeStep (H := H) start version state token)
       (datatypeStep (H := Shell) start' version state' token) := by
@@ -65,26 +67,26 @@ theorem datatypeStep_blank [NoFails H] {start : Array Plain.Symbol → PM H Unit
 
 /-! ## The functions -/
 
-theorem signatureStep_blank [NoFails H] {version : Token.Version}
+theorem signatureStep_blank [NoFails H] {version : Version}
     {state : SignatureState (Handler.«Sort» H)} {token : Internal.Input}
     {state' : SignatureState Unit} (hs : state' = blank state) :
     BSim (signatureStep (H := H) version state token)
       (signatureStep (H := Shell) version state' token) := by
   subst hs; unfold signatureStep; blank_step []
 
-theorem functionDecStep_blank [NoFails H] {version : Token.Version}
+theorem functionDecStep_blank [NoFails H] {version : Version}
     {state : FunctionDecState (Handler.«Sort» H)} {token : Internal.Input}
     {state' : FunctionDecState Unit} (hs : state' = blank state) :
     BSim (functionDecStep (H := H) version state token)
       (functionDecStep (H := Shell) version state' token) := by
   subst hs; unfold functionDecStep; blank_step []
 
-theorem bodyStep_blank [NoFails H] {version : Token.Version} {state : TermStateOf H}
+theorem bodyStep_blank [NoFails H] {version : Version} {state : TermStateOf H}
     {token : Internal.Input} {state' : TermStateOf Shell} (hs : state' = blank state) :
     BSim (bodyStep (H := H) version state token) (bodyStep (H := Shell) version state' token) := by
   subst hs; unfold bodyStep; blank_step []
 
-theorem bodiesStep_blank [NoFails H] {count : Nat} {version : Token.Version}
+theorem bodiesStep_blank [NoFails H] {count : Nat} {version : Version}
     {state : ListState (TermStateOf H) Unit} {token : Internal.Input}
     {state' : ListState (TermStateOf Shell) Unit} (hs : state' = blank state) :
     BSim (bodiesStep (H := H) count version state token)
@@ -103,7 +105,7 @@ theorem bodiesArrive_blank [NoFails H] {signatures : Array (FunctionSignature (H
 /-! ## The other commands -/
 
 set_option maxHeartbeats 4000000 in
-theorem literalStep_blank [NoFails H] {version : Token.Version} {state : LiteralStateOf H}
+theorem literalStep_blank [NoFails H] {version : Version} {state : LiteralStateOf H}
     {token : Internal.Input} {state' : LiteralStateOf Shell} (hs : state' = blank state) :
     BSim (literalStep (H := H) version state token)
       (literalStep (H := Shell) version state' token) := by
@@ -116,7 +118,7 @@ theorem finalCall_blank [NoFails H]
   subst hf; unfold finalCall; blank_step []
 
 set_option maxHeartbeats 16000000 in
-theorem payloadStep_blank [NoFails H] {version : Token.Version} {state : PayloadOf H}
+theorem payloadStep_blank [NoFails H] {version : Version} {state : PayloadOf H}
     {token : Internal.Input} {state' : PayloadOf Shell} (hs : state' = blank state) :
     BSim (payloadStep (H := H) version state token)
       (payloadStep (H := Shell) version state' token) := by
@@ -127,7 +129,7 @@ theorem payloadArrive_blank [NoFails H] {state : PayloadOf H} {token : Internal.
     BSim (payloadArrive (H := H) state token) (payloadArrive (H := Shell) state' token) := by
   subst hs; unfold payloadArrive; blank_step []
 
-theorem commandStep_blank [NoFails H] {version : Token.Version} {state : CommandStateOf H}
+theorem commandStep_blank [NoFails H] {version : Version} {state : CommandStateOf H}
     {token : Internal.Input} {state' : CommandStateOf Shell} (hs : state' = blank state) :
     BSim (commandStep (H := H) version state token)
       (commandStep (H := Shell) version state' token) := by

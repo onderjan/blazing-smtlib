@@ -648,24 +648,19 @@ fn a_whole_slice_finishes_where_the_same_input_read_in_pieces_does() {
     }
 }
 
-/// The locations `read_from` and `read_file` return, which the Lean driver
-/// does not report: this test checks the Rust interface itself.
 #[test]
 fn reading_a_buffer_or_a_file_finishes_where_reading_the_slice_does() {
-    use blazing_smtlib::{SmtReadError, SmtReader, SmtSyntaxChecker, span::SmtLocated};
-
-    type Read<'h> = SmtReader<'h, SmtSyntaxChecker>;
-    type Finished = Result<SmtLocated<()>, SmtReadError<SmtNonstandardCommandError>>;
+    type Read<'h> = Reader<'h, SyntaxChecker, ScriptParser>;
+    type Finished = Result<parse_backend::Located<()>, ReadError<SmtNonstandardCommandError>>;
 
     /// Where a fresh script reader finishes reading as `how` says.
     fn finished(how: impl FnOnce(&mut Read<'_>) -> Finished) -> Loc {
-        let mut handler = SmtSyntaxChecker;
+        let mut handler = SyntaxChecker;
         let mut reader =
-            SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+            Reader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
         let located =
             how(&mut reader).unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
-        let location = located.location();
-        (location.offset(), location.line(), location.column())
+        loc(located.location())
     }
 
     let path = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("read-finishes.smt2");

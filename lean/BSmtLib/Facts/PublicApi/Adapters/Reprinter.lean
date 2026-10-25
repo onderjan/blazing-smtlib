@@ -34,16 +34,16 @@ structure _root_.BSmtLib.Facts.PublicApi.Adapters.Reprinter where
 instance (r : Reprinter) : ContentHandler r.H := r.inst
 
 /-- The posture that allows the versions from 2.5 on, and any number of version declarations. -/
-def from25 : Token.VersionPosture :=
-  (Token.VersionPostureBuilder.new.setMaxDeclarations none).build
+def from25 : Version.VersionPosture :=
+  (Version.VersionPostureBuilder.new.setMaxDeclarations none).build
 
 /-- The script reader over the reprinter's handler, from the version, under the posture. -/
-def readerWith (r : Reprinter) (posture : Token.VersionPosture) (version : Token.Version) :
+def readerWith (r : Reprinter) (posture : Version.VersionPosture) (version : Version) :
     Reader r.H (ScriptParser r.H) :=
   Reader.script r.handler posture version
 
 /-- The script reader over the reprinter's handler, from the version, allowing every version. -/
-def reader (r : Reprinter) (version : Token.Version) : Reader r.H (ScriptParser r.H) :=
+def reader (r : Reprinter) (version : Version) : Reader r.H (ScriptParser r.H) :=
   r.readerWith allVersions version
 
 /--

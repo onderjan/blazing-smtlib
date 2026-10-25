@@ -22,8 +22,8 @@ library is the modules below `BSmtLib` outside `BSmtLib.Facts`.
 The Lean name of a Rust item follows from its path: the modules become the namespaces, each
 written in upper camel case (`parser::category::term` is `BSmtLib.Parser.Category.Term`); a type
 loses the prefix `Smt`, so that a view takes the plain name and an owned type keeps its suffix `Buf`
-(`plain::SmtSymbol` is `BSmtLib.Plain.Symbol`, `plain::SmtSymbolBuf` is `BSmtLib.Plain.SymbolBuf`);
-a type named like its module is the module's own name
+(`lexicon::value::SmtSymbol` is `BSmtLib.Lexicon.Value.Symbol`, `lexicon::value::SmtSymbolBuf`
+is `BSmtLib.Lexicon.Value.SymbolBuf`); a type named like its module is the module's own name
 (`lexer::SmtLexer` is `BSmtLib.Lexer`); a function or method is written in lower camel case, with
 `?` for a result that may be absent (`from_decimal` may be `fromDecimal?`, as `peek` may be
 `peek?`, and a suffix `_opt` becomes the `?`), and with the Lean names of the Rust types it names

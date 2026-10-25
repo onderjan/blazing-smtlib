@@ -29,9 +29,9 @@ open BSmtLibSpec.Facts.Proofs.Parser (Program.callUnit)
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- How the command parser ends after a command's last call. -/
 def finalOutcome {A S T : Type} : FinalCall A S T → CommandOutcome
@@ -39,8 +39,8 @@ def finalOutcome {A S T : Type} : FinalCall A S T → CommandOutcome
   | _ => .command
 
 /-- The command's `)`, then its last call. -/
-theorem closing_runs (final : FinalCall (Traits.Handler.Attribute H) (Traits.Handler.«Sort» H)
-      (Traits.Handler.Term H)) {request : Call (valuesOf H) .nothing}
+theorem closing_runs (final : FinalCall (Handler.Attribute H) (Handler.«Sort» H)
+      (Handler.Term H)) {request : Call (valuesOf H) .nothing}
     (hfinal : finalCall final = Parser.Internal.call (Bridge.callUnit h request))
     {outcome : CommandOutcome}
     (houtcome : finalOutcome final = outcome) :
@@ -54,8 +54,8 @@ theorem closing_runs (final : FinalCall (Traits.Handler.Attribute H) (Traits.Han
   · simp [hfinal, adaptRun_take (token := .parenClose) rfl]
 
 /-- A command of its name alone. -/
-theorem nullary_payload (final : FinalCall (Traits.Handler.Attribute H) (Traits.Handler.«Sort» H)
-      (Traits.Handler.Term H)) {request : Call (valuesOf H) .nothing}
+theorem nullary_payload (final : FinalCall (Handler.Attribute H) (Handler.«Sort» H)
+      (Handler.Term H)) {request : Call (valuesOf H) .nothing}
     (hfinal : finalCall final = Parser.Internal.call (Bridge.callUnit h request))
     {outcome : CommandOutcome}
     (houtcome : finalOutcome final = outcome)
@@ -69,8 +69,8 @@ theorem nullary_payload (final : FinalCall (Traits.Handler.Attribute H) (Traits.
 /-- A command of a single token: the token, then the closing. -/
 theorem single_payload {payload : Parser.Command.Internal.Standard.PayloadOf H}
     {token : Parser.Internal.Input}
-    {final : FinalCall (Traits.Handler.Attribute H) (Traits.Handler.«Sort» H)
-      (Traits.Handler.Term H)}
+    {final : FinalCall (Handler.Attribute H) (Handler.«Sort» H)
+      (Handler.Term H)}
     (hstep : payloadStep version payload token = pure (.more (.closing final)))
     {request : Call (valuesOf H) .nothing}
     (hfinal : finalCall final = Parser.Internal.call (Bridge.callUnit h request))

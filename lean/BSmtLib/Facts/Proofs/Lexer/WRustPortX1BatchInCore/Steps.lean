@@ -13,6 +13,8 @@ finished tokens over (`Finish`), and the loop of the normal state shown alike be
 run inside a slice, where the simulation is strict.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Steps
 
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? get runEnd runEndAll)
@@ -91,7 +93,7 @@ local macro "legacy_run " P:term:max : tactic => `(tactic| (
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
@@ -100,7 +102,7 @@ abbrev StepQ {α β : Type} (val : α → Nat) (val' : β → Nat) (a : α) (b :
     (s t : Core.St floor low) : Prop :=
   val a = val' b ∧ Core.SRb true s t
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- A finished token, with the batches in the states left as any. -/
 theorem fin {α β : Type} {strict : Bool} {l ls : Nat}
     {P : Core.St floor low → Core.St floor low → Prop}
@@ -115,7 +117,7 @@ local macro "finished" : tactic => `(tactic| (
   refine SimR.seq (Core.setNormal_sim _ _ _) ?_
   exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩))
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexFractionFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -131,7 +133,7 @@ theorem lexFractionFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (st
   · refine SimR.seq (Core.setTokenState_sim l ls _ _ _ _ _) ?_
     exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexNumeralOrDecimal_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (start : Nat) (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -159,7 +161,7 @@ theorem lexNumeralOrDecimal_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
       finished
   · exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexBaseSelection_sim (input : ByteSlice) (start : Nat) (hstart)
     (tokenStart : Span.Location) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -177,7 +179,7 @@ theorem lexBaseSelection_sim (input : ByteSlice) (start : Nat) (hstart)
     exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
   · exact Core.errorAt_sim l ls _ _ _
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (run : Lexer.Internal.Helpers.DigitRun) (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -192,7 +194,7 @@ theorem lexDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start 
     finished
   · exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexSimpleSymbol_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -208,7 +210,7 @@ theorem lexSimpleSymbol_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (st
     finished
   · exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexKeyword_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -223,7 +225,7 @@ theorem lexKeyword_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start :
     finished
   · exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexQuotedSymbolClosed_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (start : Nat) (hstart) (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -238,7 +240,7 @@ theorem lexQuotedSymbolClosed_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlic
   refine SimR.seq (fin (sinkStored_sim ho l ls _ _ _ _ _)) ?_
   finished
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexWhitespace_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (origin : Nat)
     (tokenStart : Span.Location) (base : Nat) :
     ∀ k (start : Nat), input.size - start = k → ∀ horigin hstart h,
@@ -275,7 +277,7 @@ theorem lexWhitespace_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (orig
     refine SimR.seq (Core.extendContent_sim l ls _ _ _ _) ?_
     exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexQuotedSymbol_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (origin : Nat)
     (tokenStart : Span.Location) (base : Nat) :
     ∀ k (consumed : Nat), input.size - consumed = k → ∀ horigin hconsumed h,
@@ -317,7 +319,7 @@ theorem lexQuotedSymbol_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (or
     refine SimR.seq (Core.extendContent_sim l ls _ _ _ _) ?_
     exact SimR.pure fun s t h => ⟨rfl, h.1.1, h.2⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexStringLiteralFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (origin : Nat) (tokenStart : Span.Location) (base : Nat) :
     ∀ k (consumed : Nat), input.size - consumed = k → ∀ horigin h,
@@ -353,7 +355,7 @@ theorem lexStringLiteralFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice
     · string_run consumed
   · exact SimR.pure fun s t h => ⟨rfl, h⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexStringLiteralLegacy_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice)
     (origin : Nat) (tokenStart : Span.Location) (base : Nat) :
     ∀ k (consumed : Nat), input.size - consumed = k → ∀ horigin h,
@@ -391,7 +393,7 @@ theorem lexStringLiteralLegacy_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSli
     · legacy_run consumed
   · exact SimR.pure fun s t h => ⟨rfl, h⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexStringLiteral_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -404,7 +406,7 @@ theorem lexStringLiteral_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (s
   · exact lexStringLiteralLegacy_sim ho input start tokenStart base _ start rfl _ _
   · exact lexStringLiteralFrom_sim ho input start tokenStart base _ start rfl _ _
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexComment_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (hstart : start ≤ input.size) (tokenStart : Span.Location) (base : Nat) (h) :
     Core.LSim true (H := H) (m := m) (R := R) (E := E) (floor := floor) (low := low) (Core.SRb true)
@@ -438,7 +440,7 @@ theorem lexComment_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start :
       · refine Core.SimR.of_srl fun l ls => ?_
         finished
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem afterStep_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (next next' : {next : Nat // start ≤ next})
     (e : next.val = next'.val) :
@@ -450,7 +452,7 @@ theorem afterStep_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : 
   refine SimR.dite (by rw [e]) (fun _ _ => SimR.pure fun s t h => ⟨e, h⟩) fun _ _ => ?_
   exact lexNormal_sim ho input start hstart
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexStep_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (state : Lexer.Internal.Helpers.LexerState)
     (tokenStart : Span.Location)

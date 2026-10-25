@@ -87,11 +87,11 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m] {α : Type}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m] {α : Type}
 variable {points : Points (StateT H m)}
 
 omit [LawfulMonad m] in
-theorem handlerOnly_call (x : ExceptT (Traits.Handler.Error H) (StateT H m) α) :
+theorem handlerOnly_call (x : ExceptT (Handler.Error H) (StateT H m) α) :
     HandlerOnly (BSmtLib.Parser.Internal.call x : PM H α) := ⟨x, rfl⟩
 
 theorem handlerOnly_tick (token : Parser.Internal.Input) : HandlerOnly (tick points token) :=
@@ -136,14 +136,14 @@ inductive Res (σ ρ E : Type) where
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [Traits.Handler H m] {σ ρ α β τ χ : Type}
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m] {σ ρ α β τ χ : Type}
 variable (points : Points (StateT H m))
 
 /-- What the step's answer does, with the tokens after it. -/
-def onStep (continue_ : σ → StateT H m (Res σ ρ (Traits.Handler.Error H)))
+def onStep (continue_ : σ → StateT H m (Res σ ρ (Handler.Error H)))
     (rest : List Parser.Internal.Input) :
-    Except (ParseErrorCause (Traits.Handler.Error H)) (Parser.Internal.Step σ ρ) →
-    StateT H m (Res σ ρ (Traits.Handler.Error H))
+    Except (ParseErrorCause (Handler.Error H)) (Parser.Internal.Step σ ρ) →
+    StateT H m (Res σ ρ (Handler.Error H))
   | .ok (.more state) => continue_ state
   | .ok (.done result) => pure (.done result rest)
   | .error (.syntax kind) => pure (.rejected kind rest)
@@ -152,7 +152,7 @@ def onStep (continue_ : σ → StateT H m (Res σ ρ (Traits.Handler.Error H)))
 
 /-- The steps over the tokens, from the state, keeping where they stopped. -/
 def driveS (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)) :
-    σ → List Parser.Internal.Input → StateT H m (Res σ ρ (Traits.Handler.Error H))
+    σ → List Parser.Internal.Input → StateT H m (Res σ ρ (Handler.Error H))
   | state, [] => pure (.waits state)
   | state, token :: tokens => do
     onStep (fun state => driveS step state tokens) tokens
@@ -161,14 +161,14 @@ def driveS (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step �
 /-- What the parser does after a step's program: the continuation, then the tokens. -/
 def resumeS (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ))
     (next : PM H (Parser.Internal.Step σ ρ)) (rest : List Parser.Internal.Input) :
-    StateT H m (Res σ ρ (Traits.Handler.Error H)) := do
+    StateT H m (Res σ ρ (Handler.Error H)) := do
   onStep (fun state => driveS points step state rest) rest (← next.run)
 
 /-- What a handler-only program's answer does, then the continuation. -/
-def afterProgram (k : α → StateT H m (Res σ ρ (Traits.Handler.Error H)))
+def afterProgram (k : α → StateT H m (Res σ ρ (Handler.Error H)))
     (rest : List Parser.Internal.Input) :
-    Except (ParseErrorCause (Traits.Handler.Error H)) α →
-    StateT H m (Res σ ρ (Traits.Handler.Error H))
+    Except (ParseErrorCause (Handler.Error H)) α →
+    StateT H m (Res σ ρ (Handler.Error H))
   | .ok a => k a
   | .error (.syntax kind) => pure (.rejected kind rest)
   | .error (.version kind) => pure (.rejectedVersion kind rest)
@@ -189,7 +189,7 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {σ ρ α β τ χ : Type} {points : Points (StateT H m)}
 
 omit [LawfulMonad m] in
@@ -224,7 +224,7 @@ theorem resumeS_throw (step : σ → Parser.Internal.Input → PM H (Parser.Inte
 /-- A handler-only program, then a continuation over the step's answer. -/
 theorem run_bind_onStep {program : PM H α} (hp : HandlerOnly program)
     (next : α → PM H (Parser.Internal.Step σ ρ))
-    (k : σ → StateT H m (Res σ ρ (Traits.Handler.Error H))) (rest : List Parser.Internal.Input) :
+    (k : σ → StateT H m (Res σ ρ (Handler.Error H))) (rest : List Parser.Internal.Input) :
     (program >>= next).run >>= onStep k rest =
       program.run >>= afterProgram (fun a => (next a).run >>= onStep k rest) rest := by
   obtain ⟨calls, hcalls⟩ := handlerOnly_run_eq hp

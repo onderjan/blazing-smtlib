@@ -7,7 +7,7 @@ import all BSmtLib.Parser.Script
 
 @[expose] public section
 open BSmtLib.Parser.Script.Internal
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser, posture → postureOf,
   command → commandOf, declarations → declarationsOf
 
@@ -24,6 +24,8 @@ after an action on its cursor (`Param.Stop`); `Looser.consume_looserN` carries t
 parse adapter.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Posture
 
 open BSmtLibSpec.Parser.Properties
@@ -33,18 +35,18 @@ open BSmtLib.Facts.Reader.Adapters (RecAdapter)
 open BSmtLib.Facts.Proofs.Reader.Param.Adapter (paLoop startLog consume_eq id_bind_eq)
 open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Parser.Adapter BSmtLib.Parser.Command
 open BSmtLib.Parser.Command.Internal
-open BSmtLib.Parser.Script BSmtLib.Parser.Script.Internal.VersionPosture BSmtLib.Traits
+open BSmtLib.Parser.Script BSmtLib.Parser.Script.Internal.VersionPosture BSmtLib.Handler
 
 attribute [local instance high] Stop.consumeFrom
 
 /-- `loose` limits the declarations as `strict` does and allows every version `strict` allows. -/
-structure Looser (strict loose : Token.VersionPosture) : Prop where
+structure Looser (strict loose : Version.VersionPosture) : Prop where
   max : strict.maxDeclarations = loose.maxDeclarations
   allowed : ∀ version, strict.allowed.contains version = true →
     loose.allowed.contains version = true
 
-theorem check_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
-    (declarations : Nat) (version : Token.Version)
+theorem check_looser {strict loose : Version.VersionPosture} (hl : Looser strict loose)
+    (declarations : Nat) (version : Version)
     (h : (check strict) declarations version = none) :
     (check loose) declarations version = none := by
   unfold VersionPosture.check at h ⊢
@@ -74,12 +76,12 @@ theorem check_looser {strict loose : Token.VersionPosture} (hl : Looser strict l
 /-! ## The parser under another posture -/
 
 /-- The script parser with the posture replaced. -/
-def withPosture (posture : Token.VersionPosture) (parser : ScriptParser (List Event)) :
+def withPosture (posture : Version.VersionPosture) (parser : ScriptParser (List Event)) :
     ScriptParser (List Event) :=
   scriptParser posture (commandOf parser) (declarationsOf parser)
 
 /-- The adapter with the posture of its parser replaced. -/
-def adapterWith (posture : Token.VersionPosture) (adapter : RecAdapter) : RecAdapter :=
+def adapterWith (posture : Version.VersionPosture) (adapter : RecAdapter) : RecAdapter :=
   adapter.modifyParser (withPosture posture)
 
 /-- What the script parser's step does after its command parser's step. -/
@@ -103,7 +105,7 @@ def scriptAfter (parser : ScriptParser (List Event)) :
       (pure (.more (scriptParser (postureOf parser) .awaiting (declarationsOf parser))))
   | .done .endOfFile => return .done ()
 
-theorem step_eq (version : Token.Version) (parser : ScriptParser (List Event))
+theorem step_eq (version : Version) (parser : ScriptParser (List Event))
     (token : Parser.Internal.Input) :
     Parser.Internal.ParseByToken.step (H := List Event) version parser token =
       (commandStep version (commandOf parser) token >>= scriptAfter parser) := by
@@ -114,7 +116,7 @@ theorem step_eq (version : Token.Version) (parser : ScriptParser (List Event))
   rcases outcome with command | (_ | declared | _ | _) <;> rfl
 
 /-- A step of the parser under the posture, as the parser under `strict` makes it. -/
-def StepWith (posture strict : Token.VersionPosture) :
+def StepWith (posture strict : Version.VersionPosture) :
     Parser.Internal.Step (ScriptParser (List Event)) Unit → Parser.Internal.Step (ScriptParser
         (List Event)) Unit → Prop
   | .more p, .more q => q = withPosture posture p ∧ postureOf p = strict
@@ -123,7 +125,7 @@ def StepWith (posture strict : Token.VersionPosture) :
 
 /-- A run of a resumption under the posture, as the one under `strict` runs, unless that one
 fails. -/
-def ResumeWith (posture strict : Token.VersionPosture)
+def ResumeWith (posture strict : Version.VersionPosture)
     (x y : Except (ParseErrorCause Unit) (Parser.Internal.Step (ScriptParser
         (List Event)) Unit) × List Event) :
     Prop :=
@@ -131,7 +133,7 @@ def ResumeWith (posture strict : Token.VersionPosture)
     ∃ s₁ s₂, x.1 = .ok s₁ ∧ y = (.ok s₂, x.2) ∧ StepWith posture strict s₁ s₂
 
 /-- What the step under the posture asks, as the one under `strict` asks. -/
-def FlowWith (posture strict : Token.VersionPosture) :
+def FlowWith (posture strict : Version.VersionPosture) :
     Parser.Internal.Flow Parser.Quiet.RPM (ScriptParser
         (List Event)) Unit → Parser.Internal.Flow Parser.Quiet.RPM
         (ScriptParser (List Event)) Unit → Prop
@@ -143,7 +145,7 @@ def FlowWith (posture strict : Token.VersionPosture) :
     ∀ events, ResumeWith posture strict (a.run.run events) (b.run.run events)
   | _, _ => False
 
-theorem scriptAfter_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
+theorem scriptAfter_looser {strict loose : Version.VersionPosture} (hl : Looser strict loose)
     (parser : ScriptParser (List Event)) (hp : postureOf parser = strict)
     (outcome : Parser.Internal.Step (CommandStateOf (List Event)) CommandOutcome)
         (events : List Event) :
@@ -179,7 +181,7 @@ theorem scriptAfter_looser {strict loose : Token.VersionPosture} (hl : Looser st
 /-! ## A token -/
 
 /-- What the adapter does with a token under the posture, as under `strict`. -/
-def AfterWith (posture strict : Token.VersionPosture) :
+def AfterWith (posture strict : Version.VersionPosture) :
     Parser.Internal.After (ScriptParser (List Event)) Unit Unit →
       Parser.Internal.After (ScriptParser (List Event)) Unit Unit → Prop
   | .goOn p, .goOn q => q = withPosture posture p ∧ postureOf p = strict
@@ -192,9 +194,9 @@ def IsFailure : Parser.Internal.After (ScriptParser (List Event)) Unit Unit → 
   | _ => False
 
 /-- The adapter takes a token under `loose` as under `strict`, unless it fails under `strict`. -/
-theorem takeOne_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
+theorem takeOne_looser {strict loose : Version.VersionPosture} (hl : Looser strict loose)
     (parser : ScriptParser (List Event)) (hp : postureOf parser = strict) {b : Token.BatchTag}
-    (cursor next : Token.BatchCursor b) (token : Token b) (consumed : next.Consumed cursor)
+    (cursor next : LexerCursor b) (token : LexerToken b) (consumed : next.Consumed cursor)
     (handler : List Event) :
     IsFailure ((Stop.takeOne (H := List Event) (m := Id) parser cursor token next
         consumed).run handler).1.1 ∨
@@ -319,9 +321,9 @@ theorem takeOne_looser {strict loose : Token.VersionPosture} (hl : Looser strict
 
 /-- The adapter's loop over a cursor goes alike under `loose` as under `strict`, unless it fails
 under `strict`. -/
-theorem paLoop_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
+theorem paLoop_looser {strict loose : Version.VersionPosture} (hl : Looser strict loose)
     {b : Token.BatchTag} :
-    ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
+    ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : LexerCursor b)
       (handler : List Event), remaining cursor < n → postureOf parser = strict →
       (∃ e, ((paLoop parser cursor).run handler).1.1 = .error e) ∨
         ((paLoop (withPosture loose parser) cursor).run handler =
@@ -358,7 +360,7 @@ theorem paLoop_looser {strict loose : Token.VersionPosture} (hl : Looser strict 
         · rcases after₂ with p₂ | ⟨answer', p₂⟩
           · obtain ⟨rfl, hp₁⟩ := ha
             exact paLoop_looser hl n p₁ later₂ h₂
-              (Nat.lt_of_lt_of_le (Token.BatchCursor.Consumed.remaining_lt taken₁)
+              (Nat.lt_of_lt_of_le (Lexer.Cursor.LexerCursor.Consumed.remaining_lt taken₁)
                   (Nat.le_of_lt_succ hn))
               hp₁
           · cases ha
@@ -371,9 +373,9 @@ theorem paLoop_looser {strict loose : Token.VersionPosture} (hl : Looser strict 
 
 /-- A call of the adapter goes alike under `loose` as under `strict`, unless it fails under
 `strict`; the parser keeps its posture. -/
-theorem consume_looser {strict loose : Token.VersionPosture} (hl : Looser strict loose)
+theorem consume_looser {strict loose : Version.VersionPosture} (hl : Looser strict loose)
     {b : Token.BatchTag}
-    (cursor : Token.BatchCursor b) (h : cursor.HasNext) (adapter : RecAdapter)
+    (cursor : LexerCursor b) (h : cursor.HasNext) (adapter : RecAdapter)
     (hp : postureOf adapter.parser = strict) :
     (∃ e, ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run
         adapter).1.1 = .error e) ∨

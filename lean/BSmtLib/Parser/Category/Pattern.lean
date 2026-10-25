@@ -12,9 +12,9 @@ The parser of the pattern of a case of `match`.
 
 namespace BSmtLib.Parser.Category.Pattern
 
-open BSmtLib.Plain (Symbol)
-open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Token (Version)
+open BSmtLib.Lexicon.Value (Symbol)
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal
@@ -78,6 +78,45 @@ def step (version : Version) (self : PatternState) (token : Internal.Input) :
 end PatternState
 
 end Internal
+
+/-- The parser of one simple pattern: a symbol, or the wildcard `_` in a version that has it
+(`SmtSimplePatternParser`). -/
+structure SimplePatternParser where
+  private mk ::
+
+/-- The simple pattern parser. -/
+def SimplePatternParser.new : SimplePatternParser := {}
+
+instance : Inhabited SimplePatternParser := ⟨.new⟩
+
+section
+
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
+
+/- LEAN: not an instance, as the parser does not name its handler, so that instance search could
+not find the handler; the parser's `parse` puts it in place, as for the token parsers. -/
+/-- The steps, with the handler `H`, of the simple pattern parser: it finishes at its first token,
+which must be a simple pattern. -/
+@[instance_reducible]
+def Internal.simplePatternByToken (H : Type) {m : Type → Type} [Monad m] [Handler H m] :
+    Internal.ParseByToken SimplePatternParser H m (Handler.Error H) SimplePatternBuf where
+  arrive _ _ := pure ()
+  step version _ token :=
+    match Internal.PatternState.symbolOrWildcard? version token with
+    | some pattern => pure (.done pattern.intoOwned)
+    | none =>
+      -- the underscore wildcard is not allowed in every version
+      syntaxError (if Internal.PatternState.wildcardAllowed version
+        then (.expected #[.symbol, .reserved (.general .underscore)])
+        else (.expected #[.symbol]))
+  reset self := self
+
+instance : Parse SimplePatternParser H m (Handler.Error H) SimplePatternBuf where
+  parse parser state cursor :=
+    letI := Internal.simplePatternByToken H
+    Internal.parseByToken parser state cursor
+
+end
 
 /-- The parser of one pattern (`SmtPatternParser`). -/
 /- LEAN: as Rust's, the parser names its handler, whose types it does not use. -/

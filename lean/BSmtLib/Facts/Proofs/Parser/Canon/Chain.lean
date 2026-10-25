@@ -15,6 +15,8 @@ below the length of their batches (`ConsumesAlike`): related lexers lex alike, w
 lexers after.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Chain
 
 open BSmtLib.Lexer
@@ -31,7 +33,7 @@ theorem mcouple_id {α β : Type} {Rel : α → β → Prop} {a : Id α} {b : Id
 
 section
 
-variable {H R E : Type} [Token.Consume H R E] [∀ b, Token.ConsumeFrom H (Token.BatchCursor b) Id]
+variable {H R E : Type} [Token.Consume H R E] [∀ b, Token.ConsumeFrom H (LexerCursor b) Id]
 
 /-- Two library's lexers, each related to a lexer with the batch in its state as the library's
 lexer is to it, and both of these to one Rust port's lexer. -/
@@ -41,10 +43,10 @@ def ZRelG (l₁ l₂ : BSmtLib.Lexer H) : Prop :=
     WRustPortX1BatchInCore.Calls.LexRel w x₂ ∧ X1BatchInCoreLexer.Top.LexerRel l₂ x₂
 
 /-- What a fresh lexer gives up after failing. -/
-abbrev abandonI := Recovery.LexRecovery.abandon (H := H) (m := Id) Recovery.FailFast
+abbrev abandonI := Recovery.LexerRecovery.abandon (H := H) (m := Id) Recovery.FailFast
 
 /-- What a fresh lexer reports after recovering. -/
-abbrev recoverI := Recovery.LexRecovery.recover (H := H) (m := Id) Recovery.FailFast
+abbrev recoverI := Recovery.LexerRecovery.recover (H := H) (m := Id) Recovery.FailFast
 
 variable (hcons : ConsumesAlike H Id R E)
 include hcons
@@ -86,13 +88,13 @@ theorem step_eof {l₁ l₂ : BSmtLib.Lexer H} (h : ZRelG l₁ l₂) :
       abandonI recoverI w x₂ hw₂)
   exact ⟨a1.trans (c1.symm.trans (d1.trans b1.symm)), _, _, _, a2, c2, d2, b2⟩
 
-omit hcons [∀ b, Token.ConsumeFrom H (Token.BatchCursor b) Id] in
+omit hcons [∀ b, Token.ConsumeFrom H (LexerCursor b) Id] in
 theorem run_bind {α β : Type} (l : BSmtLib.Lexer H) (f : InnerM H Id α)
     (k : α → InnerM H Id β) :
     Internal.run l (f >>= k) = Internal.run (Internal.run l f).2 (k (Internal.run l f).1) :=
   (rfl)
 
-omit hcons [∀ b, Token.ConsumeFrom H (Token.BatchCursor b) Id] in
+omit hcons [∀ b, Token.ConsumeFrom H (LexerCursor b) Id] in
 theorem run_pure {α : Type} (l : BSmtLib.Lexer H) (a : α) :
     Internal.run l (Pure.pure a : InnerM H Id α) = (a, l) := (rfl)
 

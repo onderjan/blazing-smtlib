@@ -771,32 +771,41 @@ impl<'h, H: CommandHandler, P: TopParser<H>> Reader<'h, H, P> {
         }
     }
 
-    /// `SmtReader::read_from`, without the location, which the Lean driver
-    /// does not report.
-    pub fn read_from<R: BufRead>(&mut self, reader: R) -> Result<P::Result, ReadError<H::Error>> {
+    /// `SmtReader::read_from`.
+    pub fn read_from<R: BufRead>(
+        &mut self,
+        reader: R,
+    ) -> Result<Located<P::Result>, ReadError<H::Error>> {
         match &mut self.backend {
             Backend::Rust(rust) => rust
                 .read_from(reader)
-                .map(|located| P::from_rust(located.into_value()))
+                .map(|located| Located {
+                    location: located.location().into(),
+                    value: P::from_rust(located.into_value()),
+                })
                 .map_err(ReadError::from),
             Backend::Lean(session) => {
-                let result = session.read_all(reader)?;
-                Ok(P::from_lean(&result, session.values()))
+                let (result, location) = session.read_from(reader)?;
+                let value = P::from_lean(&result, session.values());
+                Ok(Located { value, location })
             }
         }
     }
 
-    /// `SmtReader::read_file`, without the location, which the Lean driver
-    /// does not report.
-    pub fn read_file(&mut self, path: &Path) -> Result<P::Result, ReadError<H::Error>> {
+    /// `SmtReader::read_file`.
+    pub fn read_file(&mut self, path: &Path) -> Result<Located<P::Result>, ReadError<H::Error>> {
         match &mut self.backend {
             Backend::Rust(rust) => rust
                 .read_file(path)
-                .map(|located| P::from_rust(located.into_value()))
+                .map(|located| Located {
+                    location: located.location().into(),
+                    value: P::from_rust(located.into_value()),
+                })
                 .map_err(ReadError::from),
             Backend::Lean(session) => {
-                let result = session.read_file(path)?;
-                Ok(P::from_lean(&result, session.values()))
+                let (result, location) = session.read_file(path)?;
+                let value = P::from_lean(&result, session.values());
+                Ok(Located { value, location })
             }
         }
     }

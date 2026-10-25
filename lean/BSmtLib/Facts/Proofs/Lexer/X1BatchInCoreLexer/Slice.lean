@@ -23,6 +23,8 @@ Where it goes on lexing, `resumed` is below the size of the slice, so the two ag
 the loop over a slice is coupled (`Coupled`) from related states, as `Outer` relates them.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Slice
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
@@ -74,7 +76,7 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat}
 
 /-- What `lexSliceRun` measures its progress by: the bytes left, and whether no lexical error was
@@ -189,7 +191,7 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
 /-- The index of the position the loop goes back to after a stop below the end of the slice. -/
 theorem ix_resumed {slice : ByteSlice} (h : slice.stop < USize.size) {resumed : Nat}

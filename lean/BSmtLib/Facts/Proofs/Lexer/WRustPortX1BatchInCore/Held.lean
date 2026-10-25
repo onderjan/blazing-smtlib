@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Span
 
 @[expose] public section
@@ -17,6 +19,8 @@ loops hold agree, have the same array of contents (the slice's) and are below th
 (`HR`); while the loops hold them, the batches in the two lexer states have no tokens (`SRE`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Held
 
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted)
@@ -27,11 +31,11 @@ open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem pushBorrowed_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (input : ByteSlice)
     (b b' : Token.Internal.TokenBatch) (hb : Core.HR b b') (offset base : Nat)
     (ty : Token.TokenCategory)

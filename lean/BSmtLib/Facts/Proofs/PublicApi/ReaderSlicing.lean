@@ -52,7 +52,7 @@ open BSmtLibSpec.Lexer (Handed)
 /-- Where a run without the end of the input fails, the run with it fails alike. -/
 theorem runInputE_false_error (ops : LexOps) {C : BSmtLibSpec.Lexer.Consumer} :
     ∀ (slices : List BSmtLibSpec.Regex.Chars) (lexer : ops.Lexer C) (t : List Handed)
-      (e : LexError (Option C.Error)),
+      (e : LexerError (Option C.Error)),
       ((runInputE ops lexer false slices).run t).1.1 = .error e →
         ((runInputE ops lexer true slices).run t).1.1 = .error e
   | [], lexer, t, e, h => by
@@ -92,7 +92,7 @@ theorem heldRel_unique {α : Type} {x₁ x₂ : Option (Span.Located Unit)} {y :
 /-- The parse adapters where the recording runs over items standing for the same tokens leave
 the parser have the same handler. -/
 theorem handler_of_adapterAt {version : BSmtLibSpec.Lexicon.Version} {items₁ items₂ : List LibItem}
-    {v₁ v₂ : Token.Version} {a₁ a₂ : RecAdapter}
+    {v₁ v₂ : Version} {a₁ a₂ : RecAdapter}
     (h : items₁.map (rcv ∘ Subtype.val) = items₂.map (rcv ∘ Subtype.val))
     (h₁ : AdapterAtG version items₁ v₁ a₁) (h₂ : AdapterAtG version items₂ v₂ a₂) :
     a₁.handler = a₂.handler := by
@@ -154,7 +154,7 @@ abbrev pNew (version : BSmtLibSpec.Lexicon.Version) : PLexer :=
 
 /-- With the script consumer, the library's lexer never ends on trailing input. -/
 theorem script_noTrailing (version : BSmtLibSpec.Lexicon.Version)
-    (slices : List BSmtLibSpec.Regex.Chars) (e : LexError (Option ScriptError))
+    (slices : List BSmtLibSpec.Regex.Chars) (e : LexerError (Option ScriptError))
     (he : (zRun (scriptConsumer version) version true slices).1.1 = .error e) :
     e.cause ≠ .lexical .unexpectedTrailingToken := by
   intro hc
@@ -167,7 +167,7 @@ theorem script_noTrailing (version : BSmtLibSpec.Lexicon.Version)
       (runInput_eq ZOps true slices (ZOps.new (scriptConsumer version) {} (toVersion version)) [])
 
   have hf : outcomeOf (consumer := scriptConsumer version) true (.error e : Except
-      (LexError (Option ScriptError))
+      (LexerError (Option ScriptError))
       (Option (Span.Located Unit))) = .failed (.trailing (toLocation e.span.start)) := by
     simp only [outcomeOf, BSmtLib.Facts.Lexer.Adapters.failureOf, hc]
     simp only [show (LexicalErrorKind.unexpectedTrailingToken ==
@@ -232,7 +232,7 @@ the input not ended, did. -/
 theorem after_facts (version : BSmtLibSpec.Lexicon.Version) (slices : List ByteList)
     {result : Option (Span.Located Unit)} {before after : RecReader}
     (h : readThrough (readerOf version) slices = .ok (result, before, after)) :
-    (∃ (items : List LibItem) (v : Token.Version), items.map (rcv ∘ Subtype.val) =
+    (∃ (items : List LibItem) (v : Version), items.map (rcv ∘ Subtype.val) =
         (zRun (scriptConsumer version) version true slices).2.map (rcv ∘ itemOf) ∧
         AdapterAtG version items v (Internal.handler (Reader.Internal.lexer after))) ∧
       before.discardedFrom.map toLocation =
@@ -283,7 +283,7 @@ end
 adapter's consumer for the replaying consumer, which is not the adapter's error `none`, are the
 same. -/
 theorem error_eq_of_cm {version : BSmtLibSpec.Lexicon.Version}
-    {e₁ e₂ : LexError (ParseError Unit)} {y : LexError (Option (List Handed))}
+    {e₁ e₂ : LexerError (ParseError Unit)} {y : LexerError (Option (List Handed))}
     (h₁ : LexErrRel (CM version) e₁ y) (h₂ : LexErrRel (CM version) e₂ y)
     (hn : y.cause ≠ .consumer none) : e₁ = e₂ := by
   obtain ⟨c₁, s₁, f₁⟩ := e₁
@@ -309,7 +309,7 @@ theorem error_eq_of_cm {version : BSmtLibSpec.Lexicon.Version}
 
 /-- The script reader over the recording handler, allowing every version, reads an input alike
 however it is cut into slices. -/
-theorem slicing_recording (version : Token.Version) (slices : List ByteList) :
+theorem slicing_recording (version : Version) (slices : List ByteList) :
     SameRead (readThrough (Reader.script ([] : List BSmtLibSpec.Parser.Properties.Event)
         allVersions version) slices)
       (readThrough (Reader.script ([] : List BSmtLibSpec.Parser.Properties.Event) allVersions
@@ -432,10 +432,10 @@ attribute [-instance] BSmtLib.Facts.Parser.Adapters.Handler.recordingLibraryTerm
 
 /-- `reading_slicing` of a library handler with the recording handler's state, outside the
 printer. -/
-def SlicingWith (I : Traits.CommandHandler (List BSmtLibSpec.Parser.Properties.Event) Id) :
+def SlicingWith (I : Handler.CommandHandler (List BSmtLibSpec.Parser.Properties.Event) Id) :
     Prop :=
   letI := I
-  ∀ (version : Token.Version) (slices : List ByteList),
+  ∀ (version : Version) (slices : List ByteList),
     SameRead (readThrough (Reader.script ([] : List BSmtLibSpec.Parser.Properties.Event)
         allVersions version) slices)
       (readThrough (Reader.script ([] : List BSmtLibSpec.Parser.Properties.Event) allVersions

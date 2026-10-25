@@ -38,7 +38,7 @@ open BSmtLib.Facts.Reader.Adapters
 
 /-- After the end of the script, the adapter's handler holds the recording run's log with the
 events that are not calls left out. -/
-theorem adapterAt_handler {version : Lexicon.Version} {items : List LibItem} {v : Token.Version}
+theorem adapterAt_handler {version : Lexicon.Version} {items : List LibItem} {v : Version}
     {adapter : RecAdapter} (h : AdapterAt version items v adapter)
     {r : Unit × List Parser.Internal.Input} (hend : (recRun version items).1 = .ok (.inr r)) :
     adapter.handler = calls (recRun version items).2 := by

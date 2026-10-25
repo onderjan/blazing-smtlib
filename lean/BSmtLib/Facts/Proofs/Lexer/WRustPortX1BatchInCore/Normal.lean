@@ -16,6 +16,8 @@ stored back before the loop leaves or takes the slow path, and loaded again afte
 The loops are shown alike by induction on the bytes left.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Normal
 
 open BSmtLib.Lexer.Internal.WRustPort.Slice (get? runEnd)
@@ -71,11 +73,11 @@ local macro "store" : tactic => `(tactic|
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offset base : Nat)
     (origin : Nat) :
     ∀ k (index : Nat) (b b' : Token.Internal.TokenBatch) (l ls : Nat)
@@ -364,7 +366,7 @@ theorem lexNormalFrom_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (offs
       exact Core.errorAt_sim _ _ _ _ _
 
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- The normal state, from states whose batches have the same array of contents: the loops take
 the batches out of the states and run from `start`. -/
 theorem lexNormal_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) (start : Nat)

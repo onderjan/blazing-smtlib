@@ -74,16 +74,16 @@ theorem bytesOf_append (s : ByteSlice) {i j k : Nat} (hij : i ≤ j) (hjk : j �
 section
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {hd : Bool}
-    {iv : Token.Version}
+    {iv : Version}
 
-theorem outcome_pending_congr {ver1 ver2 : Token.Version} {c1 c2 : List Handed}
+theorem outcome_pending_congr {ver1 ver2 : Version} {c1 c2 : List Handed}
     {h1 h2 : List Lexeme}
     (h : pending C hd ver1 c1 h1 = pending C hd ver2 c2 h2)
     (e : Consumers.Pure.RunF) :
     outcome C hd (pending C hd ver1 c1 h1) e = outcome C hd (pending C hd ver2 c2 h2) e := by
   rw [h]
 
-theorem stops_lexeme {hold : Bool} {ver : Token.Version} {coll : List Handed} {held : List Lexeme}
+theorem stops_lexeme {hold : Bool} {ver : Version} {coll : List Handed} {held : List Lexeme}
     {a b : Lexeme} (hab : a = b) {e : WP.Intr C floor} {p : Prog} {d : Option Span.Location}
     (hn : Stops C hold ver coll (held ++ [a]) e p d) :
     Stops C hold ver coll (held ++ [b]) e p d := by
@@ -108,7 +108,7 @@ structure SameLine (s c : WP.WCore) : Prop where
 at `location` from the lexer state `s` with the tokens taken `coll` and the batch of the lexemes
 `held` the loop holds: the lexer state `s1` it runs in is `s` but for the line, and the naive
 lexer's run from `index` is, at `«end»`, the whitespace in progress at `locE`. -/
-def WsStartSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version)
+def WsStartSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version)
     (input : ByteSlice) (offset base index : Nat) (start : Span.Location)
     (batch : Token.Internal.TokenBatch)
     (hframe : Frame floor low offset) (hstart : start.offset = offset + (index - base))
@@ -133,7 +133,7 @@ def WsStartSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version)
         hbatch) s1 coll Q QE
 
 set_option maxHeartbeats 1000000 in
-theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : Nat)
+theorem wsStart_lt (v : Version) (input : ByteSlice) (offset base index : Nat)
     (start : Span.Location)
     (batch : Token.Internal.TokenBatch) (hframe : Frame floor low offset)
     (hstart : start.offset = offset + (index - base)) (hbatch : Held floor offset base index batch)
@@ -312,7 +312,7 @@ theorem wsStart_lt (v : Token.Version) (input : ByteSlice) (offset base index : 
 
 
 /-- Whitespace a consumer takes starts with its first byte, as it goes on with it. -/
-theorem feedFrom_wsStart (v : Token.Version) (input : ByteSlice) {i : Nat} (hi : i < input.size)
+theorem feedFrom_wsStart (v : Version) (input : ByteSlice) {i : Nat} (hi : i < input.size)
     (hw : isWhitespace input[i] = true) (location : Span.Location) :
     feedFrom v true input .idle location i =
       feedFrom v true input (.token ⟨.whitespace, location, .empty⟩) location i := by
@@ -332,7 +332,7 @@ theorem wp_state {α : Type} {x : WP.M C floor low α} {s : WP.BS floor low} {co
 
 /-- `startWhitespace` for a consumer that takes whitespace, from the normal state at `index`
 at `location`, with whitespace at `index`. -/
-theorem startWhitespace_wp (v : Token.Version) (input : ByteSlice) (offset base index : Nat)
+theorem startWhitespace_wp (v : Version) (input : ByteSlice) (offset base index : Nat)
     (batch : Token.Internal.TokenBatch)
     (hrun : Lexer.Internal.WRustPort.ContinuesWhitespace input index)
     (hframe : Frame floor low offset) (hindex : base ≤ index)

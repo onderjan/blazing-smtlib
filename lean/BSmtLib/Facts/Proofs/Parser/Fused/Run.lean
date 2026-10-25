@@ -5,7 +5,8 @@ public import BSmtLib.Facts.Proofs.Parser.Fused.Reserved
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Internal.Fused.Category
 import all BSmtLib.Token
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -21,13 +22,15 @@ it that the fused steps read from the category alone.
 
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Run
 
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
+open BSmtLib.Token (BatchTag Cursor)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib.Version (VersionPosture)
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandler H m]
 
@@ -58,9 +61,9 @@ def HandledOutcome.toRun {σ ρ ε : Type} :
   | .error h cause => (.error cause, h)
 
 /-- The token as the port views it, by its category and content. -/
-abbrev inputOf {batch : BatchTag} (version : Token.Version) (next : BatchCursor batch)
-    (token : Token batch) : Parser.Internal.Input :=
-  Parser.Internal.Input.ofSyntax (Token.SyntaxToken.Internal.fromParts (next.category token)
+abbrev inputOf {batch : BatchTag} (version : Version) (next : LexerCursor batch)
+    (token : LexerToken batch) : Parser.Internal.Input :=
+  Parser.Internal.Input.ofSyntax (Token.Internal.fromParts (next.category token)
       (next.content token) version)
 
 theorem run_call {α : Type} (x : ExceptT (Handler.Error H) (StateT H m) α) (h : H) :
@@ -80,12 +83,12 @@ theorem run_call_bind {α γ : Type} (x : ExceptT (Handler.Error H) (StateT H m)
   cases r <;> simp [Except.mapError]
 
 omit [Monad m] [LawfulMonad m] [CommandHandler H m] in
-theorem inputOf_parenClose {batch : BatchTag} (version : Token.Version) (next : BatchCursor batch)
-    (token : Token batch) :
+theorem inputOf_parenClose {batch : BatchTag} (version : Version) (next : LexerCursor batch)
+    (token : LexerToken batch) :
     inputOf version next token = .parenClose ↔ next.category token = .parenClose := by
   simp only [inputOf]
   generalize next.category token = cat
-  cases cat <;> simp only [Token.SyntaxToken.Internal.fromParts, Parser.Internal.Input.ofSyntax] <;>
+  cases cat <;> simp only [Token.Internal.fromParts, Parser.Internal.Input.ofSyntax] <;>
     (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     simp
 
@@ -98,20 +101,20 @@ omit [Monad m] [LawfulMonad m] [CommandHandler H m] in
 theorem beq_parenClose : (Token.TokenCategory.parenClose == .parenClose) = true := (rfl)
 
 omit [Monad m] [LawfulMonad m] [CommandHandler H m] in
-theorem inputOf_isWord {batch : BatchTag} (version : Token.Version) (next : BatchCursor batch)
-    (token : Token batch) (word : Token.Reserved.GeneralReserved) :
+theorem inputOf_isWord {batch : BatchTag} (version : Version) (next : LexerCursor batch)
+    (token : LexerToken batch) (word : Token.Reserved.GeneralReserved) :
     (inputOf version next token).isWord word =
       Category.isWord version (next.category token) next token word := by
   simp only [Category.isWord, Reserved.reservedAt_eq, inputOf]
-  cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
+  cases next.category token <;> simp only [Token.Internal.fromParts,
       Parser.Internal.Input.ofSyntax] <;>
     (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     rfl
 
 /-- A pure outcome of the fused step of a qualified identifier, as the port's step gives it. -/
 def qualToRun {σ ε : Type} :
-    Category.PureOutcome σ Nodes.Ident →
-      Except (ParseErrorCause ε) (Parser.Internal.Step σ (Nodes.Ident × Option
+    Category.PureOutcome σ Grammar.Nodes.Ident →
+      Except (ParseErrorCause ε) (Parser.Internal.Step σ (Grammar.Nodes.Ident × Option
           (Handler.«Sort» H)))
   | .more state => .ok (.more state)
   | .done identifier => .ok (.done (identifier, none))

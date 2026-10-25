@@ -18,7 +18,7 @@ open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Calls
 
 /-- The fields of two lexer states as constructed correspond. -/
-theorem coreRel_new (version : Token.Version) (recovers : Bool) :
+theorem coreRel_new (version : Version) (recovers : Bool) :
     Core.CoreRel
       { version, initialVersion := version, state := .normal, discardedFrom := none,
         holding := false, recovers, consumedDepth := 0, lexedDepth := 0, recoveryState := none,
@@ -54,13 +54,13 @@ theorem coreRel_new (version : Token.Version) (recovers : Bool) :
   batch := agree_of_len_zero rfl rfl
   capacity := Core.zero_lt_capacity
 
-theorem new_rel {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Token.Version) :
+theorem new_rel {H R E : Type} [Token.Consume H R E] (consumer : H) (version : Version) :
     LexRel (Lexer.Internal.WRustPort.Lexer.new consumer version)
       (Lexer.Internal.WRustPort.Lexer.new consumer version) :=
   ⟨rfl, ⟨coreRel_new version false, rfl⟩, rfl⟩
 
-theorem newRecovering_rel {H R E : Type} [Token.Consume H R E] {m : Type → Type} [Token.Recover H m]
-    (consumer : H) (version : Token.Version) :
+theorem newRecovering_rel {H R E : Type} [Token.Consume H R E] {m : Type → Type} [Lexer.Recovery.Recover H m]
+    (consumer : H) (version : Version) :
     LexRel (Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version)
       (Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version) :=
   ⟨rfl, ⟨coreRel_new version true, rfl⟩, rfl⟩

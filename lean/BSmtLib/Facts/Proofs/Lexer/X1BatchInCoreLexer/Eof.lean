@@ -18,6 +18,8 @@ of the input, catches a relex and hands over the end-of-file token. It is simula
 one in its state.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Eof
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -71,7 +73,7 @@ end
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
 theorem lexEofInner_exact (c : ZCore) (h : H) :
     (fun r => ((r.1.1, coreMap 0 r.1.2), r.2)) <$>

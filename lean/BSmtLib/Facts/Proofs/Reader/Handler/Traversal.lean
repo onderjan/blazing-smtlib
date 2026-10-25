@@ -21,7 +21,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Handler.Traversal
 
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser BSmtLibSpec.Parser.Properties
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Facts.Lexer.Adapters (toVersion)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection

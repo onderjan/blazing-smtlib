@@ -25,6 +25,8 @@ from how it is built, as in step 1, by the rules below and the tactic `usim`. Th
 only where the lexer calls it, in `flushCursor`, through `Watched.call`.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Unary
 
 open BSmtLib.Lexer
@@ -37,11 +39,11 @@ or been handed a cursor in another version than the one of the last cursor it ga
 handed such a cursor (`spoiled`), and whether the call at which it went wrong was handed
 whitespace or a comment and answered the error `none` (`layout`). -/
 class Watched (F : Type) (σ R E : outParam Type) [Token.Consume F R (Option E)]
-    [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] where
+    [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] where
   /-- Whether something went wrong. -/
   errored : F → Bool
   /-- The version of the last cursor the consumer gave back, or the one it started with. -/
-  version : F → Token.Version
+  version : F → Version
   /-- Whether the consumer has been called after something went wrong. -/
   spoiled : F → Bool
   /-- Whether the call at which the consumer went wrong answered the error `none`. -/
@@ -49,7 +51,7 @@ class Watched (F : Type) (σ R E : outParam Type) [Token.Consume F R (Option E)]
   /-- A call from a record where nothing went wrong, on a cursor in the record's version, records
   whether it answered an error, the error `none`, and the version of the cursor it gave back, and
   leaves `spoiled` as it was. -/
-  call {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) (fl : F) (l : σ) :
+  call {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) (fl : F) (l : σ) :
     errored fl = false → cursor.version = version fl →
       let r := ((Token.ConsumeFrom.consume cursor h : StateT F (StateM σ) _).run fl).run l
       errored r.1.2 = Flagged.isError r.1.1.1 ∧ version r.1.2 = r.1.1.2.val.version ∧
@@ -58,7 +60,7 @@ class Watched (F : Type) (σ R E : outParam Type) [Token.Consume F R (Option E)]
 section
 
 variable {F σ R E : Type} [Token.Consume F R (Option E)]
-  [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E]
+  [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E]
   {floor : Option Nat} {low : Nat} {α β : Type}
 
 /-- The lexer's monad on the consumer `F`, which runs in `StateM σ`. -/
@@ -90,7 +92,7 @@ def UL (f : FM F σ floor low α) : Prop :=
           (frun f s fl l).1.1.2.val.batch.len = 0) ∧
     Watched.spoiled (frun f s fl l).1.2 = Watched.spoiled fl
 
-omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+omit [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_bind (x : FM F σ floor low α) (k : α → FM F σ floor low β) (s fl l) :
     frun (x >>= k) s fl l =
       match frun x s fl l with

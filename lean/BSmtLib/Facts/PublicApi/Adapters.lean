@@ -13,10 +13,12 @@ library's internals. Each definition here is a few lines and states its rule in 
 reader of the theorems reads these and the public API, and nothing more.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.PublicApi.Adapters
 
 open BSmtLib.Parser
-open BSmtLib.Lexer.Error BSmtLib.Traits
+open BSmtLib.Lexer.Error BSmtLib.Handler
 
 /-- Bytes as a list: the form in which the theorems speak of an input. -/
 abbrev ByteList := List UInt8
@@ -77,8 +79,8 @@ def SameSpellings (written printed : List ByteList) : Prop :=
 /-! ## Feeding a reader -/
 
 /-- The posture that allows every version and any number of version declarations. -/
-def allVersions : Token.VersionPosture :=
-  (Token.VersionPostureBuilder.new.clearAllowed.addAllowed .v2_0 |>.addAllowed .v2_5
+def allVersions : Version.VersionPosture :=
+  (Version.VersionPostureBuilder.new.clearAllowed.addAllowed .v2_0 |>.addAllowed .v2_5
     |>.addAllowed .v2_6 |>.addAllowed .v2_7 |>.setMaxDeclarations none).build
 
 section
@@ -133,7 +135,7 @@ instance : Token.Consume Collector Unit Empty where
   isConcrete := true
 
 instance {batch : Token.BatchTag} : Token.ConsumeFrom Collector
-    (Token.BatchCursor batch) CollectM where
+    (LexerCursor batch) CollectM where
   consume cursor h := do
     let (token, next) := cursor.next h
     let span := cursor.span token
@@ -146,7 +148,7 @@ instance {batch : Token.BatchTag} : Token.ConsumeFrom Collector
 input by `Lexer.lexEof`: the result and the lexer after the end of the input, or the first
 error. -/
 def collectWith (lexer : Lexer Collector) :
-    List ByteList → CollectM (Except (LexError Empty)
+    List ByteList → CollectM (Except (LexerError Empty)
         (Option (Span.Located Unit) × Lexer Collector))
   | [] => do
     match ← lexer.lexEof with
@@ -165,8 +167,8 @@ def resultOf {ε α β : Type} : Except ε (α × β) → Except ε α
 /-- The library's lexer with the collector, from the version, fed the slices by
 `Lexer.lexSlice` and then the end of the input by `Lexer.lexEof`: the result or the first error,
 and the entries written down. -/
-def collect (version : Token.Version) (slices : List ByteList) :
-    Except (LexError Empty) (Option (Span.Located Unit)) × List Entry :=
+def collect (version : Version) (slices : List ByteList) :
+    Except (LexerError Empty) (Option (Span.Located Unit)) × List Entry :=
   (resultOf <$> collectWith (Lexer.new Collector.mk version) slices).run []
 
 /-- `Tiles entries start stop`: the entries' spans follow each other without a gap or an

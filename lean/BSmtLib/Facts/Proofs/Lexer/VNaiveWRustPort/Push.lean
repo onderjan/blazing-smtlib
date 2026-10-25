@@ -4,6 +4,8 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Span
 
 @[expose] public section
@@ -22,7 +24,7 @@ the consumer is where `pending` says; if it stops, the interruption is where it 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Push
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
-open BSmtLib.Token.BatchCursor.Internal (EndsAfter)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (EndsAfter)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Lexer.Internal.WRustPort.Rust (flushCursor)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Agree
@@ -63,7 +65,7 @@ theorem withVersion_key {s : WP.BS floor low} {p : Prog}
 /-- The hand-over of a new cursor over a batch that holds lexemes. -/
 theorem flushNew_wp (T : Token.Internal.TokenBatch) (ls : List Lexeme) (hT : Holds T ls)
     (hfloor : ∀ p, floor = some p → EndsAfter
-      (Token.BatchCursor.Internal.new (s : WP.BS floor low).val.version T) p)
+      (Lexer.Cursor.LexerCursor.Internal.new (s : WP.BS floor low).val.version T) p)
     (coll : List Handed) {Q : Unit → WP.BS floor low → List Handed → Prop}
     {QE : WP.Intr C floor → WP.BS floor low → List Handed → Prop} (hrec : s.val.recovers = false)
     (hok : ∀ p', pending C s.val.holding s.val.version coll ls = .cont p' →
@@ -71,9 +73,9 @@ theorem flushNew_wp (T : Token.Internal.TokenBatch) (ls : List Lexeme) (hT : Hol
     (herr : ∀ e p d, Stops C s.val.holding s.val.version coll ls e p d →
       QE e (withDiscards s p.ver d) p.taken) :
     WP (flushCursor (H := Answering C) (m := AnswerM) (R := C.Result) (E := Option C.Error)
-      (Token.BatchCursor.Internal.new s.val.version T) hfloor) s coll Q QE := by
-  have hy : yields (Token.BatchCursor.Internal.new s.val.version T) ls = ls := yields_new _ T ls hT
-  refine flushCursor_wp' (Token.BatchCursor.Internal.new s.val.version T) ls hT
+      (Lexer.Cursor.LexerCursor.Internal.new s.val.version T) hfloor) s coll Q QE := by
+  have hy : yields (Lexer.Cursor.LexerCursor.Internal.new s.val.version T) ls = ls := yields_new _ T ls hT
+  refine flushCursor_wp' (Lexer.Cursor.LexerCursor.Internal.new s.val.version T) ls hT
     (by rw [cStop_new, hT.len]; exact Nat.le_refl _) rfl rfl hfloor s coll hrec rfl ?_ ?_
   · rw [hy]; exact hok
   · rw [hy]; exact herr
@@ -276,7 +278,7 @@ theorem pushBorrowed_wp (input : ByteSlice) (batch : Token.Internal.TokenBatch)
     exact hok _ s coll _ hT' rfl rfl rfl
 
 /-- What the consumer does after lexemes, from where the consumer is after earlier ones. -/
-theorem stops_congr {hd : Bool} {ver ver' : Token.Version} {c₁ c₂ : List Handed}
+theorem stops_congr {hd : Bool} {ver ver' : Version} {c₁ c₂ : List Handed}
     {xs ys : List Lexeme} (h : pending C hd ver c₁ xs = pending C hd ver' c₂ ys)
     {e : WP.Intr C floor}
     {p : Prog} {d : Option Span.Location} (hs : Stops C hd ver c₁ xs e p d) :
@@ -410,12 +412,12 @@ theorem sinkEof_wp (location : Span.Location) (s : WP.BS none low) (coll : List 
 
 /-- A step interrupted where the consumer stopped on lexemes handed over from the lexer state
 `s`, which is fixed. -/
-theorem stepFails_of_stops' {v : Token.Version} {hd : Bool} {iv : Token.Version}
+theorem stepFails_of_stops' {v : Version} {hd : Bool} {iv : Version}
     {input : ByteSlice} {st : St}
-    {location : Span.Location} {start : Nat} {ver : Token.Version} {coll : List Handed}
+    {location : Span.Location} {start : Nat} {ver : Version} {coll : List Handed}
     {held : List Lexeme} {s c : WP.WCore} {p : Prog} {d : Option Span.Location} {bytes : ByteArray}
     (hss : StopState s p d c bytes)
-    (hfix : Fixed v hd iv s) {ver1 : Token.Version} {coll1 : List Handed} {held1 : List Lexeme}
+    (hfix : Fixed v hd iv s) {ver1 : Version} {coll1 : List Handed} {held1 : List Lexeme}
     (h : ∃ rest, outcome C hd (pending C hd ver coll held)
         (feedFrom v C.concrete input st location start) =
       outcome C hd (pending C hd ver1 coll1 held1) rest)

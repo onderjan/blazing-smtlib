@@ -14,6 +14,8 @@ call by call (`consumersR`): the same values, and where `Phi version` fails repo
 taken, the other fails with them.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.PhiR
 
 open BSmtLibSpec
@@ -22,7 +24,7 @@ open BSmtLib.Facts.Lexer.Adapters (toVersion Answering AnswerM toHanded)
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.HandOver
 open BSmtLib.Facts.Proofs.Reader.Param.Phi
 open BSmtLib.Facts.Reader.Adapters
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 
 /-- The script consumer, failing with the tokens taken. -/
 def replay (version : Lexicon.Version) : Consumer where
@@ -41,7 +43,7 @@ variable {version : Lexicon.Version}
 
 /-- The adapter's consumer for `replay version` takes the tokens as the one for the script
 consumer does, and fails where it fails, with the tokens taken. -/
-theorem answering_replay {b : Token.BatchTag} : ∀ (n : Nat) (cursor : Token.BatchCursor b)
+theorem answering_replay {b : Token.BatchTag} : ∀ (n : Nat) (cursor : LexerCursor b)
     (h : cursor.HasNext) (taken : List Handed), remaining cursor < n →
     ((Answering.consume (replay version) cursor h).run taken).2 =
         ((Answering.consume (scriptConsumer version) cursor h).run taken).2 ∧

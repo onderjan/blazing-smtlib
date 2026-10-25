@@ -172,7 +172,7 @@ theorem eofHand_failTaken (hd : Bool) (eof : Lexeme) {h : HandOut C} (hf : FailT
 
 /-- Where the consumer failed at the end of the input, the last token it took is that of the
 lexeme it failed at. -/
-theorem eofOut_failTaken {hd ws : Bool} {ver : Token.Version} {coll : List Handed} {st : St}
+theorem eofOut_failTaken {hd ws : Bool} {ver : Version} {coll : List Handed} {st : St}
     {location : Span.Location} {l : Lexeme}
     (h : failLex (eofOut C hd ws ver coll st location) = some l) :
     ∃ e b p d, eofOut C hd ws ver coll st location = some (.stop (.fail e b l) p, d) ∧
@@ -226,7 +226,7 @@ theorem stopsH_errSpan {h : HandOut C} {e : WP.Intr C none} {p : Prog} {d : Opti
     | discard r l => have := hm.1; rw [hx] at this; cases this
     | relex l => have := hm.1; rw [hx] at this; cases this
 
-theorem stops_eq {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls : List Lexeme}
+theorem stops_eq {hd : Bool} {ver : Version} {coll : List Handed} {ls : List Lexeme}
     {e : WP.Intr C none} {p : Prog} {d : Option Span.Location} :
     Stops C hd ver coll ls e p d = StopsH (pending C hd ver coll ls) e p d := rfl
 
@@ -257,7 +257,7 @@ theorem tail_of_stops {h : HandOut C} {d d0 dd : Option Span.Location} {location
       subst h1
       refine ⟨?_, hv, hd, rfl⟩
       simp only [intrRes, preciseFailure, lexicalKey, causeFailure, failureOf, stopFailure, h2s,
-        Lexer.Error.LexError.Internal.cause_new, Lexer.Error.LexError.Internal.span_new]
+        Lexer.Error.LexerError.Internal.cause_new, Lexer.Error.LexerError.Internal.span_new]
       rfl
     | fail err b l =>
       obtain ⟨hm, -⟩ := hm
@@ -375,7 +375,7 @@ local macro "eof_digits" : tactic => `(tactic| (
     rfl))
 
 set_option maxHeartbeats 800000 in
-theorem lexEofInner_eof (v : Token.Version) (c : WP.WCore) (coll : List Handed) (st : St)
+theorem lexEofInner_eof (v : Version) (c : WP.WCore) (coll : List Handed) (st : St)
     (location : Span.Location) (hrec : c.recovers = false) (hagree : StAgrees v C.concrete st c)
     (hloc : EofLoc c location) :
     EofFin C c coll st location

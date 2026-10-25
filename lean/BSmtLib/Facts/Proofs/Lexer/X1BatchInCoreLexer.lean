@@ -56,6 +56,8 @@ The proof, in parts:
 - `X1BatchInCoreLexer.Handed`: the constructed lexers.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple (MCouple)
@@ -63,7 +65,7 @@ open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple (MCouple)
 /-- The lexer with the batch kept in its state is constructed as the library's lexer is, with
 its state mapped. -/
 theorem X1BatchInCore.new_eq_new_lexer {H R E : Type} [Token.Consume H R E] (consumer : H)
-    (version : Token.Version) :
+    (version : Version) :
     Lexer.Internal.WRustPort.Lexer.new consumer version =
       { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.new consumer version)
         core := Core.coreMap 0 (BSmtLib.Lexer.Internal.core (BSmtLib.Lexer.new consumer version))
@@ -73,7 +75,7 @@ theorem X1BatchInCore.new_eq_new_lexer {H R E : Type} [Token.Consume H R E] (con
 /-- The lexer with the batch kept in its state that recovers is constructed as the library's
 lexer that recovers is, with its state mapped. -/
 theorem X1BatchInCore.newRecovering_eq_newRecovering_lexer {H R E : Type} [Token.Consume H R E]
-    {m : Type → Type} [Token.Recover H m] (consumer : H) (version : Token.Version) :
+    {m : Type → Type} [Lexer.Recovery.Recover H m] (consumer : H) (version : Version) :
     Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version =
       { handler := BSmtLib.Lexer.Internal.handler (BSmtLib.Lexer.newRecovering
           (m := m) consumer version)
@@ -86,7 +88,7 @@ theorem X1BatchInCore.newRecovering_eq_newRecovering_lexer {H R E : Type} [Token
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
 /-- The step of a call on a slice that ends below `USize.size`, run by `run` on related lexers
 (`LexerRel`), gives the same result in the library's lexer and in the lexer with the batch kept
@@ -121,7 +123,7 @@ theorem X1BatchInCore.lexEofStep_sim_lexer (abandon recover : Span.Location → 
 the same held result and states equal but for the base, lex a slice that ends below
 `USize.size` alike: the results are equal once the base is forgotten. -/
 theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Type}
-    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
     (hx : Outer.Rel (BSmtLib.Lexer.Internal.core l) x.core)
@@ -136,7 +138,7 @@ theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Type}
 the same held result and states equal but for the base, lex the end of the input alike: the
 results are equal once the base is forgotten. -/
 theorem X1BatchInCore.lexEof_sim_lexer {recovery : Type}
-    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
     (hh : x.handler = BSmtLib.Lexer.Internal.handler l)
     (hx : Outer.Rel (BSmtLib.Lexer.Internal.core l) x.core)

@@ -32,7 +32,7 @@ open BSmtLibSpec.Parser.Traversal
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [Traits.Handler H m] {σ ρ τ χ α β : Type}
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m] {σ ρ τ χ α β : Type}
 variable (points : Points (StateT H m))
 
 /-- A token arrives and is processed, with no call due at its arrival. -/
@@ -359,7 +359,7 @@ open BSmtLibSpec.Parser.Traversal
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [Traits.Handler H m] {σ ρ : Type}
+variable {H : Type} {m : Type → Type} [Monad m] [Handler H m] {σ ρ : Type}
 variable (points : Points (StateT H m))
 
 /-- A token arrives, the calls `first` are made, and it is processed. -/

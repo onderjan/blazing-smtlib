@@ -7,6 +7,8 @@ import all BSmtLib.Parser.Adapter
 import all BSmtLib.Parser.Internal.Fused
 import all BSmtLib.Parser.Script
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -28,15 +30,17 @@ token.
 
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Loop
 
-open BSmtLib.Traits
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Handler
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Category.Term.Internal (TermLevelOf)
 open BSmtLib.Parser.Command.Internal (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic (Cause LoopResult OutcomeOf TermContext TermModeOf)
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
+open BSmtLib.Token (BatchTag Cursor)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib.Version (VersionPosture)
 open BSmtLib.Token.Cursor (HasNext)
 
 /-! ## The adapter's token, taken from further back -/
@@ -87,13 +91,13 @@ variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 
 /-- The adapter's result of a token, taken from `origin` on, with the handler after it. -/
 abbrev PortOut (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
-    (origin : BatchCursor batch) :=
+    (origin : LexerCursor batch) :=
   (Parser.Internal.After (ScriptParser H) Unit (Handler.Error H) ×
-    { z : BatchCursor batch // z.Consumed origin }) × H
+    { z : LexerCursor batch // z.Consumed origin }) × H
 
 /-- The fused step's outcome, read as the adapter's result of the token: going on in the parser
 that the outcome stands for, or stopping. -/
-def toPort (posture : VersionPosture) {batch : BatchTag} {origin next : BatchCursor batch}
+def toPort (posture : VersionPosture) {batch : BatchTag} {origin next : LexerCursor batch}
     (consumed : next.Consumed origin) : OutcomeOf H next → PortOut H origin
   | .command h decl cmd =>
     ((.goOn (ScriptParser.Internal.mk posture cmd decl), ⟨next, consumed⟩), h)
@@ -110,9 +114,9 @@ as the adapter's result, it is the adapter's `takeOne` of the token on the parse
 arguments stand for, followed by the continuation.
 -/
 def StepSimulates (H : Type) (m : Type → Type) [Monad m] [CommandHandler H m] : Prop :=
-  ∀ (posture : VersionPosture) {batch : BatchTag} {origin next : BatchCursor batch} (h : H)
+  ∀ (posture : VersionPosture) {batch : BatchTag} {origin next : LexerCursor batch} (h : H)
     (decl : Nat) (cmd : CommandStateOf H) (inTerm : Bool) (ctx : TermContext (Handler.«Sort» H))
-    (mode : TermModeOf H) (levels : List (TermLevelOf H)) (token : Token batch)
+    (mode : TermModeOf H) (levels : List (TermLevelOf H)) (token : LexerToken batch)
     (consumed : next.Consumed origin) {β : Type} (k : PortOut H origin → m β),
     step posture h decl cmd inTerm ctx mode levels token next
         (fun out => k (toPort posture consumed out)) =
@@ -121,13 +125,13 @@ def StepSimulates (H : Type) (m : Type → Type) [Monad m] [CommandHandler H m] 
 
 /-- The port's run from a token taken from a cursor that leaves `next`: the adapter's `takeOne`,
 then, if it goes on, the rest of the cursor. -/
-def portGo {batch : BatchTag} (origin : BatchCursor batch) (parser : ScriptParser H) (h : H)
-    (token : Token batch) (next : BatchCursor batch) (consumed : next.Consumed origin) :
+def portGo {batch : BatchTag} (origin : LexerCursor batch) (parser : ScriptParser H) (h : H)
+    (token : LexerToken batch) (next : LexerCursor batch) (consumed : next.Consumed origin) :
     m (LoopResult H origin) :=
   (Parser.Internal.takeOne parser origin token next consumed).run h >>= portRest origin
 where
   /-- After a token: the rest of the cursor, or the stop. -/
-  portRest (origin : BatchCursor batch) : PortOut H origin → m (LoopResult H origin)
+  portRest (origin : LexerCursor batch) : PortOut H origin → m (LoopResult H origin)
     | ((.goOn parser, ⟨later, taken⟩), h) => do
       let ((answer, parser, done), h) ← (Parser.Internal.rest origin parser later taken).run h
       return (answer, parser, done, h)
@@ -137,18 +141,18 @@ variable [LawfulMonad m]
 
 /-- The adapter's token, its consumption counted from the cursor before it. -/
 theorem takeOne_from {batch : BatchTag} (parser : ScriptParser H)
-    {origin cursor next : BatchCursor batch} (token : Token batch) (step : next.Consumed cursor)
+    {origin cursor next : LexerCursor batch} (token : LexerToken batch) (step : next.Consumed cursor)
     (consumed : cursor.Consumed origin) :
     Parser.Internal.takeOne (m := m) parser origin token next (step.trans consumed) =
-      (fun (after, (z : { z : BatchCursor batch // z.Consumed cursor })) =>
-        (after, (⟨z.1, z.2.trans consumed⟩ : { z : BatchCursor batch // z.Consumed origin })))
+      (fun (after, (z : { z : LexerCursor batch // z.Consumed cursor })) =>
+        (after, (⟨z.1, z.2.trans consumed⟩ : { z : LexerCursor batch // z.Consumed origin })))
         <$> Parser.Internal.takeOne parser cursor token next step :=
-  takeOne_trans (Z := BatchCursor batch) parser token step consumed
+  takeOne_trans (Z := LexerCursor batch) parser token step consumed
 
 /-- The rest of a cursor that has a token, from a parser that does not hand it over: its token,
 then the rest. -/
-theorem rest_next {batch : BatchTag} (origin : BatchCursor batch) (parser : ScriptParser H) (h : H)
-    (next : BatchCursor batch) (consumed : next.Consumed origin) (hn : next.HasNext)
+theorem rest_next {batch : BatchTag} (origin : LexerCursor batch) (parser : ScriptParser H) (h : H)
+    (next : LexerCursor batch) (consumed : next.Consumed origin) (hn : next.HasNext)
     (hno : Parser.Internal.ParseByToken.handOver? parser next = none) :
     (do
         let ((answer, parser, done), h) ←
@@ -158,8 +162,8 @@ theorem rest_next {batch : BatchTag} (origin : BatchCursor batch) (parser : Scri
         ((next.next hn).2.2.trans consumed) := by
   rw [HandOver.rest_of_none consumed hno]
   have : Cursor.next? next = some (next.next hn) := by
-    show BatchCursor.next? next = _
-    simp [BatchCursor.next?, hn]
+    show LexerCursor.next? next = _
+    simp [LexerCursor.next?, hn]
   simp only [this]
   simp only [portGo, StateT.run_bind, bind_assoc]
   rw [takeOne_from parser (next.next hn).1 (next.next hn).2.2 consumed]
@@ -170,8 +174,8 @@ theorem rest_next {batch : BatchTag} (origin : BatchCursor batch) (parser : Scri
   cases after <;> simp [portGo.portRest]
 
 /-- The rest of a cursor that has no token: the parser goes on. -/
-theorem rest_none {batch : BatchTag} (origin : BatchCursor batch) (parser : ScriptParser H) (h : H)
-    (next : BatchCursor batch) (consumed : next.Consumed origin) (hn : ¬next.HasNext) :
+theorem rest_none {batch : BatchTag} (origin : LexerCursor batch) (parser : ScriptParser H) (h : H)
+    (next : LexerCursor batch) (consumed : next.Consumed origin) (hn : ¬next.HasNext) :
     (do
         let ((answer, parser, done), h) ←
           (Parser.Internal.rest (m := m) origin parser next consumed).run h
@@ -184,14 +188,14 @@ theorem rest_none {batch : BatchTag} (origin : BatchCursor batch) (parser : Scri
       exact absurd has hn
     · simp only [StateT.run_pure, pure_bind]
   · have : Cursor.next? next = none := by
-      show BatchCursor.next? next = _
-      simp [BatchCursor.next?, hn]
+      show LexerCursor.next? next = _
+      simp [LexerCursor.next?, hn]
     simp only [this, StateT.run_pure, pure_bind]
 
 omit [LawfulMonad m] in
 /-- A script parser awaiting a command hands no cursor over. -/
 theorem awaiting_handOver (posture : VersionPosture) (declarations : Nat) {batch : BatchTag}
-    (cursor : BatchCursor batch) :
+    (cursor : LexerCursor batch) :
     Parser.Internal.ParseByToken.handOver? (m := m)
       (ScriptParser.Internal.mk (H := H) posture .awaiting declarations) cursor = none :=
   HandOver.script_handOver_none (fun _ h => by simp at h) cursor
@@ -201,7 +205,7 @@ omit [LawfulMonad m] in
 theorem handOver?_eq {batch : BatchTag} {parser : ScriptParser H}
     {nonstandard : CommandHandler.NonstandardParser H}
     (hc : ScriptParser.Internal.command parser = .nonstandard nonstandard)
-    (cursor : BatchCursor batch) :
+    (cursor : LexerCursor batch) :
     Parser.Internal.ParseByToken.handOver? (m := m) parser cursor = some (do
       let (answer, next) ← Parser.Command.Internal.nonstandardParse nonstandard cursor
       match answer with
@@ -220,13 +224,13 @@ theorem handOver?_eq {batch : BatchTag} {parser : ScriptParser H}
 
 /-- What the loop's rest gives, as a value of the type of `rest`'s run on the handler. -/
 abbrev RestOut (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
-    (origin : BatchCursor batch) :=
+    (origin : LexerCursor batch) :=
   (Except (Parser.ParseError (Handler.Error H)) (ControlFlow Unit) × ScriptParser H ×
-    { z : BatchCursor batch // Cursor.Consumed z origin }) × H
+    { z : LexerCursor batch // Cursor.Consumed z origin }) × H
 
 /-- The rest of a cursor that has no token, followed by anything: the parser goes on. -/
-theorem rest_none_k {batch : BatchTag} (origin : BatchCursor batch) (parser : ScriptParser H)
-    (h : H) (next : BatchCursor batch) (consumed : next.Consumed origin) (hn : ¬next.HasNext)
+theorem rest_none_k {batch : BatchTag} (origin : LexerCursor batch) (parser : ScriptParser H)
+    (h : H) (next : LexerCursor batch) (consumed : next.Consumed origin) (hn : ¬next.HasNext)
     {β : Type} (k : RestOut H origin → m β) :
     (Parser.Internal.rest (m := m) origin parser next consumed).run h >>= k =
       k ((.ok .continue, parser, ⟨next, consumed⟩), h) := by
@@ -237,19 +241,19 @@ theorem rest_none_k {batch : BatchTag} (origin : BatchCursor batch) (parser : Sc
       exact absurd has hn
     · simp only [StateT.run_pure, pure_bind]
   · have : Cursor.next? next = none := by
-      show BatchCursor.next? next = _
-      simp [BatchCursor.next?, hn]
+      show LexerCursor.next? next = _
+      simp [LexerCursor.next?, hn]
     simp only [this, StateT.run_pure, pure_bind]
 
 /-- The rest of a cursor that has a token, in a non-standard command, followed by anything: the
 fused reader's hand-over, then, after the command, the rest of the cursor awaiting the next
 one. -/
-theorem rest_handOver {batch : BatchTag} (origin base : BatchCursor batch)
+theorem rest_handOver {batch : BatchTag} (origin base : LexerCursor batch)
     (parser : ScriptParser H) (nonstandard : CommandHandler.NonstandardParser H)
     (hc : ScriptParser.Internal.command parser = .nonstandard nonstandard)
-    (cursor : BatchCursor batch) (h : H) (has : cursor.HasNext)
-    (lift : ∀ {next : BatchCursor batch}, next.Consumed cursor → next.Consumed base)
-    (toOrigin : ∀ {next : BatchCursor batch}, next.Consumed base → next.Consumed origin)
+    (cursor : LexerCursor batch) (h : H) (has : cursor.HasNext)
+    (lift : ∀ {next : LexerCursor batch}, next.Consumed cursor → next.Consumed base)
+    (toOrigin : ∀ {next : LexerCursor batch}, next.Consumed base → next.Consumed origin)
     (consumed : cursor.Consumed origin) {β : Type} (k : RestOut H origin → m β) :
     (Parser.Internal.rest (m := m) origin parser cursor consumed).run h >>= k =
       handOver (ScriptParser.Internal.posture parser) origin base h
@@ -272,12 +276,12 @@ theorem rest_handOver {batch : BatchTag} (origin base : BatchCursor batch)
   · simp
   · by_cases hn : next.HasNext
     · simp only [hn, ↓reduceDIte]
-      have : remaining next < remaining cursor := BatchCursor.Consumed.remaining_lt (taken has)
+      have : remaining next < remaining cursor := LexerCursor.Consumed.remaining_lt (taken has)
       have ih := rest_handOver origin base
         (ScriptParser.Internal.mk (ScriptParser.Internal.posture parser)
           (.nonstandard nonstandard') (ScriptParser.Internal.declarations parser))
         nonstandard' (by simp) next h' hn
-        (fun step => lift (BatchCursor.Consumed.trans step (taken has))) toOrigin
+        (fun step => lift (LexerCursor.Consumed.trans step (taken has))) toOrigin
         (Cursor.consumed_trans (taken has) consumed) k
       simp only [ScriptParser.Internal.posture_mk, ScriptParser.Internal.declarations_mk] at ih
       simp only [StateT.run_pure, pure_bind]
@@ -289,9 +293,9 @@ termination_by remaining cursor
 
 /-- The loop from a token is the port's run from it, on the parser its arguments stand for. -/
 theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : BatchTag}
-    (origin : BatchCursor batch) (next : BatchCursor batch) (h : H) (decl : Nat)
+    (origin : LexerCursor batch) (next : LexerCursor batch) (h : H) (decl : Nat)
     (cmd : CommandStateOf H) (inTerm : Bool) (ctx : TermContext (Handler.«Sort» H))
-    (mode : TermModeOf H) (levels : List (TermLevelOf H)) (token : Token batch)
+    (mode : TermModeOf H) (levels : List (TermLevelOf H)) (token : LexerToken batch)
     (consumed : next.Consumed origin) :
     loop posture origin h decl cmd inTerm ctx mode levels token next consumed =
       portGo origin (assemble posture decl cmd inTerm ctx mode levels) h token next consumed := by
@@ -389,7 +393,7 @@ theorem loop_eq (hstep : StepSimulates H m) (posture : VersionPosture) {batch : 
 termination_by remaining next
 /-- The loop from the first token of a hand-over is the port's run from it, on the parser. -/
 theorem start_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : ScriptParser H) (h : H)
-    (token : Token batch) (cursor next : BatchCursor batch) (consumed : next.Consumed cursor) :
+    (token : LexerToken batch) (cursor next : LexerCursor batch) (consumed : next.Consumed cursor) :
     start parser h token cursor next consumed = portGo cursor parser h token next consumed := by
   unfold start
   split <;> rw [loop_eq hstep] <;> congr 1 <;> cases parser <;>
@@ -398,8 +402,8 @@ theorem start_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
 
 /-- The rest of a cursor that has a token, from a parser that does not hand it over, followed by
 anything: its token, then the rest. -/
-theorem rest_next_k {batch : BatchTag} (origin : BatchCursor batch) (parser : ScriptParser H)
-    (h : H) (next : BatchCursor batch) (consumed : next.Consumed origin) (hn : next.HasNext)
+theorem rest_next_k {batch : BatchTag} (origin : LexerCursor batch) (parser : ScriptParser H)
+    (h : H) (next : LexerCursor batch) (consumed : next.Consumed origin) (hn : next.HasNext)
     (hno : Parser.Internal.ParseByToken.handOver? parser next = none) {β : Type}
     (k : RestOut H origin → m β) :
     (Parser.Internal.rest (m := m) origin parser next consumed).run h >>= k =
@@ -412,7 +416,7 @@ theorem rest_next_k {batch : BatchTag} (origin : BatchCursor batch) (parser : Sc
 /-- The fused reader parses a batch cursor as the script parser's loop over single tokens does:
 the same answer, parser, parse state, cursor and handler. -/
 theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : ScriptParser H)
-    (state : Parser.ParseState H) (cursor : BatchCursor batch) :
+    (state : Parser.ParseState H) (cursor : LexerCursor batch) :
     BSmtLib.Parser.Internal.Fused.parse (m := m) parser state cursor =
       Parser.Internal.parseByToken parser state cursor := by
   funext h
@@ -449,7 +453,7 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
         by_cases hn : next.HasNext
         · simp only [hn, ↓reduceDIte]
           rw [rest_handOver cursor cursor _ nonstandard' (by simp) next h' hn
-            (fun step => BatchCursor.Consumed.trans step (taken hp)) id (taken hp)]
+            (fun step => LexerCursor.Consumed.trans step (taken hp)) id (taken hp)]
           simp only [ScriptParser.Internal.posture_mk, ScriptParser.Internal.declarations_mk]
           refine bind_congr fun r => ?_
           rcases r with ⟨answer, after, ⟨done, taken'⟩, h''⟩ | ⟨⟨ended, taken'⟩, h''⟩
@@ -477,14 +481,14 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
       split
       · rename_i heq
         have : Cursor.next? cursor = some (cursor.next hp) := by
-          show BatchCursor.next? cursor = _
-          simp [BatchCursor.next?, hp]
+          show LexerCursor.next? cursor = _
+          simp [LexerCursor.next?, hp]
         rw [this] at heq; cases heq
       · rename_i token next consumed heq
         have hnx : cursor.next hp = (token, ⟨next, consumed⟩) := by
           have : Cursor.next? cursor = some (cursor.next hp) := by
-            show BatchCursor.next? cursor = _
-            simp [BatchCursor.next?, hp]
+            show LexerCursor.next? cursor = _
+            simp [LexerCursor.next?, hp]
           rw [this] at heq
           exact Option.some.inj heq
         simp only [BSmtLib.Parser.Internal.Fused.parse, Cursor.asBatch?, hp, ↓reduceDIte, begin]
@@ -509,8 +513,8 @@ theorem parse_eq (hstep : StepSimulates H m) {batch : BatchTag} (parser : Script
           rw [StateT.run_pure, pure_bind]
           rfl
   · have h2 : Cursor.next? cursor = none := by
-      show BatchCursor.next? cursor = _
-      simp [BatchCursor.next?, hp]
+      show LexerCursor.next? cursor = _
+      simp [LexerCursor.next?, hp]
     have hd : Cursor.decideHasNext cursor = isFalse hp := Subsingleton.elim _ _
     cases hh : Parser.Internal.ParseByToken.handOver? (m := m) parser cursor with
     | none =>

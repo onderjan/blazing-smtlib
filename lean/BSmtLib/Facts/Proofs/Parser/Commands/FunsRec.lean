@@ -22,7 +22,7 @@ first token's arrival (`term_runs_first_init`).
 
 namespace BSmtLib.Facts.Proofs.Parser.Commands.FunsRec
 
-open BSmtLib.Multiple (FunctionSignature)
+open BSmtLib.Grammar.Multiple (FunctionSignature)
 open BSmtLibSpec.Grammar
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Command.Internal.Standard (Payload FinalCall payloadStep finalCall)
@@ -45,9 +45,9 @@ open BSmtLibSpec.Facts.Proofs.Parser.Equations (recursiveBodies_cons)
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- The list of bodies between bodies, after `found` of them. -/
 abbrev bodiesBetween (found : Nat) : ListState (Parser.Category.Term.Internal.TermStateOf H) Unit :=
@@ -134,33 +134,33 @@ theorem bodiesStep_close (count found : Nat) :
 
 omit [LawfulMonad m] in
 /-- Between bodies, a token other than `)` starts the body that is due, with its signature. -/
-theorem bodiesArrive_between (signatures : Array (FunctionSignature (Traits.Handler.«Sort» H)))
+theorem bodiesArrive_between (signatures : Array (FunctionSignature (Handler.«Sort» H)))
     (found : Nat) {token : Parser.Internal.Input} (htoken : token ≠ .parenClose)
-    {signature : FunctionSignature (Traits.Handler.«Sort» H)}
+    {signature : FunctionSignature (Handler.«Sort» H)}
     (hsignature : signatures[found]? = some signature) :
     bodiesArrive signatures (bodiesBetween found) token =
-      Parser.Internal.call (Traits.CommandHandler.startRecursiveBody signature) := by
+      Parser.Internal.call (Handler.CommandHandler.startRecursiveBody signature) := by
   simp only [bodiesArrive, ListState.between, Array.size_replicate, Bool.and_self, ↓reduceIte,
     hsignature]
 
 /-- The body parser reads a body, its start due at its first token's arrival: the term, then
 its end. -/
-theorem body_runs (hA : Agrees h) (signature : FunctionSignature (Traits.Handler.«Sort» H))
+theorem body_runs (hA : Agrees h) (signature : FunctionSignature (Handler.«Sort» H))
     (body : Tree.Term) (hvalid : body.Valid
         (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens body.tokens) :
-    RunsFirst points (Parser.Internal.call (Traits.CommandHandler.startRecursiveBody signature))
+    RunsFirst points (Parser.Internal.call (Handler.CommandHandler.startRecursiveBody signature))
       (bodyStep version) TermState.init tokens
       (do
         let result ← adaptRun (Traversal.term points h body
           (Program.callUnit h (.startRecursiveBody (Bridge.signature signature))))
-        Parser.Internal.call (Traits.CommandHandler.endRecursiveBody result))
+        Parser.Internal.call (Handler.CommandHandler.endRecursiveBody result))
       fun _ => pure (.done ()) := by
   have hruns := term_runs_first_init (points := points) hA.toTermAgrees body hvalid hs
     (Program.callUnit h (.startRecursiveBody (Bridge.signature signature)))
   rw [adaptRun_callUnit, ← hA.startRecursiveBody] at hruns
   have hembed := RunsFirst.embed (outer := bodyStep version) id
-    (fun body => Parser.Internal.call (Traits.CommandHandler.endRecursiveBody body) >>=
+    (fun body => Parser.Internal.call (Handler.CommandHandler.endRecursiveBody body) >>=
       fun _ => pure (.done ()))
     (fun state token => by
       simp only [bodyStep]
@@ -172,7 +172,7 @@ theorem body_runs (hA : Agrees h) (signature : FunctionSignature (Traits.Handler
 /-- The bodies from the `found`-th on, each started at its first token's arrival with the
 signature of its function. -/
 theorem bodies_runs (hA : Agrees h)
-    (signatures : Array (FunctionSignature (Traits.Handler.«Sort» H))) :
+    (signatures : Array (FunctionSignature (Handler.«Sort» H))) :
     (bodies : List Tree.Term) → Tree.Term.ValidAll (Bridge.version version) bodies →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (bodies.flatMap Tree.Term.tokens) →
     ∀ found, found + bodies.length = signatures.size →
@@ -249,8 +249,8 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
     Payload.defineFunsRecDeclarations
     (fun signatures => do
       if signatures.isEmpty then Parser.Internal.syntaxError (.empty .functionSignatures)
-      Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec
-        (Multiple.FunctionSignatures.Internal.new signatures))
+      Parser.Internal.call (Handler.CommandHandler.startDefineFunsRec
+        (Grammar.Multiple.FunctionSignatures.Internal.new signatures))
       return .more (.defineFunsRecBodies signatures (ListState.paren .init)))
     (by
       intro state token
@@ -260,16 +260,16 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
       cases step <;> simp [Parser.Internal.Step.wrap]) hsignaturesRuns)
       (HasLength.after (HasLength.bind_pure hsignaturesLength _) _)
       (next' := fun found =>
-        (Parser.Internal.call (Traits.CommandHandler.startDefineFunsRec
-          (Multiple.FunctionSignatures.Internal.new ((found : List (FunctionSignature
-            (Traits.Handler.«Sort» H))).toArray))) >>=
+        (Parser.Internal.call (Handler.CommandHandler.startDefineFunsRec
+          (Grammar.Multiple.FunctionSignatures.Internal.new ((found : List (FunctionSignature
+            (Handler.«Sort» H))).toArray))) >>=
             fun _ => pure found) >>=
         fun found => pure (.more (.defineFunsRecBodies found.toArray (ListState.paren .init))))
       (fun found hfound => by
         cases found with
         | nil => exact absurd (List.length_eq_zero_iff.mp hfound.symm) hne
         | cons => simp [Parser.Internal.Step.wrap]))
-  have hbodiesList : ∀ found : List (FunctionSignature (Traits.Handler.«Sort» H)),
+  have hbodiesList : ∀ found : List (FunctionSignature (Handler.«Sort» H)),
       found.length = bodies.length →
       Runs points (bodiesStep found.toArray.size version)
         (ListState.paren (TermState.init : Parser.Category.Term.Internal.TermStateOf H))
@@ -293,7 +293,7 @@ theorem defineFunsRec_payload (hA : Agrees h) (declarations : List Tree.Function
           (by rw [bodiesStep_close]; simp)
           (by simp [bodiesArrive, ListState.between])).congr ?_ rfl
     simp
-  have hbodiesPayload : ∀ found : List (FunctionSignature (Traits.Handler.«Sort» H)),
+  have hbodiesPayload : ∀ found : List (FunctionSignature (Handler.«Sort» H)),
       found.length = bodies.length →
       PayloadRuns points version (.defineFunsRecBodies found.toArray (ListState.paren .init))
         (.parenOpen :: (bodyInner ++ [.parenClose]))

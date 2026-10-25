@@ -15,6 +15,8 @@ values: the same answer, with results related by the link's relation of results 
 its relation of errors.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Slice
 
 open BSmtLib.Lexer
@@ -46,8 +48,8 @@ abbrev HeldRel (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) :
   ERel (FailRel L.re) (ORel (LocRel L.rr))
 
 variable [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, Token.ConsumeFrom H₁
-    (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂] {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂}
+    (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂] {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂}
 
 /-- What the loop over a slice descends by: the bytes left, and then whether a failure is still
 to be met. -/

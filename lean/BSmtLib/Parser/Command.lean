@@ -15,8 +15,8 @@ at its `)`.
 
 namespace BSmtLib.Parser.Command
 
-open BSmtLib.Traits BSmtLib.Parser.Command.Internal.Standard
-open BSmtLib.Token (Version)
+open BSmtLib.Handler BSmtLib.Parser.Command.Internal.Standard
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal

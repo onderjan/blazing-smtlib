@@ -1,29 +1,31 @@
 module
 
 public import BSmtLib.ControlFlow
-public import BSmtLib.Bytes
-public import BSmtLib.Plain
-public import BSmtLib.Plain.Versioned
+public import BSmtLib.Lexicon.Bytes
+public import BSmtLib.Lexicon.Value
+public import BSmtLib.Lexicon.Value.Versioned
 public import BSmtLib.Span
-public import BSmtLib.Nodes
-public import BSmtLib.Multiple.MatchCasesBuf
-public import BSmtLib.Traits
-public import BSmtLib.Traits.CommandHandler
-public import BSmtLib.Traits.PartialCommandHandler
-public import BSmtLib.Traits.SyntaxChecker
-public import BSmtLib.Token
+public import BSmtLib.Version
+public import BSmtLib.Grammar.Nodes
+public import BSmtLib.Grammar.Multiple.MatchCasesBuf
+public import BSmtLib.Handler
+public import BSmtLib.Handler.CommandHandler
+public import BSmtLib.Handler.PartialCommandHandler
+public import BSmtLib.Handler.SyntaxChecker
 public import BSmtLib.Token.Reserved
-public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Token
+public import BSmtLib.Lexer.Cursor
 public import BSmtLib.Token.Lookahead
 public import BSmtLib.Token.Cursor
 public import BSmtLib.Token.ConsumeFrom
-public import BSmtLib.Token.SyntaxTokenBuf
+public import BSmtLib.Token.TokenBuf
 public import BSmtLib.Token.TokensBuf
 public import BSmtLib.Token.TokensCursor
 public import BSmtLib.Token.AppendTokens
-public import BSmtLib.Token.Writer
+public import BSmtLib.Writer
 public import BSmtLib.Lexer.Error
 public import BSmtLib.Lexer.Recovery
+public import BSmtLib.Reader.BufRead
 public import BSmtLib.Lexer
 public import BSmtLib.Parser
 public import BSmtLib.Parser.Category
@@ -44,894 +46,18 @@ Regenerate it with `lake exe reexports` in `lean/`. The naming check (`BSmtLib.F
 fails when it is stale.
 -/
 
-/-! `pub use crate::bytes::*` in `lib.rs` -/
+/-! `pub use crate::handler::*` in `lib.rs`; `SmtHandler` is itself `BSmtLib.Handler` -/
 
--- `BSmtLib.Bytes.BytesBuf`, by `pub use crate::bytes::*`
+-- `BSmtLib.Handler.CommandHandler`, by `pub use crate::handler::*`
 namespace BSmtLib
 
-export BSmtLib.Bytes (BytesBuf)
-
-end BSmtLib
-
-namespace BSmtLib.BytesBuf
-
-export BSmtLib.Bytes.BytesBuf (asSlice eqSlice eqView fromByte fromByteArray instBEq instHashable
-  instRepr intoByteArray isEmpty len new view)
-
-end BSmtLib.BytesBuf
-
-/-! `pub use crate::multiple::*` in `lib.rs` -/
-
--- `BSmtLib.Multiple.Bindings`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (Bindings)
-
-end BSmtLib
-
--- `BSmtLib.Multiple.BindingsBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (BindingsBuf)
-
-end BSmtLib
-
--- `BSmtLib.Multiple.Constructors`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (Constructors)
-
-end BSmtLib
-
-namespace BSmtLib.Constructors
-
-export BSmtLib.Multiple.Constructors (instForInProdSymbolSortedVarsOfMonad instRepr isEmpty len
-  toArray)
-
-end BSmtLib.Constructors
-
--- `BSmtLib.Multiple.ConstructorsBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (ConstructorsBuf)
-
-end BSmtLib
-
-namespace BSmtLib.ConstructorsBuf
-
-export BSmtLib.Multiple.ConstructorsBuf (clear instInhabited isEmpty len new push pushSelector
-  viewMut)
-
-end BSmtLib.ConstructorsBuf
-
--- `BSmtLib.Multiple.FunctionSignature`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (FunctionSignature)
-
-end BSmtLib
-
-namespace BSmtLib.FunctionSignature
-
-export BSmtLib.Multiple.FunctionSignature (name params resultSort)
-
-end BSmtLib.FunctionSignature
-
--- `BSmtLib.Multiple.FunctionSignatures`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (FunctionSignatures)
-
-end BSmtLib
-
-namespace BSmtLib.FunctionSignatures
-
-export BSmtLib.Multiple.FunctionSignatures (get? instForInFunctionSignatureOfMonad instRepr isEmpty
-  len toArray)
-
-end BSmtLib.FunctionSignatures
-
--- `BSmtLib.Multiple.FunctionSignaturesBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (FunctionSignaturesBuf)
-
-end BSmtLib
-
-namespace BSmtLib.FunctionSignaturesBuf
-
-export BSmtLib.Multiple.FunctionSignaturesBuf (clear get? instInhabited isEmpty len new push
-  pushParam view)
-
-end BSmtLib.FunctionSignaturesBuf
-
--- `BSmtLib.Multiple.MatchCases`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (MatchCases)
-
-end BSmtLib
-
-namespace BSmtLib.MatchCases
-
-export BSmtLib.Multiple.MatchCases (get? instForInProdPatternOfMonad instRepr isEmpty len toArray)
-
-end BSmtLib.MatchCases
-
--- `BSmtLib.Multiple.MatchCasesBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (MatchCasesBuf)
-
-end BSmtLib
-
-namespace BSmtLib.MatchCasesBuf
-
-export BSmtLib.Multiple.MatchCasesBuf (clear instInhabited isEmpty len new push viewMut)
-
-end BSmtLib.MatchCasesBuf
-
--- `BSmtLib.Multiple.Named`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (Named)
-
-end BSmtLib
-
-namespace BSmtLib.Named
-
-export BSmtLib.Multiple.Named (get? instForInProdSymbolOfMonad instRepr isEmpty len toArray)
-
-end BSmtLib.Named
-
--- `BSmtLib.Multiple.NamedBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (NamedBuf)
-
-end BSmtLib
-
-namespace BSmtLib.NamedBuf
-
-export BSmtLib.Multiple.NamedBuf (clear instInhabited isEmpty len new push viewMut)
-
-end BSmtLib.NamedBuf
-
--- `BSmtLib.Multiple.SortArities`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (SortArities)
-
-end BSmtLib
-
-namespace BSmtLib.SortArities
-
-export BSmtLib.Multiple.SortArities (get? instForInProdSymbolNumeralOfMonad instRepr isEmpty len
-  toArray)
-
-end BSmtLib.SortArities
-
--- `BSmtLib.Multiple.SortAritiesBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (SortAritiesBuf)
-
-end BSmtLib
-
-namespace BSmtLib.SortAritiesBuf
-
-export BSmtLib.Multiple.SortAritiesBuf (clear instInhabited isEmpty len new push view)
-
-end BSmtLib.SortAritiesBuf
-
--- `BSmtLib.Multiple.SortedVars`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (SortedVars)
-
-end BSmtLib
-
--- `BSmtLib.Multiple.SortedVarsBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (SortedVarsBuf)
-
-end BSmtLib
-
--- `BSmtLib.Multiple.Symbols`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (Symbols)
-
-end BSmtLib
-
-namespace BSmtLib.Symbols
-
-export BSmtLib.Multiple.Symbols (get? instForInSymbolOfMonad instRepr isEmpty len toArray)
-
-end BSmtLib.Symbols
-
--- `BSmtLib.Multiple.SymbolsBuf`, by `pub use crate::multiple::*`
-namespace BSmtLib
-
-export BSmtLib.Multiple (SymbolsBuf)
-
-end BSmtLib
-
-namespace BSmtLib.SymbolsBuf
-
-export BSmtLib.Multiple.SymbolsBuf (clear instInhabited isEmpty len new push view)
-
-end BSmtLib.SymbolsBuf
-
-/-! `pub use crate::nodes::*` in `lib.rs` -/
-
--- `BSmtLib.Nodes.AttributeValue`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (AttributeValue)
-
-end BSmtLib
-
-namespace BSmtLib.AttributeValue
-
-export BSmtLib.Nodes.AttributeValue (sExprs specialConstant symbol)
-
-end BSmtLib.AttributeValue
-
--- `BSmtLib.Nodes.Attributes`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (Attributes)
-
-end BSmtLib
-
--- `BSmtLib.Nodes.EmptyArgumentsError`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (EmptyArgumentsError)
-
-end BSmtLib
-
-namespace BSmtLib.EmptyArgumentsError
-
-export BSmtLib.Nodes.EmptyArgumentsError (mk)
-
-end BSmtLib.EmptyArgumentsError
-
--- `BSmtLib.Nodes.Ident`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (Ident)
-
-end BSmtLib
-
-namespace BSmtLib.Ident
-
-export BSmtLib.Nodes.Ident (indices intoOwned mk name)
-
-end BSmtLib.Ident
-
--- `BSmtLib.Nodes.IdentBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (IdentBuf)
-
-end BSmtLib
-
-namespace BSmtLib.IdentBuf
-
-export BSmtLib.Nodes.IdentBuf (indices mk name newSimple view)
-
-end BSmtLib.IdentBuf
-
--- `BSmtLib.Nodes.Index`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (Index)
-
-end BSmtLib
-
-namespace BSmtLib.Index
-
-export BSmtLib.Nodes.Index (intoOwned numeral symbol)
-
-end BSmtLib.Index
-
--- `BSmtLib.Nodes.IndexBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (IndexBuf)
-
-end BSmtLib
-
-namespace BSmtLib.IndexBuf
-
-export BSmtLib.Nodes.IndexBuf (numeral symbol view)
-
-end BSmtLib.IndexBuf
-
--- `BSmtLib.Nodes.IndicesBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (IndicesBuf)
-
-end BSmtLib
-
-namespace BSmtLib.IndicesBuf
-
-export BSmtLib.Nodes.IndicesBuf (clear get? instForInIndexOfMonad instInhabited instRepr isEmpty
-  len new push view)
-
-end BSmtLib.IndicesBuf
-
--- `BSmtLib.Nodes.Pattern`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (Pattern)
-
-end BSmtLib
-
-namespace BSmtLib.Pattern
-
-export BSmtLib.Nodes.Pattern (application intoOwned simple)
-
-end BSmtLib.Pattern
-
--- `BSmtLib.Nodes.PatternApplication`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (PatternApplication)
-
-end BSmtLib
-
-namespace BSmtLib.PatternApplication
-
-export BSmtLib.Nodes.PatternApplication (args constructor intoOwned mk new nonempty)
-
-end BSmtLib.PatternApplication
-
--- `BSmtLib.Nodes.PatternApplicationBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (PatternApplicationBuf)
-
-end BSmtLib
-
-namespace BSmtLib.PatternApplicationBuf
-
-export BSmtLib.Nodes.PatternApplicationBuf (args constructor intoParts mk new nonempty view)
-
-end BSmtLib.PatternApplicationBuf
-
--- `BSmtLib.Nodes.PatternBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (PatternBuf)
-
-end BSmtLib
-
-namespace BSmtLib.PatternBuf
-
-export BSmtLib.Nodes.PatternBuf (application simple view)
-
-end BSmtLib.PatternBuf
-
--- `BSmtLib.Nodes.QualifiedIdent`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (QualifiedIdent)
-
-end BSmtLib
-
-namespace BSmtLib.QualifiedIdent
-
-export BSmtLib.Nodes.QualifiedIdent (ident intoOwned mk sort)
-
-end BSmtLib.QualifiedIdent
-
--- `BSmtLib.Nodes.QualifiedIdentBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (QualifiedIdentBuf)
-
-end BSmtLib
-
-namespace BSmtLib.QualifiedIdentBuf
-
-export BSmtLib.Nodes.QualifiedIdentBuf (ident mk newQualified newSimple newUnqualified sort)
-
-end BSmtLib.QualifiedIdentBuf
-
--- `BSmtLib.Nodes.QuantifierKind`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (QuantifierKind)
-
-end BSmtLib
-
-namespace BSmtLib.QuantifierKind
-
-export BSmtLib.Nodes.QuantifierKind («exists» «forall»)
-
-end BSmtLib.QuantifierKind
-
--- `BSmtLib.Nodes.SExpr`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SExpr)
-
-end BSmtLib
-
-namespace BSmtLib.SExpr
-
-export BSmtLib.Nodes.SExpr (keyword reserved sExprs specialConstant symbol)
-
-end BSmtLib.SExpr
-
--- `BSmtLib.Nodes.SExprs`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SExprs)
-
-end BSmtLib
-
--- `BSmtLib.Nodes.SimplePattern`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SimplePattern)
-
-end BSmtLib
-
-namespace BSmtLib.SimplePattern
-
-export BSmtLib.Nodes.SimplePattern (intoOwned symbol wildcard)
-
-end BSmtLib.SimplePattern
-
--- `BSmtLib.Nodes.SimplePatternBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SimplePatternBuf)
-
-end BSmtLib
-
-namespace BSmtLib.SimplePatternBuf
-
-export BSmtLib.Nodes.SimplePatternBuf (symbol view wildcard)
-
-end BSmtLib.SimplePatternBuf
-
--- `BSmtLib.Nodes.SimplePatternsBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SimplePatternsBuf)
-
-end BSmtLib
-
-namespace BSmtLib.SimplePatternsBuf
-
-export BSmtLib.Nodes.SimplePatternsBuf (clear get? instForInSimplePatternOfMonad instInhabited
-  instRepr isEmpty len new push size_view view)
-
-end BSmtLib.SimplePatternsBuf
-
--- `BSmtLib.Nodes.Sorts`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (Sorts)
-
-end BSmtLib
-
--- `BSmtLib.Nodes.SpecialConstant`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SpecialConstant)
-
-end BSmtLib
-
-namespace BSmtLib.SpecialConstant
-
-export BSmtLib.Nodes.SpecialConstant (binary decimal hexadecimal intoOwned numeral string)
-
-end BSmtLib.SpecialConstant
-
--- `BSmtLib.Nodes.SpecialConstantBuf`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (SpecialConstantBuf)
-
-end BSmtLib
-
-namespace BSmtLib.SpecialConstantBuf
-
-export BSmtLib.Nodes.SpecialConstantBuf (binary decimal hexadecimal numeral string view)
-
-end BSmtLib.SpecialConstantBuf
-
--- `BSmtLib.Nodes.Term`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (Term)
-
-end BSmtLib
-
-namespace BSmtLib.Term
-
-export BSmtLib.Nodes.Term (application newApplication qualifiedIdent specialConstant)
-
-end BSmtLib.Term
-
--- `BSmtLib.Nodes.Terms`, by `pub use crate::nodes::*`
-namespace BSmtLib
-
-export BSmtLib.Nodes (Terms)
-
-end BSmtLib
-
-/-! `pub use crate::plain::*` in `lib.rs` -/
-
--- `BSmtLib.Plain.BinDigits`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (BinDigits)
-
-end BSmtLib
-
-namespace BSmtLib.BinDigits
-
-export BSmtLib.Plain.BinDigits (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
-
-end BSmtLib.BinDigits
-
--- `BSmtLib.Plain.BinDigitsBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (BinDigitsBuf)
-
-end BSmtLib
-
-namespace BSmtLib.BinDigitsBuf
-
-export BSmtLib.Plain.BinDigitsBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytesBuf isAllowed isEmpty len new toNat toUInt32? toUInt64? toUSize? view)
-
-end BSmtLib.BinDigitsBuf
-
--- `BSmtLib.Plain.Comment`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (Comment)
-
-end BSmtLib
-
-namespace BSmtLib.Comment
-
-export BSmtLib.Plain.Comment (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len new)
-
-end BSmtLib.Comment
-
--- `BSmtLib.Plain.CommentBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (CommentBuf)
-
-end BSmtLib
-
-namespace BSmtLib.CommentBuf
-
-export BSmtLib.Plain.CommentBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytesBuf isAllowed isEmpty len new view)
-
-end BSmtLib.CommentBuf
-
--- `BSmtLib.Plain.Decimal`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (Decimal)
-
-end BSmtLib
-
-namespace BSmtLib.Decimal
-
-export BSmtLib.Plain.Decimal (asSlice eqOwned eqSlice eqString fraction instBEq instHashable
-  instRepr intoOwned isEmpty len new whole)
-
-end BSmtLib.Decimal
-
--- `BSmtLib.Plain.DecimalBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (DecimalBuf)
-
-end BSmtLib
-
-namespace BSmtLib.DecimalBuf
-
-export BSmtLib.Plain.DecimalBuf (asSlice eqSlice eqString eqView fraction instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view whole)
-
-end BSmtLib.DecimalBuf
-
--- `BSmtLib.Plain.DisallowedByteVecError`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (DisallowedByteVecError)
-
-end BSmtLib
-
-namespace BSmtLib.DisallowedByteVecError
-
-export BSmtLib.Plain.DisallowedByteVecError (instBEq instHashable instRepr instToString
-  intoByteArray)
-
-end BSmtLib.DisallowedByteVecError
-
--- `BSmtLib.Plain.DisallowedBytesError`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (DisallowedBytesError)
-
-end BSmtLib
-
-namespace BSmtLib.DisallowedBytesError
-
-export BSmtLib.Plain.DisallowedBytesError (mk)
-
-end BSmtLib.DisallowedBytesError
-
--- `BSmtLib.Plain.HexDigits`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (HexDigits)
-
-end BSmtLib
-
-namespace BSmtLib.HexDigits
-
-export BSmtLib.Plain.HexDigits (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
-
-end BSmtLib.HexDigits
-
--- `BSmtLib.Plain.HexDigitsBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (HexDigitsBuf)
-
-end BSmtLib
-
-namespace BSmtLib.HexDigitsBuf
-
-export BSmtLib.Plain.HexDigitsBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytesBuf isAllowed isEmpty len new toNat toUInt32? toUInt64? toUSize? view)
-
-end BSmtLib.HexDigitsBuf
-
--- `BSmtLib.Plain.Keyword`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (Keyword)
-
-end BSmtLib
-
-namespace BSmtLib.Keyword
-
-export BSmtLib.Plain.Keyword (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len new)
-
-end BSmtLib.Keyword
-
--- `BSmtLib.Plain.KeywordBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (KeywordBuf)
-
-end BSmtLib
-
-namespace BSmtLib.KeywordBuf
-
-export BSmtLib.Plain.KeywordBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytesBuf isAllowed isEmpty len new view)
-
-end BSmtLib.KeywordBuf
-
--- `BSmtLib.Plain.Numeral`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (Numeral)
-
-end BSmtLib
-
-namespace BSmtLib.Numeral
-
-export BSmtLib.Plain.Numeral (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
-
-end BSmtLib.Numeral
-
--- `BSmtLib.Plain.NumeralBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (NumeralBuf)
-
-end BSmtLib
-
-namespace BSmtLib.NumeralBuf
-
-export BSmtLib.Plain.NumeralBuf (asSlice eqSlice eqString eqView fromNat fromUInt32 fromUInt64
-  fromUSize instBEq instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new
-  toNat toUInt32? toUInt64? toUSize? view)
-
-end BSmtLib.NumeralBuf
-
--- `BSmtLib.Plain.NumericOverflow`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (NumericOverflow)
-
-end BSmtLib
-
-namespace BSmtLib.NumericOverflow
-
-export BSmtLib.Plain.NumericOverflow (mk)
-
-end BSmtLib.NumericOverflow
-
--- `BSmtLib.Plain.StringContent`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (StringContent)
-
-end BSmtLib
-
-namespace BSmtLib.StringContent
-
-export BSmtLib.Plain.StringContent (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len new)
-
-end BSmtLib.StringContent
-
--- `BSmtLib.Plain.StringContentBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (StringContentBuf)
-
-end BSmtLib
-
-namespace BSmtLib.StringContentBuf
-
-export BSmtLib.Plain.StringContentBuf (asSlice eqSlice eqString eqView instBEq instHashable
-  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view)
-
-end BSmtLib.StringContentBuf
-
--- `BSmtLib.Plain.Symbol`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (Symbol)
-
-end BSmtLib
-
-namespace BSmtLib.Symbol
-
-export BSmtLib.Plain.Symbol (asSlice bytes instRepr intoOwned intoVersioned isAllowedIn isEmpty
-  isQuoted len new newQuoted newUnquoted)
-
-end BSmtLib.Symbol
-
--- `BSmtLib.Plain.SymbolBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (SymbolBuf)
-
-end BSmtLib
-
-namespace BSmtLib.SymbolBuf
-
-export BSmtLib.Plain.SymbolBuf (asSlice bytes instRepr intoByteArray intoBytesBuf intoVersioned
-  isAllowedIn isEmpty isQuoted isQuotedAllowed isUnquotedAllowed isUnquotedAllowedIn len new
-  newQuoted newUnquoted view)
-
-end BSmtLib.SymbolBuf
-
--- `BSmtLib.Plain.Whitespace`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (Whitespace)
-
-end BSmtLib
-
-namespace BSmtLib.Whitespace
-
-export BSmtLib.Plain.Whitespace (asSlice eqOwned eqSlice eqString instBEq instHashable instRepr
-  intoOwned isEmpty len new)
-
-end BSmtLib.Whitespace
-
--- `BSmtLib.Plain.WhitespaceBuf`, by `pub use crate::plain::*`
-namespace BSmtLib
-
-export BSmtLib.Plain (WhitespaceBuf)
-
-end BSmtLib
-
-namespace BSmtLib.WhitespaceBuf
-
-export BSmtLib.Plain.WhitespaceBuf (asSlice eqSlice eqString eqView instBEq instHashable instRepr
-  intoByteArray intoBytesBuf isAllowed isEmpty len new view)
-
-end BSmtLib.WhitespaceBuf
-
-/-! `pub use crate::span::*` in `lib.rs` -/
-
--- `BSmtLib.Span.InvalidLocation`, by `pub use crate::span::*`
-namespace BSmtLib
-
-export BSmtLib.Span (InvalidLocation)
-
-end BSmtLib
-
-namespace BSmtLib.InvalidLocation
-
-export BSmtLib.Span.InvalidLocation (mk)
-
-end BSmtLib.InvalidLocation
-
--- `BSmtLib.Span.InvalidSpan`, by `pub use crate::span::*`
-namespace BSmtLib
-
-export BSmtLib.Span (InvalidSpan)
-
-end BSmtLib
-
-namespace BSmtLib.InvalidSpan
-
-export BSmtLib.Span.InvalidSpan (mk)
-
-end BSmtLib.InvalidSpan
-
--- `BSmtLib.Span.Located`, by `pub use crate::span::*`
-namespace BSmtLib
-
-export BSmtLib.Span (Located)
-
-end BSmtLib
-
-namespace BSmtLib.Located
-
-export BSmtLib.Span.Located (location value)
-
-end BSmtLib.Located
-
--- `BSmtLib.Span.Location`, by `pub use crate::span::*`
-namespace BSmtLib
-
-export BSmtLib.Span (Location)
-
-end BSmtLib
-
-namespace BSmtLib.Location
-
-export BSmtLib.Span.Location (afterByte afterColumn column ext initial instMax instMin line new
-  offset)
-
-end BSmtLib.Location
-
-/-! `pub use crate::traits::*` in `lib.rs` -/
-
--- `BSmtLib.Traits.CommandHandler`, by `pub use crate::traits::*`
-namespace BSmtLib
-
-export BSmtLib.Traits (CommandHandler)
+export BSmtLib.Handler (CommandHandler)
 
 end BSmtLib
 
 namespace BSmtLib.CommandHandler
 
-export BSmtLib.Traits.CommandHandler (NonstandardParser commandAssert commandCheckSat
+export BSmtLib.Handler.CommandHandler (NonstandardParser commandAssert commandCheckSat
   commandCheckSatAssuming commandDeclareConst commandDeclareFun commandDeclareSort
   commandDeclareSortParameter commandDefineConst commandEcho commandExit commandGetAssertions
   commandGetAssignment commandGetInfo commandGetModel commandGetOption commandGetProof
@@ -944,57 +70,42 @@ export BSmtLib.Traits.CommandHandler (NonstandardParser commandAssert commandChe
 
 end BSmtLib.CommandHandler
 
--- `BSmtLib.Traits.Handler`, by `pub use crate::traits::*`
+-- `BSmtLib.Handler.NonstandardCommandError`, by `pub use crate::handler::*`
 namespace BSmtLib
 
-export BSmtLib.Traits (Handler)
-
-end BSmtLib
-
-namespace BSmtLib.Handler
-
-export BSmtLib.Traits.Handler (Attribute Error SExpr Scope «Sort» Term annotateTerm endLambda
-  endLet endMatch endMatchCase endQuantifier handleAttribute handleSExpr handleSort handleTerm mk
-  setVersion startLambda startLet startMatch startMatchCase startQuantifier)
-
-end BSmtLib.Handler
-
--- `BSmtLib.Traits.NonstandardCommandError`, by `pub use crate::traits::*`
-namespace BSmtLib
-
-export BSmtLib.Traits (NonstandardCommandError)
+export BSmtLib.Handler (NonstandardCommandError)
 
 end BSmtLib
 
 namespace BSmtLib.NonstandardCommandError
 
-export BSmtLib.Traits.NonstandardCommandError (name new)
+export BSmtLib.Handler.NonstandardCommandError (name new)
 
 end BSmtLib.NonstandardCommandError
 
--- `BSmtLib.Traits.PartialCommandError`, by `pub use crate::traits::*`
+-- `BSmtLib.Handler.PartialCommandError`, by `pub use crate::handler::*`
 namespace BSmtLib
 
-export BSmtLib.Traits (PartialCommandError)
+export BSmtLib.Handler (PartialCommandError)
 
 end BSmtLib
 
 namespace BSmtLib.PartialCommandError
 
-export BSmtLib.Traits.PartialCommandError (handler unsupported unsupportedNonstandard)
+export BSmtLib.Handler.PartialCommandError (handler unsupported unsupportedNonstandard)
 
 end BSmtLib.PartialCommandError
 
--- `BSmtLib.Traits.PartialCommandHandler`, by `pub use crate::traits::*`
+-- `BSmtLib.Handler.PartialCommandHandler`, by `pub use crate::handler::*`
 namespace BSmtLib
 
-export BSmtLib.Traits (PartialCommandHandler)
+export BSmtLib.Handler (PartialCommandHandler)
 
 end BSmtLib
 
 namespace BSmtLib.PartialCommandHandler
 
-export BSmtLib.Traits.PartialCommandHandler (HandlerError NonstandardParser commandAssert
+export BSmtLib.Handler.PartialCommandHandler (HandlerError NonstandardParser commandAssert
   commandCheckSat commandCheckSatAssuming commandDeclareConst commandDeclareFun commandDeclareSort
   commandDeclareSortParameter commandDefineConst commandEcho commandExit commandGetAssertions
   commandGetAssignment commandGetInfo commandGetModel commandGetOption commandGetProof
@@ -1007,18 +118,1124 @@ export BSmtLib.Traits.PartialCommandHandler (HandlerError NonstandardParser comm
 
 end BSmtLib.PartialCommandHandler
 
--- `BSmtLib.Traits.SyntaxChecker`, by `pub use crate::traits::*`
+-- `BSmtLib.Handler.SyntaxChecker`, by `pub use crate::handler::*`
 namespace BSmtLib
 
-export BSmtLib.Traits (SyntaxChecker)
+export BSmtLib.Handler (SyntaxChecker)
 
 end BSmtLib
 
 namespace BSmtLib.SyntaxChecker
 
-export BSmtLib.Traits.SyntaxChecker (mk)
+export BSmtLib.Handler.SyntaxChecker (mk)
 
 end BSmtLib.SyntaxChecker
+
+/-! `pub use crate::reader::*` in `lib.rs`; `SmtReader` is itself `BSmtLib.Reader`, and the
+stand-ins of Rust's `BufRead` and `BufReader` are not re-exported -/
+
+-- `BSmtLib.Reader.readSmt`, by `pub use crate::reader::read_smt`
+namespace BSmtLib
+
+export BSmtLib.Reader (readSmt)
+
+end BSmtLib
+
+-- `BSmtLib.Reader.readSmtFile`, by `pub use crate::reader::read_smt_file`
+namespace BSmtLib
+
+export BSmtLib.Reader (readSmtFile)
+
+end BSmtLib
+
+-- `BSmtLib.Reader.ReadError`, by `pub use crate::reader::*`
+namespace BSmtLib
+
+export BSmtLib.Reader (ReadError)
+
+end BSmtLib
+
+namespace BSmtLib.ReadError
+
+export BSmtLib.Reader.ReadError (cause location ofLex ofParse span)
+
+end BSmtLib.ReadError
+
+-- `BSmtLib.Reader.ReadErrorCause`, by `pub use crate::reader::*`
+namespace BSmtLib
+
+export BSmtLib.Reader (ReadErrorCause)
+
+end BSmtLib
+
+namespace BSmtLib.ReadErrorCause
+
+export BSmtLib.Reader.ReadErrorCause (handler io lexical «syntax» version)
+
+end BSmtLib.ReadErrorCause
+
+-- `BSmtLib.Reader.ReadFailure`, by `pub use crate::reader::*`
+namespace BSmtLib
+
+export BSmtLib.Reader (ReadFailure)
+
+end BSmtLib
+
+namespace BSmtLib.ReadFailure
+
+export BSmtLib.Reader.ReadFailure (error handler mk)
+
+end BSmtLib.ReadFailure
+
+/-! `pub use crate::version::*` in `lib.rs`; `SmtVersion` is itself `BSmtLib.Version` -/
+
+-- `BSmtLib.Version.VersionPosture`, by `pub use crate::version::*`
+namespace BSmtLib
+
+export BSmtLib.Version (VersionPosture)
+
+end BSmtLib
+
+namespace BSmtLib.VersionPosture
+
+export BSmtLib.Version.VersionPosture (allowed default maxDeclarations)
+
+end BSmtLib.VersionPosture
+
+-- `BSmtLib.Version.VersionPostureBuilder`, by `pub use crate::version::*`
+namespace BSmtLib
+
+export BSmtLib.Version (VersionPostureBuilder)
+
+end BSmtLib
+
+namespace BSmtLib.VersionPostureBuilder
+
+export BSmtLib.Version.VersionPostureBuilder (addAllowed allowed allowed_addAllowed allowed_build
+  allowed_clearAllowed allowed_new allowed_removeAllowed allowed_setMaxDeclarations build
+  clearAllowed maxDeclarations maxDeclarations_addAllowed maxDeclarations_build
+  maxDeclarations_clearAllowed maxDeclarations_new maxDeclarations_removeAllowed
+  maxDeclarations_setMaxDeclarations new removeAllowed setMaxDeclarations)
+
+end BSmtLib.VersionPostureBuilder
+
+/-! `pub use crate::writer::*` in `lib.rs`; `SmtWriter` is itself `BSmtLib.Writer` -/
+
+-- `BSmtLib.Writer.WriteError`, by `pub use crate::writer::*`
+namespace BSmtLib
+
+export BSmtLib.Writer (WriteError)
+
+end BSmtLib
+
+namespace BSmtLib.WriteError
+
+export BSmtLib.Writer.WriteError (cause)
+
+end BSmtLib.WriteError
+
+-- `BSmtLib.Writer.WriteErrorCause`, by `pub use crate::writer::*`
+namespace BSmtLib
+
+export BSmtLib.Writer (WriteErrorCause)
+
+end BSmtLib
+
+namespace BSmtLib.WriteErrorCause
+
+export BSmtLib.Writer.WriteErrorCause (io notInVersion)
+
+end BSmtLib.WriteErrorCause
+
+-- `BSmtLib.Writer.WriteStyle`, by `pub use crate::writer::*`
+namespace BSmtLib
+
+export BSmtLib.Writer (WriteStyle)
+
+end BSmtLib
+
+namespace BSmtLib.WriteStyle
+
+export BSmtLib.Writer.WriteStyle (compact layout line)
+
+end BSmtLib.WriteStyle
+
+-- `BSmtLib.Writer.WriterConfig`, by `pub use crate::writer::*`
+namespace BSmtLib
+
+export BSmtLib.Writer (WriterConfig)
+
+end BSmtLib
+
+namespace BSmtLib.WriterConfig
+
+export BSmtLib.Writer.WriterConfig (new style version withStyle)
+
+end BSmtLib.WriterConfig
+
+/-! `pub use multiple::*` in `grammar.rs`; `SmtMultiple` is itself `BSmtLib.Grammar.Multiple` -/
+
+-- `BSmtLib.Grammar.Multiple.Bindings`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (Bindings)
+
+end BSmtLib.Grammar
+
+-- `BSmtLib.Grammar.Multiple.Constructors`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (Constructors)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.Constructors
+
+export BSmtLib.Grammar.Multiple.Constructors (instForInProdSymbolSortedVarsOfMonad instRepr isEmpty
+  len toArray)
+
+end BSmtLib.Grammar.Constructors
+
+-- `BSmtLib.Grammar.Multiple.ConstructorsBuf`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (ConstructorsBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.ConstructorsBuf
+
+export BSmtLib.Grammar.Multiple.ConstructorsBuf (clear instInhabited instRepr isEmpty len new push
+  pushSelector viewMut)
+
+end BSmtLib.Grammar.ConstructorsBuf
+
+-- `BSmtLib.Grammar.Multiple.FunctionSignature`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (FunctionSignature)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.FunctionSignature
+
+export BSmtLib.Grammar.Multiple.FunctionSignature (name params resultSort)
+
+end BSmtLib.Grammar.FunctionSignature
+
+-- `BSmtLib.Grammar.Multiple.FunctionSignatures`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (FunctionSignatures)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.FunctionSignatures
+
+export BSmtLib.Grammar.Multiple.FunctionSignatures (get? instForInFunctionSignatureOfMonad instRepr
+  isEmpty len toArray)
+
+end BSmtLib.Grammar.FunctionSignatures
+
+-- `BSmtLib.Grammar.Multiple.FunctionSignaturesBuf`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (FunctionSignaturesBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.FunctionSignaturesBuf
+
+export BSmtLib.Grammar.Multiple.FunctionSignaturesBuf (clear get? instInhabited instRepr isEmpty
+  len new push pushParam view)
+
+end BSmtLib.Grammar.FunctionSignaturesBuf
+
+-- `BSmtLib.Grammar.Multiple.MatchCases`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (MatchCases)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.MatchCases
+
+export BSmtLib.Grammar.Multiple.MatchCases (get? instForInProdPatternOfMonad instRepr isEmpty len
+  toArray)
+
+end BSmtLib.Grammar.MatchCases
+
+-- `BSmtLib.Grammar.Multiple.MatchCasesBuf`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (MatchCasesBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.MatchCasesBuf
+
+export BSmtLib.Grammar.Multiple.MatchCasesBuf (clear instInhabited instRepr isEmpty len new push
+  viewMut)
+
+end BSmtLib.Grammar.MatchCasesBuf
+
+-- `BSmtLib.Grammar.Multiple.NamedValues`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (NamedValues)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.NamedValues
+
+export BSmtLib.Grammar.Multiple.NamedValues (get? instForInProdSymbolOfMonad instRepr isEmpty len
+  toArray)
+
+end BSmtLib.Grammar.NamedValues
+
+-- `BSmtLib.Grammar.Multiple.NamedValuesBuf`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (NamedValuesBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.NamedValuesBuf
+
+export BSmtLib.Grammar.Multiple.NamedValuesBuf (clear instInhabited instRepr isEmpty len new push
+  viewMut)
+
+end BSmtLib.Grammar.NamedValuesBuf
+
+-- `BSmtLib.Grammar.Multiple.SortArities`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (SortArities)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SortArities
+
+export BSmtLib.Grammar.Multiple.SortArities (get? instForInProdSymbolNumeralOfMonad instRepr
+  isEmpty len toArray)
+
+end BSmtLib.Grammar.SortArities
+
+-- `BSmtLib.Grammar.Multiple.SortAritiesBuf`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (SortAritiesBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SortAritiesBuf
+
+export BSmtLib.Grammar.Multiple.SortAritiesBuf (clear instInhabited instRepr isEmpty len new push
+  view)
+
+end BSmtLib.Grammar.SortAritiesBuf
+
+-- `BSmtLib.Grammar.Multiple.SortedVars`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (SortedVars)
+
+end BSmtLib.Grammar
+
+-- `BSmtLib.Grammar.Multiple.Symbols`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (Symbols)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.Symbols
+
+export BSmtLib.Grammar.Multiple.Symbols (get? instForInSymbolOfMonad instRepr isEmpty len toArray)
+
+end BSmtLib.Grammar.Symbols
+
+-- `BSmtLib.Grammar.Multiple.SymbolsBuf`, by `pub use multiple::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Multiple (SymbolsBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SymbolsBuf
+
+export BSmtLib.Grammar.Multiple.SymbolsBuf (clear instInhabited instRepr isEmpty len new push view)
+
+end BSmtLib.Grammar.SymbolsBuf
+
+/-! `pub use nodes::*` in `grammar.rs` -/
+
+-- `BSmtLib.Grammar.Nodes.AttributeValue`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (AttributeValue)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.AttributeValue
+
+export BSmtLib.Grammar.Nodes.AttributeValue (sExprs specialConstant symbol)
+
+end BSmtLib.Grammar.AttributeValue
+
+-- `BSmtLib.Grammar.Nodes.EmptyArgumentsError`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (EmptyArgumentsError)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.EmptyArgumentsError
+
+export BSmtLib.Grammar.Nodes.EmptyArgumentsError (mk)
+
+end BSmtLib.Grammar.EmptyArgumentsError
+
+-- `BSmtLib.Grammar.Nodes.Ident`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (Ident)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.Ident
+
+export BSmtLib.Grammar.Nodes.Ident (indices intoOwned mk name)
+
+end BSmtLib.Grammar.Ident
+
+-- `BSmtLib.Grammar.Nodes.IdentBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (IdentBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.IdentBuf
+
+export BSmtLib.Grammar.Nodes.IdentBuf (indices mk name newSimple view)
+
+end BSmtLib.Grammar.IdentBuf
+
+-- `BSmtLib.Grammar.Nodes.Index`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (Index)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.Index
+
+export BSmtLib.Grammar.Nodes.Index (intoOwned numeral symbol)
+
+end BSmtLib.Grammar.Index
+
+-- `BSmtLib.Grammar.Nodes.IndexBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (IndexBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.IndexBuf
+
+export BSmtLib.Grammar.Nodes.IndexBuf (numeral symbol view)
+
+end BSmtLib.Grammar.IndexBuf
+
+-- `BSmtLib.Grammar.Nodes.IndicesBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (IndicesBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.IndicesBuf
+
+export BSmtLib.Grammar.Nodes.IndicesBuf (clear get? instForInIndexOfMonad instInhabited instRepr
+  isEmpty len new push view)
+
+end BSmtLib.Grammar.IndicesBuf
+
+-- `BSmtLib.Grammar.Nodes.Pattern`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (Pattern)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.Pattern
+
+export BSmtLib.Grammar.Nodes.Pattern (application intoOwned simple)
+
+end BSmtLib.Grammar.Pattern
+
+-- `BSmtLib.Grammar.Nodes.PatternApplication`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (PatternApplication)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.PatternApplication
+
+export BSmtLib.Grammar.Nodes.PatternApplication (args constructor intoOwned mk new nonempty)
+
+end BSmtLib.Grammar.PatternApplication
+
+-- `BSmtLib.Grammar.Nodes.PatternApplicationBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (PatternApplicationBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.PatternApplicationBuf
+
+export BSmtLib.Grammar.Nodes.PatternApplicationBuf (args constructor intoParts mk new nonempty view)
+
+end BSmtLib.Grammar.PatternApplicationBuf
+
+-- `BSmtLib.Grammar.Nodes.PatternBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (PatternBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.PatternBuf
+
+export BSmtLib.Grammar.Nodes.PatternBuf (application simple view)
+
+end BSmtLib.Grammar.PatternBuf
+
+-- `BSmtLib.Grammar.Nodes.QualifiedIdent`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (QualifiedIdent)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.QualifiedIdent
+
+export BSmtLib.Grammar.Nodes.QualifiedIdent (ident intoOwned mk sort)
+
+end BSmtLib.Grammar.QualifiedIdent
+
+-- `BSmtLib.Grammar.Nodes.QualifiedIdentBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (QualifiedIdentBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.QualifiedIdentBuf
+
+export BSmtLib.Grammar.Nodes.QualifiedIdentBuf (ident mk newQualified newSimple newUnqualified sort)
+
+end BSmtLib.Grammar.QualifiedIdentBuf
+
+-- `BSmtLib.Grammar.Nodes.QuantifierKind`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (QuantifierKind)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.QuantifierKind
+
+export BSmtLib.Grammar.Nodes.QuantifierKind («exists» «forall»)
+
+end BSmtLib.Grammar.QuantifierKind
+
+-- `BSmtLib.Grammar.Nodes.SExpr`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SExpr)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SExpr
+
+export BSmtLib.Grammar.Nodes.SExpr (keyword reserved sExprs specialConstant symbol)
+
+end BSmtLib.Grammar.SExpr
+
+-- `BSmtLib.Grammar.Nodes.SimplePattern`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SimplePattern)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SimplePattern
+
+export BSmtLib.Grammar.Nodes.SimplePattern (intoOwned symbol wildcard)
+
+end BSmtLib.Grammar.SimplePattern
+
+-- `BSmtLib.Grammar.Nodes.SimplePatternBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SimplePatternBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SimplePatternBuf
+
+export BSmtLib.Grammar.Nodes.SimplePatternBuf (symbol view wildcard)
+
+end BSmtLib.Grammar.SimplePatternBuf
+
+-- `BSmtLib.Grammar.Nodes.SimplePatternsBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SimplePatternsBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SimplePatternsBuf
+
+export BSmtLib.Grammar.Nodes.SimplePatternsBuf (clear get? instForInSimplePatternOfMonad
+  instInhabited instRepr isEmpty len new push size_view view)
+
+end BSmtLib.Grammar.SimplePatternsBuf
+
+-- `BSmtLib.Grammar.Nodes.SpecialConstant`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SpecialConstant)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SpecialConstant
+
+export BSmtLib.Grammar.Nodes.SpecialConstant (binary decimal hexadecimal intoOwned numeral string)
+
+end BSmtLib.Grammar.SpecialConstant
+
+-- `BSmtLib.Grammar.Nodes.SpecialConstantBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SpecialConstantBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SpecialConstantBuf
+
+export BSmtLib.Grammar.Nodes.SpecialConstantBuf (binary decimal hexadecimal numeral string view)
+
+end BSmtLib.Grammar.SpecialConstantBuf
+
+-- `BSmtLib.Grammar.Nodes.Term`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (Term)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.Term
+
+export BSmtLib.Grammar.Nodes.Term (application newApplication qualifiedIdent specialConstant)
+
+end BSmtLib.Grammar.Term
+
+/-! `pub use bytes::*` in `lexicon.rs`; `SmtBytes` is itself `BSmtLib.Lexicon.Bytes` -/
+
+-- `BSmtLib.Lexicon.Bytes.BytesBuf`, by `pub use bytes::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Bytes (BytesBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.BytesBuf
+
+export BSmtLib.Lexicon.Bytes.BytesBuf (asSlice eqSlice eqView fromByte fromByteArray instBEq
+  instHashable instRepr intoByteArray isEmpty len new view)
+
+end BSmtLib.Lexicon.BytesBuf
+
+/-! `pub use value::*` in `lexicon.rs` -/
+
+-- `BSmtLib.Lexicon.Value.BinDigits`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (BinDigits)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.BinDigits
+
+export BSmtLib.Lexicon.Value.BinDigits (asSlice eqOwned eqSlice eqString instBEq instHashable
+  instRepr intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
+
+end BSmtLib.Lexicon.BinDigits
+
+-- `BSmtLib.Lexicon.Value.BinDigitsBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (BinDigitsBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.BinDigitsBuf
+
+export BSmtLib.Lexicon.Value.BinDigitsBuf (asSlice eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new toNat toUInt32? toUInt64? toUSize?
+  view)
+
+end BSmtLib.Lexicon.BinDigitsBuf
+
+-- `BSmtLib.Lexicon.Value.Comment`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (Comment)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.Comment
+
+export BSmtLib.Lexicon.Value.Comment (asSlice eqOwned eqSlice eqString instBEq instHashable
+  instRepr intoOwned isEmpty len new)
+
+end BSmtLib.Lexicon.Comment
+
+-- `BSmtLib.Lexicon.Value.CommentBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (CommentBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.CommentBuf
+
+export BSmtLib.Lexicon.Value.CommentBuf (asSlice eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view)
+
+end BSmtLib.Lexicon.CommentBuf
+
+-- `BSmtLib.Lexicon.Value.Decimal`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (Decimal)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.Decimal
+
+export BSmtLib.Lexicon.Value.Decimal (asSlice eqOwned eqSlice eqString fraction instBEq
+  instHashable instRepr intoOwned isEmpty len new whole)
+
+end BSmtLib.Lexicon.Decimal
+
+-- `BSmtLib.Lexicon.Value.DecimalBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (DecimalBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.DecimalBuf
+
+export BSmtLib.Lexicon.Value.DecimalBuf (asSlice eqSlice eqString eqView fraction instBEq
+  instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view whole)
+
+end BSmtLib.Lexicon.DecimalBuf
+
+-- `BSmtLib.Lexicon.Value.DisallowedByteVecError`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (DisallowedByteVecError)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.DisallowedByteVecError
+
+export BSmtLib.Lexicon.Value.DisallowedByteVecError (instBEq instHashable instRepr instToString
+  intoByteArray)
+
+end BSmtLib.Lexicon.DisallowedByteVecError
+
+-- `BSmtLib.Lexicon.Value.DisallowedBytesError`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (DisallowedBytesError)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.DisallowedBytesError
+
+export BSmtLib.Lexicon.Value.DisallowedBytesError (mk)
+
+end BSmtLib.Lexicon.DisallowedBytesError
+
+-- `BSmtLib.Lexicon.Value.HexDigits`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (HexDigits)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.HexDigits
+
+export BSmtLib.Lexicon.Value.HexDigits (asSlice eqOwned eqSlice eqString instBEq instHashable
+  instRepr intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
+
+end BSmtLib.Lexicon.HexDigits
+
+-- `BSmtLib.Lexicon.Value.HexDigitsBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (HexDigitsBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.HexDigitsBuf
+
+export BSmtLib.Lexicon.Value.HexDigitsBuf (asSlice eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new toNat toUInt32? toUInt64? toUSize?
+  view)
+
+end BSmtLib.Lexicon.HexDigitsBuf
+
+-- `BSmtLib.Lexicon.Value.Keyword`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (Keyword)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.Keyword
+
+export BSmtLib.Lexicon.Value.Keyword (asSlice eqOwned eqSlice eqString instBEq instHashable
+  instRepr intoOwned isEmpty len new)
+
+end BSmtLib.Lexicon.Keyword
+
+-- `BSmtLib.Lexicon.Value.KeywordBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (KeywordBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.KeywordBuf
+
+export BSmtLib.Lexicon.Value.KeywordBuf (asSlice eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view)
+
+end BSmtLib.Lexicon.KeywordBuf
+
+-- `BSmtLib.Lexicon.Value.Numeral`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (Numeral)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.Numeral
+
+export BSmtLib.Lexicon.Value.Numeral (asSlice eqOwned eqSlice eqString instBEq instHashable
+  instRepr intoOwned isEmpty len new toNat toUInt32? toUInt64? toUSize?)
+
+end BSmtLib.Lexicon.Numeral
+
+-- `BSmtLib.Lexicon.Value.NumeralBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (NumeralBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.NumeralBuf
+
+export BSmtLib.Lexicon.Value.NumeralBuf (asSlice eqSlice eqString eqView fromNat fromUInt32
+  fromUInt64 fromUSize instBEq instHashable instRepr intoByteArray intoBytesBuf isAllowed isEmpty
+  len new toNat toUInt32? toUInt64? toUSize? view)
+
+end BSmtLib.Lexicon.NumeralBuf
+
+-- `BSmtLib.Lexicon.Value.NumericOverflowError`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (NumericOverflowError)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.NumericOverflowError
+
+export BSmtLib.Lexicon.Value.NumericOverflowError (mk)
+
+end BSmtLib.Lexicon.NumericOverflowError
+
+-- `BSmtLib.Lexicon.Value.StringContent`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (StringContent)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.StringContent
+
+export BSmtLib.Lexicon.Value.StringContent (asSlice eqOwned eqSlice eqString instBEq instHashable
+  instRepr intoOwned isEmpty len new)
+
+end BSmtLib.Lexicon.StringContent
+
+-- `BSmtLib.Lexicon.Value.StringContentBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (StringContentBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.StringContentBuf
+
+export BSmtLib.Lexicon.Value.StringContentBuf (asSlice eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view)
+
+end BSmtLib.Lexicon.StringContentBuf
+
+-- `BSmtLib.Lexicon.Value.Symbol`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (Symbol)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.Symbol
+
+export BSmtLib.Lexicon.Value.Symbol (asSlice bytes instRepr intoOwned intoVersioned isEmpty
+  isQuoted isSymbolIn len newIn newQuoted newUnquoted)
+
+end BSmtLib.Lexicon.Symbol
+
+-- `BSmtLib.Lexicon.Value.SymbolBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (SymbolBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.SymbolBuf
+
+export BSmtLib.Lexicon.Value.SymbolBuf (asSlice bytes instRepr intoByteArray intoBytesBuf
+  intoVersioned isEmpty isQuoted isQuotedAllowed isSimpleIn isSymbolIn isUnquotedAllowed len newIn
+  newQuoted newUnquoted view)
+
+end BSmtLib.Lexicon.SymbolBuf
+
+-- `BSmtLib.Lexicon.Value.Whitespace`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (Whitespace)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.Whitespace
+
+export BSmtLib.Lexicon.Value.Whitespace (asSlice eqOwned eqSlice eqString instBEq instHashable
+  instRepr intoOwned isEmpty len new)
+
+end BSmtLib.Lexicon.Whitespace
+
+-- `BSmtLib.Lexicon.Value.WhitespaceBuf`, by `pub use value::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Value (WhitespaceBuf)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.WhitespaceBuf
+
+export BSmtLib.Lexicon.Value.WhitespaceBuf (asSlice eqSlice eqString eqView instBEq instHashable
+  instRepr intoByteArray intoBytesBuf isAllowed isEmpty len new view)
+
+end BSmtLib.Lexicon.WhitespaceBuf
+
+/-! `pub use cursor::{SmtLexerCursor, SmtLexerToken, SmtLexerWindow}` in `lexer.rs` -/
+
+-- `BSmtLib.Lexer.Cursor.LexerCursor`, by `pub use cursor::SmtLexerCursor`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Cursor (LexerCursor)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexerCursor
+
+export BSmtLib.Lexer.Cursor.LexerCursor (Consumed HasNext attempt category consumeAll
+  consumeAll_consumed consumeAll_follows content discardRest discardRest_follows
+  discardRest_hasNext endsAfter_new endsAfter_resetConsumed hasNext_new hasNext_resetConsumed
+  instDecidableHasNext isEmpty isEmpty_iff isSome_next? next next? not_hasNext_consumeAll peek
+  peek? relexRequested_next remaining_resetConsumed setVersion setVersion_follows span «syntax»
+  version)
+
+end BSmtLib.Lexer.LexerCursor
+
+namespace BSmtLib.Lexer.LexerCursor.Consumed
+
+export BSmtLib.Lexer.Cursor.LexerCursor.Consumed (follows lt_consumedEndOf remaining_lt trans
+  trans_follows)
+
+end BSmtLib.Lexer.LexerCursor.Consumed
+
+-- `BSmtLib.Lexer.Cursor.LexerToken`, by `pub use cursor::SmtLexerToken`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Cursor (LexerToken)
+
+end BSmtLib.Lexer
+
+-- `BSmtLib.Lexer.Cursor.LexerWindow`, by `pub use cursor::SmtLexerWindow`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Cursor (LexerWindow)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexerWindow
+
+export BSmtLib.Lexer.Cursor.LexerWindow (Consumed category content next? span «syntax» version)
+
+end BSmtLib.Lexer.LexerWindow
+
+namespace BSmtLib.Lexer.LexerWindow.Consumed
+
+export BSmtLib.Lexer.Cursor.LexerWindow.Consumed (trans)
+
+end BSmtLib.Lexer.LexerWindow.Consumed
+
+/-! `pub use error::{SmtLexerError, SmtLexerErrorCause, SmtLexerReadError, SmtLexerReadErrorCause,
+SmtLexicalErrorKind, SmtLexicalExpected}` in `lexer.rs` -/
+
+-- `BSmtLib.Lexer.Error.LexerError`, by `pub use error::SmtLexerError`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Error (LexerError)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexerError
+
+export BSmtLib.Lexer.Error.LexerError (cause continuesFrom location span)
+
+end BSmtLib.Lexer.LexerError
+
+-- `BSmtLib.Lexer.Error.LexerErrorCause`, by `pub use error::SmtLexerErrorCause`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Error (LexerErrorCause)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexerErrorCause
+
+export BSmtLib.Lexer.Error.LexerErrorCause (consumer lexical)
+
+end BSmtLib.Lexer.LexerErrorCause
+
+-- `BSmtLib.Lexer.Error.LexerReadError`, by `pub use error::SmtLexerReadError`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Error (LexerReadError)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexerReadError
+
+export BSmtLib.Lexer.Error.LexerReadError (cause location ofLex span)
+
+end BSmtLib.Lexer.LexerReadError
+
+-- `BSmtLib.Lexer.Error.LexerReadErrorCause`, by `pub use error::SmtLexerReadErrorCause`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Error (LexerReadErrorCause)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexerReadErrorCause
+
+export BSmtLib.Lexer.Error.LexerReadErrorCause (consumer io lexical)
+
+end BSmtLib.Lexer.LexerReadErrorCause
+
+-- `BSmtLib.Lexer.Error.LexicalErrorKind`, by `pub use error::SmtLexicalErrorKind`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Error (LexicalErrorKind)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexicalErrorKind
+
+export BSmtLib.Lexer.Error.LexicalErrorKind (backslashInQuotedSymbol emptyKeyword expected
+  forbiddenByteInQuotedSymbol forbiddenByteInString missingDelimiter numeralLeadingZero
+  unclosedQuotedSymbol unclosedString unexpectedByte unexpectedTrailingToken)
+
+end BSmtLib.Lexer.LexicalErrorKind
+
+-- `BSmtLib.Lexer.Error.LexicalExpected`, by `pub use error::SmtLexicalExpected`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Error (LexicalExpected)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexicalExpected
+
+export BSmtLib.Lexer.Error.LexicalExpected (base binaryDigit fractionDigit hexadecimalDigit)
+
+end BSmtLib.Lexer.LexicalExpected
+
+/-! `pub use recovery::{SmtFailFast, SmtLexerRecovery, SmtRecover, SmtRecovering}` in `lexer.rs` -/
+
+-- `BSmtLib.Lexer.Recovery.FailFast`, by `pub use recovery::SmtFailFast`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Recovery (FailFast)
+
+end BSmtLib.Lexer
+
+-- `BSmtLib.Lexer.Recovery.LexerRecovery`, by `pub use recovery::SmtLexerRecovery`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Recovery (LexerRecovery)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.LexerRecovery
+
+export BSmtLib.Lexer.Recovery.LexerRecovery (abandon mk recover)
+
+end BSmtLib.Lexer.LexerRecovery
+
+-- `BSmtLib.Lexer.Recovery.Recover`, by `pub use recovery::SmtRecover`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Recovery (Recover)
+
+end BSmtLib.Lexer
+
+namespace BSmtLib.Lexer.Recover
+
+export BSmtLib.Lexer.Recovery.Recover (abandon mk recover)
+
+end BSmtLib.Lexer.Recover
+
+-- `BSmtLib.Lexer.Recovery.Recovering`, by `pub use recovery::SmtRecovering`
+namespace BSmtLib.Lexer
+
+export BSmtLib.Lexer.Recovery (Recovering)
+
+end BSmtLib.Lexer
 
 /-! `pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved}` in `token.rs`;
 `Reserved` is itself `BSmtLib.Token.Reserved` -/
@@ -1053,120 +1270,6 @@ export BSmtLib.Token.Reserved.GeneralReserved (all as asStr binary decimal excla
   «forall» fromBytes? hexadecimal lambda «let» numeral par string underscore)
 
 end BSmtLib.Token.GeneralReserved
-
-/-! `pub use writer::{SmtCompactTokenWriter, SmtLayoutTokenWriter}` in `token.rs` -/
-
--- `BSmtLib.Token.Writer.CompactTokenWriter`, by `pub use writer::SmtCompactTokenWriter`
-namespace BSmtLib.Token
-
-export BSmtLib.Token.Writer (CompactTokenWriter)
-
-end BSmtLib.Token
-
-namespace BSmtLib.Token.CompactTokenWriter
-
-export BSmtLib.Token.Writer.CompactTokenWriter (getRef intoInner new setVersion version write)
-
-end BSmtLib.Token.CompactTokenWriter
-
--- `BSmtLib.Token.Writer.LayoutTokenWriter`, by `pub use writer::SmtLayoutTokenWriter`
-namespace BSmtLib.Token
-
-export BSmtLib.Token.Writer (LayoutTokenWriter)
-
-end BSmtLib.Token
-
-namespace BSmtLib.Token.LayoutTokenWriter
-
-export BSmtLib.Token.Writer.LayoutTokenWriter (getRef intoInner new setVersion version write)
-
-end BSmtLib.Token.LayoutTokenWriter
-
-/-! `pub use error::{SmtLexError, SmtLexErrorCause, SmtLexicalErrorKind, SmtLexicalExpected}` in
-`lexer.rs` -/
-
--- `BSmtLib.Lexer.Error.LexError`, by `pub use error::SmtLexError`
-namespace BSmtLib.Lexer
-
-export BSmtLib.Lexer.Error (LexError)
-
-end BSmtLib.Lexer
-
-namespace BSmtLib.Lexer.LexError
-
-export BSmtLib.Lexer.Error.LexError (cause continuesFrom location span)
-
-end BSmtLib.Lexer.LexError
-
--- `BSmtLib.Lexer.Error.LexErrorCause`, by `pub use error::SmtLexErrorCause`
-namespace BSmtLib.Lexer
-
-export BSmtLib.Lexer.Error (LexErrorCause)
-
-end BSmtLib.Lexer
-
-namespace BSmtLib.Lexer.LexErrorCause
-
-export BSmtLib.Lexer.Error.LexErrorCause (consumer lexical)
-
-end BSmtLib.Lexer.LexErrorCause
-
--- `BSmtLib.Lexer.Error.LexicalErrorKind`, by `pub use error::SmtLexicalErrorKind`
-namespace BSmtLib.Lexer
-
-export BSmtLib.Lexer.Error (LexicalErrorKind)
-
-end BSmtLib.Lexer
-
-namespace BSmtLib.Lexer.LexicalErrorKind
-
-export BSmtLib.Lexer.Error.LexicalErrorKind (backslashInQuotedSymbol emptyKeyword expected
-  forbiddenCharInQuotedSymbol forbiddenCharInString missingDelimiter numeralLeadingZero
-  unclosedQuotedSymbol unclosedStringLiteral unexpectedCharacter unexpectedTrailingToken)
-
-end BSmtLib.Lexer.LexicalErrorKind
-
--- `BSmtLib.Lexer.Error.LexicalExpected`, by `pub use error::SmtLexicalExpected`
-namespace BSmtLib.Lexer
-
-export BSmtLib.Lexer.Error (LexicalExpected)
-
-end BSmtLib.Lexer
-
-namespace BSmtLib.Lexer.LexicalExpected
-
-export BSmtLib.Lexer.Error.LexicalExpected (base binaryDigit fractionDigit hexadecimalDigit)
-
-end BSmtLib.Lexer.LexicalExpected
-
-/-! `pub use recovery::{SmtFailFast, SmtLexRecovery, SmtRecovering}` in `lexer.rs` -/
-
--- `BSmtLib.Lexer.Recovery.FailFast`, by `pub use recovery::SmtFailFast`
-namespace BSmtLib.Lexer
-
-export BSmtLib.Lexer.Recovery (FailFast)
-
-end BSmtLib.Lexer
-
--- `BSmtLib.Lexer.Recovery.LexRecovery`, by `pub use recovery::SmtLexRecovery`
-namespace BSmtLib.Lexer
-
-export BSmtLib.Lexer.Recovery (LexRecovery)
-
-end BSmtLib.Lexer
-
-namespace BSmtLib.Lexer.LexRecovery
-
-export BSmtLib.Lexer.Recovery.LexRecovery (abandon mk recover)
-
-end BSmtLib.Lexer.LexRecovery
-
--- `BSmtLib.Lexer.Recovery.Recovering`, by `pub use recovery::SmtRecovering`
-namespace BSmtLib.Lexer
-
-export BSmtLib.Lexer.Recovery (Recovering)
-
-end BSmtLib.Lexer
 
 /-! `pub use {…}` in `parser/category.rs` -/
 
@@ -1205,7 +1308,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.ClosedMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaximum)
+export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaxElements)
 
 end BSmtLib.Parser.Category.ClosedMaximumParser
 
@@ -1270,7 +1373,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.ParenMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaximum)
+export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaxElements)
 
 end BSmtLib.Parser.Category.ParenMaximumParser
 
@@ -1404,6 +1507,19 @@ export BSmtLib.Parser.Category.Pattern.PatternParser (new)
 
 end BSmtLib.Parser.Category.PatternParser
 
+-- `BSmtLib.Parser.Category.Pattern.SimplePatternParser`, by `pub use pattern::SmtSimplePatternParser`
+namespace BSmtLib.Parser.Category
+
+export BSmtLib.Parser.Category.Pattern (SimplePatternParser)
+
+end BSmtLib.Parser.Category
+
+namespace BSmtLib.Parser.Category.SimplePatternParser
+
+export BSmtLib.Parser.Category.Pattern.SimplePatternParser (new)
+
+end BSmtLib.Parser.Category.SimplePatternParser
+
 -- `BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser`, by `pub use qualified_ident::SmtQualifiedIdentParser`
 namespace BSmtLib.Parser.Category
 
@@ -1478,7 +1594,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.CloseParenParser
 
-export BSmtLib.Parser.Category.Token.CloseParenParser (mk new)
+export BSmtLib.Parser.Category.Token.CloseParenParser (new)
 
 end BSmtLib.Parser.Category.CloseParenParser
 
@@ -1491,7 +1607,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.KeywordParser
 
-export BSmtLib.Parser.Category.Token.KeywordParser (mk new)
+export BSmtLib.Parser.Category.Token.KeywordParser (new)
 
 end BSmtLib.Parser.Category.KeywordParser
 
@@ -1504,7 +1620,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.NumeralParser
 
-export BSmtLib.Parser.Category.Token.NumeralParser (mk new)
+export BSmtLib.Parser.Category.Token.NumeralParser (new)
 
 end BSmtLib.Parser.Category.NumeralParser
 
@@ -1517,7 +1633,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.OpenParenParser
 
-export BSmtLib.Parser.Category.Token.OpenParenParser (mk new)
+export BSmtLib.Parser.Category.Token.OpenParenParser (new)
 
 end BSmtLib.Parser.Category.OpenParenParser
 
@@ -1530,7 +1646,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.StringParser
 
-export BSmtLib.Parser.Category.Token.StringParser (mk new)
+export BSmtLib.Parser.Category.Token.StringParser (new)
 
 end BSmtLib.Parser.Category.StringParser
 
@@ -1543,7 +1659,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.SymbolParser
 
-export BSmtLib.Parser.Category.Token.SymbolParser (mk new)
+export BSmtLib.Parser.Category.Token.SymbolParser (new)
 
 end BSmtLib.Parser.Category.SymbolParser
 
@@ -1600,7 +1716,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.ClosedMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaximum)
+export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaxElements)
 
 end BSmtLib.Parser.ClosedMaximumParser
 
@@ -1665,7 +1781,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.ParenMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaximum)
+export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaxElements)
 
 end BSmtLib.Parser.ParenMaximumParser
 
@@ -1799,6 +1915,19 @@ export BSmtLib.Parser.Category.Pattern.PatternParser (new)
 
 end BSmtLib.Parser.PatternParser
 
+-- `BSmtLib.Parser.Category.Pattern.SimplePatternParser`, by `pub use category::*`
+namespace BSmtLib.Parser
+
+export BSmtLib.Parser.Category.Pattern (SimplePatternParser)
+
+end BSmtLib.Parser
+
+namespace BSmtLib.Parser.SimplePatternParser
+
+export BSmtLib.Parser.Category.Pattern.SimplePatternParser (new)
+
+end BSmtLib.Parser.SimplePatternParser
+
 -- `BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser`, by `pub use category::*`
 namespace BSmtLib.Parser
 
@@ -1873,7 +2002,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.CloseParenParser
 
-export BSmtLib.Parser.Category.Token.CloseParenParser (mk new)
+export BSmtLib.Parser.Category.Token.CloseParenParser (new)
 
 end BSmtLib.Parser.CloseParenParser
 
@@ -1886,7 +2015,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.KeywordParser
 
-export BSmtLib.Parser.Category.Token.KeywordParser (mk new)
+export BSmtLib.Parser.Category.Token.KeywordParser (new)
 
 end BSmtLib.Parser.KeywordParser
 
@@ -1899,7 +2028,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.NumeralParser
 
-export BSmtLib.Parser.Category.Token.NumeralParser (mk new)
+export BSmtLib.Parser.Category.Token.NumeralParser (new)
 
 end BSmtLib.Parser.NumeralParser
 
@@ -1912,7 +2041,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.OpenParenParser
 
-export BSmtLib.Parser.Category.Token.OpenParenParser (mk new)
+export BSmtLib.Parser.Category.Token.OpenParenParser (new)
 
 end BSmtLib.Parser.OpenParenParser
 
@@ -1925,7 +2054,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.StringParser
 
-export BSmtLib.Parser.Category.Token.StringParser (mk new)
+export BSmtLib.Parser.Category.Token.StringParser (new)
 
 end BSmtLib.Parser.StringParser
 
@@ -1938,22 +2067,9 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.SymbolParser
 
-export BSmtLib.Parser.Category.Token.SymbolParser (mk new)
+export BSmtLib.Parser.Category.Token.SymbolParser (new)
 
 end BSmtLib.Parser.SymbolParser
-
--- `BSmtLib.Parser.Category.ParenSortedVarsParser`, by `pub use category::*`
-namespace BSmtLib.Parser
-
-export BSmtLib.Parser.Category (ParenSortedVarsParser)
-
-end BSmtLib.Parser
-
-namespace BSmtLib.Parser.ParenSortedVarsParser
-
-export BSmtLib.Parser.Category.ParenSortedVarsParser (new)
-
-end BSmtLib.Parser.ParenSortedVarsParser
 
 /-! `pub use command::*` in `parser.rs`, for the items that have a counterpart -/
 

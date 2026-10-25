@@ -1,7 +1,7 @@
 module
 
-public import BSmtLib.Traits
-public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Handler
+public import BSmtLib.Token
 public import BSmtLib.Token.Cursor
 
 public section
@@ -23,9 +23,10 @@ that finishes starts its next value from its initial state.
 
 namespace BSmtLib.Parser
 
-open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Plain (Keyword Symbol)
-open BSmtLib.Token (TokenCategory Version SyntaxToken)
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib.Lexicon.Value (Keyword Symbol)
+open BSmtLib.Token (TokenCategory)
+open BSmtLib (Version Token)
 open BSmtLib.Token.Reserved (GeneralReserved)
 
 
@@ -59,8 +60,8 @@ inductive NonEmptyList where
   | termApplication
   | letBindings
   | annotation
-  | quantifierBindings
-  | lambdaBindings
+  | quantifierVars
+  | lambdaVars
   | functionSignatures
   | datatypeIntroductions
   | datatypeParameters
@@ -187,8 +188,8 @@ private def SyntaxExpected.name : SyntaxExpected → String
       | .termApplication => "arguments of application"
       | .letBindings => "bindings of `let`"
       | .annotation => "attributes of annotation"
-      | .quantifierBindings => "variables of quantifier"
-      | .lambdaBindings => "variables of `lambda`"
+      | .quantifierVars => "variables of quantifier"
+      | .lambdaVars => "variables of `lambda`"
       | .functionSignatures => "functions of `define-funs-rec`"
       | .datatypeIntroductions => "sorts of `declare-datatypes`"
       | .datatypeParameters => "parameters of datatype"
@@ -354,7 +355,7 @@ A token as the parsers take it: what it stands for in the version it was cut in,
 the input. Words reserved in the version are reserved words; every other simple or quoted
 symbol is a symbol.
 -/
-/- LEAN: Rust's parsers match on `SmtSyntaxToken`. The parser has a type of its own for it,
+/- LEAN: Rust's parsers match on `SmtToken`. The parser has a type of its own for it,
 with the constants as one constructor and whitespace and comments as one, which the loop makes
 from the syntax token (`Input.ofSyntax`). -/
 inductive Input where
@@ -382,7 +383,7 @@ end Input
 
 /-- What the token, viewed under its producer's version, stands for. -/
 @[inline]
-def Input.ofSyntax : SyntaxToken → Input
+def Input.ofSyntax : Token → Input
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
   | .numeral value => .constant (.numeral value)
@@ -398,7 +399,7 @@ def Input.ofSyntax : SyntaxToken → Input
 
 /-- The syntax token the token was made from (`Input.ofSyntax`), with whitespace and comments as
 empty whitespace. -/
-def Input.toSyntax : Input → SyntaxToken
+def Input.toSyntax : Input → Token
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
   | .constant (.numeral value) => .numeral value
@@ -409,7 +410,8 @@ def Input.toSyntax : Input → SyntaxToken
   | .keyword value => .keyword value
   | .symbol value => .symbol value
   | .reserved word => .reserved word
-  | .layout => .whitespace (Plain.Whitespace.Internal.newUnchecked ByteArray.empty.toByteSlice)
+  | .layout =>
+    .whitespace (Lexicon.Value.Whitespace.Internal.newUnchecked ByteArray.empty.toByteSlice)
   | .endOfInput => .endOfFile
 
 /-- A token made into a syntax token and back is the token. -/

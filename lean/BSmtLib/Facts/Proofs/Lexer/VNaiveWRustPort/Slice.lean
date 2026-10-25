@@ -87,7 +87,7 @@ def ExitMatches : Model.Stop C → Lexer.Internal.WRustPort.SliceExit C.Result
 
 /-- The lexer state after the loop stopped with the consumer having done `p`, discarding from `d`
 if `d` is some. -/
-structure AfterStop (hd : Bool) (iv : Token.Version) (bytes : ByteArray) (p : Prog)
+structure AfterStop (hd : Bool) (iv : Version) (bytes : ByteArray) (p : Prog)
     (d : Option Span.Location)
     (c : WP.WCore) :
     Prop where
@@ -153,8 +153,8 @@ theorem exitMatches_of {s : Model.Stop C} {e : WP.Intr C floor} (h : Matches s e
 /-- What the loop over a slice from the naive lexer's pure state `st` at `location` at the
 index `position`, under the version `ver`, with the tokens taken `coll` and the lexemes `held`
 in the batch, ends with. -/
-def SliceOut (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv : Token.Version)
-    (input : ByteSlice) (st : St) (location : Span.Location) (position : Nat) (ver : Token.Version)
+def SliceOut (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+    (input : ByteSlice) (st : St) (location : Span.Location) (position : Nat) (ver : Version)
     (coll : List Handed) (held : List Lexeme)
     (r : (Lexer.Internal.WRustPort.SliceExit C.Result (Option C.Error) floor × WP.BS floor 0) ×
       List Handed) : Prop :=
@@ -170,7 +170,7 @@ def SliceOut (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (i
   | .stopped s p =>
     ExitMatches s r.1.1 ∧ AfterStop hd iv input.byteArray p s.discards r.1.2.val ∧ r.2 = p.taken
 
-variable {v : Token.Version} {hd : Bool} {iv : Token.Version}
+variable {v : Version} {hd : Bool} {iv : Version}
 
 /-- The hand-over of the batch at the end of the loop over a slice: the result to return once
 the batch is handed over, or where the consumer stopped. -/
@@ -254,7 +254,7 @@ theorem sliceRun_error (input : ByteSlice) (position : Nat) (ff : LexFailure)
 
 /-- How the loop ends depends only on the outcome of the run from where it is. -/
 theorem sliceOut_congr {input : ByteSlice} {st st' : St} {location location' : Span.Location}
-    {position position' : Nat} {ver ver' : Token.Version} {coll coll' : List Handed}
+    {position position' : Nat} {ver ver' : Version} {coll coll' : List Handed}
     {held held' : List Lexeme}
     {r : (Lexer.Internal.WRustPort.SliceExit C.Result
     (Option C.Error) floor × WP.BS floor 0) × List Handed}
@@ -268,7 +268,7 @@ theorem sliceOut_congr {input : ByteSlice} {st st' : St} {location location' : S
   rw [h]
   exact hs
 
-theorem sliceRun_ok (v : Token.Version) (input : ByteSlice) :
+theorem sliceRun_ok (v : Version) (input : ByteSlice) :
     ∀ (n position : Nat), input.size - position < n →
     ∀ (core : WP.BS floor 0) (coll : List Handed) (st : St) (location : Span.Location)
       (held : List Lexeme), StepPre C v hd iv input st location held position core.val →

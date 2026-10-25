@@ -39,13 +39,13 @@ open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Commands.B
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic BSmtLib.Facts.Proofs.Parser.Rejection.Command
 open BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts BSmtLib.Facts.Proofs.Parser.Rejection.Parts
 open BSmtLib.Facts.Proofs.Parser.Rejection.SExpr BSmtLib.Facts.Proofs.Parser.Rejection.«Sort»
-open BSmtLib.Facts.Proofs.Parser.Rejection.Term BSmtLib.Plain
+open BSmtLib.Facts.Proofs.Parser.Rejection.Term BSmtLib.Lexicon.Value
 
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 
 section
 
-variable (version : Token.Version) (follows : CmdEnd → Lang)
+variable (version : Version) (follows : CmdEnd → Lang)
   (hfollows : ∀ e, ∃ w, follows e w)
 
 /-- The command's last item, before what follows the command as the outcome says. -/
@@ -209,13 +209,13 @@ macro "sort_then_close" hfollows:ident hitem:ident hlex:ident : tactic => `(tact
   | done sort => exact Sound.pure fun _ => ⟨fun u hu => cat_intro' hr hu rfl, hnext⟩))
 
 include hitem hlex hfollows in
-theorem payload_declareConst (symbol : Plain.Symbol) (state : SortState Nat) :
+theorem payload_declareConst (symbol : Lexicon.Value.Symbol) (state : SortState Nat) :
     PayloadAdvance version follows (.declareConst symbol state) item
       (payloadStep (H := List Event) version (.declareConst symbol state) token) := by
   sort_then_close hfollows hitem hlex
 
 include hitem hlex hfollows in
-theorem payload_declareFunResult (symbol : Plain.Symbol) (parameters : Array Nat)
+theorem payload_declareFunResult (symbol : Lexicon.Value.Symbol) (parameters : Array Nat)
     (state : SortState Nat) :
     PayloadAdvance version follows (.declareFunResult symbol parameters state) item
       (payloadStep (H := List Event) version (.declareFunResult symbol parameters state)
@@ -229,7 +229,7 @@ theorem payload_defineSortBody (state : SortState Nat) :
   sort_then_close hfollows hitem hlex
 
 include hitem hlex hfollows in
-theorem payload_declareFunParameters (symbol : Plain.Symbol)
+theorem payload_declareFunParameters (symbol : Lexicon.Value.Symbol)
     (state : ListState (SortState Nat) Nat) :
     PayloadAdvance version follows (.declareFunParameters symbol state) item
       (payloadStep (H := List Event) version (.declareFunParameters symbol state) token) := by
@@ -252,7 +252,7 @@ theorem payload_declareFunParameters (symbol : Plain.Symbol)
       cat_nonempty (sortRem_init_nonempty _) hnext⟩
 
 include hitem hfollows in
-theorem payload_declareSort (symbol : Plain.Symbol) :
+theorem payload_declareSort (symbol : Lexicon.Value.Symbol) :
     PayloadAdvance version follows (.declareSort symbol) item
       (payloadStep (H := List Event) version (.declareSort symbol) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -328,7 +328,7 @@ theorem payload_push :
   all_goals fail_step
 
 include hitem hlex hfollows in
-theorem payload_declareDatatype (symbol : Plain.Symbol) (state : DatatypeState Nat) :
+theorem payload_declareDatatype (symbol : Lexicon.Value.Symbol) (state : DatatypeState Nat) :
     PayloadAdvance version follows (.declareDatatype symbol state) item
       (payloadStep (H := List Event) version (.declareDatatype symbol state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -344,8 +344,8 @@ theorem payload_declareDatatype (symbol : Plain.Symbol) (state : DatatypeState N
     exact Sound.pure fun hne => ⟨fun u hu => cat_intro' (hr (cat_nonempty_left hne)) hu rfl, hnext⟩
 
 include hitem hlex hfollows in
-theorem payload_defineSortParameters (symbol : Plain.Symbol)
-    (state : ListState Unit Plain.Symbol) :
+theorem payload_defineSortParameters (symbol : Lexicon.Value.Symbol)
+    (state : ListState Unit Lexicon.Value.Symbol) :
     PayloadAdvance version follows (.defineSortParameters symbol state) item
       (payloadStep (H := List Event) version (.defineSortParameters symbol state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -367,7 +367,7 @@ theorem payload_defineSortParameters (symbol : Plain.Symbol)
       cat_nonempty (sortRem_init_nonempty _) hnext⟩
 
 include hitem hlex hfollows in
-theorem payload_defineConstSort (symbol : Plain.Symbol) (state : SortState Nat) :
+theorem payload_defineConstSort (symbol : Lexicon.Value.Symbol) (state : SortState Nat) :
     PayloadAdvance version follows (.defineConstSort symbol state) item
       (payloadStep (H := List Event) version (.defineConstSort symbol state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -424,7 +424,7 @@ theorem payload_defineBody (definition : DefinitionEnd Nat)
     · cases definition <;> exact hnext
 
 include hitem hlex hfollows in
-theorem payload_defineFunsRecBodies (signatures : Array (Multiple.FunctionSignature Nat))
+theorem payload_defineFunsRecBodies (signatures : Array (Grammar.Multiple.FunctionSignature Nat))
     (state : ListState (TermState Nat Nat Nat Nat Nat) Unit) :
     PayloadAdvance version follows (.defineFunsRecBodies signatures state) item
       (payloadStep (H := List Event) version (.defineFunsRecBodies signatures state) token) := by
@@ -497,7 +497,7 @@ theorem payload_setOption (state : AttributeState Nat Nat) :
 
 include hitem hlex hfollows in
 theorem payload_declareDatatypesSorts
-    (state : ListState SortDecState (Plain.Symbol × Numeral)) :
+    (state : ListState SortDecState (Lexicon.Value.Symbol × Numeral)) :
     PayloadAdvance version follows (.declareDatatypesSorts state) item
       (payloadStep (H := List Event) version (.declareDatatypesSorts state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -542,7 +542,7 @@ theorem payload_declareDatatypesSorts
 
 include hitem hlex hfollows in
 theorem payload_defineFunsRecDeclarations
-    (state : ListState (FunctionDecState Nat) (Multiple.FunctionSignature Nat)) :
+    (state : ListState (FunctionDecState Nat) (Grammar.Multiple.FunctionSignature Nat)) :
     PayloadAdvance version follows (.defineFunsRecDeclarations state) item
       (payloadStep (H := List Event) version (.defineFunsRecDeclarations state) token) := by
   have hnext := closeNext_nonempty version follows (hfollows _)
@@ -712,7 +712,7 @@ theorem setInfoEnd_next (v : BSmtLibSpec.Lexicon.Version) (declaration : Declara
 
 section
 
-variable (version : Token.Version) (follows : CmdEnd → Lang)
+variable (version : Version) (follows : CmdEnd → Lang)
   (hfollows : ∀ e, ∃ w, follows e w)
 
 /-- A failure of the command parser's step: no rejection of a version declaration, or the

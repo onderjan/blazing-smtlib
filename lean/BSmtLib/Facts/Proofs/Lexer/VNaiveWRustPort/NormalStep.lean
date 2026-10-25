@@ -25,17 +25,17 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Step BSmtLib.Lexer.Internal.VNai
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The loop of the normal state keeps the correspondence. -/
-theorem lexNormalFrom_wp (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem lexNormalFrom_wp (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat) :
     NormalSpec C v hd iv input offset base hframe index :=
   normalSpec_lt (C := C) (hd := hd) (iv := iv) v input offset base hframe _ index
       (Nat.lt_succ_self _)
 
 /-- The step of the normal state keeps the correspondence. -/
-theorem lexNormal_wp (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem lexNormal_wp (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (s : WP.BS floor low) (coll : List Handed)
     (location : Span.Location)
     (held : List Lexeme) (hpre : StepPre C v hd iv input .idle location held start s.val) :

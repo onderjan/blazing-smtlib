@@ -123,15 +123,15 @@ end
 
 section
 
-variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-  [Parse P H m (Traits.Handler.Error H) R]
+variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+  [Parse P H m (Handler.Error H) R]
 
 /-- The list parser with a maximum between values, with the results so far. -/
 private abbrev between (p : P) (maximum : Nat) (results : Array R) : ClosedMaximumParser H P :=
   { maximum, outside := true, results, inner := p }
 
 /-- The first token of the cursor, taken by the tokens. -/
-private theorem first_of_takes {version : Token.Version} {Z : Type} [Cursor Z] {cursor next : Z}
+private theorem first_of_takes {version : Version} {Z : Type} [Cursor Z] {cursor next : Z}
     {token : Parser.Internal.Input} {tokens : List Parser.Internal.Input}
     (htakes : Takes version cursor (token :: tokens) next) :
     ∃ (h : Cursor.HasNext cursor) (raw : Cursor.Token Z) (after : Z)
@@ -144,7 +144,7 @@ private theorem first_of_takes {version : Token.Version} {Z : Type} [Cursor Z] {
   exact ⟨h, raw, after, consumed, firstToken_eq hnext h, htoken, htail⟩
 
 /-- A turn between values on a `)`: the list finishes with its results. -/
-private theorem turn_close {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
+private theorem turn_close {version : Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor next : Z} (results : Array R) (state : ParseState H)
     (htakes : Takes version cursor [.parenClose] next) (h : Cursor.HasNext cursor) (k) :
     turnThen ClosedMaximumParser.turn (between (H := H) p maximum results) state cursor h k =
@@ -156,7 +156,7 @@ private theorem turn_close {version : Token.Version} {p : P} {maximum : Nat} {Z 
   simp [outcomeAny, ClosedMaximumParser.new]
 
 /-- A turn between values at the maximum on a token that is not `)`: the list rejects it. -/
-private theorem turn_beyond {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
+private theorem turn_beyond {version : Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor next : Z} {token : Parser.Internal.Input} (results : Array R)
     (hsize : maximum ≤ results.size) (htoken : token ≠ .parenClose) (state : ParseState H)
     (htakes : Takes version cursor [token] next) (h : Cursor.HasNext cursor) (k) :
@@ -175,7 +175,7 @@ private theorem turn_beyond {version : Token.Version} {p : P} {maximum : Nat} {Z
 /-- What a turn between values below the maximum does on tokens of the inner parser, which do
 not start with `)`: it has the inner parser parse them. -/
 private theorem turn_inner {p : P} {maximum : Nat} {Z : Type} [Cursor Z] {cursor : Z}
-    {token : Parser.Internal.Input} {tokens : List Parser.Internal.Input} {version : Token.Version}
+    {token : Parser.Internal.Input} {tokens : List Parser.Internal.Input} {version : Version}
     {last : Z} (htakes : Takes version cursor (token :: tokens) last)
     (htok : token ≠ .parenClose) (results : Array R) (hsize : results.size < maximum)
     (state : ParseState H) (h : Cursor.HasNext cursor) (k) :
@@ -206,7 +206,7 @@ private theorem turn_inner {p : P} {maximum : Nat} {Z : Type} [Cursor Z] {cursor
 
 /-- A turn between values below the maximum on a value that does not start with `)`: the inner
 parser's program, then the continuation with the result added. -/
-private theorem turn_value {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
+private theorem turn_value {version : Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor last : Z} {tokens : List Parser.Internal.Input} {program : PM H R}
     (hp : Outcome.Finishes version p tokens program p)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
@@ -248,7 +248,7 @@ private theorem turn_value {version : Token.Version} {p : P} {maximum : Nat} {Z 
 
 /-- A turn between values below the maximum on tokens that the inner parser rejects, not
 starting with `)`: the list rejects them. -/
-private theorem turn_rejects {version : Token.Version} {p : P} {maximum : Nat} {Z : Type}
+private theorem turn_rejects {version : Version} {p : P} {maximum : Nat} {Z : Type}
     [Cursor Z]
     {cursor next : Z} {tokens : List Parser.Internal.Input} {program : PM H Unit}
     {kind : SyntaxErrorKind} (hp : Outcome.Rejects version p tokens program kind)
@@ -287,7 +287,7 @@ private theorem turn_rejects {version : Token.Version} {p : P} {maximum : Nat} {
 
 /-- A turn between values below the maximum on tokens on which the inner parser wants more, not
 starting with `)`: the list wants more, within a value. -/
-private theorem turn_waits {version : Token.Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
+private theorem turn_waits {version : Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor final : Z} {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
     {after : α → P} (hp : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose)
@@ -331,10 +331,10 @@ private theorem value_ne {value : List Parser.Internal.Input × PM H R}
   simp [h]
 
 /-- The values, then what the loop does at the cursor after them, with the results it has. -/
-private theorem maximum_loop {version : Token.Version} {p : P} {maximum target : Nat}
+private theorem maximum_loop {version : Version} {p : P} {maximum target : Nat}
     {Z : Type} [Cursor Z] {origin last : Z}
     (finale : Array R →
-      StateT H m (Outcome (Array R) (ClosedMaximumParser H P) Z (Traits.Handler.Error H)))
+      StateT H m (Outcome (Array R) (ClosedMaximumParser H P) Z (Handler.Error H)))
     (hfinale : ∀ (results : Array R) (state : ParseState H) (hc : Cursor.Consumed last origin),
       results.size = target →
       outcomeAny <$> Internal.repeatTurns ClosedMaximumParser.turn origin
@@ -380,10 +380,10 @@ private theorem maximum_loop {version : Token.Version} {p : P} {maximum target :
 
 /-- The parse of a list with a maximum that has a first value: the values, then what the loop
 does at the cursor after them. -/
-private theorem maximum_first {version : Token.Version} {p : P} {maximum target : Nat}
+private theorem maximum_first {version : Version} {p : P} {maximum target : Nat}
     {Z : Type} [Cursor Z] {cursor last : Z}
     (finale : Array R →
-      StateT H m (Outcome (Array R) (ClosedMaximumParser H P) Z (Traits.Handler.Error H)))
+      StateT H m (Outcome (Array R) (ClosedMaximumParser H P) Z (Handler.Error H)))
     (hfinale : ∀ (results : Array R) (state : ParseState H) (hc : Cursor.Consumed last cursor),
       results.size = target →
       outcomeAny <$> Internal.repeatTurns ClosedMaximumParser.turn cursor
@@ -433,7 +433,7 @@ private theorem between_parse_eq (p : P) (maximum : Nat) (results : Array R) {Z 
 
 /-! ## From a state between values -/
 
-private theorem results_finishes {version : Token.Version} {p : P} {maximum : Nat}
+private theorem results_finishes {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (results : Array R) (hlength : results.size + values.length ≤ maximum) :
     Outcome.Finishes version (between (H := H) p maximum results)
@@ -462,7 +462,7 @@ private theorem results_finishes {version : Token.Version} {p : P} {maximum : Na
     refine bind_congr fun e => ?_
     rcases e with error | found <;> rfl
 
-private theorem results_rejects_beyond {version : Token.Version} {p : P} {maximum : Nat}
+private theorem results_rejects_beyond {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (results : Array R) (hlength : results.size + values.length = maximum)
     {token : Parser.Internal.Input} (htoken : token ≠ .parenClose) :
@@ -492,7 +492,7 @@ private theorem results_rejects_beyond {version : Token.Version} {p : P} {maximu
     refine bind_congr fun e => ?_
     rcases e with error | found <;> simp [answer]
 
-private theorem results_rejects_inner {version : Token.Version} {p : P} {maximum : Nat}
+private theorem results_rejects_inner {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (results : Array R) (hlength : results.size + values.length < maximum)
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
@@ -525,7 +525,7 @@ private theorem results_rejects_inner {version : Token.Version} {p : P} {maximum
     refine bind_congr fun e => ?_
     rcases e with error | found <;> rfl
 
-private theorem results_waits_end {version : Token.Version} {p : P} {maximum : Nat}
+private theorem results_waits_end {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (results : Array R) (hlength : results.size + values.length ≤ maximum) :
     Outcome.Waits version (between (H := H) p maximum results) (valuesTokens values)
@@ -553,7 +553,7 @@ private theorem results_waits_end {version : Token.Version} {p : P} {maximum : N
 
 /-- The closed list parser with a maximum on at most the maximum of values and the `)` after
 them. -/
-theorem closedMaximum_parses {version : Token.Version} {p : P} {maximum : Nat}
+theorem closedMaximum_parses {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hlength : values.length ≤ maximum) :
     Outcome.Finishes version (ClosedMaximumParser.new (H := H) p maximum)
@@ -565,7 +565,7 @@ theorem closedMaximum_parses {version : Token.Version} {p : P} {maximum : Nat}
 
 /-- The closed list parser with a maximum on the maximum of values and a token after them that
 is not `)`: it rejects that token. -/
-theorem closedMaximum_rejects_beyond {version : Token.Version} {p : P} {maximum : Nat}
+theorem closedMaximum_rejects_beyond {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hlength : values.length = maximum) {token : Parser.Internal.Input}
     (htoken : token ≠ .parenClose) :
@@ -576,7 +576,7 @@ theorem closedMaximum_rejects_beyond {version : Token.Version} {p : P} {maximum 
 
 /-- The closed list parser with a maximum on fewer values than the maximum and then tokens that
 its inner parser rejects, not starting with `)`. -/
-theorem closedMaximum_rejects_inner {version : Token.Version} {p : P} {maximum : Nat}
+theorem closedMaximum_rejects_inner {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hlength : values.length < maximum) {tokens : List Parser.Internal.Input}
     {program : PM H Unit} {kind : SyntaxErrorKind}
@@ -593,10 +593,10 @@ more, as a parser that holds the maximum and the results so far. A maximum set o
 the values after them: it finishes on as many further values as the maximum leaves and the `)`,
 and rejects a token not `)` after values that reach the maximum.
 -/
-theorem closedMaximum_waits_between {version : Token.Version} {p : P}
+theorem closedMaximum_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
     ∃ after : Nat → List R → ClosedMaximumParser H P,
-      (∀ maximum found n, (after maximum found).setMaximum n = after n found) ∧
+      (∀ maximum found n, (after maximum found).setMaxElements n = after n found) ∧
       (∀ maximum, values.length ≤ maximum →
         Outcome.Waits version (ClosedMaximumParser.new (H := H) p maximum) (valuesTokens values)
           (values.mapM fun value => value.2) (after maximum)) ∧
@@ -625,7 +625,7 @@ omit [Monad m] [LawfulMonad m] in
 /-- Setting the maximum of a closed list parser with a maximum before its first value: the
 parser with the new maximum. -/
 theorem closedMaximum_setMaximum_new (p : P) (maximum n : Nat) :
-    (ClosedMaximumParser.new (H := H) p maximum).setMaximum n =
+    (ClosedMaximumParser.new (H := H) p maximum).setMaxElements n =
       ClosedMaximumParser.new (H := H) p n := by rfl
 
 omit [Monad m] [LawfulMonad m] in
@@ -640,7 +640,7 @@ private abbrev within (maximum : Nat) (results : Array R) (q : P) :
     ClosedMaximumParser H P :=
   { maximum, outside := false, results, inner := q }
 
-private theorem results_waits_inner {version : Token.Version} {p : P} {maximum : Nat}
+private theorem results_waits_inner {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (results : Array R) (hlength : results.size + values.length < maximum)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P}
@@ -714,7 +714,7 @@ private theorem turn_resume {q : P} {maximum : Nat} {Z : Type} [Cursor Z] {curso
 
 /-- A turn within a value that the inner parser finishes, back as `p`: the inner parser's
 program, then the continuation with the result added. -/
-private theorem turn_resume_value {version : Token.Version} {p q : P} {maximum : Nat} {Z : Type}
+private theorem turn_resume_value {version : Version} {p q : P} {maximum : Nat} {Z : Type}
     [Cursor Z] {cursor last : Z} {tokens : List Parser.Internal.Input} {program : PM H R}
     (hq : Outcome.Finishes version q tokens program p) (hne : tokens ≠ [])
     (rest : List Parser.Internal.Input) (htakes : Takes version cursor tokens last)
@@ -756,7 +756,7 @@ private theorem turn_resume_value {version : Token.Version} {p q : P} {maximum :
 
 /-- Within a value that the inner parser finishes, then further values and the `)`: the list
 finishes with them. -/
-private theorem results_resume_finishes {version : Token.Version} {p q : P} {maximum : Nat}
+private theorem results_resume_finishes {version : Version} {p q : P} {maximum : Nat}
     {tokens : List Parser.Internal.Input} {program : PM H R}
     (hq : Outcome.Finishes version q tokens program p) (hne : tokens ≠ [])
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
@@ -808,13 +808,13 @@ maximum, the results so far and the inner parser within its value. A maximum set
 to the values after that value; it finishes once the inner parser finishes the value and as many
 further values as the maximum leaves and the `)` follow.
 -/
-theorem closedMaximum_waits_inner {version : Token.Version} {p : P}
+theorem closedMaximum_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
     ∃ after' : Nat → List R × α → ClosedMaximumParser H P,
-      (∀ maximum x n, (after' maximum x).setMaximum n = after' n x) ∧
+      (∀ maximum x n, (after' maximum x).setMaxElements n = after' n x) ∧
       (∀ maximum, values.length < maximum →
         Outcome.Waits version (ClosedMaximumParser.new (H := H) p maximum)
           (valuesTokens values ++ tokens)
@@ -842,8 +842,8 @@ theorem closedMaximum_waits_inner {version : Token.Version} {p : P}
 /-! ## The list with its own `(` -/
 
 private def parenF {Z : Type} :
-    Outcome (Array R) (ClosedMaximumParser H P) Z (Traits.Handler.Error H) →
-    Outcome (Array R) (ParenMaximumParser H P) Z (Traits.Handler.Error H)
+    Outcome (Array R) (ClosedMaximumParser H P) Z (Handler.Error H) →
+    Outcome (Array R) (ParenMaximumParser H P) Z (Handler.Error H)
   | .finished results q next => .finished results ⟨false, q⟩ next
   | .waits q => .waits ⟨true, q⟩
   | .rejected kind next => .rejected kind next
@@ -880,7 +880,7 @@ private theorem parenMaximum_open (q : ClosedMaximumParser H P) {Z : Type} [Curs
       obtain ⟨a, p', s, ⟨z, hz⟩⟩ := x
       rcases a with (_ | _) | (_ | _) <;> simp [outcome, parenF]
 
-private theorem paren_finishes {version : Token.Version} {q b : ClosedMaximumParser H P}
+private theorem paren_finishes {version : Version} {q b : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {program : PM H (Array R)}
     (h : Outcome.Finishes version q tokens program b) (hne : tokens ≠ []) :
     Outcome.Finishes version (⟨false, q⟩ : ParenMaximumParser H P) (.parenOpen :: tokens)
@@ -893,7 +893,7 @@ private theorem paren_finishes {version : Token.Version} {q b : ClosedMaximumPar
   funext e
   rcases e with (_ | _ | _) | _ <;> rfl
 
-private theorem paren_rejects {version : Token.Version} {q : ClosedMaximumParser H P}
+private theorem paren_rejects {version : Version} {q : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version q tokens program kind) (hne : tokens ≠ []) :
     Outcome.Rejects version (⟨false, q⟩ : ParenMaximumParser H P) (.parenOpen :: tokens)
@@ -908,7 +908,7 @@ private theorem paren_rejects {version : Token.Version} {q : ClosedMaximumParser
 
 /-- The list parser with a maximum and its own `(` on the `(`, at most the maximum of values
 and the `)`. -/
-theorem parenMaximum_parses {version : Token.Version} {p : P} {maximum : Nat}
+theorem parenMaximum_parses {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hlength : values.length ≤ maximum) :
     Outcome.Finishes version (ParenMaximumParser.new (H := H) p maximum)
@@ -918,7 +918,7 @@ theorem parenMaximum_parses {version : Token.Version} {p : P} {maximum : Nat}
   paren_finishes (closedMaximum_parses hvalues hlength) (by simp)
 
 /-- The list parser with a maximum and its own `(` on a first token that is not `(`. -/
-theorem parenMaximum_rejects_open {version : Token.Version} {p : P} {maximum : Nat}
+theorem parenMaximum_rejects_open {version : Version} {p : P} {maximum : Nat}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
     Outcome.Rejects version (ParenMaximumParser.new (H := H) p maximum) [token]
       (pure () : PM H Unit) (.expected #[.token .parenOpen]) := by
@@ -941,7 +941,7 @@ theorem parenMaximum_rejects_open {version : Token.Version} {p : P} {maximum : N
 
 /-- The list parser with a maximum and its own `(` on the `(`, the maximum of values and a token
 after them that is not `)`: it rejects that token. -/
-theorem parenMaximum_rejects_beyond {version : Token.Version} {p : P} {maximum : Nat}
+theorem parenMaximum_rejects_beyond {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hlength : values.length = maximum) {token : Parser.Internal.Input}
     (htoken : token ≠ .parenClose) :
@@ -952,7 +952,7 @@ theorem parenMaximum_rejects_beyond {version : Token.Version} {p : P} {maximum :
 
 /-- The list parser with a maximum and its own `(` on the `(`, fewer values than the maximum and
 then tokens that its inner parser rejects, not starting with `)`. -/
-theorem parenMaximum_rejects_inner {version : Token.Version} {p : P} {maximum : Nat}
+theorem parenMaximum_rejects_inner {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hlength : values.length < maximum) {tokens : List Parser.Internal.Input}
     {program : PM H Unit} {kind : SyntaxErrorKind}
@@ -969,7 +969,7 @@ omit [Monad m] [LawfulMonad m] in
 /-- Setting the maximum of a list parser with a maximum and its own `(` before its `(`: the
 parser with the new maximum. -/
 theorem parenMaximum_setMaximum_new (p : P) (maximum n : Nat) :
-    (ParenMaximumParser.new (H := H) p maximum).setMaximum n =
+    (ParenMaximumParser.new (H := H) p maximum).setMaxElements n =
       ParenMaximumParser.new (H := H) p n := by rfl
 
 omit [Monad m] [LawfulMonad m] in
@@ -992,7 +992,7 @@ private theorem parenMaximum_opened (q : ClosedMaximumParser H P) {Z : Type} [Cu
   obtain ⟨a, p', s, ⟨z, hz⟩⟩ := x
   rcases a with (_ | _) | (_ | _) <;> simp [outcome, parenF]
 
-private theorem opened_finishes {version : Token.Version} {q b : ClosedMaximumParser H P}
+private theorem opened_finishes {version : Version} {q b : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {program : PM H (Array R)}
     (h : Outcome.Finishes version q tokens program b) :
     Outcome.Finishes version (⟨true, q⟩ : ParenMaximumParser H P) tokens program ⟨false, b⟩ := by
@@ -1003,7 +1003,7 @@ private theorem opened_finishes {version : Token.Version} {q b : ClosedMaximumPa
   funext e
   rcases e with (_ | _ | _) | _ <;> rfl
 
-private theorem opened_rejects {version : Token.Version} {q : ClosedMaximumParser H P}
+private theorem opened_rejects {version : Version} {q : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version q tokens program kind) :
     Outcome.Rejects version (⟨true, q⟩ : ParenMaximumParser H P) tokens program kind := by
@@ -1014,7 +1014,7 @@ private theorem opened_rejects {version : Token.Version} {q : ClosedMaximumParse
   funext e
   rcases e with (_ | _ | _) | _ <;> rfl
 
-private theorem paren_waits {version : Token.Version} {q : ClosedMaximumParser H P}
+private theorem paren_waits {version : Version} {q : ClosedMaximumParser H P}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
     {after : α → ClosedMaximumParser H P}
     (h : Outcome.Waits version q tokens program after) (hne : tokens ≠ []) :
@@ -1029,7 +1029,7 @@ private theorem paren_waits {version : Token.Version} {q : ClosedMaximumParser H
   rcases e with (_ | _ | _) | _ <;> rfl
 
 /-- The list parser with a maximum and its own `(` on no token: it wants more, as it is. -/
-theorem parenMaximum_waits_open {version : Token.Version} {p : P} {maximum : Nat} :
+theorem parenMaximum_waits_open {version : Version} {p : P} {maximum : Nat} :
     Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum) [] (pure () : PM H Unit)
       fun _ => ParenMaximumParser.new p maximum := by
   refine ⟨handlerOnly_pure _, fun state cursor last htakes hnone => ?_⟩
@@ -1046,9 +1046,9 @@ The list parser with a maximum and its own `(` on its `(` and no more: it wants 
 that holds the maximum, which a maximum set on it replaces. It finishes on at most the maximum
 of values and the `)`, and rejects a token not `)` after the maximum of values.
 -/
-theorem parenMaximum_waits_after_open {version : Token.Version} {p : P} :
+theorem parenMaximum_waits_after_open {version : Version} {p : P} :
     ∃ after : Nat → ParenMaximumParser H P,
-      (∀ maximum n, (after maximum).setMaximum n = after n) ∧
+      (∀ maximum n, (after maximum).setMaxElements n = after n) ∧
       (∀ maximum, Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum) [.parenOpen]
         (pure () : PM H Unit) fun _ => after maximum) ∧
       (∀ maximum {values : List (List Parser.Internal.Input × PM H R)},
@@ -1090,11 +1090,11 @@ The list parser with a maximum and its own `(` on its `(` and at most the maximu
 least one, and no more: it wants more, as a parser that holds the maximum and the results so
 far. A maximum set on it applies to the values after them.
 -/
-theorem parenMaximum_waits_between {version : Token.Version} {p : P}
+theorem parenMaximum_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hne : values ≠ []) :
     ∃ after : Nat → List R → ParenMaximumParser H P,
-      (∀ maximum found n, (after maximum found).setMaximum n = after n found) ∧
+      (∀ maximum found n, (after maximum found).setMaxElements n = after n found) ∧
       (∀ maximum, values.length ≤ maximum →
         Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum)
           (.parenOpen :: valuesTokens values) (values.mapM fun value => value.2)
@@ -1132,13 +1132,13 @@ that holds the maximum, the results so far and the inner parser within its value
 on it applies to the values after that value; it finishes once the inner parser finishes the
 value and as many further values as the maximum leaves and the `)` follow.
 -/
-theorem parenMaximum_waits_inner {version : Token.Version} {p : P}
+theorem parenMaximum_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
     ∃ after' : Nat → List R × α → ParenMaximumParser H P,
-      (∀ maximum x n, (after' maximum x).setMaximum n = after' n x) ∧
+      (∀ maximum x n, (after' maximum x).setMaxElements n = after' n x) ∧
       (∀ maximum, values.length < maximum →
         Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum)
           (.parenOpen :: (valuesTokens values ++ tokens))

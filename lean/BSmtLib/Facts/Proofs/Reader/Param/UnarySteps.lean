@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Reader.Param.Unary
 import all BSmtLib.Lexer
 import all BSmtLib.Token
+import all BSmtLib.Lexer.Cursor
+import all BSmtLib.Version
 
 @[expose] public section
 
@@ -15,10 +17,12 @@ the cursor the consumer gave back into the lexer, or throws the consumer's error
 empty. Every other function is taken apart by `usim`.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.UnarySteps
 
 open BSmtLib.Lexer
-open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested resetConsumed remaining relexRequested)
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Lexer.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Unary
@@ -26,7 +30,7 @@ open BSmtLib.Facts.Proofs.Reader.Param.Unary
 section
 
 variable {F σ R E : Type} [Token.Consume F R (Option E)]
-  [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E]
+  [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E]
   {floor : Option Nat} {low : Nat}
 
 theorem getCore_usim : UL (Internal.getCore : FM F σ floor low LexerCore) := by
@@ -118,10 +122,10 @@ end
 section
 
 variable {F σ R E : Type} [Token.Consume F R (Option E)]
-  [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E]
+  [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E]
   {floor : Option Nat} {low : Nat}
 
-theorem bne_self_version (v : Token.Version) : (v != v) = false := by
+theorem bne_self_version (v : Version) : (v != v) = false := by
   cases v <;> rfl
 
 /-- `Flagged consumer` keeps the record of what went wrong, in its fields. -/
@@ -148,22 +152,22 @@ instance (consumer : BSmtLibSpec.Lexer.Consumer) :
       rfl
 
 omit [Watched F σ R E] in
-theorem frun_callConsumer {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext)
+theorem frun_callConsumer {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext)
     (s fl l) :
     frun (Internal.callConsumer cursor h : FM F σ floor low _) s fl l =
       let r := ((Token.ConsumeFrom.consume cursor h : StateT F (StateM σ) _).run fl).run l
       (((.ok r.1.1, s), r.1.2), r.2) := (rfl)
 
-omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+omit [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_getCore (s : {c : LexerCore // c.Bound floor low}) (fl : F) (l) :
     frun (Internal.getCore : FM F σ floor low LexerCore) s fl l = (((.ok s.val, s), fl), l) := (rfl)
 
-omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+omit [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_pure {α : Type} (a : α) (s : {c : LexerCore // c.Bound floor low})
     (fl : F) (l) :
     frun (Pure.pure a : FM F σ floor low α) s fl l = (((.ok a, s), fl), l) := rfl
 
-omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+omit [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_modifyCore (f : LexerCore → LexerCore) (h) (s : {c : LexerCore // c.Bound floor low})
     (fl : F) (l) :
     frun (Internal.modifyCore f h : FM F σ floor low Unit) s fl l =
@@ -173,7 +177,7 @@ theorem frun_modifyCore (f : LexerCore → LexerCore) (h) (s : {c : LexerCore //
 the consumer left, the lexer's version as it was; while nothing went wrong, the consumer's version
 is that cursor's; once the consumer answered an error, the stop is that error. -/
 theorem flushCursor_flag {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (hfloor) (s : {c : LexerCore // c.Bound floor low})
+    ∀ (n : Nat) (cursor : LexerCursor b) (hfloor) (s : {c : LexerCore // c.Bound floor low})
       (fl : F) (l), remaining cursor < n → Watched.errored fl = false →
       cursor.version = Watched.version fl →
       ∃ stop cur, (frun (Internal.flushCursor cursor hfloor) s fl l).1.1.1 = .ok (stop, cur) ∧
@@ -241,7 +245,7 @@ theorem flushCursor_flag {b : Token.BatchTag} :
                     (resetConsumed next) _ s
                   fl' l'
                   (by
-                    rw [Token.BatchCursor.remaining_resetConsumed]
+                    rw [Lexer.Cursor.LexerCursor.remaining_resetConsumed]
                     exact Nat.lt_of_lt_of_le consumed.remaining_lt (Nat.le_of_lt_succ hn))
                   hE' hV.symm
                 exact ⟨stop, cur, h₁, h₂, h₃, h₄, h₅.trans hS⟩
@@ -256,12 +260,12 @@ theorem flushCursor_flag {b : Token.BatchTag} :
       exact ⟨_, _, rfl, rfl, fun _ => hv.symm, fun h' => (by
         have h'' : true = false := h'.symm.trans he; cases h''), rfl⟩
 
-omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+omit [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E] in
 theorem frun_throw {α : Type} (i : Interrupted R (Option E) floor)
     (s : {c : LexerCore // c.Bound floor low}) (fl : F) (l) :
     frun (MonadExcept.throw i : FM F σ floor low α) s fl l = (((.error i, s), fl), l) := rfl
 
-omit [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E] in
+omit [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E] in
 theorem storeSpent_run (spent : Token.Internal.TokenBatch)
     (s : {c : LexerCore // c.Bound floor low})
     (fl : F) (l) :
@@ -279,9 +283,9 @@ theorem handOver_usim (batch bytesAfter hfloor) :
   dsimp only
   rw [frun_bind]
   obtain ⟨stop, cur, hres, hs, hok, herr, hsp⟩ :=
-    flushCursor_flag _ (Token.BatchCursor.Internal.new s.val.version batch) _ s fl l
+    flushCursor_flag _ (Lexer.Cursor.LexerCursor.Internal.new s.val.version batch) _ s fl l
         (Nat.lt_succ_self _) he hv
-  generalize frun (Internal.flushCursor (Token.BatchCursor.Internal.new s.val.version batch)
+  generalize frun (Internal.flushCursor (Lexer.Cursor.LexerCursor.Internal.new s.val.version batch)
       _) s fl l = r
     at hres hs hok herr hsp
   obtain ⟨⟨⟨res, s'⟩, fl'⟩, l'⟩ := r

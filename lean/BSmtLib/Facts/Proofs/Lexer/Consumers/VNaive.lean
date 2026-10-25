@@ -4,6 +4,8 @@ public import BSmtLib.Facts.Proofs.Lexer.Consumers.VReset
 public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -102,7 +104,7 @@ theorem runs_collector
   | discardsToEnd _ _ hdi => simp [BSmtLibSpec.Lexer.collector] at hdi
   | discardsFailsAtEnd _ _ hdi => simp [BSmtLibSpec.Lexer.collector] at hdi
 
-theorem handedOf_noEof {version : Token.Version} {ls : List Lexeme} (h : NoEof ls) :
+theorem handedOf_noEof {version : Version} {ls : List Lexeme} (h : NoEof ls) :
     ∀ t ∈ handedOf version ls, t.type ≠ .endOfFile := by
   intro t ht
   obtain ⟨l, hl, hlt⟩ := List.mem_filterMap.mp ht
@@ -113,7 +115,7 @@ theorem handedOf_noEof {version : Token.Version} {ls : List Lexeme} (h : NoEof l
   cases this
 
 /-- The tokens of a run, as the collector takes them. -/
-theorem streamFrom_collectorReady (version : Token.Version) (ended : Bool)
+theorem streamFrom_collectorReady (version : Version) (ended : Bool)
     (location : Span.Location)
     (bytes : List UInt8) :
     CollectorReady (handedOf version (streamFrom version false ended location bytes).1)

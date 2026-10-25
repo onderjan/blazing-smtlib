@@ -4,9 +4,9 @@ public import BSmtLib.Facts.Proofs.Parser.Quiet
 public import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
 public import BSmtLib.Facts.Proofs.Parser.Canon.Attr
 import all BSmtLib.Parser
-import all BSmtLib.Plain
-import all BSmtLib.Multiple
-import all BSmtLib.Multiple.MatchCases
+import all BSmtLib.Lexicon.Value
+import all BSmtLib.Grammar.Multiple
+import all BSmtLib.Grammar.Multiple.MatchCases
 
 @[expose] public section
 
@@ -27,8 +27,9 @@ built, by the closure lemmas below.
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Basic
 
-open BSmtLib.Parser BSmtLib.Nodes
-open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+open BSmtLib.Grammar (Multiple)
+open BSmtLib.Parser BSmtLib.Grammar.Nodes
+open BSmtLib.Lexicon.Value (Symbol Numeral Decimal HexDigits BinDigits
   StringContent Keyword)
 open BSmtLib.Facts.Proofs.Parser.Quiet (RPM)
 open BSmtLibSpec.Parser.Properties (Event)
@@ -54,13 +55,13 @@ class CanonId (α : Type) [Canon α] : Prop where
 instance : Canon Nat := ⟨id⟩
 instance : Canon Bool := ⟨id⟩
 instance : Canon Unit := ⟨id⟩
-instance : Canon Token.Version := ⟨id⟩
+instance : Canon Version := ⟨id⟩
 instance : Canon Token.Reserved := ⟨id⟩
 instance : Canon QuantifierKind := ⟨id⟩
 instance : CanonId Nat := ⟨fun _ => rfl⟩
 instance : CanonId Bool := ⟨fun _ => rfl⟩
 instance : CanonId Unit := ⟨fun _ => rfl⟩
-instance : CanonId Token.Version := ⟨fun _ => rfl⟩
+instance : CanonId Version := ⟨fun _ => rfl⟩
 
 instance {α : Type} [Canon α] : Canon (Array α) := ⟨Array.map canon⟩
 instance {α : Type} [Canon α] : Canon (List α) := ⟨List.map canon⟩
@@ -77,7 +78,7 @@ instance {α β : Type} [Canon α] [Canon β] [CanonId α] [CanonId β] : CanonI
   ⟨fun a => by show (canon a.1, canon a.2) = a; simp [CanonId.canon_id]⟩
 instance {α : Type} [Canon α] : Canon (Multiple α) := ⟨fun m => .new (canon m.asSlice)⟩
 instance {α : Type} [Canon α] [CanonId α] : CanonId (Multiple α) :=
-  ⟨fun m => by show Multiple.new (canon m.asSlice) = m; rw [CanonId.canon_id]; rfl⟩
+  ⟨fun m => by show Grammar.Multiple.new (canon m.asSlice) = m; rw [CanonId.canon_id]; rfl⟩
 
 def canonSymbol (v : Symbol) : Symbol :=
   Symbol.Internal.newUnchecked v.isQuoted (canonSlice v.asSlice)
@@ -117,14 +118,14 @@ instance : Canon Keyword :=
 @[canon_simps] theorem asSlice_canon_keywordView (v : Keyword) :
     (canon v).asSlice = canonSlice v.asSlice := (rfl)
 
-instance {V : Type} [Canon V] : Canon (Multiple.Named V) :=
-  ⟨fun v => Multiple.Named.Internal.new (canon v.toArray)⟩
+instance {V : Type} [Canon V] : Canon (Grammar.Multiple.NamedValues V) :=
+  ⟨fun v => Grammar.Multiple.NamedValues.Internal.new (canon v.toArray)⟩
 
-attribute [canon_simps] Multiple.asSlice_new Multiple.Named.Internal.toArray_new
-  Multiple.Symbols.Internal.toArray_new Multiple.SortArities.Internal.toArray_new
-  Multiple.Constructors.Internal.toArray_new Multiple.MatchCases.Internal.toArray_new
-  Multiple.FunctionSignatures.Internal.toArray_new Multiple.FunctionSignature.Internal.name_new
-  Multiple.FunctionSignature.Internal.params_new Multiple.FunctionSignature.Internal.resultSort_new
+attribute [canon_simps] Grammar.Multiple.asSlice_new Grammar.Multiple.NamedValues.Internal.toArray_new
+  Grammar.Multiple.Symbols.Internal.toArray_new Grammar.Multiple.SortArities.Internal.toArray_new
+  Grammar.Multiple.Constructors.Internal.toArray_new Grammar.Multiple.MatchCases.Internal.toArray_new
+  Grammar.Multiple.FunctionSignatures.Internal.toArray_new Grammar.Multiple.FunctionSignature.Internal.name_new
+  Grammar.Multiple.FunctionSignature.Internal.params_new Grammar.Multiple.FunctionSignature.Internal.resultSort_new
 
 /-! ## Nodes and tokens -/
 
@@ -162,33 +163,33 @@ def canonPattern : Pattern → Pattern
 
 instance : Canon Pattern := ⟨canonPattern⟩
 
-instance : Canon Multiple.Symbols :=
-  ⟨fun v => Multiple.Symbols.Internal.new (canon v.toArray)⟩
-instance : Canon Multiple.SortArities :=
-  ⟨fun v => Multiple.SortArities.Internal.new (canon v.toArray)⟩
-instance {S : Type} [Canon S] : Canon (Multiple.Constructors S) :=
-  ⟨fun v => Multiple.Constructors.Internal.new (canon v.toArray)⟩
-instance {T : Type} [Canon T] : Canon (Multiple.MatchCases T) :=
-  ⟨fun v => Multiple.MatchCases.Internal.new (canon v.toArray)⟩
+instance : Canon Grammar.Multiple.Symbols :=
+  ⟨fun v => Grammar.Multiple.Symbols.Internal.new (canon v.toArray)⟩
+instance : Canon Grammar.Multiple.SortArities :=
+  ⟨fun v => Grammar.Multiple.SortArities.Internal.new (canon v.toArray)⟩
+instance {S : Type} [Canon S] : Canon (Grammar.Multiple.Constructors S) :=
+  ⟨fun v => Grammar.Multiple.Constructors.Internal.new (canon v.toArray)⟩
+instance {T : Type} [Canon T] : Canon (Grammar.Multiple.MatchCases T) :=
+  ⟨fun v => Grammar.Multiple.MatchCases.Internal.new (canon v.toArray)⟩
 
-def canonTermNode {S T : Type} [Canon S] [Canon T] : Nodes.Term S T → Nodes.Term S T
+def canonTermNode {S T : Type} [Canon S] [Canon T] : Grammar.Nodes.Term S T → Grammar.Nodes.Term S T
   | .specialConstant c => .specialConstant (canon c)
   | .qualifiedIdent i s => .qualifiedIdent (canon i) (canon s)
   | .application i s args h => .application (canon i) (canon s) (canon args) (by
-    rw [show canon args = Multiple.new (args.asSlice.map canon) from rfl, Multiple.len_new,
-      Array.size_map, Multiple.size_asSlice]
+    rw [show canon args = Grammar.Multiple.new (args.asSlice.map canon) from rfl, Grammar.Multiple.len_new,
+      Array.size_map, Grammar.Multiple.size_asSlice]
     exact h)
 
-instance {S T : Type} [Canon S] [Canon T] : Canon (Nodes.Term S T) := ⟨canonTermNode⟩
+instance {S T : Type} [Canon S] [Canon T] : Canon (Grammar.Nodes.Term S T) := ⟨canonTermNode⟩
 
-def canonSExprNode {X : Type} [Canon X] : Nodes.SExpr X → Nodes.SExpr X
+def canonSExprNode {X : Type} [Canon X] : Grammar.Nodes.SExpr X → Grammar.Nodes.SExpr X
   | .specialConstant c => .specialConstant (canon c)
   | .symbol s => .symbol (canon s)
   | .reserved w => .reserved w
   | .keyword k => .keyword (canon k)
   | .sExprs items => .sExprs (canon items)
 
-instance {X : Type} [Canon X] : Canon (Nodes.SExpr X) := ⟨canonSExprNode⟩
+instance {X : Type} [Canon X] : Canon (Grammar.Nodes.SExpr X) := ⟨canonSExprNode⟩
 
 def canonAttributeValueNode {X : Type} [Canon X] : AttributeValue X → AttributeValue X
   | .specialConstant c => .specialConstant (canon c)

@@ -4,6 +4,8 @@ public import BSmtLib.Facts.Proofs.Reader.ParamW.Calls
 public import BSmtLib.Facts.Proofs.PublicApi.Collector
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -17,10 +19,13 @@ consumer once; the two handovers end alike, with the same lexer state, the colle
 down the entries the other takes (`consumersW`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.PublicApi.CollectorW
 
 open BSmtLib.Lexer BSmtLib.Lexer.Error
-open BSmtLib.Token.BatchCursor.Internal (discardRequested resetConsumed remaining relexRequested
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested resetConsumed remaining
+    relexRequested
     EndsAfter consumedSpanOf Follows foldConsumedCategories consumedEndOf)
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.PublicApi.Adapters
@@ -35,12 +40,12 @@ open BSmtLibSpec.Lexer (Handed)
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] {floor : Option Nat} {low : Nat}
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] {floor : Option Nat} {low : Nat}
 
 /-- What `Rust.flushCursor` does with the consumer's answer and the cursor it gives back. -/
-def afterCallW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+def afterCallW {b : Token.BatchTag} (cursor : LexerCursor b)
     (hfloor : ∀ p, floor = some p → EndsAfter cursor p)
-    (x : Except E (ControlFlow R) × {c : Token.BatchCursor b // c.Consumed cursor}) :
+    (x : Except E (ControlFlow R) × {c : LexerCursor b // c.Consumed cursor}) :
     Lexer.Internal.WRustPort.LexM H m R E floor low Unit :=
   match x with
   | (result, ⟨cursor', consumed⟩) => do
@@ -69,7 +74,8 @@ def afterCallW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
                 stopAfter := fun p hp _ _ => after p hp }
           else
             Rust.flushCursor (resetConsumed cursor') fun p hp =>
-              Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp))
+              Lexer.Cursor.LexerCursor.endsAfter_resetConsumed
+                (consumed.follows.endsAfter (hfloor p hp))
         | .break result =>
           if h : cursor'.HasNext then
             Rust.stopWith cursor' (trailingAt (cursor'.span (cursor'.peek h)))
@@ -86,7 +92,7 @@ def afterCallW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
           location := consumedEnd
           stopAfter := fun _ _ _ h => nomatch h }
 
-theorem flushCursor_eqW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+theorem flushCursor_eqW {b : Token.BatchTag} (cursor : LexerCursor b)
     (hfloor : ∀ p, floor = some p → EndsAfter cursor p) :
     Rust.flushCursor (H := H) (m := m) (R := R) (E := E) (low := low) cursor hfloor =
       (if h : cursor.HasNext then do
@@ -105,9 +111,9 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] {floor : Option Nat} {low : Nat}
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] {floor : Option Nat} {low : Nat}
 
-theorem callConsumer_runW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+theorem callConsumer_runW {b : Token.BatchTag} (cursor : LexerCursor b)
     (h : cursor.HasNext) (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low})
     (handler : H) :
     ((callConsumer (m := m) (R := R) (E := E) (floor := floor) (low := low) cursor
@@ -119,7 +125,7 @@ theorem callConsumer_runW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
 end
 
 theorem collector_flush_stepW {g : Token.BatchTag} {floor : Option Nat} {low : Nat}
-    (c : Token.BatchCursor g)
+    (c : LexerCursor g)
     (hf : ∀ p, floor = some p → EndsAfter c p) (h : c.HasNext)
     (s : {core : Lexer.Internal.WRustPort.LexerCore // core.Bound floor low})
     (hhold : s.val.holding = false) (a : Collector) (entries : List Entry) :
@@ -137,7 +143,7 @@ theorem collector_flush_stepW {g : Token.BatchTag} {floor : Option Nat} {low : N
   rfl
 
 theorem answering_flush_stepW {g : Token.BatchTag} {floor : Option Nat} {low : Nat}
-    (c : Token.BatchCursor g)
+    (c : LexerCursor g)
     (hf : ∀ p, floor = some p → EndsAfter c p) (h : c.HasNext)
     (s : {core : Lexer.Internal.WRustPort.LexerCore // core.Bound floor low})
     (hhold : s.val.holding = false)
@@ -160,10 +166,10 @@ theorem answering_flush_stepW {g : Token.BatchTag} {floor : Option Nat} {low : N
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] {floor : Option Nat} {low : Nat}
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] {floor : Option Nat} {low : Nat}
 
 /-- The parentheses open after the tokens the cursor's consumer has taken, from `depth`. -/
-def depthAfterW {b : Token.BatchTag} (cursor : Token.BatchCursor b) (depth : Nat) : Nat :=
+def depthAfterW {b : Token.BatchTag} (cursor : LexerCursor b) (depth : Nat) : Nat :=
   foldConsumedCategories cursor depth fun depth category =>
     match category with
     | .parenOpen => depth + 1
@@ -172,7 +178,7 @@ def depthAfterW {b : Token.BatchTag} (cursor : Token.BatchCursor b) (depth : Nat
 
 /-- The lexer state after a stop of the handover: a recovering lexer counts the parentheses
 the consumer has taken. -/
-def stopState {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+def stopState {b : Token.BatchTag} (cursor : LexerCursor b)
     (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low}) :
     {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low} :=
   if s.val.recovers then
@@ -181,8 +187,8 @@ def stopState {b : Token.BatchTag} (cursor : Token.BatchCursor b)
         lexedDepth := depthAfterW cursor s.val.consumedDepth }, s.property⟩
   else s
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
-theorem stopWith_runW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
+theorem stopWith_runW {b : Token.BatchTag} (cursor : LexerCursor b)
     (stop : Interrupted R E floor)
     (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low}) (a : H) :
     ((Rust.stopWith (m := m) (low := low) cursor stop).run.run s).run a =
@@ -198,7 +204,7 @@ theorem stopWith_runW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
     simp [getCore, ExceptT.run_bind, getThe, MonadStateOf.get, hg, StateT.run_bind, hr',
       throw, throwThe, MonadExceptOf.throw]
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem modifyCore_bind_runW {α : Type} (f : Lexer.Internal.WRustPort.LexerCore →
     Lexer.Internal.WRustPort.LexerCore) (hf)
     (k : Unit → Lexer.Internal.WRustPort.LexM H m R E floor low α)
@@ -213,7 +219,7 @@ def emptyState (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low
     {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low} :=
   if s.val.recovers then ⟨{ s.val with consumedDepth := s.val.lexedDepth }, s.property⟩ else s
 
-theorem flushCursor_empty_runW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+theorem flushCursor_empty_runW {b : Token.BatchTag} (cursor : LexerCursor b)
     (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (h : ¬ cursor.HasNext)
     (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low}) (a : H) :
     ((Rust.flushCursor (m := m) (R := R) (E := E) (low := low) cursor hfloor).run.run s).run a =
@@ -231,22 +237,22 @@ theorem flushCursor_empty_runW {b : Token.BatchTag} (cursor : Token.BatchCursor 
 
 omit [LawfulMonad m] in
 /-- After the consumer continues without a request, the handover goes on with the rest. -/
-theorem afterCallW_continue {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (next : Token.BatchCursor b)
+theorem afterCallW_continue {b : Token.BatchTag} (cursor : LexerCursor b)
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (next : LexerCursor b)
     (consumed : next.Consumed cursor) (hd : discardRequested next = false)
     (hr : relexRequested next = false) :
     afterCallW (H := H) (m := m) (R := R) (E := E) (low := low) cursor hfloor
         (.ok .continue, ⟨next, consumed⟩) =
       (modifyCore fun c => { c with version := next.version }) >>= fun _ =>
         Rust.flushCursor (resetConsumed next) fun p hp =>
-          Token.BatchCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp)) := by
+          Lexer.Cursor.LexerCursor.endsAfter_resetConsumed (consumed.follows.endsAfter (hfloor p hp)) := by
   simp only [afterCallW, hd, hr, Bool.false_eq_true, ↓reduceIte]
 
 omit [LawfulMonad m] in
 /-- After the consumer breaks without a request, the handover stops: at trailing input if the
 consumer left tokens, else with the result. -/
-theorem afterCallW_break {b : Token.BatchTag} (cursor : Token.BatchCursor b)
-    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (next : Token.BatchCursor b)
+theorem afterCallW_break {b : Token.BatchTag} (cursor : LexerCursor b)
+    (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (next : LexerCursor b)
     (consumed : next.Consumed cursor) (hd : discardRequested next = false) (result : R) :
     afterCallW (H := H) (m := m) (R := R) (E := E) (low := low) cursor hfloor
         (.ok (.break result), ⟨next, consumed⟩) =
@@ -266,10 +272,10 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] {floor : Option Nat} {low : Nat}
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] {floor : Option Nat} {low : Nat}
 
 omit [LawfulMonad m] in
-theorem flushCursor_congrW {b : Token.BatchTag} {x y : Token.BatchCursor b} (hxy : x = y)
+theorem flushCursor_congrW {b : Token.BatchTag} {x y : LexerCursor b} (hxy : x = y)
     (hx : ∀ p, floor = some p → EndsAfter x p) (hy : ∀ p, floor = some p → EndsAfter y p) :
     Rust.flushCursor (H := H) (m := m) (R := R) (E := E) (low := low) x hx =
       Rust.flushCursor y hy := by
@@ -278,10 +284,10 @@ theorem flushCursor_congrW {b : Token.BatchTag} {x y : Token.BatchCursor b} (hxy
 
 /-- The handover after a call sets the version first, so the version it starts from does not
 matter. -/
-theorem afterCallW_run_version {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+theorem afterCallW_run_version {b : Token.BatchTag} (cursor : LexerCursor b)
     (hfloor : ∀ p, floor = some p → EndsAfter cursor p)
-    (x : Except E (ControlFlow R) × {c : Token.BatchCursor b // c.Consumed cursor})
-    (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low}) (v : Token.Version)
+    (x : Except E (ControlFlow R) × {c : LexerCursor b // c.Consumed cursor})
+    (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low}) (v : Version)
     (a : H) :
     ((afterCallW (m := m) (low := low) cursor hfloor x).run.run
         ⟨{ s.val with version := v }, s.property⟩).run a =
@@ -304,14 +310,14 @@ def RunRelW {floor : Option Nat} {low : Nat}
   ERel (IRel link.rr link.re) (· = ·) x.1.1.1 y.1.1.1 ∧ x.1.1.2 = y.1.1.2 ∧
     x.2 = y.2.map entryOf
 
-theorem version_next {g : Token.BatchTag} (c : Token.BatchCursor g) (h : c.HasNext) :
+theorem version_next {g : Token.BatchTag} (c : LexerCursor g) (h : c.HasNext) :
     (c.next h).2.1.version = c.version := (rfl)
 
 section
 
 variable {floor : Option Nat} {low : Nat}
 
-theorem flush_mainW (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCursor g)
+theorem flush_mainW (n : Nat) : ∀ {g : Token.BatchTag} (o c : LexerCursor g)
     (hq : Follows c o) (h : c.HasNext) (_hr : remaining c < n)
     (_hrl : relexRequested c = false) (_hds : discardRequested c = false)
     (hfo : ∀ p, floor = some p → EndsAfter o p)
@@ -355,7 +361,7 @@ theorem flush_mainW (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCurso
       have := ih o (c.next h).2.1 ((c.next h).2.2.follows.trans hq) hn
         (Nat.lt_of_lt_of_le (c.next h).2.2.remaining_lt (Nat.le_of_lt_succ hr))
         (by rw [relexRequested_next, hrl]) (by rw [discardRequested_next, hds]) hfo
-        (fun p hp => Token.BatchCursor.endsAfter_resetConsumed
+        (fun p hp => Lexer.Cursor.LexerCursor.endsAfter_resetConsumed
           ((c.next h).2.2.follows.endsAfter ((hq.endsAfter (hfo p hp)))))
         ⟨{ s.val with version := ((resetConsumed c).next h').2.1.version }, s.property⟩ hhold a b
         (taken ++ [handedAt c (c.peek h)])
@@ -375,7 +381,7 @@ theorem flush_mainW (n : Nat) : ∀ {g : Token.BatchTag} (o c : Token.BatchCurso
         _ _ _ _ (by rw [discardRequested_next, hds]) (() : concreteCollector.Result),
       modifyCore_bind_runW, modifyCore_bind_runW]
     obtain ⟨hhas, hspan, hcons, -, -, hver, -, hfold⟩ := hsame
-    have hstate : ∀ x y : Token.BatchCursor g, x.version = y.version →
+    have hstate : ∀ x y : LexerCursor g, x.version = y.version →
         (∀ init, depthAfterW x init = depthAfterW y init) →
         stopState (floor := floor) (low := low) x
             ⟨{ s.val with version := x.version }, s.property⟩ =
@@ -403,9 +409,9 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] {floor : Option Nat} {low : Nat}
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] {floor : Option Nat} {low : Nat}
 
-theorem flushCursor_holding_runW {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+theorem flushCursor_holding_runW {b : Token.BatchTag} (cursor : LexerCursor b)
     (hfloor : ∀ p, floor = some p → EndsAfter cursor p) (h : cursor.HasNext)
     (s : {c : Lexer.Internal.WRustPort.LexerCore // c.Bound floor low})
     (hh : s.val.holding = true) (handler : H) :
@@ -424,23 +430,23 @@ section
 variable {floor : Option Nat} {low : Nat}
 
 /-- The Rust port's handovers of a new cursor to the two consumers are related. -/
-theorem flushNew_simW (version : Token.Version) (batch : Token.Internal.TokenBatch)
-    (hf : ∀ p, floor = some p → EndsAfter (Token.BatchCursor.Internal.new version batch) p) :
+theorem flushNew_simW (version : Version) (batch : Token.Internal.TokenBatch)
+    (hf : ∀ p, floor = some p → EndsAfter (Lexer.Cursor.LexerCursor.Internal.new version batch) p) :
     LSim link (· = ·)
       (Rust.flushCursor (H := Collector) (m := CollectM) (R := Unit) (E := Empty)
-        (low := low) (Token.BatchCursor.Internal.new version batch) hf)
+        (low := low) (Lexer.Cursor.LexerCursor.Internal.new version batch) hf)
       (Rust.flushCursor (H := Answering concreteCollector) (m := AnswerM)
         (R := concreteCollector.Result) (E := Option concreteCollector.Error)
-        (Token.BatchCursor.Internal.new version batch) hf) := by
+        (Lexer.Cursor.LexerCursor.Internal.new version batch) hf) := by
   intro s a b taken
-  by_cases hn : (Token.BatchCursor.Internal.new version batch).HasNext
+  by_cases hn : (Lexer.Cursor.LexerCursor.Internal.new version batch).HasNext
   · by_cases hh : s.val.holding = true
     · rw [flushCursor_holding_runW _ _ hn s hh, flushCursor_holding_runW _ _ hn s hh]
       exact ⟨⟨⟨rfl, rfl, rfl⟩, rfl⟩, rfl⟩
     · have hhold : s.val.holding = false := by simpa using hh
-      have hm := flush_mainW _ (Token.BatchCursor.Internal.new version batch)
-        (Token.BatchCursor.Internal.new version batch)
-        (Token.BatchCursor.Internal.Follows.refl _) hn
+      have hm := flush_mainW _ (Lexer.Cursor.LexerCursor.Internal.new version batch)
+        (Lexer.Cursor.LexerCursor.Internal.new version batch)
+        (Lexer.Cursor.LexerCursor.Internal.Follows.refl _) hn
         (Nat.lt_succ_self _) (relexRequested_new version batch)
         (discardRequested_new version batch) hf
         (by rw [new_resetConsumed]; exact hf) s hhold a b taken

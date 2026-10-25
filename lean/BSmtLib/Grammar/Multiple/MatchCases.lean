@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Nodes
+public import BSmtLib.Grammar.Nodes
 
 public section
 
@@ -11,11 +11,11 @@ The cases of a `match` that its end hands over, each a pattern with its handled 
 -/
 
 /- LEAN: a part of Rust's `multiple.rs`, in a module of its own as it holds patterns of
-`BSmtLib.Nodes`, which imports `BSmtLib.Multiple`. -/
+`BSmtLib.Grammar.Nodes`, which imports `BSmtLib.Grammar.Multiple`. -/
 
-namespace BSmtLib.Multiple
+namespace BSmtLib.Grammar.Multiple
 
-open BSmtLib.Nodes (Pattern)
+open BSmtLib.Grammar.Nodes (Pattern)
 
 /-- The cases of a match term to be handled: each a pattern with its handled body. -/
 /- LEAN: Rust's `SmtMatchCases`, parameterised by the handled terms, where Rust's is by the
@@ -59,4 +59,4 @@ def get? (self : MatchCases HandledTerm) (index : Nat) : Option (Pattern × Hand
 
 end MatchCases
 
-end BSmtLib.Multiple
+end BSmtLib.Grammar.Multiple

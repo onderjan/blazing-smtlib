@@ -20,7 +20,7 @@ through the bridge, is the traversal's.
 
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Parts
 
-open BSmtLib.Multiple (FunctionSignature)
+open BSmtLib.Grammar.Multiple (FunctionSignature)
 open BSmtLibSpec.Grammar
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Combinator.Internal (ListState)
@@ -39,7 +39,7 @@ open BSmtLibSpec.Parser.Traversal
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {points : Points (StateT H m)} {σ ρ : Type}
 
 omit [LawfulMonad m] in
@@ -60,11 +60,11 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
-theorem specPairs_toArray {S : Type} (l : List (Plain.Symbol × S)) :
+theorem specPairs_toArray {S : Type} (l : List (Lexicon.Value.Symbol × S)) :
     Bridge.pairs l.toArray = Bridge.specPairs l := by
   simp [Bridge.pairs, Bridge.specPairs]
 
@@ -77,7 +77,7 @@ theorem signature_runs (hA : TermAgrees h) (name : Tree.Symbol)
     (hresult : result.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (.symbol name :: paren (parameters.flatMap Tree.SortedVar.tokens) ++
       result.tokens)) :
-    ∃ program : PM H (FunctionSignature (Traits.Handler.«Sort» H)),
+    ∃ program : PM H (FunctionSignature (Handler.«Sort» H)),
       Bridge.signature <$> program =
         adaptRun (Traversal.signature points h name parameters result) ∧
       Runs points (signatureStep version) .start tokens program fun r => pure (.done r) := by
@@ -219,7 +219,7 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
     (hvalid : constructor.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (.symbol constructor.symbol ::
       (constructor.selectors.flatMap Tree.SelectorDec.tokens ++ [.parenClose]))) :
-    ∃ program : PM H (Plain.Symbol × Multiple.SortedVars (Traits.Handler.«Sort» H)),
+    ∃ program : PM H (Lexicon.Value.Symbol × Grammar.Multiple.SortedVars (Handler.«Sort» H)),
       Bridge.constructor <$> program = adaptRun (constructorAfterOpen points h constructor) ∧
       Runs points (constructorStep version) .opened tokens program fun r => pure (.done r) := by
   obtain ⟨symbolToken, rest, rfl, hsymbolToken, hrest⟩ := Stands.split_cons hs
@@ -247,7 +247,7 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
         (by simp [ListState.step, ListState.between])
   have hembed := Runs.embed (outer := constructorStep version)
     (fun state => ConstructorState.selectors symbol state)
-    (fun selectors => pure (.done (symbol, (Multiple.Named.Internal.new selectors))))
+    (fun selectors => pure (.done (symbol, (Grammar.Multiple.NamedValues.Internal.new selectors))))
     (fun state token => by
       simp only [constructorStep]
       congr 1
@@ -257,7 +257,7 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
       tick points (.symbol symbol)
       let handled ← program
       tick points .parenClose
-      pure (symbol, (Multiple.Named.Internal.new handled.toArray)), ?_, ?_⟩
+      pure (symbol, (Grammar.Multiple.NamedValues.Internal.new handled.toArray)), ?_, ?_⟩
   · simp only [constructorAfterOpen, adaptRun_bind, ← hsymbol,
       adaptRun_take (token := .symbol symbol) rfl, adaptRun_take (token := .parenClose) rfl,
       selectors_eq, ← hprogram]
@@ -266,9 +266,9 @@ theorem constructor_runs_opened (hA : TermAgrees h) (constructor : Tree.Construc
       (middle := fun _ => ConstructorState.selectors symbol (ListState.closed .start))
       (Runs.token_more (state := ConstructorState.opened)
         (by simp [constructorStep, Parser.Category.Token.Internal.expectSymbol])) fun _ =>
-      Runs.map_program (f := fun handled => ((symbol, (Multiple.Named.Internal.new
+      Runs.map_program (f := fun handled => ((symbol, (Grammar.Multiple.NamedValues.Internal.new
         (#[] ++ handled.toArray))) :
-          Plain.Symbol × Multiple.SortedVars _))
+          Lexicon.Value.Symbol × Grammar.Multiple.SortedVars _))
         (hembed.congr rfl (by funext; simp [Parser.Internal.Step.wrap]))).congr ?_ rfl
     simp
 

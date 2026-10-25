@@ -31,21 +31,21 @@ open BSmtLib.Facts.Proofs.Reader.Param.HandOver
 open BSmtLib.Facts.Proofs.Reader.Param.Phi BSmtLib.Facts.Proofs.Reader.Param.PhiR
 open BSmtLib.Facts.Reader.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Failing (InvG)
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 
 variable {version : Lexicon.Version}
 
-abbrev abandonP := Recovery.LexRecovery.abandon (H := Phi version) (m := AnswerM)
+abbrev abandonP := Recovery.LexerRecovery.abandon (H := Phi version) (m := AnswerM)
   Recovery.FailFast
-abbrev recoverP := Recovery.LexRecovery.recover (H := Phi version) (m := AnswerM)
+abbrev recoverP := Recovery.LexerRecovery.recover (H := Phi version) (m := AnswerM)
   Recovery.FailFast
 
 theorem phiSlice_sim (slice : ByteSlice) :
     SSim (linkPhi version) (SliceRel (linkPhi version))
       (Internal.lexSliceStep (H := Phi version) (m := AnswerM) abandonP recoverP slice)
       (Internal.lexSliceStep (H := RecAdapter) (m := Id)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast) slice) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast) slice) :=
   lexSliceStep_sim (consumersPhi version) _ _ _ _ (fun _ => (linkPhi version).rc.pure rfl)
     (fun _ => (linkPhi version).rc.pure rfl) slice
 
@@ -55,8 +55,8 @@ theorem phiEof_sim :
         (E := Option ScriptError × List Handed) abandonP recoverP)
       (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
         (E := Parser.ParseError Unit)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast)) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast)) :=
   lexEofStep_sim (consumersPhi version) _ _ _ _ (fun _ => (linkPhi version).rc.pure rfl)
     (fun _ => (linkPhi version).rc.pure rfl)
 
@@ -64,8 +64,8 @@ theorem fSlice_sim (slice : ByteSlice) :
     SSim (linkF version) (SliceRel (linkF version))
       (Internal.lexSliceStep (H := Phi version) (m := AnswerM) abandonP recoverP slice)
       (Internal.lexSliceStep (H := Flagged (scriptConsumer version)) (m := AnswerM)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast) slice) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast) slice) :=
   lexSliceStep_sim consumersF _ _ _ _ (fun _ => (linkF version).rc.pure rfl)
     (fun _ => (linkF version).rc.pure rfl) slice
 
@@ -75,8 +75,8 @@ theorem fEof_sim :
         (E := Option ScriptError × List Handed) abandonP recoverP)
       (Internal.lexEofStep (H := Flagged (scriptConsumer version)) (m := AnswerM)
         (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast)) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast)) :=
   lexEofStep_sim consumersF _ _ _ _ (fun _ => (linkF version).rc.pure rfl)
     (fun _ => (linkF version).rc.pure rfl)
 
@@ -84,8 +84,8 @@ theorem rSlice_sim (slice : ByteSlice) :
     SSim (linkR version) (SliceRel (linkR version))
       (Internal.lexSliceStep (H := Phi version) (m := AnswerM) abandonP recoverP slice)
       (Internal.lexSliceStep (H := Answering (replay version)) (m := AnswerM)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast) slice) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast) slice) :=
   lexSliceStep_sim consumersR _ _ _ _ (fun _ => (linkR version).rc.pure rfl)
     (fun _ => (linkR version).rc.pure rfl) slice
 
@@ -95,8 +95,8 @@ theorem rEof_sim :
         (E := Option ScriptError × List Handed) abandonP recoverP)
       (Internal.lexEofStep (H := Answering (replay version)) (m := AnswerM)
         (R := (replay version).Result) (E := Option (replay version).Error)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast)) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast)) :=
   lexEofStep_sim consumersR _ _ _ _ (fun _ => (linkR version).rc.pure rfl)
     (fun _ => (linkR version).rc.pure rfl)
 
@@ -119,8 +119,8 @@ theorem compose_err {fe : Option ScriptError × List Handed} {ae : Parser.ParseE
     | none => left; rfl
     | some e => right; exact ⟨fe.2, rfl, h⟩
 
-theorem compose_lexErr {x : LexError (Option ScriptError × List Handed)}
-    {a : LexError (Parser.ParseError Unit)} {z : LexError (Option (List Handed))}
+theorem compose_lexErr {x : LexerError (Option ScriptError × List Handed)}
+    {a : LexerError (Parser.ParseError Unit)} {z : LexerError (Option (List Handed))}
     (h₁ : LexErrRel (ReE version) x a) (h₂ : LexErrRel (linkR version).re x z) :
     LexErrRel (CM version) a z := by
   obtain ⟨c₁, s₁, f₁⟩ := h₁
@@ -137,10 +137,10 @@ theorem compose_loc {α β : Type} {x : Span.Located α} {a : Span.Located β}
     LocRel (fun _ _ => True) a z :=
   ⟨trivial, h₁.2.symm.trans h₂.2⟩
 
-theorem compose_slice {x : Except (LexError (Option ScriptError × List Handed))
+theorem compose_slice {x : Except (LexerError (Option ScriptError × List Handed))
       (Option (Span.Located Unit))}
-    {a : Except (LexError (Parser.ParseError Unit)) (Option (Span.Located Unit))}
-    {z : Except (LexError (Option (List Handed))) (Option (Span.Located Unit))}
+    {a : Except (LexerError (Parser.ParseError Unit)) (Option (Span.Located Unit))}
+    {z : Except (LexerError (Option (List Handed))) (Option (Span.Located Unit))}
     (h₁ : SliceRel (linkPhi version) x a) (h₂ : SliceRel (linkR version) x z) :
     ERel (LexErrRel (CM version)) (ORel (LocRel fun _ _ => True)) a z := by
   rcases x with ex | ox <;> rcases a with ea | oa <;> rcases z with ez | oz <;>
@@ -150,10 +150,10 @@ theorem compose_slice {x : Except (LexError (Option ScriptError × List Handed))
       simp only [ORel] at h₁ h₂ ⊢
     exact compose_loc h₁ h₂
 
-theorem compose_eof {x : Except (LexError (Option ScriptError × List Handed))
+theorem compose_eof {x : Except (LexerError (Option ScriptError × List Handed))
       (ControlFlow (Span.Located Unit))}
-    {a : Except (LexError (Parser.ParseError Unit)) (ControlFlow (Span.Located Unit))}
-    {z : Except (LexError (Option (List Handed))) (ControlFlow (Span.Located Unit))}
+    {a : Except (LexerError (Parser.ParseError Unit)) (ControlFlow (Span.Located Unit))}
+    {z : Except (LexerError (Option (List Handed))) (ControlFlow (Span.Located Unit))}
     (h₁ : EofRel (linkPhi version) x a) (h₂ : EofRel (linkR version) x z) :
     ERel (LexErrRel (CM version)) (FlowRel (LocRel fun _ _ => True)) a z := by
   rcases x with ex | ox <;> rcases a with ea | oa <;> rcases z with ez | oz <;>
@@ -163,13 +163,13 @@ theorem compose_eof {x : Except (LexError (Option ScriptError × List Handed))
       simp only [FlowRel] at h₁ h₂ ⊢
     exact compose_loc h₁ h₂
 
-abbrev abandonF := Recovery.LexRecovery.abandon (H := Flagged (scriptConsumer version))
+abbrev abandonF := Recovery.LexerRecovery.abandon (H := Flagged (scriptConsumer version))
   (m := AnswerM) Recovery.FailFast
-abbrev recoverF := Recovery.LexRecovery.recover (H := Flagged (scriptConsumer version))
+abbrev recoverF := Recovery.LexerRecovery.recover (H := Flagged (scriptConsumer version))
   (m := AnswerM) Recovery.FailFast
-abbrev abandonZ := Recovery.LexRecovery.abandon (H := Answering (replay version))
+abbrev abandonZ := Recovery.LexerRecovery.abandon (H := Answering (replay version))
   (m := AnswerM) Recovery.FailFast
-abbrev recoverZ := Recovery.LexRecovery.recover (H := Answering (replay version))
+abbrev recoverZ := Recovery.LexerRecovery.recover (H := Answering (replay version))
   (m := AnswerM) Recovery.FailFast
 
 /-- A call on a slice from a state where the stand-in consumer and the parse adapter are related:
@@ -184,13 +184,13 @@ theorem sliceStep_replay (slice : ByteSlice) (c : Internal.LexerCore)
       abandonF recoverF slice).run c).run fl).run taken).1.2.spoiled = false) :
     ERel (LexErrRel (CM version)) (ORel (LocRel fun _ _ => True))
         (((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-          (Recovery.LexRecovery.abandon Recovery.FailFast)
-          (Recovery.LexRecovery.recover Recovery.FailFast) slice).run c).run ad).1.1
+          (Recovery.LexerRecovery.abandon Recovery.FailFast)
+          (Recovery.LexerRecovery.recover Recovery.FailFast) slice).run c).run ad).1.1
         ((((Internal.lexSliceStep (H := Answering (replay version)) (m := AnswerM) abandonZ
           recoverZ slice).run c).run {}).run taken).1.1.1 ∧
       (((Internal.lexSliceStep (H := RecAdapter) (m := Id)
-          (Recovery.LexRecovery.abandon Recovery.FailFast)
-          (Recovery.LexRecovery.recover Recovery.FailFast) slice).run c).run ad).1.2 =
+          (Recovery.LexerRecovery.abandon Recovery.FailFast)
+          (Recovery.LexerRecovery.recover Recovery.FailFast) slice).run c).run ad).1.2 =
         ((((Internal.lexSliceStep (H := Answering (replay version)) (m := AnswerM) abandonZ
           recoverZ slice).run c).run {}).run taken).1.1.2 ∧
       ((((Internal.lexSliceStep (H := Answering (replay version)) (m := AnswerM) abandonZ
@@ -219,15 +219,15 @@ theorem eofStep_replay (c : Internal.LexerCore)
     ERel (LexErrRel (CM version)) (FlowRel (LocRel fun _ _ => True))
         (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
           (E := Parser.ParseError Unit)
-          (Recovery.LexRecovery.abandon Recovery.FailFast)
-          (Recovery.LexRecovery.recover Recovery.FailFast)).run c).run ad).1.1
+          (Recovery.LexerRecovery.abandon Recovery.FailFast)
+          (Recovery.LexerRecovery.recover Recovery.FailFast)).run c).run ad).1.1
         ((((Internal.lexEofStep (H := Answering (replay version)) (m := AnswerM)
           (R := (replay version).Result) (E := Option (replay version).Error) abandonZ
           recoverZ).run c).run {}).run taken).1.1.1 ∧
       (((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
           (E := Parser.ParseError Unit)
-          (Recovery.LexRecovery.abandon Recovery.FailFast)
-          (Recovery.LexRecovery.recover Recovery.FailFast)).run c).run ad).1.2 =
+          (Recovery.LexerRecovery.abandon Recovery.FailFast)
+          (Recovery.LexerRecovery.recover Recovery.FailFast)).run c).run ad).1.2 =
         ((((Internal.lexEofStep (H := Answering (replay version)) (m := AnswerM)
           (R := (replay version).Result) (E := Option (replay version).Error) abandonZ
           recoverZ).run c).run {}).run taken).1.1.2 ∧
@@ -320,8 +320,8 @@ theorem through_replay (hnl : NoLayout (scriptConsumer version) (toVersion versi
       Parser.Canon.Through.run_eq, ← hcore, hz]
     dsimp only
     generalize ((Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := Parser.ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
-      (Recovery.LexRecovery.recover Recovery.FailFast)).run (Internal.core a)).run
+      (E := Parser.ParseError Unit) (Recovery.LexerRecovery.abandon Recovery.FailFast)
+      (Recovery.LexerRecovery.recover Recovery.FailFast)).run (Internal.core a)).run
       (Internal.handler p) = A at hst hsc ⊢
     generalize (((Internal.lexEofStep (H := Answering (replay version)) (m := AnswerM)
       (R := (replay version).Result) (E := Option (replay version).Error) abandonZ
@@ -379,8 +379,8 @@ theorem through_replay (hnl : NoLayout (scriptConsumer version) (toVersion versi
     rw [hz]
     dsimp only at hL ⊢
     generalize ((Internal.lexSliceStep (H := RecAdapter) (m := Id) (R := Unit)
-      (E := Parser.ParseError Unit) (Recovery.LexRecovery.abandon Recovery.FailFast)
-      (Recovery.LexRecovery.recover Recovery.FailFast) slice.toByteArray.toByteSlice).run
+      (E := Parser.ParseError Unit) (Recovery.LexerRecovery.abandon Recovery.FailFast)
+      (Recovery.LexerRecovery.recover Recovery.FailFast) slice.toByteArray.toByteSlice).run
       (Internal.core a)).run (Internal.handler p) = A at hst hsc hL ⊢
     generalize (((Internal.lexSliceStep (H := Answering (replay version)) (m := AnswerM)
       abandonZ recoverZ slice.toByteArray.toByteSlice).run (Internal.core a)).run {}).run
@@ -459,9 +459,9 @@ theorem callsS : Calls (linkS version) where
 theorem consumersS : Consumers (linkS version) := .ofCalls callsS
 
 
-abbrev abandonS := Recovery.LexRecovery.abandon (H := Answering (scriptConsumer version))
+abbrev abandonS := Recovery.LexerRecovery.abandon (H := Answering (scriptConsumer version))
   (m := AnswerM) Recovery.FailFast
-abbrev recoverS := Recovery.LexRecovery.recover (H := Answering (scriptConsumer version))
+abbrev recoverS := Recovery.LexerRecovery.recover (H := Answering (scriptConsumer version))
   (m := AnswerM) Recovery.FailFast
 
 theorem sSlice_sim (slice : ByteSlice) :

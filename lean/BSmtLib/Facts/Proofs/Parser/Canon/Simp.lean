@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Parser.Canon.States
 public import BSmtLib.Facts.Proofs.Parser.Canon.Tactic
-import all BSmtLib.Plain
+import all BSmtLib.Lexicon.Value
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Attribute
 import all BSmtLib.Parser.Category.Combinator
@@ -25,11 +25,11 @@ handler calls and matches.
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Simp
 
-open BSmtLib.Multiple (FunctionSignature)
+open BSmtLib.Grammar.Multiple (FunctionSignature)
 open Basic States Tactic
 
-open BSmtLib.Parser BSmtLib.Nodes
-open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes
+open BSmtLib.Lexicon.Value (Symbol Numeral Decimal HexDigits BinDigits
   StringContent Keyword)
 
 attribute [canon_simps]
@@ -155,7 +155,7 @@ variable (w : Token.Reserved.GeneralReserved)
 @[canon_simps] theorem isWord_symbol (s : Symbol) :
     (Internal.Input.symbol s).isWord w = false :=
   (rfl)
-@[canon_simps] theorem isWord_keyword (k : BSmtLib.Plain.Keyword) :
+@[canon_simps] theorem isWord_keyword (k : BSmtLib.Lexicon.Value.Keyword) :
     (Internal.Input.keyword k).isWord w = false := (rfl)
 @[canon_simps] theorem isWord_endOfInput : Internal.Input.endOfInput.isWord w = false := (rfl)
 @[canon_simps] theorem isWord_layout : Internal.Input.layout.isWord w = false := (rfl)
@@ -173,12 +173,12 @@ end
     (s : Internal.Step σ ρ) : canonStep s = s := by
   cases s <;> simp only [canonStep, CanonId.canon_id]
 
-@[canon_simps] theorem canon_sExpr (x : Traits.Handler.SExpr (List Event)) : canon x = x := (rfl)
-@[canon_simps] theorem canon_attribute (x : Traits.Handler.Attribute (List Event)) :
+@[canon_simps] theorem canon_sExpr (x : Handler.SExpr (List Event)) : canon x = x := (rfl)
+@[canon_simps] theorem canon_attribute (x : Handler.Attribute (List Event)) :
     canon x = x := (rfl)
-@[canon_simps] theorem canon_sort (x : Traits.Handler.«Sort» (List Event)) : canon x = x := (rfl)
-@[canon_simps] theorem canon_term (x : Traits.Handler.Term (List Event)) : canon x = x := (rfl)
-@[canon_simps] theorem canon_scope (x : Traits.Handler.Scope (List Event)) : canon x = x := (rfl)
+@[canon_simps] theorem canon_sort (x : Handler.«Sort» (List Event)) : canon x = x := (rfl)
+@[canon_simps] theorem canon_term (x : Handler.Term (List Event)) : canon x = x := (rfl)
+@[canon_simps] theorem canon_scope (x : Handler.Scope (List Event)) : canon x = x := (rfl)
 
 @[canon_simps] theorem canon_attributeState_init :
     canonAttributeState (AttributeState.init : AttributeState SE A) = .init := by
@@ -196,7 +196,7 @@ end
     canonListState (ListState.closed init : ListState σ ρ) = .closed (canon init) := by
   simp only [ListState.closed, canon_simps, Canon.canon]
 @[canon_simps] theorem canon_payload_init (name : Token.Reserved.CommandNameReserved)
-    (version : Token.Version) :
+    (version : Version) :
     canonPayload (Payload.init name version : Payload SE A S T Sc) = .init name version := by
   cases name <;> simp only [Payload.init] <;> (try split) <;>
     simp only [canon_simps, Canon.canon, ListState.paren,
@@ -281,9 +281,9 @@ omit [Canon A] in
 @[canon_simps] theorem fun_canonPattern :
     (canon : Pattern → Pattern) = canonPattern := (rfl)
 @[canon_simps] theorem fun_canonTermNode {S T : Type} [Canon S] [Canon T] :
-    (canon : (Nodes.Term S T) → (Nodes.Term S T)) = canonTermNode := (rfl)
+    (canon : (Grammar.Nodes.Term S T) → (Grammar.Nodes.Term S T)) = canonTermNode := (rfl)
 @[canon_simps] theorem fun_canonSExprNode {X : Type} [Canon X] :
-    (canon : (Nodes.SExpr X) → (Nodes.SExpr X)) = canonSExprNode := (rfl)
+    (canon : (Grammar.Nodes.SExpr X) → (Grammar.Nodes.SExpr X)) = canonSExprNode := (rfl)
 @[canon_simps] theorem fun_canonAttributeValueNode {X : Type} [Canon X] :
     (canon : (AttributeValue X) → (AttributeValue X)) = canonAttributeValueNode := (rfl)
 @[canon_simps] theorem fun_canonInput :

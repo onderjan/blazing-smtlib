@@ -37,7 +37,7 @@ variable (C : BSmtLibSpec.Lexer.Consumer)
 /-- What an error of the Rust port's run keeps, with the tokens taken: a consumer's error has the
 span of the last token taken, and the adapter's error `none` comes only with a consumer that
 takes whitespace and comments. -/
-def WErr (e : LexError (Option C.Error)) (t : List Handed) : Prop :=
+def WErr (e : LexerError (Option C.Error)) (t : List Handed) : Prop :=
   (∀ x, e.cause = .consumer (some x) → e.span = VNaiveWRustPort.Cursor.handedSpan t) ∧
     (C.concrete = false → e.cause ≠ .consumer none)
 
@@ -74,7 +74,7 @@ theorem w_run_err (ended : Bool) : ∀ (slices : List BSmtLibSpec.Regex.Chars)
 /-- The library's lexer with the adapter's consumer for `C` ends as the naive lexer fed the cut of
 the slices ends: the same tokens taken, results alike as `preciseOf` says, an error that does not
 go on and keeps `WErr`, and where it does not fail, discarding from where the naive lexer does. -/
-theorem z_naive (version : Token.Version) (ended : Bool) (slices : List BSmtLibSpec.Regex.Chars) :
+theorem z_naive (version : Version) (ended : Bool) (slices : List BSmtLibSpec.Regex.Chars) :
     ((runInputE ZOps (ZOps.new C {} version) ended slices).run []).2 =
         ((runInputE VOps (VOps.new C {} version) ended
           (X1BatchInCoreLexer.Chunks.cutAll slices)).run []).2 ∧
@@ -138,7 +138,7 @@ theorem z_naive (version : Token.Version) (ended : Bool) (slices : List BSmtLibS
 
 /-- Two errors alike as `preciseOf` says, neither going on, with the same spans for consumer's
 errors, and neither trailing input nor the adapter's error `none`, are the same. -/
-theorem error_eq {e₁ e₂ : LexError (Option C.Error)} (h : preciseOf e₁ = preciseOf e₂)
+theorem error_eq {e₁ e₂ : LexerError (Option C.Error)} (h : preciseOf e₁ = preciseOf e₂)
     (hc₁ : e₁.continuesFrom = none) (hc₂ : e₂.continuesFrom = none)
     (hs : ∀ x, e₁.cause = .consumer (some x) → e₂.cause = .consumer (some x) → e₁.span = e₂.span)
     (hn₁ : e₁.cause ≠ .consumer none) (hn₂ : e₂.cause ≠ .consumer none)
@@ -148,7 +148,7 @@ theorem error_eq {e₁ e₂ : LexError (Option C.Error)} (h : preciseOf e₁ = p
   simp only at hc₁ hc₂ hs hn₁ hn₂ ht
   subst hc₁ hc₂
   rcases c₁ with k | (_ | x)
-  · have hv : VCollector.IsLexicalNT (⟨.lexical k, s₁, none⟩ : LexError (Option C.Error)) :=
+  · have hv : VCollector.IsLexicalNT (⟨.lexical k, s₁, none⟩ : LexerError (Option C.Error)) :=
       ⟨k, rfl, fun hk => ht (by rw [hk])⟩
     obtain ⟨hc, hsp⟩ := Slicing.precise_lexical h.symm hv
     simp only at hc hsp
@@ -156,7 +156,7 @@ theorem error_eq {e₁ e₂ : LexError (Option C.Error)} (h : preciseOf e₁ = p
   · exact absurd rfl hn₁
   · have h1 := congrArg Prod.fst h
     simp only [preciseOf, preciseFailure, causeFailure, failureOf,
-      Lexer.Error.LexError.Internal.cause_new] at h1
+      Lexer.Error.LexerError.Internal.cause_new] at h1
     rcases c₂ with k | (_ | y)
     · simp only at h1
       split at h1 <;> cases h1
@@ -169,7 +169,7 @@ theorem error_eq {e₁ e₂ : LexError (Option C.Error)} (h : preciseOf e₁ = p
 whitespace and comments takes the same tokens however its input is cut into slices, and gives the
 same result, or the same error where neither is trailing input; where both do not fail, they
 discard from the same location. -/
-theorem slicing (hc : C.concrete = false) (version : Token.Version) (ended : Bool)
+theorem slicing (hc : C.concrete = false) (version : Version) (ended : Bool)
     (slices : List BSmtLibSpec.Regex.Chars) :
     ((runInputE ZOps (ZOps.new C {} version) ended slices).run []).2 =
         ((runInputE ZOps (ZOps.new C {} version) ended [slices.flatten]).run []).2 ∧

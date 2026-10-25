@@ -21,6 +21,8 @@ As both consumers answer alike on every cursor, the library's lexer does with on
 with the other (`lexing_flagged`, from step 1, `lexSliceStep_sim` and `lexEofStep_sim`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Flagged
 
 open BSmtLib.Lexer
@@ -36,7 +38,7 @@ structure _root_.BSmtLib.Facts.Proofs.Reader.Param.Flagged
   the one of the last cursor it gave back. -/
   errored : Bool
   /-- The version of the last cursor it gave back, or the one it started with. -/
-  version : Token.Version
+  version : Version
   /-- Whether the consumer has been called after something went wrong, or handed a cursor in
   another version than the one of the last cursor it gave back. -/
   spoiled : Bool
@@ -61,10 +63,10 @@ instance (consumer : BSmtLibSpec.Lexer.Consumer) : Token.Consume (Flagged consum
 
 /-- Takes the tokens as `Answering consumer` does, and records what went wrong. -/
 def consume (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
-    (cursor : Token.BatchCursor batch) (h : cursor.HasNext) :
+    (cursor : LexerCursor batch) (h : cursor.HasNext) :
     StateT (Flagged consumer) AnswerM
       (Except (Option consumer.Error) (ControlFlow consumer.Result) ×
-        {c : Token.BatchCursor batch // c.Consumed cursor}) := do
+        {c : LexerCursor batch // c.Consumed cursor}) := do
   let flagged ← get
   let (answer, next) ← (Answering.consume consumer cursor h : AnswerM _)
   set ({ errored := flagged.errored || cursor.version != flagged.version || isError answer
@@ -75,7 +77,7 @@ def consume (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
   return (answer, next)
 
 instance (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag} :
-    Token.ConsumeFrom (Flagged consumer) (Token.BatchCursor batch) AnswerM where
+    Token.ConsumeFrom (Flagged consumer) (LexerCursor batch) AnswerM where
   consume cursor h := Flagged.consume consumer cursor h
 
 /-! ## Both consumers answer alike -/
@@ -128,16 +130,16 @@ end
 
 /-! ## Equal results -/
 
-theorem cause_eq {ε : Type} {a b : LexErrorCause ε} (h : CauseRel (· = ·) a b) : a = b := by
+theorem cause_eq {ε : Type} {a b : LexerErrorCause ε} (h : CauseRel (· = ·) a b) : a = b := by
   rcases a with a | a <;> rcases b with b | b <;> first | exact absurd h id | cases h; rfl
 
 /-- Lexer errors related as `LexErrRel (· = ·)` are the same to the spec. -/
-theorem failureOf_eq_of_rel {ε : Type} {a b : LexError (Option ε)}
+theorem failureOf_eq_of_rel {ε : Type} {a b : LexerError (Option ε)}
     (h : LexErrRel (· = ·) a b) : failureOf a = failureOf b := by
   unfold failureOf
   rw [cause_eq h.1, h.2.1]
 
-theorem sliceRel_eq {ε α : Type} {a b : Except (LexError (Option ε)) (Option (Span.Located α))}
+theorem sliceRel_eq {ε α : Type} {a b : Except (LexerError (Option ε)) (Option (Span.Located α))}
     (h : ERel (LexErrRel (· = ·)) (ORel (LocRel (· = ·))) a b) :
     a.mapError failureOf = b.mapError failureOf := by
   rcases a with e | (_ | ⟨v, l⟩) <;> rcases b with e' | (_ | ⟨v', l'⟩) <;>
@@ -148,7 +150,7 @@ theorem sliceRel_eq {ε α : Type} {a b : Except (LexError (Option ε)) (Option 
     simp only at hv hl
     rw [hv, hl]
 
-theorem eofRel_eq {ε α : Type} {a b : Except (LexError (Option ε)) (ControlFlow (Span.Located α))}
+theorem eofRel_eq {ε α : Type} {a b : Except (LexerError (Option ε)) (ControlFlow (Span.Located α))}
     (h : ERel (LexErrRel (· = ·)) (FlowRel (LocRel (· = ·))) a b) :
     a.mapError failureOf = b.mapError failureOf := by
   rcases a with e | (_ | ⟨v, l⟩) <;> rcases b with e' | (_ | ⟨v', l'⟩) <;>
@@ -173,12 +175,12 @@ def flaggedOps : LexOps where
   lexEof := BSmtLib.Lexer.lexEof
   lexSliceStep lexer slice :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexSliceStep
-      (Recovery.LexRecovery.abandon Recovery.FailFast)
-          (Recovery.LexRecovery.recover Recovery.FailFast) slice)
+      (Recovery.LexerRecovery.abandon Recovery.FailFast)
+          (Recovery.LexerRecovery.recover Recovery.FailFast) slice)
   lexEofStep lexer :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexEofStep
-      (Recovery.LexRecovery.abandon Recovery.FailFast)
-          (Recovery.LexRecovery.recover Recovery.FailFast))
+      (Recovery.LexerRecovery.abandon Recovery.FailFast)
+          (Recovery.LexerRecovery.recover Recovery.FailFast))
   held := BSmtLib.Lexer.Internal.held
   withHeld := BSmtLib.Lexer.Internal.withHeld
   version := BSmtLib.Lexer.version
@@ -210,14 +212,14 @@ def AlikeLexers (consumer : BSmtLibSpec.Lexer.Consumer) (a : Lexer.lexOps.Lexer 
 
 theorem recovery_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Span.Location) :
     (alikeLink consumer).rc.rel (· = ·)
-      (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast l)
-      (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast l) :=
+      (Recovery.LexerRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast l)
+      (Recovery.LexerRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast l) :=
   fun _ _ _ => ⟨rfl, rfl⟩
 
 theorem recover_alike (consumer : BSmtLibSpec.Lexer.Consumer) (l : Span.Location) :
     (alikeLink consumer).rc.rel (· = ·)
-      (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast l)
-      (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast l) :=
+      (Recovery.LexerRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast l)
+      (Recovery.LexerRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast l) :=
   fun _ _ _ => ⟨rfl, rfl⟩
 
 /-- The call on a slice does with the two consumers what it does with the other, from lexers
@@ -229,10 +231,10 @@ theorem slice_alikeF (consumer : BSmtLibSpec.Lexer.Consumer) (slice : BSmtLibSpe
       (fun b => flaggedOps.lexSliceStep b slice.toByteArray.toByteSlice) := by
   intro a b taken hab
   have hsim := lexSliceStep_sim (alike_consumers consumer)
-    (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
-    (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
-    (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
-    (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
     (recovery_alike consumer) (recover_alike consumer) slice.toByteArray.toByteSlice
         (Internal.core a)
     (Internal.handler a) (Internal.handler b)
@@ -251,10 +253,10 @@ theorem eof_alikeF (consumer : BSmtLibSpec.Lexer.Consumer) :
       Lexer.lexOps.lexEofStep flaggedOps.lexEofStep := by
   intro a b taken hab
   have hsim := lexEofStep_sim (alike_consumers consumer)
-    (Recovery.LexRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
-    (Recovery.LexRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
-    (Recovery.LexRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
-    (Recovery.LexRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.abandon (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.recover (H := Answering consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.abandon (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
+    (Recovery.LexerRecovery.recover (H := Flagged consumer) (m := AnswerM) Recovery.FailFast)
     (recovery_alike consumer) (recover_alike consumer) (Internal.core a) (Internal.handler a)
         (Internal.handler b) taken
   obtain ⟨⟨hr, hc⟩, ht⟩ := hsim

@@ -183,7 +183,7 @@ theorem outcome_bind_pure {cursor' : Z} (X : StateT H m (Answer H P R E cursor')
 
 /-- Waiting after a program whose result is changed: waiting after the program, the change made
 by the parser given back. -/
-theorem waits_of_map {Pa Ra : Type} [Parse Pa H m E Ra] {version : Token.Version} {p : Pa}
+theorem waits_of_map {Pa Ra : Type} [Parse Pa H m E Ra] {version : Version} {p : Pa}
     {tokens : List Parser.Internal.Input} {β : Type} {program : ExceptT (ParseErrorCause E)
       (StateT H m) α} {f : α → β} {after : β → Pa}
     (h : Outcome.Waits version p tokens (f <$> program) after) (hp : HandlerOnly program) :
@@ -194,13 +194,13 @@ theorem waits_of_map {Pa Ra : Type} [Parse Pa H m E Ra] {version : Token.Version
   funext e
   rcases e with (_ | _) | a <;> rfl
 
-theorem Takes.consumed_of_ne {version : Token.Version} {cursor next : Z}
+theorem Takes.consumed_of_ne {version : Version} {cursor next : Z}
     {tokens : List Parser.Internal.Input} (h : Takes version cursor tokens next)
     (hne : tokens ≠ []) : Cursor.HasNext cursor → Cursor.Consumed next cursor := by
   obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil hne
   exact fun _ => Takes.consumed h
 
-theorem Takes.hasNext_of_ne {version : Token.Version} {cursor next : Z}
+theorem Takes.hasNext_of_ne {version : Version} {cursor next : Z}
     {tokens : List Parser.Internal.Input} (h : Takes version cursor tokens next)
     (hne : tokens ≠ []) : Cursor.HasNext cursor := by
   obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil hne
@@ -226,14 +226,14 @@ end
 section
 
 variable {H P₁ P₂ R₁ R₂ : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
-  [Traits.Handler H m] [Parse P₁ H m (Traits.Handler.Error H) R₁]
-  [Parse P₂ H m (Traits.Handler.Error H) R₂]
+  [Handler H m] [Parse P₁ H m (Handler.Error H) R₁]
+  [Parse P₂ H m (Handler.Error H) R₂]
 
 /-- What the pair answers after its second parser answered, the first having finished with
 `first`. -/
 private def afterSecond (p₁ : P₁) (first : R₁) {Z : Type} :
-    Outcome R₂ P₂ Z (Traits.Handler.Error H) →
-    Outcome (R₁ × R₂) (PairParser H P₁ P₂) Z (Traits.Handler.Error H)
+    Outcome R₂ P₂ Z (Handler.Error H) →
+    Outcome (R₁ × R₂) (PairParser H P₁ P₂) Z (Handler.Error H)
   | .finished second p₂ next => .finished (first, second) (PairParser.new p₁ p₂) next
   | .waits p₂ => .waits ⟨p₁, p₂, some first⟩
   | .rejected kind next => .rejected kind next
@@ -276,9 +276,9 @@ private theorem pair_parse_eq (p₁ : P₁) (p₂ : P₂) {Z : Type} [Cursor Z] 
 /-- What the pair's continuation after the first parser does, read by `outcome`, depends on no
 more than what `outcome` reads of the first parser's answer. -/
 private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Cursor Z] {cursor : Z}
-    (x₀ : Answer H P₁ R₁ (Traits.Handler.Error H) cursor)
-    (x : Answer H P₁ R₁ (Traits.Handler.Error H) cursor) :
-    let k := fun (x : Answer H P₁ R₁ (Traits.Handler.Error H) cursor) =>
+    (x₀ : Answer H P₁ R₁ (Handler.Error H) cursor)
+    (x : Answer H P₁ R₁ (Handler.Error H) cursor) :
+    let k := fun (x : Answer H P₁ R₁ (Handler.Error H) cursor) =>
       (match x with
         | (answer, first, state, ⟨next, consumed⟩) =>
           match answer with
@@ -294,7 +294,7 @@ private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Cursor Z] {cursor : Z}
                 (PairParser.new (H := H) first p₂).parseSecond result state next
               return (answer, self, state,
                 ⟨later, fun hn => Cursor.consumed_trans (taken h) (consumed hn)⟩) :
-        StateT H m (Answer H (PairParser H P₁ P₂) (R₁ × R₂) (Traits.Handler.Error H) cursor))
+        StateT H m (Answer H (PairParser H P₁ P₂) (R₁ × R₂) (Handler.Error H) cursor))
     outcome <$> k x = outcome <$> onOutcome k x₀ (outcome x) := by
   intro k
   obtain ⟨a, p, s, ⟨z, hz⟩⟩ := x
@@ -315,7 +315,7 @@ private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Cursor Z] {cursor : Z}
       .finished result p z from rfl, onOutcome_finished _ _ _ _ hz, parseState_eq s .new]
 
 /-- The pair on the values of its two parsers, one after the other. -/
-theorem pair_parses {version : Token.Version} {p₁ b₁ : P₁} {p₂ b₂ : P₂}
+theorem pair_parses {version : Version} {p₁ b₁ : P₁} {p₂ b₂ : P₂}
     {tokens₁ tokens₂ : List Parser.Internal.Input} {program₁ : PM H R₁} {program₂ : PM H R₂}
     (h₁ : Outcome.Finishes version p₁ tokens₁ program₁ b₁)
     (h₂ : Outcome.Finishes version p₂ tokens₂ program₂ b₂) (hne₁ : tokens₁ ≠ [])
@@ -367,7 +367,7 @@ theorem pair_parses {version : Token.Version} {p₁ b₁ : P₁} {p₂ b₂ : P�
       rcases e with error | second <;> simp [answer, afterSecond]
 
 /-- The pair rejects where its first parser rejects. -/
-theorem pair_rejects_first {version : Token.Version} {p₁ : P₁} {p₂ : P₂}
+theorem pair_rejects_first {version : Version} {p₁ : P₁} {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p₁ tokens program kind) (hne : tokens ≠ []) :
     Outcome.Rejects version (PairParser.new (H := H) p₁ p₂) tokens program kind := by
@@ -386,7 +386,7 @@ theorem pair_rejects_first {version : Token.Version} {p₁ : P₁} {p₂ : P₂}
     simp [outcome, answer]
 
 /-- The pair rejects where its second parser rejects, after the first finished. -/
-theorem pair_rejects_second {version : Token.Version} {p₁ b₁ : P₁} {p₂ : P₂}
+theorem pair_rejects_second {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
     {tokens₁ tokens₂ : List Parser.Internal.Input} {program₁ : PM H R₁} {program₂ : PM H Unit}
     {kind : SyntaxErrorKind}
     (h₁ : Outcome.Finishes version p₁ tokens₁ program₁ b₁)
@@ -423,7 +423,7 @@ theorem pair_rejects_second {version : Token.Version} {p₁ b₁ : P₁} {p₂ :
 
 /-- The pair on tokens on which its first parser wants more: it wants more, its first parser as
 the first's. -/
-theorem pair_waits_first {version : Token.Version} {p₁ : P₁} {p₂ : P₂}
+theorem pair_waits_first {version : Version} {p₁ : P₁} {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P₁}
     (h : Outcome.Waits version p₁ tokens program after) :
     Outcome.Waits version (PairParser.new (H := H) p₁ p₂) tokens program
@@ -456,7 +456,7 @@ private theorem parseSecond_outcome' (p₁ : P₁) (p₂ : P₂) (first : R₁) 
   rcases a with (_ | _) | (_ | _) <;> simp only [map_pure] <;> rfl
 
 /-- A pair whose first parser finished with `first`: it finishes as its second parser does. -/
-private theorem pairWith_finishes {version : Token.Version} (b₁ : P₁) (first : R₁) {p₂ b₂ : P₂}
+private theorem pairWith_finishes {version : Version} (b₁ : P₁) (first : R₁) {p₂ b₂ : P₂}
     {tokens : List Parser.Internal.Input} {program : PM H R₂}
     (h : Outcome.Finishes version p₂ tokens program b₂) :
     Outcome.Finishes version (⟨b₁, p₂, some first⟩ : PairParser H P₁ P₂) tokens
@@ -472,7 +472,7 @@ private theorem pairWith_finishes {version : Token.Version} (b₁ : P₁) (first
   rcases e with error | second <;> simp [answer, afterSecond, Except.map]
 
 /-- A pair whose first parser finished with `first`: it rejects where its second parser does. -/
-private theorem pairWith_rejects {version : Token.Version} (b₁ : P₁) (first : R₁) {p₂ : P₂}
+private theorem pairWith_rejects {version : Version} (b₁ : P₁) (first : R₁) {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p₂ tokens program kind) :
     Outcome.Rejects version (⟨b₁, p₂, some first⟩ : PairParser H P₁ P₂) tokens program kind := by
@@ -489,7 +489,7 @@ private theorem pairWith_rejects {version : Token.Version} (b₁ : P₁) (first 
 The pair on tokens on which its first parser finishes, and no more: it wants more, as a pair
 that, on the tokens after, finishes and rejects as its second parser does.
 -/
-theorem pair_waits_between {version : Token.Version} {p₁ b₁ : P₁} {p₂ : P₂}
+theorem pair_waits_between {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {program : PM H R₁}
     (h : Outcome.Finishes version p₁ tokens program b₁) (hne : tokens ≠ []) :
     ∃ after : R₁ → PairParser H P₁ P₂,
@@ -526,7 +526,7 @@ theorem pair_waits_between {version : Token.Version} {p₁ b₁ : P₁} {p₂ : 
 The pair on tokens on which its first parser finishes and then its second wants more: it wants
 more, as a pair that, on the tokens after, finishes and rejects as the second parser does then.
 -/
-theorem pair_waits_second {version : Token.Version} {p₁ b₁ : P₁} {p₂ : P₂}
+theorem pair_waits_second {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
     {tokens₁ tokens₂ : List Parser.Internal.Input} {program₁ : PM H R₁} {α : Type}
     {program₂ : PM H α} {after₂ : α → P₂}
     (h₁ : Outcome.Finishes version p₁ tokens₁ program₁ b₁)
@@ -578,13 +578,13 @@ end
 
 section
 
-variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-  [Parse P H m (Traits.Handler.Error H) R]
+variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+  [Parse P H m (Handler.Error H) R]
 
 /-- The closed parser's answer from its pair's. -/
 private def closedF {Z : Type} :
-    Outcome (R × Unit) (PairParser H P CloseParenParser) Z (Traits.Handler.Error H) →
-    Outcome R (ClosedParser H P) Z (Traits.Handler.Error H)
+    Outcome (R × Unit) (PairParser H P CloseParenParser) Z (Handler.Error H) →
+    Outcome R (ClosedParser H P) Z (Handler.Error H)
   | .finished result pair next => .finished result.1 ⟨pair⟩ next
   | .waits pair => .waits ⟨pair⟩
   | .rejected kind next => .rejected kind next
@@ -593,8 +593,8 @@ private def closedF {Z : Type} :
 
 /-- The opened parser's answer from its pair's. -/
 private def openedF {Z : Type} :
-    Outcome (Unit × R) (PairParser H OpenParenParser P) Z (Traits.Handler.Error H) →
-    Outcome R (OpenedParser H P) Z (Traits.Handler.Error H)
+    Outcome (Unit × R) (PairParser H OpenParenParser P) Z (Handler.Error H) →
+    Outcome R (OpenedParser H P) Z (Handler.Error H)
   | .finished result pair next => .finished result.2 ⟨pair⟩ next
   | .waits pair => .waits ⟨pair⟩
   | .rejected kind next => .rejected kind next
@@ -626,7 +626,7 @@ private theorem opened_outcome (pair : PairParser H OpenParenParser P) {Z : Type
   rcases a with (_ | _) | (_ | ⟨⟨⟩, r⟩) <;> simp only [map_pure] <;> rfl
 
 /-- What the closed parser does, from what its pair does. -/
-private theorem closed_finishes_of {version : Token.Version}
+private theorem closed_finishes_of {version : Version}
     {pair back : PairParser H P CloseParenParser}
     {tokens : List Parser.Internal.Input} {program : PM H (R × Unit)}
     (h : Outcome.Finishes version pair tokens program back) :
@@ -638,7 +638,7 @@ private theorem closed_finishes_of {version : Token.Version}
   refine congrArg (· <$> calls.run) (funext fun e => ?_)
   rcases e with error | result <;> simp [answer, closedF, Except.map]
 
-private theorem closed_rejects_of {version : Token.Version} {pair : PairParser H P CloseParenParser}
+private theorem closed_rejects_of {version : Version} {pair : PairParser H P CloseParenParser}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version pair tokens program kind) :
     Outcome.Rejects version (⟨pair⟩ : ClosedParser H P) tokens program kind := by
@@ -649,7 +649,7 @@ private theorem closed_rejects_of {version : Token.Version} {pair : PairParser H
   refine congrArg (· <$> calls.run) (funext fun e => ?_)
   rcases e with error | ⟨⟩ <;> simp [answer, closedF]
 
-private theorem closed_waits_of {version : Token.Version} {pair : PairParser H P CloseParenParser}
+private theorem closed_waits_of {version : Version} {pair : PairParser H P CloseParenParser}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
     {after : α → PairParser H P CloseParenParser}
     (h : Outcome.Waits version pair tokens program after) :
@@ -661,7 +661,7 @@ private theorem closed_waits_of {version : Token.Version} {pair : PairParser H P
   refine congrArg (· <$> calls.run) (funext fun e => ?_)
   rcases e with error | a <;> simp [answer, closedF]
 
-private theorem opened_finishes_of {version : Token.Version}
+private theorem opened_finishes_of {version : Version}
     {pair back : PairParser H OpenParenParser P}
     {tokens : List Parser.Internal.Input} {program : PM H (Unit × R)}
     (h : Outcome.Finishes version pair tokens program back) :
@@ -673,7 +673,7 @@ private theorem opened_finishes_of {version : Token.Version}
   refine congrArg (· <$> calls.run) (funext fun e => ?_)
   rcases e with error | result <;> simp [answer, openedF, Except.map]
 
-private theorem opened_rejects_of {version : Token.Version} {pair : PairParser H OpenParenParser P}
+private theorem opened_rejects_of {version : Version} {pair : PairParser H OpenParenParser P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version pair tokens program kind) :
     Outcome.Rejects version (⟨pair⟩ : OpenedParser H P) tokens program kind := by
@@ -684,7 +684,7 @@ private theorem opened_rejects_of {version : Token.Version} {pair : PairParser H
   refine congrArg (· <$> calls.run) (funext fun e => ?_)
   rcases e with error | ⟨⟩ <;> simp [answer, openedF]
 
-private theorem opened_waits_of {version : Token.Version} {pair : PairParser H OpenParenParser P}
+private theorem opened_waits_of {version : Version} {pair : PairParser H OpenParenParser P}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
     {after : α → PairParser H OpenParenParser P}
     (h : Outcome.Waits version pair tokens program after) :
@@ -697,7 +697,7 @@ private theorem opened_waits_of {version : Token.Version} {pair : PairParser H O
   rcases e with error | a <;> simp [answer, openedF]
 
 /-- The closed parser on the inner value and the `)` after it. -/
-theorem closed_parses {version : Token.Version} {p b : P} {tokens : List Parser.Internal.Input}
+theorem closed_parses {version : Version} {p b : P} {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ []) :
     Outcome.Finishes version (ClosedParser.new (H := H) p) (tokens ++ [.parenClose]) program
       (ClosedParser.new b) := by
@@ -707,14 +707,14 @@ theorem closed_parses {version : Token.Version} {p b : P} {tokens : List Parser.
   simpa [ClosedParser.new] using this
 
 /-- The closed parser rejects where its inner parser rejects. -/
-theorem closed_rejects_inner {version : Token.Version} {p : P} {tokens : List Parser.Internal.Input}
+theorem closed_rejects_inner {version : Version} {p : P} {tokens : List Parser.Internal.Input}
     {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p tokens program kind) (hne : tokens ≠ []) :
     Outcome.Rejects version (ClosedParser.new (H := H) p) tokens program kind :=
   closed_rejects_of (pair_rejects_first h hne)
 
 /-- The closed parser on the inner value and a token after it that is not `)`. -/
-theorem closed_rejects_close {version : Token.Version} {p b : P}
+theorem closed_rejects_close {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R} {token : Parser.Internal.Input}
     (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ [])
     (htoken : token ≠ .parenClose) :
@@ -724,7 +724,7 @@ theorem closed_rejects_close {version : Token.Version} {p b : P}
     (List.cons_ne_nil _ _))
 
 /-- The closed parser on tokens on which its inner parser wants more. -/
-theorem closed_waits_inner {version : Token.Version} {p : P} {tokens : List Parser.Internal.Input}
+theorem closed_waits_inner {version : Version} {p : P} {tokens : List Parser.Internal.Input}
     {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after) :
     Outcome.Waits version (ClosedParser.new (H := H) p) tokens program
@@ -733,7 +733,7 @@ theorem closed_waits_inner {version : Token.Version} {p : P} {tokens : List Pars
 
 /-- The closed parser on its inner value and no more: it wants more, as a parser that finishes
 at a `)` and rejects any other token. -/
-theorem closed_waits_close {version : Token.Version} {p b : P}
+theorem closed_waits_close {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R}
     (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ []) :
     ∃ after : R → ClosedParser H P,
@@ -750,7 +750,7 @@ theorem closed_waits_close {version : Token.Version} {p b : P}
   simpa [ClosedParser.new] using this
 
 /-- The opened parser on a `(` and the inner value. -/
-theorem opened_parses {version : Token.Version} {p b : P} {tokens : List Parser.Internal.Input}
+theorem opened_parses {version : Version} {p b : P} {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ []) :
     Outcome.Finishes version (OpenedParser.new (H := H) p) (.parenOpen :: tokens) program
       (OpenedParser.new b) := by
@@ -760,14 +760,14 @@ theorem opened_parses {version : Token.Version} {p b : P} {tokens : List Parser.
   simpa [OpenedParser.new] using this
 
 /-- The opened parser on a first token that is not `(`. -/
-theorem opened_rejects_open {version : Token.Version} {p : P} {token : Parser.Internal.Input}
+theorem opened_rejects_open {version : Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Outcome.Rejects version (OpenedParser.new (H := H) p) [token] (pure () : PM H Unit)
       (.expected #[.token .parenOpen]) :=
   opened_rejects_of (pair_rejects_first (openParen_rejects version htoken) (List.cons_ne_nil _ _))
 
 /-- The opened parser rejects where its inner parser rejects after the `(`. -/
-theorem opened_rejects_inner {version : Token.Version} {p : P}
+theorem opened_rejects_inner {version : Version} {p : P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p tokens program kind) (hne : tokens ≠ []) :
     Outcome.Rejects version (OpenedParser.new (H := H) p) (.parenOpen :: tokens) program kind := by
@@ -776,14 +776,14 @@ theorem opened_rejects_inner {version : Token.Version} {p : P}
   simpa [OpenedParser.new] using this
 
 /-- The opened parser on a cursor with no token: it wants more, as it was. -/
-theorem opened_waits_open {version : Token.Version} {p : P} :
+theorem opened_waits_open {version : Version} {p : P} :
     Outcome.Waits version (OpenedParser.new (H := H) p) [] (pure () : PM H Unit)
       fun _ => OpenedParser.new p :=
   opened_waits_of (pair_waits_first (openParen_waits (H := H) version))
 
 /-- The opened parser on its `(` and no more: it wants more, as a parser that finishes and
 rejects on the inner tokens as the inner parser. -/
-theorem opened_waits_after_open {version : Token.Version} {p : P} :
+theorem opened_waits_after_open {version : Version} {p : P} :
     ∃ after : Unit → OpenedParser H P,
       Outcome.Waits version (OpenedParser.new (H := H) p) [.parenOpen] (pure () : PM H Unit)
         after ∧
@@ -801,7 +801,7 @@ theorem opened_waits_after_open {version : Token.Version} {p : P} :
   simpa [OpenedParser.new] using this
 
 /-- The opened parser on a `(` and tokens on which its inner parser wants more. -/
-theorem opened_waits_inner {version : Token.Version} {p : P} {tokens : List Parser.Internal.Input}
+theorem opened_waits_inner {version : Version} {p : P} {tokens : List Parser.Internal.Input}
     {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after) (hne : tokens ≠ []) :
     ∃ after' : α → OpenedParser H P,
@@ -823,39 +823,121 @@ theorem opened_waits_inner {version : Token.Version} {p : P} {tokens : List Pars
   · have := opened_finishes_of (hfin () a h')
     simpa [OpenedParser.new] using this
 
+end
+
+/-! ## Parsers that wrap another one -/
+
+section
+
+variable {H Q W R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+  [Parse Q H m (Handler.Error H) R] [Parse W H m (Handler.Error H) R]
+
+/-- The answer of a parser that wraps another one, from the inner parser's answer: the inner
+parser it gives back is wrapped. -/
+def wrapF (wrap : Q → W) {Z : Type} :
+    Outcome R Q Z (Handler.Error H) → Outcome R W Z (Handler.Error H)
+  | .finished result inner next => .finished result (wrap inner) next
+  | .waits inner => .waits (wrap inner)
+  | .rejected kind next => .rejected kind next
+  | .rejectedVersion kind next => .rejectedVersion kind next
+  | .failed error => .failed error
+
+/-- The parsers that `wrap` makes answer as the parser they wrap, with that parser wrapped. -/
+def Wraps (wrap : Q → W) : Prop :=
+  ∀ (inner : Q) {Z : Type} [Cursor Z] (state : ParseState H) (cursor : Z),
+    outcome <$> Parse.parse (wrap inner) state cursor =
+      wrapF (H := H) wrap <$> (outcome <$> Parse.parse inner state cursor)
+
+/-- A wrapped parser finishes where the parser it wraps does. -/
+theorem wraps_finishes {wrap : Q → W} (hw : Wraps (H := H) wrap) {version : Version}
+    {inner back : Q} {tokens : List Parser.Internal.Input} {program : PM H R}
+    (h : Outcome.Finishes version inner tokens program back) :
+    Outcome.Finishes version (wrap inner) tokens program (wrap back) := by
+  refine ⟨h.1, fun state cursor next rest htakes hreads => ?_⟩
+  obtain ⟨calls, hcalls⟩ := handler_run h.1
+  rw [hw, h.2 state cursor next rest htakes hreads, hcalls]
+  simp only [Functor.map_map]
+  refine congrArg (· <$> calls.run) (funext fun e => ?_)
+  rcases e with error | result <;> simp [answer, wrapF]
+
+/-- A wrapped parser rejects where the parser it wraps does. -/
+theorem wraps_rejects {wrap : Q → W} (hw : Wraps (H := H) wrap) {version : Version} {inner : Q}
+    {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
+    (h : Outcome.Rejects version inner tokens program kind) :
+    Outcome.Rejects version (wrap inner) tokens program kind := by
+  refine ⟨h.1, fun state cursor next rest htakes hreads => ?_⟩
+  obtain ⟨calls, hcalls⟩ := handler_run h.1
+  rw [hw, h.2 state cursor next rest htakes hreads, hcalls]
+  simp only [Functor.map_map]
+  refine congrArg (· <$> calls.run) (funext fun e => ?_)
+  rcases e with error | ⟨⟩ <;> simp [answer, wrapF]
+
+/-- A wrapped parser waits where the parser it wraps does, as the wrap of what that parser
+waits as. -/
+theorem wraps_waits {wrap : Q → W} (hw : Wraps (H := H) wrap) {version : Version} {inner : Q}
+    {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → Q}
+    (h : Outcome.Waits version inner tokens program after) :
+    Outcome.Waits version (wrap inner) tokens program fun a => wrap (after a) := by
+  refine ⟨h.1, fun state cursor last htakes hnone => ?_⟩
+  obtain ⟨calls, hcalls⟩ := handler_run h.1
+  rw [hw, h.2 state cursor last htakes hnone, hcalls]
+  simp only [Functor.map_map]
+  refine congrArg (· <$> calls.run) (funext fun e => ?_)
+  rcases e with error | a <;> simp [answer, wrapF]
+
+end
+
+section
+
+variable {H P R : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+  [Parse P H m (Handler.Error H) R]
+
+/-- The parenthesised parser answers as the opened parser it wraps. -/
+private theorem paren_wraps :
+    Wraps (H := H) fun inner : OpenedParser H (ClosedParser H P) =>
+      (⟨inner⟩ : ParenParser H P) := by
+  intro inner Z _ state cursor
+  rw [show Parse.parse (⟨inner⟩ : ParenParser H P) state cursor =
+      Parse.parse inner state cursor >>= fun x =>
+        pure (x.1, (⟨x.2.1⟩ : ParenParser H P), x.2.2.1, x.2.2.2) from rfl, map_bind,
+    Functor.map_map, map_eq_pure_bind]
+  refine bind_congr fun x => ?_
+  obtain ⟨a, p, s, ⟨z, hz⟩⟩ := x
+  rcases a with (_ | _) | (_ | _) <;> simp only [map_pure] <;> rfl
+
 /-- The parenthesised parser on a `(`, the inner value and a `)`. -/
-theorem paren_parses {version : Token.Version} {p b : P} {tokens : List Parser.Internal.Input}
+theorem paren_parses {version : Version} {p b : P} {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ []) :
-    Outcome.Finishes version (ParenParser.new (ClosedParser.new (H := H) p))
+    Outcome.Finishes version (ParenParser.new (H := H) p)
       (.parenOpen :: (tokens ++ [.parenClose]))
-      program (ParenParser.new (ClosedParser.new b)) :=
-  opened_parses (closed_parses h hne) (by simp)
+      program (ParenParser.new b) :=
+  wraps_finishes paren_wraps (opened_parses (closed_parses h hne) (by simp))
 
 /-- The parenthesised parser on a first token that is not `(`. -/
-theorem paren_rejects_open {version : Token.Version} {p : P} {token : Parser.Internal.Input}
+theorem paren_rejects_open {version : Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
-    Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+    Outcome.Rejects version (ParenParser.new (H := H) p)
       [token] (pure () : PM H Unit)
       (.expected #[.token .parenOpen]) :=
-  opened_rejects_open htoken
+  wraps_rejects paren_wraps (opened_rejects_open htoken)
 
 /-- The parenthesised parser rejects where its inner parser rejects after the `(`. -/
-theorem paren_rejects_inner {version : Token.Version} {p : P}
+theorem paren_rejects_inner {version : Version} {p : P}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Outcome.Rejects version p tokens program kind) (hne : tokens ≠ []) :
-    Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+    Outcome.Rejects version (ParenParser.new (H := H) p)
       (.parenOpen :: tokens) program kind :=
-  opened_rejects_inner (closed_rejects_inner h hne) hne
+  wraps_rejects paren_wraps (opened_rejects_inner (closed_rejects_inner h hne) hne)
 
 /-- The parenthesised parser on a `(`, the inner value and a token that is not `)`. -/
-theorem paren_rejects_close {version : Token.Version} {p b : P}
+theorem paren_rejects_close {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R} {token : Parser.Internal.Input}
     (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ [])
     (htoken : token ≠ .parenClose) :
-    Outcome.Rejects version (ParenParser.new (ClosedParser.new (H := H) p))
+    Outcome.Rejects version (ParenParser.new (H := H) p)
       (.parenOpen :: (tokens ++ [token]))
       (do let _ ← program; pure ()) (.expected #[.token .parenClose]) :=
-  opened_rejects_inner (closed_rejects_close h hne htoken) (by simp)
+  wraps_rejects paren_wraps (opened_rejects_inner (closed_rejects_close h hne htoken) (by simp))
 
 end
 

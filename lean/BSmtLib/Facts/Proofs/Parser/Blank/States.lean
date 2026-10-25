@@ -33,7 +33,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Blank.States
 
 open Basic
 
-open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Attribute.Internal
 open BSmtLib.Parser.Category.Combinator.Internal

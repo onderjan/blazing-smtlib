@@ -91,7 +91,7 @@ theorem collectBy_x1 (slices : List ByteList) : ∀ (l l' : WLexer), LexRel l l'
     · exact ih k k' h1 _
 
 /-- The lexer with the batch in its state with the collector runs as the Rust port does. -/
-theorem collectX1_collectW (version : Token.Version) (slices : List ByteList) :
+theorem collectX1_collectW (version : Version) (slices : List ByteList) :
     collectX1 version slices = collectW version slices :=
   (collectBy_x1 slices _ _
     (BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Handed.new_rel Collector.mk version)
@@ -104,8 +104,8 @@ abbrev WOps := BSmtLib.Facts.Lexer.Adapters.WRustPort.lexOps
 
 /-- A result of a run with the collector against one of the naive lexer with the concrete
 collector: the same result, or errors of the same lexical kind. -/
-def MatchesC : Except (LexError Empty) (Option (Span.Located Unit)) →
-    Except (LexError (Option concreteCollector.Error))
+def MatchesC : Except (LexerError Empty) (Option (Span.Located Unit)) →
+    Except (LexerError (Option concreteCollector.Error))
       (Option (Span.Located concreteCollector.Result)) → Prop
   | .ok o, .ok o' => o = o'
   | .error e, .error e' => ∃ kind, e.cause = .lexical kind ∧ e'.cause = .lexical kind
@@ -113,8 +113,8 @@ def MatchesC : Except (LexError Empty) (Option (Span.Located Unit)) →
 
 /-- Two runs with the collector that match the same one of the naive lexer and write down the
 same entries are the same, but for where an error is. -/
-theorem causeOnly_eq {c₁ c₂ : Except (LexError Empty) (Option (Span.Located Unit)) × List Entry}
-    {r : Except (LexError (Option concreteCollector.Error))
+theorem causeOnly_eq {c₁ c₂ : Except (LexerError Empty) (Option (Span.Located Unit)) × List Entry}
+    {r : Except (LexerError (Option concreteCollector.Error))
       (Option (Span.Located concreteCollector.Result))}
     (h₁ : MatchesC c₁.1 r) (h₂ : MatchesC c₂.1 r) (he : c₁.2 = c₂.2) :
     causeOnly c₁ = causeOnly c₂ := by
@@ -134,8 +134,8 @@ theorem causeOnly_eq {c₁ c₂ : Except (LexError Empty) (Option (Span.Located 
     | (simp only [MatchesC] at h₁ h₂; subst h₁ h₂; rfl)
 
 /-- An error that matches as `Slicing.Matches` says matches as `MatchesC` says. -/
-theorem matchesC_of_matches {c : Except (LexError Empty) (Option (Span.Located Unit))}
-    {r : Except (LexError (Option concreteCollector.Error))
+theorem matchesC_of_matches {c : Except (LexerError Empty) (Option (Span.Located Unit))}
+    {r : Except (LexerError (Option concreteCollector.Error))
       (Option (Span.Located concreteCollector.Result))}
     (h : Slicing.Matches c r) : MatchesC c r := by
   rcases c with x | o <;> rcases r with x' | o'
@@ -146,7 +146,7 @@ theorem matchesC_of_matches {c : Except (LexError Empty) (Option (Span.Located U
 
 /-- A collector's error related to a lexical error of a lexer with the concrete collector has
 its kind. -/
-theorem cause_of_rel {e : LexError Empty} {e' : LexError (Option concreteCollector.Error)}
+theorem cause_of_rel {e : LexerError Empty} {e' : LexerError (Option concreteCollector.Error)}
     {k : LexicalErrorKind} (h : CauseRel link.re e.cause e'.cause)
     (hk : e'.cause = .lexical k) : e.cause = .lexical k := by
   rw [hk] at h
@@ -158,7 +158,7 @@ theorem cause_of_rel {e : LexError Empty} {e' : LexError (Option concreteCollect
 
 /-- The naive lexer with the collector ends as the naive lexer with the concrete collector,
 fed the same slices, ends, and writes down the entries it takes. -/
-theorem collectV_naive (version : Token.Version) (slices : List ByteList) :
+theorem collectV_naive (version : Version) (slices : List ByteList) :
     (collectV version slices).2 = ((runInputE VOps (VOps.new concreteCollector {} version) true
         slices).run []).2.map entryOf ∧
       MatchesC (collectV version slices).1 ((runInputE VOps (VOps.new concreteCollector {}
@@ -188,7 +188,7 @@ theorem collectV_naive (version : Token.Version) (slices : List ByteList) :
 
 /-- The Rust port with the collector ends as the naive lexer with the concrete collector, fed
 the same slices, ends, and writes down the entries it takes. -/
-theorem collectW_naive (version : Token.Version) (slices : List ByteList) :
+theorem collectW_naive (version : Version) (slices : List ByteList) :
     (collectW version slices).2 = ((runInputE VOps (VOps.new concreteCollector {} version) true
         slices).run []).2.map entryOf ∧
       MatchesC (collectW version slices).1 ((runInputE VOps (VOps.new concreteCollector {}
@@ -244,7 +244,7 @@ theorem collectW_naive (version : Token.Version) (slices : List ByteList) :
 
 /-- The naive lexer with the concrete collector ends alike fed the slices and their cut, and takes
 the same tokens. -/
-theorem naive_cut (version : Token.Version) (slices : List ByteList) :
+theorem naive_cut (version : Version) (slices : List ByteList) :
     ((runInputE VOps (VOps.new concreteCollector {} version) true slices).run []).1.1 =
         ((runInputE VOps (VOps.new concreteCollector {} version) true
           (X1BatchInCoreLexer.Chunks.cutAll slices)).run []).1.1 ∧
@@ -266,7 +266,7 @@ theorem naive_cut (version : Token.Version) (slices : List ByteList) :
 /-- The naive lexer, the Rust port and the lexer with the batch in its state with the collector
 end as the library's lexer with it does, but for where an error is, and write down the same
 entries. -/
-theorem lexers_agree (version : Token.Version) (slices : List ByteList) :
+theorem lexers_agree (version : Version) (slices : List ByteList) :
     causeOnly (collectV version slices) = causeOnly (collect version slices) ∧
       causeOnly (collectW version slices) = causeOnly (collect version slices) ∧
       causeOnly (collectX1 version slices) = causeOnly (collect version slices) := by

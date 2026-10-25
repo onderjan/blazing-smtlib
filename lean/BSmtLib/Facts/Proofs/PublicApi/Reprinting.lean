@@ -68,7 +68,7 @@ theorem printLog_eq {version : Lexicon.Version} {input : Regex.Chars} {commands 
   · contradiction
 
 /-- A read through slices reads the first slice, then the rest. -/
-theorem readThrough_cons {H P E R : Type} [Parser.Parse P H Id E R] [Traits.Handler H Id]
+theorem readThrough_cons {H P E R : Type} [Parser.Parse P H Id E R] [Handler H Id]
     (reader : Reader H P) (slice : ByteList) (slices : List ByteList) :
     readThrough reader (slice :: slices) =
       match (reader.readSlice slice.toByteArray.toByteSlice : Id _) with
@@ -134,7 +134,7 @@ theorem readUpTo_of_reading {version : Lexicon.Version} {slices : List ByteList}
 
 /-- The reader of the recording handler from the version, allowing every version, is the reader
 of the end-to-end proofs. -/
-theorem reader_eq (version : Token.Version) :
+theorem reader_eq (version : Version) :
     Reader.script ([] : List Event) allVersions version = readerOf (fromVersion version) := by
   cases version <;> rfl
 
@@ -148,7 +148,7 @@ theorem from25_looser : Looser from25 allVersions :=
 /-- A reader allowing the versions from 2.5 on, from one of them, that reads an input to the end
 reads it as the reader allowing every version: to the same handler, with the same discarding;
 and on a file, no command declares 2.0. -/
-theorem from25_as_all {version : Token.Version} (hv : version ≠ .v2_0) {slices : List ByteList}
+theorem from25_as_all {version : Version} (hv : version ≠ .v2_0) {slices : List ByteList}
     {result : Span.Located Unit} {before after : RecReader}
     (h : readThrough (Reader.script ([] : List Event) from25 version) slices =
       .ok (some result, before, after)) :
@@ -180,7 +180,7 @@ theorem from25_as_all {version : Token.Version} (hv : version ≠ .v2_0) {slices
   exact absurd (hw.2 .v2_0 hmemc) (by rw [Array.contains_iff_mem]; simp [from25])
 
 /-- What the recording handler reprints of an input read to the end. -/
-theorem recording_reprints (version : Token.Version) (slices : List ByteList)
+theorem recording_reprints (version : Version) (slices : List ByteList)
     {result : Span.Located Unit} {before after : RecReader}
     (h : readThrough (Reader.script ([] : List Event) allVersions version) slices =
       .ok (some result, before, after)) :
@@ -222,9 +222,9 @@ section
 attribute [-instance] recordingLibraryTerms recordingLibrary
 
 /-- `Reprints` of a library handler with the recording handler's state. -/
-def ReprintsWith (I : Traits.CommandHandler (List Event) Id) : Prop :=
+def ReprintsWith (I : Handler.CommandHandler (List Event) Id) : Prop :=
   letI := I
-  ∀ (version : Token.Version) (slices : List ByteList) (result : Span.Located Unit)
+  ∀ (version : Version) (slices : List ByteList) (result : Span.Located Unit)
     (before after : Reader (List Event) (ScriptParser (List Event) (m := Id)) (m := Id)),
     readThrough (Reader.script ([] : List Event) allVersions version) slices =
         .ok (some result, before, after) →
@@ -232,9 +232,9 @@ def ReprintsWith (I : Traits.CommandHandler (List Event) Id) : Prop :=
         SameSpellings written (printLog after.handler)
 
 /-- `ReprintsExactly` of a library handler with the recording handler's state. -/
-def ReprintsExactlyWith (I : Traits.CommandHandler (List Event) Id) : Prop :=
+def ReprintsExactlyWith (I : Handler.CommandHandler (List Event) Id) : Prop :=
   letI := I
-  ∀ (version : Token.Version) (slices : List ByteList) (result : Span.Located Unit)
+  ∀ (version : Version) (slices : List ByteList) (result : Span.Located Unit)
     (before after : Reader (List Event) (ScriptParser (List Event) (m := Id)) (m := Id)),
     version ≠ .v2_0 →
     readThrough (Reader.script ([] : List Event) from25 version) slices =

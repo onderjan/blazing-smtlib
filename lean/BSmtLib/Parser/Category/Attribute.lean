@@ -13,11 +13,12 @@ The parser of an attribute, a keyword with its value if it has one, alone or in 
 
 namespace BSmtLib.Parser.Category.Attribute
 
-open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.SExpr
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.SExpr
 open BSmtLib.Parser.Category.SExpr.Internal
 open BSmtLib.Parser.Category.Token.Internal
-open BSmtLib.Plain (Keyword)
-open BSmtLib.Token (Version)
+open BSmtLib.Lexicon.Value (Keyword)
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal

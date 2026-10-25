@@ -13,8 +13,8 @@ The parser of an s-expression, and the parser of one s-expression that a driver 
 
 namespace BSmtLib.Parser.Category.SExpr
 
-open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Token (Version)
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal
@@ -47,7 +47,7 @@ def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token :
       | items :: outer => do
         let list ← call (Handler.handleSExpr (.sExprs (.new items)))
         return sExprComplete outer list
-    | .constant constant => pure (Nodes.SExpr.specialConstant constant)
+    | .constant constant => pure (Grammar.Nodes.SExpr.specialConstant constant)
     | .symbol symbol => pure (.symbol symbol)
     | .keyword name => pure (.keyword name)
     | .reserved word =>

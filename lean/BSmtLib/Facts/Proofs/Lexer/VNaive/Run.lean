@@ -4,8 +4,9 @@ public import BSmtLib.Facts.Lexer.Adapters
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Span
 import all BSmtLib.Token
+import all BSmtLib.Version
 import all BSmtLib.Token.Reserved
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -38,7 +39,7 @@ def St.activity : St → Activity
 
 /-- The byte `c` at `location` with no token in progress: the state after it and the
 lexemes it finishes, or none on an error. -/
-def startStep (version : Token.Version) (location : Span.Location) (c : UInt8) :
+def startStep (version : Version) (location : Span.Location) (c : UInt8) :
     Option (St × List Lexeme) :=
   match start version false location c with
   | .idle => some (.idle, [])
@@ -49,7 +50,7 @@ def startStep (version : Token.Version) (location : Span.Location) (c : UInt8) :
 /-- The byte `c` at `location` in the state: the state after it and the lexemes it finishes,
 or none on an error. A byte that delimits a token is lexed again with no token in
 progress. -/
-def byteStep (version : Token.Version) : St → Span.Location → UInt8 → Option (St × List Lexeme)
+def byteStep (version : Version) : St → Span.Location → UInt8 → Option (St × List Lexeme)
   | .idle, location, c => startStep version location c
   | .token p, location, c =>
     match advance false p location c with
@@ -61,7 +62,7 @@ def byteStep (version : Token.Version) : St → Span.Location → UInt8 → Opti
 
 /-- The bytes from the state at `location`: the state and the location after them and the
 lexemes they finish, or none on an error. -/
-def feedBytes (version : Token.Version) : St → Span.Location → List UInt8 →
+def feedBytes (version : Version) : St → Span.Location → List UInt8 →
     Option (St × Span.Location × List Lexeme)
   | st, location, [] => some (st, location, [])
   | st, location, c :: cs =>
@@ -95,7 +96,7 @@ def withBefore (ls : List Lexeme) :
 
 /-- The bytes from the state at `location`: the state and the location after them and the
 lexemes they finish, or on an error, the lexemes finished before it. -/
-def lexBytes (version : Token.Version) : St → Span.Location → List UInt8 →
+def lexBytes (version : Version) : St → Span.Location → List UInt8 →
     Except (List Lexeme) (St × Span.Location × List Lexeme)
   | st, location, [] => .ok (st, location, [])
   | st, location, c :: cs =>
@@ -104,7 +105,7 @@ def lexBytes (version : Token.Version) : St → Span.Location → List UInt8 →
     | some (st', ls) => withBefore ls (lexBytes version st' (location.afterByte c) cs)
 
 /-- `feedBytes` is `lexBytes` without the lexemes finished before an error. -/
-theorem lexBytes_toOption (version : Token.Version) (st : St) (location : Span.Location)
+theorem lexBytes_toOption (version : Version) (st : St) (location : Span.Location)
     (bytes : List UInt8) :
     (lexBytes version st location bytes).toOption = feedBytes version st location bytes := by
   induction bytes generalizing st location with
@@ -147,19 +148,19 @@ def endStep : St → Span.Location → Option (List Lexeme)
     | .error _ => none
 
 /-- The bytes and then the end of the input, from the state at `location`. -/
-def runFrom (version : Token.Version) (st : St) (location : Span.Location) (bytes : List UInt8) :
+def runFrom (version : Version) (st : St) (location : Span.Location) (bytes : List UInt8) :
     Option (List Lexeme) :=
   (feedBytes version st location bytes).bind fun (st, location, ls) =>
     (endStep st location).map (ls ++ ·)
 
 /-- The lexemes of the whole input, or none on an error. -/
-def run (version : Token.Version) (bytes : List UInt8) : Option (List Lexeme) :=
+def run (version : Version) (bytes : List UInt8) : Option (List Lexeme) :=
   runFrom version .idle Span.Location.initial bytes
 
 /-- The lexeme in the spec's form, as the adapter records it (`toHanded`) when it is handed
 over alone in a cursor under the version (see `toHanded_batch`); none for whitespace and
 comments. -/
-def lexemeHanded (version : Token.Version) (l : Lexeme) : Option BSmtLibSpec.Lexer.Handed :=
+def lexemeHanded (version : Version) (l : Lexeme) : Option BSmtLibSpec.Lexer.Handed :=
   (toTokenType l.category).map fun type =>
     { type
       start := toLocation l.start
@@ -172,33 +173,33 @@ def lexemeHanded (version : Token.Version) (l : Lexeme) : Option BSmtLibSpec.Lex
       content := toContent l.content.toByteSlice }
 
 /-- The adapter records the lexeme handed over alone in a cursor as `lexemeHanded` gives it. -/
-theorem toHanded_batch (version : Token.Version) (l : Lexeme) (h : l.Valid) :
-    toHanded (Token.BatchCursor.Internal.new version (l.batch h))
-      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
+theorem toHanded_batch (version : Version) (l : Lexeme) (h : l.Valid) :
+    toHanded (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h))
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
       lexemeHanded version l := by
   have hcat :
-      (Token.BatchCursor.Internal.new version (l.batch h)).category
-      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version))
+      (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).category
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek (l.hasNext h version))
           = l.category := by
     obtain ⟨category, content, start, «end»⟩ := l
     cases category <;> rfl
   have hstart :
-      ((Token.BatchCursor.Internal.new version (l.batch h)).span
-      ((Token.BatchCursor.Internal.new version (l.batch h)).peek
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).span
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek
           (l.hasNext h version))).start = l.start :=
           rfl
   have hend :
-      ((Token.BatchCursor.Internal.new version (l.batch h)).span
-      ((Token.BatchCursor.Internal.new version (l.batch h)).peek
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).span
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek
           (l.hasNext h version))).end = l.end := rfl
   have hcontent :
-      (Token.BatchCursor.Internal.new version (l.batch h)).content
-      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
+      (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).content
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
         l.content.toByteSlice := rfl
-  have hversion : (Token.BatchCursor.Internal.new version (l.batch h)).version = version := rfl
+  have hversion : (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).version = version := rfl
   unfold lexemeHanded toHanded
-  simp only [Token.BatchCursor.«syntax», Token.SyntaxToken.fromToken,
-      Token.SyntaxToken.Internal.fromParts,
+  simp only [Lexer.Cursor.LexerCursor.«syntax», Token.fromLexerToken,
+      Token.Internal.fromParts,
       hcat, hstart, hend,
     hcontent, hversion]
   cases hc : l.category <;> simp [toTokenType, toReservedKind]
@@ -215,7 +216,7 @@ def lexemeLayout (l : Lexeme) : BSmtLibSpec.Lexer.Handed :=
 /-- The entry a consumer takes for the lexeme, as the adapter records it (`Answering.entry`): the
 token, or whitespace or a comment for a concrete consumer; none for whitespace or a comment
 otherwise. -/
-def lexemeEntry (concrete : Bool) (version : Token.Version)
+def lexemeEntry (concrete : Bool) (version : Version)
     (l : Lexeme) : Option BSmtLibSpec.Lexer.Handed :=
   match lexemeHanded version l with
   | some handed => some handed
@@ -223,14 +224,14 @@ def lexemeEntry (concrete : Bool) (version : Token.Version)
 
 /-- The adapter's consumer takes the lexeme handed over alone in a cursor as `lexemeEntry`
 gives it. -/
-theorem entry_batch (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Version) (l : Lexeme)
+theorem entry_batch (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) (l : Lexeme)
     (h : l.Valid) :
-    Answering.entry consumer (Token.BatchCursor.Internal.new version (l.batch h))
-      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
+    Answering.entry consumer (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h))
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) =
       lexemeEntry consumer.concrete version l := by
   have hcat :
-      (Token.BatchCursor.Internal.new version (l.batch h)).category
-      ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version))
+      (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).category
+      ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek (l.hasNext h version))
           = l.category := by
     obtain ⟨category, content, start, «end»⟩ := l
     cases category <;> rfl
@@ -244,7 +245,7 @@ theorem entry_batch (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Ver
 
 /-! ## Feeding in pieces -/
 
-theorem feedBytes_append (version : Token.Version) (st : St) (location : Span.Location)
+theorem feedBytes_append (version : Version) (st : St) (location : Span.Location)
     (a b : List UInt8) :
     feedBytes version st location (a ++ b) =
       (feedBytes version st location a).bind fun (st', location', ls) =>
@@ -270,7 +271,7 @@ theorem feedBytes_append (version : Token.Version) (st : St) (location : Span.Lo
         | none => rfl
         | some r => simp [List.append_assoc]
 
-theorem runFrom_append (version : Token.Version) (st : St) (location : Span.Location)
+theorem runFrom_append (version : Version) (st : St) (location : Span.Location)
     (a b : List UInt8) :
     runFrom version st location (a ++ b) =
       (feedBytes version st location a).bind fun (st', location', ls) =>
@@ -291,11 +292,11 @@ theorem runFrom_append (version : Token.Version) (st : St) (location : Span.Loca
 /-! ## The lexemes in the spec's form -/
 
 /-- The lexemes in the spec's form, or none if one of them is whitespace or a comment. -/
-def handedAll (version : Token.Version) (ls : List Lexeme) : Option
+def handedAll (version : Version) (ls : List Lexeme) : Option
     (List BSmtLibSpec.Lexer.Handed) :=
   ls.mapM (lexemeHanded version)
 
-theorem handedAll_cons_some {version : Token.Version} {l : Lexeme} {x : BSmtLibSpec.Lexer.Handed}
+theorem handedAll_cons_some {version : Version} {l : Lexeme} {x : BSmtLibSpec.Lexer.Handed}
     (hl : lexemeHanded version l = some x) (ls : List Lexeme) :
     handedAll version (l :: ls) = (handedAll version ls).map (x :: ·) := by
   simp only [handedAll, List.mapM_cons, hl]
@@ -323,7 +324,7 @@ theorem id_bind {α β : Type} (x : α) (f : α → Id β) : (x >>= f : Id β) =
 /-- The lexemes of the pure run over the bytes and then, if the input has ended and the run has
 not failed, of the end of the input, in the spec's form, and whether the run failed; none if a
 lexeme is whitespace or a comment. -/
-def fedOf (version : Token.Version) (ended : Bool) :
+def fedOf (version : Version) (ended : Bool) :
     Except (List Lexeme) (St × Span.Location × List Lexeme) → Option
         (List BSmtLibSpec.Lexer.Handed × Bool)
   | .ok (st, location, ls) =>

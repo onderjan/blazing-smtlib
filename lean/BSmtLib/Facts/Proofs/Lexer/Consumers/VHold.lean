@@ -5,6 +5,8 @@ import all BSmtLib.Lexer.Error
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Span
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -30,7 +32,7 @@ open BSmtLib.Facts.Proofs.Lexer.VNaive.Streaming BSmtLib.Lexer.Error BSmtLib.Lex
 
 /-- The run from the state at the location over the bytes, and then, if the input has ended,
 the end of the input: the lexemes it finishes, and whether it fails. -/
-def streamFromSt (version : Token.Version) (ws ended : Bool) (st : St) (location : Span.Location)
+def streamFromSt (version : Version) (ws ended : Bool) (st : St) (location : Span.Location)
     (bytes : List UInt8) : List Lexeme × Bool :=
   match lexBytesW version ws st location bytes with
   | .error ls => (ls, true)
@@ -41,13 +43,13 @@ def streamFromSt (version : Token.Version) (ws ended : Bool) (st : St) (location
       | none => (ls, true)
     else (ls, false)
 
-theorem streamFrom_eq (version : Token.Version) (ws ended : Bool) (location : Span.Location)
+theorem streamFrom_eq (version : Version) (ws ended : Bool) (location : Span.Location)
     (bytes : List UInt8) :
     streamFrom version ws ended location bytes =
       streamFromSt version ws ended .idle location bytes :=
   rfl
 
-theorem streamFromSt_nil (version : Token.Version) (ws ended : Bool) (st : St)
+theorem streamFromSt_nil (version : Version) (ws ended : Bool) (st : St)
     (location : Span.Location) :
     streamFromSt version ws ended st location [] =
       if ended then
@@ -57,7 +59,7 @@ theorem streamFromSt_nil (version : Token.Version) (ws ended : Bool) (st : St)
       else ([], false) := by
   simp only [streamFromSt, lexBytesW, List.nil_append]
 
-theorem streamFromSt_cons_some {version : Token.Version} {ws ended : Bool} {st st' : St}
+theorem streamFromSt_cons_some {version : Version} {ws ended : Bool} {st st' : St}
     {location : Span.Location} {b : UInt8} {bytes : List UInt8} {ls : List Lexeme}
     (h : byteStepW version ws st location b = some (st', ls)) :
     streamFromSt version ws ended st location (b :: bytes) =
@@ -75,7 +77,7 @@ theorem streamFromSt_cons_some {version : Token.Version} {ws ended : Bool} {st s
       simp only [ite_true]
       cases endStepW ws st'' location' <;> simp [List.append_assoc]
 
-theorem streamFromSt_cons_none {version : Token.Version} {ws ended : Bool} {st : St}
+theorem streamFromSt_cons_none {version : Version} {ws ended : Bool} {st : St}
     {location : Span.Location} {b : UInt8} {bytes : List UInt8}
     (h : byteStepW version ws st location b = none) :
     streamFromSt version ws ended st location (b :: bytes) =
@@ -84,7 +86,7 @@ theorem streamFromSt_cons_none {version : Token.Version} {ws ended : Bool} {st :
 
 /-- A byte that ends the token in progress before it: the run hands the token over and goes on
 with nothing in progress at the byte. -/
-theorem streamFromSt_tokenBefore {version : Token.Version} {ws ended : Bool} {p : Pending}
+theorem streamFromSt_tokenBefore {version : Version} {ws ended : Bool} {p : Pending}
     {location : Span.Location} {b : UInt8} {bytes : List UInt8} {l : Lexeme}
     (hadv : advance ws p location b = .tokenBefore l) :
     streamFromSt version ws ended (.token p) location (b :: bytes) =
@@ -104,7 +106,7 @@ theorem streamFromSt_tokenBefore {version : Token.Version} {ws ended : Bool} {p 
 
 /-! ## The errors of the pure step are not trailing input -/
 
-theorem start_error_kind {version : Token.Version} {ws : Bool} {location : Span.Location}
+theorem start_error_kind {version : Version} {ws : Bool} {location : Span.Location}
     {c : UInt8}
     {f : LexFailure} (h : start version ws location c = .error f) :
     (f.kind == .unexpectedTrailingToken) = false := by
@@ -135,17 +137,17 @@ theorem finish_error_kind {ws : Bool} {p : Pending} {location : Span.Location} {
 
 theorem failureOf_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
     (h : (k == .unexpectedTrailingToken) = false) (continuesFrom : Option Span.Location) :
-    failureOf (ε := ε) (LexError.Internal.new (.lexical k) span continuesFrom) = .lexical := by
+    failureOf (ε := ε) (LexerError.Internal.new (.lexical k) span continuesFrom) = .lexical := by
   simp [failureOf, h]
 
 /-! ## The end of file -/
 
-theorem lexemeHanded_eofAt (version : Token.Version) (input : List UInt8) :
+theorem lexemeHanded_eofAt (version : Version) (input : List UInt8) :
     lexemeHanded version (eofAt (locAfter input)) = some (BSmtLibSpec.Lexer.endOfFile input) :=
   lexemeHanded_eof version input
 
 /-- The end-of-file lexeme at a location is handed over as the end-of-file token there. -/
-theorem lexemeHanded_eofAt_location (version : Token.Version) (location : Span.Location) :
+theorem lexemeHanded_eofAt_location (version : Version) (location : Span.Location) :
     lexemeHanded version (eofAt location) =
       some (BSmtLibSpec.Lexer.endOfFileAt (toLocation location)) := by
   rw [lexemeHanded_eq]
@@ -154,7 +156,7 @@ theorem lexemeHanded_eofAt_location (version : Token.Version) (location : Span.L
 
 /-! ## The run for a consumer that takes whitespace and comments, and the pure run -/
 
-theorem handedOf_plainOf (version : Token.Version) (ls : List Lexeme) :
+theorem handedOf_plainOf (version : Version) (ls : List Lexeme) :
     handedOf version (plainOf ls) = handedOf version ls := by
   induction ls with
   | nil => rfl
@@ -172,7 +174,7 @@ theorem handedOf_plainOf (version : Token.Version) (ls : List Lexeme) :
       simp only [Bool.false_eq_true, ite_false, List.filterMap_cons, hnone]
       exact ih
 
-theorem streamFromSt_plain (version : Token.Version) (ended : Bool) {stW stP : St}
+theorem streamFromSt_plain (version : Version) (ended : Bool) {stW stP : St}
     (h : PlainOf stW stP)
     (location : Span.Location) (bytes : List UInt8) :
     (streamFromSt version true ended stW location bytes).2 =
@@ -220,7 +222,7 @@ theorem streamFromSt_plain (version : Token.Version) (ended : Bool) {stW stP : S
 /-- What the pure run hands over (`fedRun`) from the offset `o` on, read on its own and
 located in the whole input, is the tokens of the run from the boundary at `o`, for a consumer
 of either kind. -/
-theorem segment_stream (version : Token.Version) (ws : Bool) (input : List UInt8) (ended : Bool)
+theorem segment_stream (version : Version) (ws : Bool) (input : List UInt8) (ended : Bool)
     (o : Nat) :
     BSmtLibSpec.Lexer.segment fedRun (fromVersion version) input ended o =
       { handed := handedOf version (stream version ws input ended o).1
@@ -265,7 +267,7 @@ def St.weight : St → Nat
 lexeme of the run after it decides: trailing input at its start, or the end of the input, which
 returns the result; with no lexeme, a lexical error if the run fails, and otherwise the result
 held. -/
-def holdSession (start : BSmtLibSpec.Lexicon.Version) (version : Token.Version)
+def holdSession (start : BSmtLibSpec.Lexicon.Version) (version : Version)
     (taken : List Handed)
     (held : Span.Located consumer.Result) :
     List Lexeme × Bool → BSmtLibSpec.Lexer.Session consumer.Result consumer.Error
@@ -280,7 +282,7 @@ def holdSession (start : BSmtLibSpec.Lexicon.Version) (version : Token.Version)
 
 theorem trailing_failureOf (l : Lexeme) (continuesFrom : Option Span.Location) :
     failureOf (ε := consumer.Error)
-        (LexError.Internal.new (.lexical .unexpectedTrailingToken) (trailingSpan l) continuesFrom) =
+        (LexerError.Internal.new (.lexical .unexpectedTrailingToken) (trailingSpan l) continuesFrom) =
       .trailing (toLocation l.start) := by
   simp only [failureOf, trailingSpan]
   rfl
@@ -328,7 +330,7 @@ theorem discardedOf_reset (core : Core) : discardedOf core.reset = none := (rfl)
 
 /-- While a result is held, the end of the input returns it, unless the token in progress is
 trailing input or fails. -/
-theorem hold_nil (v : Token.Version) (x : Span.Located consumer.Result) (st : St) (j : Nat)
+theorem hold_nil (v : Version) (x : Span.Located consumer.Result) (st : St) (j : Nat)
     (core : Core)
     (taken : List Handed) (hv : core.version = v)
     (ha : core.activity = st.activity) (hl : core.location = locAfter (input.take j))
@@ -370,7 +372,7 @@ theorem hold_nil (v : Token.Version) (x : Span.Located consumer.Result) (st : St
           failureOf_lexical (finish_error_kind hf), discardedOf_of_activity ha, Option.map_none]
 
 
-theorem start_token_ne_eof {version : Token.Version} {ws : Bool} {location : Span.Location}
+theorem start_token_ne_eof {version : Version} {ws : Bool} {location : Span.Location}
     {c : UInt8}
     {l : Lexeme} (h : start version ws location c = .token l) :
     (l.category == .endOfFile) = false := by
@@ -422,14 +424,14 @@ theorem vSession_step_error {core core' : Core} {b : UInt8} {taken taken' : List
     (held : Option (Span.Located consumer.Result)) (bs : List UInt8) (ended : Bool)
     (h : vByte consumer core b taken = ((.error f, core'), taken')) :
     vSession consumer core held (b :: bs) ended taken =
-      sessionOf consumer taken' (.failed (failureOf (LexError.Internal.new f.cause f.span none)))
+      sessionOf consumer taken' (.failed (failureOf (LexerError.Internal.new f.cause f.span none)))
         core' := by
   unfold vSession
   simp only [vBytes, h]
 
 /-- While a result is held, the first lexeme the lexer finishes is trailing input, and the end of
 the input returns the result. -/
-theorem hold (v : Token.Version) (x : Span.Located consumer.Result) : ∀ (n : Nat)
+theorem hold (v : Version) (x : Span.Located consumer.Result) : ∀ (n : Nat)
     (bytes : List UInt8)
     (st : St), 2 * bytes.length + (St.weight st) ≤ n → ∀ (j : Nat) (core : Core)
     (taken : List Handed),

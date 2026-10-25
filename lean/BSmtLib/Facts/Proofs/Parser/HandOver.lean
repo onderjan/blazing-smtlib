@@ -64,8 +64,8 @@ theorem parseByToken_of_none {parser : P} (state : ParseState H) {cursor : Z}
 
 /-- The script parser of a handler that has no parser of a non-standard command hands no cursor
 over. -/
-theorem script_noHandOver {H : Type} {m : Type → Type} [Monad m] [Traits.CommandHandler H m]
-    (empty : Traits.CommandHandler.NonstandardParser H → False) :
+theorem script_noHandOver {H : Type} {m : Type → Type} [Monad m] [Handler.CommandHandler H m]
+    (empty : Handler.CommandHandler.NonstandardParser H → False) :
     NoHandOver (Parser.Script.ScriptParser H) := by
   intro Z _ parser cursor
   show Parser.Script.ScriptParser.Internal.handOver? parser cursor = none
@@ -76,7 +76,7 @@ theorem script_noHandOver {H : Type} {m : Type → Type} [Monad m] [Traits.Comma
   · rfl
 
 /-- A script parser not in a non-standard command hands no cursor over. -/
-theorem script_handOver_none {H : Type} {m : Type → Type} [Monad m] [Traits.CommandHandler H m]
+theorem script_handOver_none {H : Type} {m : Type → Type} [Monad m] [Handler.CommandHandler H m]
     {parser : Parser.Script.ScriptParser H}
     (h : ∀ nonstandard,
       Parser.Script.ScriptParser.Internal.command parser ≠ .nonstandard nonstandard)

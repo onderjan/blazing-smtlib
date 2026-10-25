@@ -17,12 +17,14 @@ batch cursor, the fused reader, is that loop (`parse_eq`).
 
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Step
 
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
+open BSmtLib.Token (BatchTag Cursor)
+open BSmtLib.Lexer.Cursor (LexerCursor)
+open BSmtLib.Version (VersionPosture)
 open BSmtLib.Facts.Proofs.Parser.Fused.Loop
 open BSmtLib.Facts.Proofs.Parser.Fused.Adapter
 open BSmtLib.Facts.Proofs.Parser.Fused.Term
@@ -54,7 +56,7 @@ theorem stepSimulates : StepSimulates H m := by
 the same answer, parser, parse state, cursor and handler, in every lawful monad, with every
 handler, on every cursor. -/
 theorem parse_eq {batch : BatchTag} (parser : ScriptParser H) (state : Parser.ParseState H)
-    (cursor : BatchCursor batch) :
+    (cursor : LexerCursor batch) :
     Parse.parse
         (m := m) parser state cursor = Parser.Internal.parseByToken parser state cursor :=
   Loop.parse_eq stepSimulates parser state cursor

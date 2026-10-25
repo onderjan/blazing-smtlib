@@ -37,11 +37,11 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 set_option maxHeartbeats 600000 in
 /-- `normalSpec_lt` at the colon that starts a keyword. -/
-theorem normalSpec_keyword (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_keyword (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)

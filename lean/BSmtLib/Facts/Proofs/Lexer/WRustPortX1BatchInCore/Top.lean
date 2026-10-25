@@ -14,6 +14,8 @@ calls the two lexer states correspond and their batches have no tokens (`TopRel`
 the lexer states and the consumer are related by `ISim`. A call that fails leaves them so too.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Top
 
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Interrupted Failure Stop)
@@ -95,7 +97,7 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
@@ -103,7 +105,7 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
 abbrev TopQ {α : Type} (a b : α) (w x : Core) : Prop :=
   a = b ∧ TopRel w x
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem executeStep_sim {step step' : Lexer.Internal.WRustPort.InnerM H m (Except (Failure E)
       (ControlFlow R))}
     (hs : Simulation.Couple.ISim TopRel TopQ step step') :
@@ -124,7 +126,7 @@ theorem executeStep_sim {step step' : Lexer.Internal.WRustPort.InnerM H m (Excep
     obtain ⟨rfl, rfl⟩ := h
     exact ⟨by rw [currentLocation_eq ht.1], ht⟩
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem fail_sim (abandon : Span.Location → StateT H m Unit) (failure : Failure E) (atEnd : Bool) :
     Simulation.Couple.ISim TopRel TopQ (Lexer.Internal.WRustPort.fail abandon failure atEnd)
       (Lexer.Internal.WRustPort.fail abandon failure atEnd) := by
@@ -143,14 +145,14 @@ theorem fail_sim (abandon : Span.Location → StateT H m Unit) (failure : Failur
           (Simulation.Couple.ISim.pure fun _ _ h => ⟨rfl, h⟩)
   exact ⟨{ h.2.1 with recoveryState := rfl }, h.2.2⟩
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexSliceInner_isim (ho : OpsSim o₁ o₂ LRel) (slice : ByteSlice) :
     Simulation.Couple.ISim TopRel TopQ (Lexer.Internal.WRustPort.lexSliceInner (ops := o₁) (H := H)
         (m := m) (R := R) (E := E)
       slice) (Lexer.Internal.WRustPort.lexSliceInner (ops := o₂) slice) := fun w x h =>
   Couple.mono (fun _ _ hab => ⟨hab.1, hab.2.1, hab.2.2⟩) (lexSliceInner_sim ho slice w x h.1)
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexEofInner_isim (ho : OpsSim o₁ o₂ LRel) :
     Simulation.Couple.ISim TopRel TopQ (Lexer.Internal.WRustPort.lexEofInner (ops := o₁) (H := H)
         (m := m) (R := R) (E := E))
@@ -174,7 +176,7 @@ local macro "slice_tail" : tactic => `(tactic| (
   · exact Simulation.Couple.ISim.mono hpre (fun _ _ _ _ h => h)
       (Simulation.Couple.ISim.pure fun w' x' h => ⟨rfl, h⟩)))
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexSliceStep_sim (ho : OpsSim o₁ o₂ LRel) (abandon recover : Span.Location → StateT H m
     Unit)
     (slice : ByteSlice) :
@@ -233,7 +235,7 @@ local macro "eof_tail" : tactic => `(tactic| (
   · exact Simulation.Couple.ISim.seq reset_sim' (Simulation.Couple.ISim.pure fun _ _ hh =>
       ⟨rfl, hh⟩)))
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexEofStep_sim (ho : OpsSim o₁ o₂ LRel) (abandon recover : Span.Location → StateT H m Unit)
     :
     Simulation.Couple.ISim TopRel TopQ (Lexer.Internal.WRustPort.lexEofStep (ops := o₁) (R := R)

@@ -29,7 +29,7 @@ variable {consumer : BSmtLibSpec.Lexer.Consumer}
 the result the lexer holds at the end, and the lexer. -/
 def runInputE (ops : LexOps) (lexer : ops.Lexer consumer) (ended : Bool) :
     List BSmtLibSpec.Regex.Chars →
-      AnswerM (Except (LexError (Option consumer.Error)) (Option (Span.Located consumer.Result)) ×
+      AnswerM (Except (LexerError (Option consumer.Error)) (Option (Span.Located consumer.Result)) ×
         ops.Lexer consumer)
   | [] =>
     if ended then do
@@ -68,7 +68,7 @@ theorem runInputE_nil_false (ops : LexOps) (lexer : ops.Lexer consumer) (t : Lis
 
 /-- Where the lexer stands in the spec's form, after the result or the error of `runInputE`. -/
 def outcomeOf (ended : Bool) :
-    Except (LexError (Option consumer.Error)) (Option (Span.Located consumer.Result)) →
+    Except (LexerError (Option consumer.Error)) (Option (Span.Located consumer.Result)) →
       BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error
   | .error error => .failed (failureOf error)
   | .ok (some held) =>
@@ -119,7 +119,7 @@ variable (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
 result, such that every failed call from a lexer that has it fails with an error that has `P`:
 the run from a lexer that has it fails, if it does, with an error that has `P`. -/
 theorem runInputE_error_inv (ops : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
-    (Inv : ops.Lexer consumer → Prop) (P : LexError (Option consumer.Error) → Prop)
+    (Inv : ops.Lexer consumer → Prop) (P : LexerError (Option consumer.Error) → Prop)
     (hslice : ∀ (slice : BSmtLibSpec.Regex.Chars) a (taken : List Handed), Inv a →
       (∀ held, ((ops.lexSliceStep a slice.toByteArray.toByteSlice).run taken).1.1 = .ok held →
         ∀ held', Inv (ops.withHeld ((ops.lexSliceStep a slice.toByteArray.toByteSlice).run
@@ -154,7 +154,7 @@ theorem runInputE_error_inv (ops : LexOps) {consumer : BSmtLibSpec.Lexer.Consume
 /-- Two lexers whose steps give results alike as `g` says, as `StepsAlikeG` says, and whose
 related lexers hold the same result, give results alike as `g` says fed the same slices, take the
 same tokens, and are weakly related, and related if they have not failed. -/
-theorem runInputE_alikeG {γ : Type} (g : LexError (Option consumer.Error) → γ)
+theorem runInputE_alikeG {γ : Type} (g : LexerError (Option consumer.Error) → γ)
     (hslice : ∀ slice : BSmtLibSpec.Regex.Chars, StepsAlikeG ops₁ ops₂ Rel Weak g
       (fun a => ops₁.lexSliceStep a slice.toByteArray.toByteSlice)
       (fun b => ops₂.lexSliceStep b slice.toByteArray.toByteSlice))
@@ -234,9 +234,9 @@ theorem runInputE_alikeG {γ : Type} (g : LexError (Option consumer.Error) → �
 says, with the relation as the weak one. -/
 theorem stepsAlike_G {β : Type}
     {step₁ : ops₁.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₁.Lexer consumer)}
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₁.Lexer consumer)}
     {step₂ : ops₂.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₂.Lexer consumer)}
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₂.Lexer consumer)}
     (h : StepsAlike ops₁ ops₂ Rel step₁ step₂) :
     StepsAlikeG ops₁ ops₂ Rel Rel id step₁ step₂ := by
   intro a b taken hr

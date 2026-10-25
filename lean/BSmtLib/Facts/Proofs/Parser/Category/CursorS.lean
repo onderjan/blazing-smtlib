@@ -32,13 +32,13 @@ open BSmtLib.Facts.Proofs.Parser.HandOver (rest_of_none parseByToken_of_none)
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m] {σ ρ : Type}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m] {σ ρ : Type}
 variable {points : BSmtLibSpec.Parser.Traversal.Points (StateT H m)}
 
 /-- The result with the tokens after it made a suffix of `tokens` of the same length, if it can
 be: what `driveS` gives back anyway. -/
 def projS (tokens : List Parser.Internal.Input) :
-    Res σ ρ (Traits.Handler.Error H) → Res σ ρ (Traits.Handler.Error H)
+    Res σ ρ (Handler.Error H) → Res σ ρ (Handler.Error H)
   | .done result rest => .done result (tokens.drop (tokens.length - rest.length))
   | .rejected kind rest => .rejected kind (tokens.drop (tokens.length - rest.length))
   | .rejectedVersion kind rest =>
@@ -47,7 +47,7 @@ def projS (tokens : List Parser.Internal.Input) :
 
 omit [Monad m] [LawfulMonad m] in
 theorem projS_cons (token : Parser.Internal.Input) (tokens : List Parser.Internal.Input)
-    (result : Res σ ρ (Traits.Handler.Error H)) :
+    (result : Res σ ρ (Handler.Error H)) :
     projS (token :: tokens) (projS tokens result) = projS tokens result := by
   have key : ∀ rest : List Parser.Internal.Input,
       (token :: tokens).drop ((token :: tokens).length -
@@ -90,17 +90,17 @@ end
 
 section
 
-variable {H P R σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable [ParseByToken P H m (Traits.Handler.Error H) R]
-variable {version : Token.Version} {mk : σ → P}
+variable {H P R σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable [ParseByToken P H m (Handler.Error H) R]
+variable {version : Version} {mk : σ → P}
   {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ R)} {fresh : P}
 variable {Z : Type} [Cursor Z]
 
 /-- What the loop gave, read as `outcome` reads a parse. -/
 def outcomeRest {origin : Z} :
-    Except (ParseError (Traits.Handler.Error H)) (ControlFlow R) × P ×
+    Except (ParseError (Handler.Error H)) (ControlFlow R) × P ×
       { z : Z // Cursor.Consumed z origin } →
-    Outcome R P Z (Traits.Handler.Error H)
+    Outcome R P Z (Handler.Error H)
   | (.ok (.break result), parser, next) => .finished result parser next.val
   | (.ok .continue, parser, _) => .waits parser
   | (.error error, _, next) =>
@@ -111,7 +111,7 @@ def outcomeRest {origin : Z} :
 
 /-- What `driveS` gave back, as the loop on the cursor gives it. -/
 def convS (mk : σ → P) (fresh : P) (cursor : Z) (tokens : List Parser.Internal.Input) :
-    Res σ R (Traits.Handler.Error H) → Outcome R P Z (Traits.Handler.Error H)
+    Res σ R (Handler.Error H) → Outcome R P Z (Handler.Error H)
   | .waits state => .waits (mk state)
   | .done result rest => .finished result fresh (advance (tokens.length - rest.length) cursor)
   | .rejected kind rest => .rejected kind (advance (tokens.length - rest.length) cursor)
@@ -119,12 +119,12 @@ def convS (mk : σ → P) (fresh : P) (cursor : Z) (tokens : List Parser.Interna
     .rejectedVersion kind (advance (tokens.length - rest.length) cursor)
   | .failed error => .failed error
 
-omit [Monad m] [LawfulMonad m] [ParseByToken P H m (Traits.Handler.Error H) R] in
+omit [Monad m] [LawfulMonad m] [ParseByToken P H m (Handler.Error H) R] in
 theorem convS_proj {cursor after : Z} {raw : Cursor.Token Z}
     {consumed : Cursor.Consumed after cursor}
     (hnext : Cursor.next? cursor = some (raw, ⟨after, consumed⟩))
     (token : Parser.Internal.Input) (tokens : List Parser.Internal.Input)
-    (result : Res σ R (Traits.Handler.Error H)) :
+    (result : Res σ R (Handler.Error H)) :
     convS mk fresh after tokens (projS tokens result) =
       convS mk fresh cursor (token :: tokens) (projS tokens result) := by
   have key : ∀ rest : List Parser.Internal.Input,
@@ -143,13 +143,13 @@ theorem convS_proj {cursor after : Z} {raw : Cursor.Token Z}
   · simp only [projS, convS, key]
   · rfl
 
-omit [ParseByToken P H m (Traits.Handler.Error H) R] in
+omit [ParseByToken P H m (Handler.Error H) R] in
 /-- The step on the first token, then what the loop does after it, against `driveS`. -/
 theorem step_afterS (state : σ) {cursor after : Z}
     {raw : Cursor.Token Z} {consumed : Cursor.Consumed after cursor}
     (hnext : Cursor.next? cursor = some (raw, ⟨after, consumed⟩))
-    {β : Type} (g : β → Outcome R P Z (Traits.Handler.Error H))
-    (k : After P R (Traits.Handler.Error H) × { z : Z // Cursor.Consumed z cursor } →
+    {β : Type} (g : β → Outcome R P Z (Handler.Error H))
+    (k : After P R (Handler.Error H) × { z : Z // Cursor.Consumed z cursor } →
       StateT H m β)
     (tokens : List Parser.Internal.Input)
     (hstop : ∀ answer z, g <$> k (.stop answer fresh, z) =
@@ -252,7 +252,7 @@ theorem parseByToken_driveS (sim : Simulates version mk step fresh) (state : σ)
         rcases answer with (_ | _) | (_ | _) <;> simp only [map_pure] <;> rfl
 
 /-- `driveS` over the tokens and anything after, as `RunsS` gives it, read on the cursor. -/
-theorem outcome_of_runsS [Parse P H m (Traits.Handler.Error H) R]
+theorem outcome_of_runsS [Parse P H m (Handler.Error H) R]
     (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh) {tokens : List Parser.Internal.Input}
@@ -273,7 +273,7 @@ theorem advance_rest {cursor last : Z} {tokens rest : List Parser.Internal.Input
     omega, advance_takes htakes]
 
 /-- A parser whose steps run over the tokens and finish parses them on every cursor. -/
-theorem parses_of_runsS [Parse P H m (Traits.Handler.Error H) R]
+theorem parses_of_runsS [Parse P H m (Handler.Error H) R]
     (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh)
@@ -291,7 +291,7 @@ theorem parses_of_runsS [Parse P H m (Traits.Handler.Error H) R]
 
 /-- A parser whose steps run over the tokens and stay in a state wants more on every cursor that
 has exactly the tokens. -/
-theorem waits_of_runsS [Parse P H m (Traits.Handler.Error H) R]
+theorem waits_of_runsS [Parse P H m (Handler.Error H) R]
     (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh)
@@ -310,7 +310,7 @@ theorem waits_of_runsS [Parse P H m (Traits.Handler.Error H) R]
 
 /-- A parser whose steps run over the tokens and then fail with a syntax error rejects them on
 every cursor. -/
-theorem rejects_of_runsS [Parse P H m (Traits.Handler.Error H) R]
+theorem rejects_of_runsS [Parse P H m (Handler.Error H) R]
     (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     {state : σ} (sim : Simulates version mk step fresh)
@@ -341,7 +341,7 @@ theorem RunsS.of_moves {step : σ → Parser.Internal.Input → PM H (Parser.Int
 /-- From a state from which the steps only move the parser over the tokens and then fail at the
 token with a syntax error, the parser rejects the tokens and the token on every cursor, making
 no call. -/
-theorem rejects_of_movesS [Parse P H m (Traits.Handler.Error H) R]
+theorem rejects_of_movesS [Parse P H m (Handler.Error H) R]
     (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),
       Parse.parse parser parseState cursor = parseByToken parser parseState cursor)
     (sim : Simulates version mk step fresh) {kind : SyntaxErrorKind}
@@ -364,7 +364,7 @@ runs as its steps do, with the results converted. -/
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {σ ρ τ α : Type} {points : BSmtLibSpec.Parser.Traversal.Points (StateT H m)}
 
 /-- A step with its result converted by `f`. -/
@@ -386,10 +386,10 @@ def Res.mapDone {E : Type} (f : ρ → τ) : Res σ ρ E → Res σ τ E
   | .failed error => .failed error
 
 theorem onStep_mapDone (f : ρ → τ)
-    {k : σ → StateT H m (Res σ ρ (Traits.Handler.Error H))}
-    {k' : σ → StateT H m (Res σ τ (Traits.Handler.Error H))}
+    {k : σ → StateT H m (Res σ ρ (Handler.Error H))}
+    {k' : σ → StateT H m (Res σ τ (Handler.Error H))}
     (hk : ∀ state, k' state = Res.mapDone f <$> k state) (rest : List Parser.Internal.Input)
-    (e : Except (ParseErrorCause (Traits.Handler.Error H)) (Parser.Internal.Step σ ρ)) :
+    (e : Except (ParseErrorCause (Handler.Error H)) (Parser.Internal.Step σ ρ)) :
     onStep k' rest (mapDone f <$> e) = Res.mapDone f <$> onStep k rest e := by
   rcases e with (kind | kind | error) | (state | result)
   · simp [onStep, Res.mapDone]; rfl
@@ -453,9 +453,9 @@ end
 
 section
 
-variable {H P R ρ σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable [ParseByToken P H m (Traits.Handler.Error H) R] [Parse P H m (Traits.Handler.Error H) R]
-variable {version : Token.Version} {mk : σ → P}
+variable {H P R ρ σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable [ParseByToken P H m (Handler.Error H) R] [Parse P H m (Handler.Error H) R]
+variable {version : Version} {mk : σ → P}
   {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)} {fresh : P} {f : ρ → R}
   {state : σ} {tokens : List Parser.Internal.Input}
 

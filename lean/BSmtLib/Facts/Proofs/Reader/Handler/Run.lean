@@ -22,7 +22,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Handler.Run
 open BSmtLib.Lexer
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Lexer (Handed)
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
@@ -46,7 +46,7 @@ abbrev HLexer (H : Type) [CommandHandler H Id] := BSmtLib.Lexer (ParseAdapter H 
 its public calls: the result at the end of the input and the lexer, or the first error. -/
 def hFeed (lexer : HLexer H) :
     List Regex.Chars →
-      Except (Lexer.Error.LexError (Parser.ParseError (Handler.Error H)))
+      Except (Lexer.Error.LexerError (Parser.ParseError (Handler.Error H)))
         (Option (Span.Located Unit) × HLexer H)
   | [] =>
     match (Lexer.lexEof lexer : Id _) with
@@ -79,18 +79,18 @@ variable {version : Lexicon.Version} {commands : List Tree.Command} {init : H} [
 omit [NoFails H] in
 theorem link_abandon (l : Span.Location) :
     (linkLink version commands init).rc.rel (· = ·)
-      (Recovery.LexRecovery.abandon (H := Flagged (scriptConsumer version)) (m := AnswerM)
+      (Recovery.LexerRecovery.abandon (H := Flagged (scriptConsumer version)) (m := AnswerM)
         Recovery.FailFast l)
-      (Recovery.LexRecovery.abandon (H := (ParseAdapter H (ScriptParser H))) (m := Id)
+      (Recovery.LexerRecovery.abandon (H := (ParseAdapter H (ScriptParser H))) (m := Id)
         Recovery.FailFast l) :=
   (linkLink version commands init).rc.pure rfl
 
 omit [NoFails H] in
 theorem link_recover (l : Span.Location) :
     (linkLink version commands init).rc.rel (· = ·)
-      (Recovery.LexRecovery.recover (H := Flagged (scriptConsumer version)) (m := AnswerM)
+      (Recovery.LexerRecovery.recover (H := Flagged (scriptConsumer version)) (m := AnswerM)
         Recovery.FailFast l)
-      (Recovery.LexRecovery.recover (H := (ParseAdapter H (ScriptParser H))) (m := Id)
+      (Recovery.LexerRecovery.recover (H := (ParseAdapter H (ScriptParser H))) (m := Id)
         Recovery.FailFast l) :=
   (linkLink version commands init).rc.pure rfl
 
@@ -103,11 +103,11 @@ variable {version : Lexicon.Version} {commands : List Tree.Command} {init : H} [
 theorem sliceStep_sim (hscript : Script version commands) (slice : ByteSlice) :
     SSim (linkLink version commands init) (SliceRel (linkLink version commands init))
       (Internal.lexSliceStep (H := Flagged (scriptConsumer version)) (m := AnswerM)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-            (Recovery.LexRecovery.recover Recovery.FailFast) slice)
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+            (Recovery.LexerRecovery.recover Recovery.FailFast) slice)
       (Internal.lexSliceStep (H := (ParseAdapter H (ScriptParser H))) (m := Id)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-            (Recovery.LexRecovery.recover Recovery.FailFast) slice) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+            (Recovery.LexerRecovery.recover Recovery.FailFast) slice) :=
   lexSliceStep_sim (link_consumers hscript init) _ _ _ _ link_abandon link_recover slice
 
 theorem slice_step (hscript : Script version commands) (slice : ByteSlice) (a : FLexer version)
@@ -132,12 +132,12 @@ theorem slice_step (hscript : Script version commands) (slice : ByteSlice) (a : 
   rw [run_id, ← hcore]
   generalize ((StateT.run (Internal.lexSliceStep (H := Flagged (scriptConsumer version))
       (m := AnswerM)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast) slice)
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast) slice)
     (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok
   generalize (StateT.run (Internal.lexSliceStep (H := (ParseAdapter H (ScriptParser H))) (m := Id)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast) slice)
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast) slice)
     (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢
   obtain ⟨⟨⟨res, core'⟩, fl'⟩, taken''⟩ := R
   obtain ⟨⟨res₂, core₂⟩, adapter₂⟩ := R₂
@@ -157,12 +157,12 @@ theorem eofStep_sim (hscript : Script version commands) :
     SSim (linkLink version commands init) (EofRel (linkLink version commands init))
       (Internal.lexEofStep (H := Flagged (scriptConsumer version)) (m := AnswerM)
         (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-            (Recovery.LexRecovery.recover Recovery.FailFast))
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+            (Recovery.LexerRecovery.recover Recovery.FailFast))
       (Internal.lexEofStep (H := (ParseAdapter H (ScriptParser H))) (m := Id) (R := Unit)
           (E := Parser.ParseError (Handler.Error H))
-        (Recovery.LexRecovery.abandon Recovery.FailFast)
-            (Recovery.LexRecovery.recover Recovery.FailFast)) :=
+        (Recovery.LexerRecovery.abandon Recovery.FailFast)
+            (Recovery.LexerRecovery.recover Recovery.FailFast)) :=
   lexEofStep_sim (link_consumers hscript init) _ _ _ _ link_abandon link_recover
 
 theorem eof_step (hscript : Script version commands) (a : FLexer version) (p : HLexer H)
@@ -189,14 +189,14 @@ theorem eof_step (hscript : Script version commands) (a : FLexer version) (p : H
   generalize ((StateT.run (Internal.lexEofStep (H := Flagged (scriptConsumer version))
       (m := AnswerM)
     (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast))
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok
   generalize (StateT.run (Internal.lexEofStep (H := (ParseAdapter H (ScriptParser H))) (m := Id)
     (R := Unit)
     (E := Parser.ParseError (Handler.Error H))
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast))
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢
   obtain ⟨⟨⟨res, core'⟩, fl'⟩, taken''⟩ := R
   obtain ⟨⟨res₂, core₂⟩, adapter₂⟩ := R₂

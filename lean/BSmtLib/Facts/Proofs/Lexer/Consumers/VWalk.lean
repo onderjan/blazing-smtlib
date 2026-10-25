@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.VEvent
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Span
 import all BSmtLib.Lexer.Error
 
@@ -82,7 +84,7 @@ theorem lexStart_holding (core : Core) (b : UInt8) (taken : List Handed)
 progress: the version it left, and discarding from the end of the lexeme if it asked for it. -/
 theorem sessionOf_coreAfterError (taken : List Handed)
     (outcome : BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error) (X : Core) (l : Lexeme)
-    (version : Token.Version) (discards : Bool) (ha : X.activity = .idle) :
+    (version : Version) (discards : Bool) (ha : X.activity = .idle) :
     sessionOf consumer taken outcome (coreAfterError X l version discards) =
       ⟨taken, outcome, fromVersion version,
         if discards then some (toLocation l.end) else none⟩ := by
@@ -91,7 +93,7 @@ theorem sessionOf_coreAfterError (taken : List Handed)
 
 /-- At the end of the input with nothing in progress and no result held: the end-of-file token
 is handed over. -/
-theorem walk_eof (hb : consumer.BreaksAtEnd) (j : Nat) (v : Token.Version) (core : Core)
+theorem walk_eof (hb : consumer.BreaksAtEnd) (j : Nat) (v : Version) (core : Core)
     (taken : List Handed) (hj : input.drop j = []) (hv : core.version = v)
     (ha : core.activity = .idle) (hl : core.location = locAfter (input.take j))
     (hh : core.holding = false) (hi : core.initialVersion = toVersion sv) :
@@ -158,7 +160,7 @@ theorem session_handOver {core X : Core} {b : UInt8} {bs : List UInt8} {l : Lexe
           (some (Span.Located.Internal.new value l.end)) bs ended taken'
       | (.error err, version, discards, taken') =>
         sessionOf consumer taken'
-            (.failed (failureOf (Lexer.Error.LexError.Internal.new (.consumer err)
+            (.failed (failureOf (Lexer.Error.LexerError.Internal.new (.consumer err)
               (Span.Internal.newUnchecked l.end l.end) none)))
           (coreAfterError X l version discards) := by
   have hr := handOverAt_reply consumer X l hl hX taken
@@ -173,7 +175,7 @@ theorem session_handOver {core X : Core} {b : UInt8} {bs : List UInt8} {l : Lexe
     | «break» value => exact vSession_step_some consumer held bs ended hbyte
 
 
-theorem coreAfter_fields (X : Core) (l : Lexeme) (version : Token.Version) (discards : Bool) :
+theorem coreAfter_fields (X : Core) (l : Lexeme) (version : Version) (discards : Bool) :
     (coreAfter X l version discards).version = version ∧
       (coreAfter X l version discards).activity =
         (if discards then .discarding l.end else X.activity) ∧
@@ -185,7 +187,7 @@ theorem coreAfter_fields (X : Core) (l : Lexeme) (version : Token.Version) (disc
 
 /-- An entry that a byte ends with it, handed over with nothing in progress after it, at the
 boundary `j + 1`: a token that is the byte by itself, or a comment that the byte ends. -/
-theorem eventA (hb : consumer.BreaksAtEnd) {j : Nat} {v : Token.Version} {core : Core}
+theorem eventA (hb : consumer.BreaksAtEnd) {j : Nat} {v : Version} {core : Core}
     {taken : List Handed} {b : UInt8} {bs : List UInt8} {l : Lexeme} {hd : Handed}
     (hj : input.drop j = b :: bs) (hv : core.version = v)
     (hl : core.location = locAfter (input.take j)) (hh : core.holding = false)
@@ -248,7 +250,7 @@ theorem eventA (hb : consumer.BreaksAtEnd) {j : Nat} {v : Token.Version} {core :
 
 /-- An entry that a byte ends before it, handed over at the boundary `j`, after which the byte is
 lexed again with nothing in progress. -/
-theorem eventB (hb : consumer.BreaksAtEnd) {j : Nat} {v : Token.Version} {core : Core}
+theorem eventB (hb : consumer.BreaksAtEnd) {j : Nat} {v : Version} {core : Core}
     {taken : List Handed} {b : UInt8} {bs : List UInt8} {p : Pending} {l : Lexeme}
     {hd : Handed}
     (hj : input.drop j = b :: bs) (hv : core.version = v) (ha : core.activity = .token p)
@@ -353,12 +355,12 @@ theorem eventB (hb : consumer.BreaksAtEnd) {j : Nat} {v : Token.Version} {core :
       (by simp only [discardingAfter]; rw [f5]; exact hi) nofun
 
 
-theorem stream_at_end (version : Token.Version) (ws : Bool) {j : Nat} (hj : input.drop j = []) :
+theorem stream_at_end (version : Version) (ws : Bool) {j : Nat} (hj : input.drop j = []) :
     stream version ws input true j = ([eofLexeme (locAfter (input.take j))], false) := by
   simp [stream, streamFrom, hj, lexBytesW, endStepW]
 
 /-- An entry that the end of the input ends, handed over at the end. -/
-theorem eventC (hb : consumer.BreaksAtEnd) {j : Nat} {v : Token.Version} {core : Core}
+theorem eventC (hb : consumer.BreaksAtEnd) {j : Nat} {v : Version} {core : Core}
     {taken : List Handed} {p : Pending} {l : Lexeme} {hd : Handed}
     (hj : input.drop j = []) (hjle : j ≤ input.length) (hv : core.version = v)
     (ha : core.activity = .token p)
@@ -451,7 +453,7 @@ theorem session_end_after {core core2 : Core} {taken taken2 : List Handed} {p : 
   rw [hend3 hh2 hr2 hR3, vEnd_eof consumer core2 taken2 ha2 hh2 (r := r3) (core2 := core3)
     (taken2 := taken3) (by rw [hl2]; exact hR3)]
 
-theorem start_token_taken {version : Token.Version} {ws : Bool} {location : Span.Location}
+theorem start_token_taken {version : Version} {ws : Bool} {location : Span.Location}
     {c : UInt8}
     {l : Lexeme} (h : start version ws location c = .token l) : (Taken l) := by
   simp only [start] at h
@@ -461,7 +463,7 @@ theorem start_token_taken {version : Token.Version} {ws : Bool} {location : Span
 
 /-- A lexeme the lexer hands over is an entry the consumer takes: any lexeme for a concrete
 consumer, a token for one that is not. -/
-theorem entry_of (version : Token.Version) {l : Lexeme}
+theorem entry_of (version : Version) {l : Lexeme}
     (h : consumer.concrete = false → (Taken l)) :
     ∃ hd, lexemeEntry consumer.concrete version l = some hd := by
   cases hc : consumer.concrete with
@@ -471,7 +473,7 @@ theorem entry_of (version : Token.Version) {l : Lexeme}
     exact ⟨hd, lexemeEntry_of_handed hhd⟩
 
 /-- At the end of the bytes with nothing in progress. -/
-theorem walk_nil_idle (hb : consumer.BreaksAtEnd) (j : Nat) (v : Token.Version) (core : Core)
+theorem walk_nil_idle (hb : consumer.BreaksAtEnd) (j : Nat) (v : Version) (core : Core)
     (taken : List Handed) (hj : input.drop j = []) (hv : core.version = v)
     (ha : core.activity = .idle) (hl : core.location = locAfter (input.take j))
     (hh : core.holding = false) (hi : core.initialVersion = toVersion sv) :
@@ -502,7 +504,7 @@ theorem walk_nil_idle (hb : consumer.BreaksAtEnd) (j : Nat) (v : Token.Version) 
 result, is what `Runs` states, from the entries of the run from that state. -/
 theorem walk (hb : consumer.BreaksAtEnd) : ∀ (n : Nat) (bytes : List UInt8) (st : St),
     2 * bytes.length + (weight st) ≤ n →
-    ∀ (j : Nat) (v : Token.Version) (core : Core) (taken : List Handed),
+    ∀ (j : Nat) (v : Version) (core : Core) (taken : List Handed),
     input.drop j = bytes → j ≤ input.length → core.version = v →
     core.activity = st.activity → core.location = locAfter (input.take j) →
     core.holding = false → core.initialVersion = toVersion sv →

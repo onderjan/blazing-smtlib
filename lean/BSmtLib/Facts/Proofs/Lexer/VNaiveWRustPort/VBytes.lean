@@ -118,7 +118,7 @@ end
 
 section
 
-variable (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version)
+variable (C : BSmtLibSpec.Lexer.Consumer) (v : Version)
 
 theorem lexBytesW_tokenBefore {ws : Bool} {p : Pending} {location : Span.Location} {b : UInt8}
     {l : Lexeme} (rest : List UInt8) (h : advance ws p location b = .tokenBefore l) :

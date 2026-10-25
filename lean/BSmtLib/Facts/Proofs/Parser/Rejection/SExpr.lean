@@ -26,7 +26,7 @@ open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser.Category.SExpr.Internal (SExprState sExprStep sExprComplete)
 open BSmtLib.Parser.Category.Attribute.Internal (AttributeState AttributeMode attributeStep)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
-open BSmtLib.Facts.Proofs.Parser.Rejection.«Sort» BSmtLib.Plain
+open BSmtLib.Facts.Proofs.Parser.Rejection.«Sort» BSmtLib.Lexicon.Value
 
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 
@@ -119,17 +119,17 @@ theorem sExprComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : 
   | cons level outer => exact fun _ => ⟨fun u hu => h u hu, sExprRem_nonempty version _⟩
 
 /-- Every step of the s-expression parser advances. -/
-theorem sExprStep_advances (version : Token.Version) :
+theorem sExprStep_advances (version : Version) :
     StepsAdvance version (sExprStep (H := List Event) version)
       (sExprRem (Bridge.version version))
       fun state _ => sExprRem (Bridge.version version) state := by
   intro state token item hitem hlex
-  have atom : ∀ (node : Nodes.SExpr Nat) (x : Received),
+  have atom : ∀ (node : Grammar.Nodes.SExpr Nat) (x : Received),
       SExprLang (Bridge.version version) [x] →
       Sound (Advances (sExprRem (Bridge.version version))
         (fun state _ => sExprRem (Bridge.version version) state) state x) Benign
         (do
-          let handled ← Parser.Internal.call (Traits.Handler.handleSExpr (H := List Event) node)
+          let handled ← Parser.Internal.call (Handler.handleSExpr (H := List Event) node)
           pure (sExprComplete state handled)) := fun node x hx => by
     call_step
     exact Sound.pure (sExprComplete_advances _ _ fun v hv =>
@@ -268,7 +268,7 @@ end
 
 /-- In a list value, the s-expression parser's step, with its result in the attribute parser's
 state. -/
-theorem inside_advances (version : Token.Version) (single need : Bool)
+theorem inside_advances (version : Version) (single need : Bool)
     (keyword : Keyword) (items : Array Nat) (sExpr : SExprState Nat) (outside : Bool)
     (attributes : Array Nat) {item : Received} (r : Parser.Internal.Step (SExprState Nat) Nat)
     (hr : Advances (sExprRem (Bridge.version version))
@@ -316,7 +316,7 @@ theorem attrRem_after_iff (version : BSmtLibSpec.Lexicon.Version) (single need :
 
 /-- Every step of the attribute parser advances; it finishes with at least one attribute where
 one is needed, and the remainders say so. -/
-theorem attributeStep_advances (version : Token.Version) (single need : Bool) :
+theorem attributeStep_advances (version : Version) (single need : Bool) :
     StepsAdvance version (attributeStep (H := List Event) single version)
       (attrRem (Bridge.version version) single need)
       fun state (result : Array Nat) u => (need = true → result.isEmpty = false) →
@@ -427,7 +427,7 @@ theorem attributeStep_advances (version : Token.Version) (single need : Bool) :
         exact Sound.pure (inside_advances version single need keyword items sExpr _ attributes _ hr)
 
 /-- The attribute parser finishes with no attribute only without a call. -/
-theorem attributeStep_done_silent (single : Bool) (version : Token.Version)
+theorem attributeStep_done_silent (single : Bool) (version : Version)
     (state : AttributeState Nat Nat) (token : Parser.Internal.Input) :
     ∀ events attrs events',
       (attributeStep (H := List Event) single version state token).run.run events =
@@ -484,7 +484,7 @@ theorem attributeStep_done_silent (single : Bool) (version : Token.Version)
 
 /-- The attribute parser writes no event where it finishes with no attribute, as
 `Sound.bindOn` takes it. -/
-theorem attributeStep_quiet (single : Bool) (version : Token.Version)
+theorem attributeStep_quiet (single : Bool) (version : Version)
     (state : AttributeState Nat Nat) (token : Parser.Internal.Input) :
     ∀ events b events',
       (attributeStep (H := List Event) single version state token).run.run events =

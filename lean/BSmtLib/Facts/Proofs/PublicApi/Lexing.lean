@@ -4,6 +4,8 @@ public import BSmtLib.Facts.Proofs.PublicApi.Collector
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Ports
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -108,7 +110,7 @@ def lexEntry (l : Lexeme) : Entry := (l.category, l.start.offset, l.«end».offs
 theorem cat_beq (a b : Token.TokenCategory) : (a == b) = (a.ctorIdx == b.ctorIdx) := by
   cases a <;> cases b <;> rfl
 
-theorem lexemeEntry_true (version : Token.Version) (l : Lexeme) :
+theorem lexemeEntry_true (version : Version) (l : Lexeme) :
     ∃ hd, lexemeEntry true version l = some hd ∧ entryOf hd = lexEntry l ∧
       (hd.type = .endOfFile ↔ (l.category == .endOfFile) = true) := by
   unfold lexemeEntry lexemeHanded lexemeLayout
@@ -119,7 +121,7 @@ theorem lexemeEntry_true (version : Token.Version) (l : Lexeme) :
       | (simp only [entryOf, lexEntry, hc, toLocation]; rfl)
       | (dsimp only; decide)
 
-theorem entriesOf_map (version : Token.Version) (ls : List Lexeme) :
+theorem entriesOf_map (version : Version) (ls : List Lexeme) :
     (entriesOf true version ls).map entryOf = ls.map lexEntry := by
   induction ls with
   | nil => rfl
@@ -128,7 +130,7 @@ theorem entriesOf_map (version : Token.Version) (ls : List Lexeme) :
     simp only [entriesOf, List.filterMap_cons, h1, List.map_cons] at ih ⊢
     rw [h2, ih]
 
-theorem entriesOf_noEof {version : Token.Version} {ls : List Lexeme} (h : NoEof ls) :
+theorem entriesOf_noEof {version : Version} {ls : List Lexeme} (h : NoEof ls) :
     ∀ t ∈ entriesOf true version ls, t.type ≠ .endOfFile := by
   intro t ht hte
   obtain ⟨l, hl, hlt⟩ := List.mem_filterMap.mp ht
@@ -140,7 +142,7 @@ theorem entriesOf_noEof {version : Token.Version} {ls : List Lexeme} (h : NoEof 
   cases this
 
 /-- The entries of a run, as the concrete collector takes them. -/
-theorem streamFrom_ready (version : Token.Version) (ended : Bool) (location : Span.Location)
+theorem streamFrom_ready (version : Version) (ended : Bool) (location : Span.Location)
     (bytes : List UInt8) :
     CollectorReady (entriesOf true version (streamFrom version true ended location bytes).1)
       (streamFrom version true ended location bytes).2 := by
@@ -196,7 +198,7 @@ theorem streamFrom_ready (version : Token.Version) (ended : Bool) (location : Sp
 
 /-- The library's lexer with the collector writes down the lexemes of the naive lexer's pure run
 over the input joined, and fails exactly where it does. -/
-theorem collect_stream (version : Token.Version) (slices : List ByteList) :
+theorem collect_stream (version : Version) (slices : List ByteList) :
     (collect version slices).2 = (stream version true slices.flatten true 0).1.map lexEntry ∧
       (collect version slices).1.toBool = !(stream version true slices.flatten true 0).2 := by
   obtain ⟨h1, h2⟩ := collect_lexing version slices
@@ -228,7 +230,7 @@ theorem finish_token_ne_close {ws : Bool} {p : Pending} {location : Span.Locatio
   all_goals first | (intro hc; cases hc) | (cases ‹Radix› <;> intro hc <;> cases hc)
 
 /-- The run from the start of the input over the bytes, and then the end of the input. -/
-theorem stream_zero (version : Token.Version) (input : List UInt8) :
+theorem stream_zero (version : Version) (input : List UInt8) :
     stream version true input true 0 =
       streamFrom version true true Span.Location.initial input := by
   simp [stream, locAfter, advanceLoc]
@@ -236,7 +238,7 @@ theorem stream_zero (version : Token.Version) (input : List UInt8) :
 /-- A run that finishes without an error, with a `)` as its last lexeme before the end of file,
 has nothing in progress after the bytes: the lexemes before the end of file are those of the
 bytes. -/
-theorem lexBytes_of_close {version : Token.Version} {input : List UInt8} {ls : List Lexeme}
+theorem lexBytes_of_close {version : Version} {input : List UInt8} {ls : List Lexeme}
     (h : streamFrom version true true Span.Location.initial input = (ls, false))
     (hclose : (ls.map lexEntry).dropLast.getLast?.map (·.1) = some .parenClose) :
     ∃ location, lexBytesW version true .idle Span.Location.initial input =
@@ -287,7 +289,7 @@ theorem lexBytes_of_close {version : Token.Version} {input : List UInt8} {ls : L
 
 /-- The run over bytes after bytes that leave nothing in progress: the lexemes of the first
 bytes, then those of the run over the rest on its own, moved past the first bytes. -/
-theorem streamFrom_append {version : Token.Version} {first rest : List UInt8}
+theorem streamFrom_append {version : Version} {first rest : List UInt8}
     {location : Span.Location} {ls : List Lexeme}
     (h : lexBytesW version true .idle Span.Location.initial first = .ok (.idle, location, ls)) :
     streamFrom version true true Span.Location.initial (first ++ rest) =
@@ -322,7 +324,7 @@ theorem map_lexEntry_shift (base : Span.Location) (ls : List Lexeme) :
 
 /-- An input that the library's lexer with the collector lexes to the end, with a `)` as its last
 token, is lexed as a prefix of every input it starts. -/
-theorem composes (version : Token.Version) (first rest : ByteList)
+theorem composes (version : Version) (first rest : ByteList)
     (result : Option (Span.Located Unit)) (entries : List Entry)
     (h : collect version [first] = (.ok result, entries))
     (hclose : entries.dropLast.getLast?.map (·.1) = some .parenClose) :

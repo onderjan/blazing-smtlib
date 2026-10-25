@@ -35,7 +35,7 @@ variable {Z : Type} [Cursor Z]
 `Takes version cursor tokens next`: the cursor has the tokens first, each viewed in the version
 in force after it is taken, which is `version`, and taking them leaves `next`.
 -/
-inductive Takes (version : Token.Version) : Z → List Parser.Internal.Input → Z → Prop where
+inductive Takes (version : Version) : Z → List Parser.Internal.Input → Z → Prop where
   | nil (cursor : Z) : Takes version cursor [] cursor
   | cons {cursor after next : Z} {token : Cursor.Token Z} {consumed : Cursor.Consumed after cursor}
       {tokens : List Parser.Internal.Input} :
@@ -45,7 +45,7 @@ inductive Takes (version : Token.Version) : Z → List Parser.Internal.Input →
         next
 
 /-- The cursor gives exactly the tokens, each in the version. -/
-def Reads (version : Token.Version) (cursor : Z) (tokens : List Parser.Internal.Input) : Prop :=
+def Reads (version : Version) (cursor : Z) (tokens : List Parser.Internal.Input) : Prop :=
   ∃ last, Takes version cursor tokens last ∧ Cursor.next? last = none
 
 end

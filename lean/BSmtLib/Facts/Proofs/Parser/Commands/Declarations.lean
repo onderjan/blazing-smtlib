@@ -36,14 +36,14 @@ open BSmtLibSpec.Facts.Proofs.Parser (Program.callUnit)
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- The sort of the handler. -/
-local notation "S" => Traits.Handler.«Sort» H
+local notation "S" => Handler.«Sort» H
 
-theorem adaptRun_forM {X : Type} (f : X → Run (StateT H m) (Traits.Handler.Error H) Unit)
+theorem adaptRun_forM {X : Type} (f : X → Run (StateT H m) (Handler.Error H) Unit)
     (items : List X) : adaptRun (items.forM f) = items.forM fun item => adaptRun (f item) := by
   induction items with
   | nil => simp [List.forM]
@@ -82,8 +82,8 @@ theorem declareDatatype_payload (name : Tree.Symbol) (declaration : Tree.Datatyp
   obtain ⟨symbolToken, datatypeTokens, rfl, hsymbolToken, hdatatype⟩ := Stands.split_cons hs
   obtain ⟨symbol, rfl, rfl⟩ := Parser.Internal.Input.received_symbol hsymbolToken
   obtain ⟨-, program, hprogram, hruns⟩ := datatype_runs (points := points) (version := version)
-    (fun parameters => Parser.Internal.call (Traits.CommandHandler.startDeclareDatatype (H := H) symbol
-      (Multiple.Symbols.Internal.new parameters)))
+    (fun parameters => Parser.Internal.call (Handler.CommandHandler.startDeclareDatatype (H := H) symbol
+      (Grammar.Multiple.Symbols.Internal.new parameters)))
     (start' := fun parameters =>
       Program.callUnit h (.startDeclareDatatype (Bridge.symbol symbol) parameters))
     hA.toTermAgrees (fun parameters => by simp [hA.startDeclareDatatype]) declaration hvalid
@@ -102,17 +102,17 @@ theorem declareDatatype_payload (name : Tree.Symbol) (declaration : Tree.Datatyp
 
 omit hA in
 /-- The parser of a datatype declaration in `declare-datatypes`, which ends it with its end. -/
-abbrev datatypeElementStep (version : Token.Version) :
+abbrev datatypeElementStep (version : Version) :
     DatatypeState S → Parser.Internal.Input → PM H (Parser.Internal.Step (DatatypeState S) Unit) :=
   let start parameters := Parser.Internal.call
-    (Traits.CommandHandler.startDatatypeDeclaration (H := H)
-      (Multiple.Symbols.Internal.new parameters))
+    (Handler.CommandHandler.startDatatypeDeclaration (H := H)
+      (Grammar.Multiple.Symbols.Internal.new parameters))
   fun state token => do
     match ← datatypeStep start version state token with
     | .more state => return Parser.Internal.Step.more state
     | .done constructors =>
-      Parser.Internal.call (Traits.CommandHandler.endDatatypeDeclaration
-        (Multiple.Constructors.Internal.new constructors))
+      Parser.Internal.call (Handler.CommandHandler.endDatatypeDeclaration
+        (Grammar.Multiple.Constructors.Internal.new constructors))
       return .done ()
 
 /-- The datatype element parser reads a datatype declaration, then makes its end. -/
@@ -128,18 +128,18 @@ theorem datatypeElement_element :
   intro declaration hvalid tokens hs
   obtain ⟨⟨rest, rfl⟩, program, hprogram, hruns⟩ := datatype_runs (points := points)
     (version := version)
-    (fun parameters => Parser.Internal.call (Traits.CommandHandler.startDatatypeDeclaration (H := H)
-      (Multiple.Symbols.Internal.new parameters)))
+    (fun parameters => Parser.Internal.call (Handler.CommandHandler.startDatatypeDeclaration (H := H)
+      (Grammar.Multiple.Symbols.Internal.new parameters)))
     (start' := fun parameters => Program.callUnit h (.startDatatypeDeclaration parameters))
     hA.toTermAgrees (fun parameters => by simp [hA.startDatatypeDeclaration]) declaration
     hvalid hs
   refine ⟨⟨_, _, rfl, by simp⟩, program >>= fun constructors =>
-    Parser.Internal.call (Traits.CommandHandler.endDatatypeDeclaration
-      (Multiple.Constructors.Internal.new constructors)), ?_, ?_⟩
+    Parser.Internal.call (Handler.CommandHandler.endDatatypeDeclaration
+      (Grammar.Multiple.Constructors.Internal.new constructors)), ?_, ?_⟩
   · simp [← hprogram, hA.endDatatypeDeclaration]
   · refine Runs.bind_next ((Runs.embed (outer := datatypeElementStep version) id
-      (fun constructors => Parser.Internal.call (Traits.CommandHandler.endDatatypeDeclaration
-        (Multiple.Constructors.Internal.new constructors)) >>= fun _ => pure (.done ()))
+      (fun constructors => Parser.Internal.call (Handler.CommandHandler.endDatatypeDeclaration
+        (Grammar.Multiple.Constructors.Internal.new constructors)) >>= fun _ => pure (.done ()))
       (fun state token => by
         simp only [datatypeElementStep]
         congr 1
@@ -191,8 +191,8 @@ theorem declareDatatypes_payload (sortDecs : List Tree.SortDec)
           (by simp [ListState.step, ListState.between])).congr ?_ rfl
     simp [ticks_append]
   have hsortsPayload := Runs.bind_next
-    (following := fun _ => Parser.Internal.call (Traits.CommandHandler.startDeclareDatatypes (H := H)
-      (Multiple.SortArities.Internal.new (#[] ++ (view :: views).toArray))))
+    (following := fun _ => Parser.Internal.call (Handler.CommandHandler.startDeclareDatatypes (H := H)
+      (Grammar.Multiple.SortArities.Internal.new (#[] ++ (view :: views).toArray))))
     (next := fun _ => pure (.more (Payload.declareDatatypesDatatypes count
       (ListState.paren .start))))
     ((Runs.embedA (outer := payloadStep version)
@@ -200,8 +200,8 @@ theorem declareDatatypes_payload (sortDecs : List Tree.SortDec)
             Parser.Command.Internal.Standard.payloadArrive) Payload.declareDatatypesSorts
       (fun sorts => do
         if sorts.isEmpty then Parser.Internal.syntaxError (.empty .datatypeIntroductions)
-        Parser.Internal.call (Traits.CommandHandler.startDeclareDatatypes (H := H)
-          (Multiple.SortArities.Internal.new sorts))
+        Parser.Internal.call (Handler.CommandHandler.startDeclareDatatypes (H := H)
+          (Grammar.Multiple.SortArities.Internal.new sorts))
         return .more (.declareDatatypesDatatypes sorts.size (ListState.paren .start)))
       (by payload_step) hsortsRuns).congr rfl
       (by funext; simp [Parser.Internal.Step.wrap, count, ← hviewsLength]))

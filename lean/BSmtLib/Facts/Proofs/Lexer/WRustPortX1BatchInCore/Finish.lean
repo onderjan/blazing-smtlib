@@ -14,6 +14,8 @@ At the end of the input the batches have no tokens before either, and every inte
 thrown from states whose first batch has none (the finishers `…_simZ`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Finish
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Relation
@@ -24,11 +26,11 @@ open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Ops
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} {strict : Bool} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem sinkStored_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (ty : Token.TokenCategory)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (start : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low start) :
@@ -44,7 +46,7 @@ theorem sinkStored_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (ty : Token.To
   subst e
   exact ho.sinkStoredAt l ls ty start a _ _
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem sinkStored_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat) (ty : Token.TokenCategory)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (start : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low start) :
@@ -67,7 +69,7 @@ local macro "finish_checked" : tactic => `(tactic| (
     exact SimR.seq (Core.expectDelimiter_sim _ _ _ _) (sinkStored_sim ‹_› _ _ _ _ _ _ _)
   | none => exact sinkStored_sim ‹_› _ _ _ _ _ _ _))
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem finishDecimal_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (next : Option UInt8)
     (start : Span.Location) (base : Nat)
@@ -79,7 +81,7 @@ theorem finishDecimal_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   unfold Lexer.Internal.WRustPort.finishDecimal
   finish_checked
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem finishDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (run : Lexer.Internal.Helpers.DigitRun)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (next : Option UInt8)
@@ -92,7 +94,7 @@ theorem finishDigitRun_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   unfold Lexer.Internal.WRustPort.finishDigitRun
   finish_checked
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem finishKeyword_sim (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (next : Option UInt8)
     (start : Span.Location) (base : Nat)
@@ -115,7 +117,7 @@ local macro "finish_eof" : tactic => `(tactic| (
   refine SimR.ite (by content_agree hst.1.1.1.tokenContent) (fun _ => Core.error_simZ _ _ _ _ _)
     fun _ => SimR.pre (fun _ _ h => h.1) (sinkStored_simZ ‹_› _ _ _ _ _ _ _)))
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem finishDecimal_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (start : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low start) :
@@ -126,7 +128,7 @@ theorem finishDecimal_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   unfold Lexer.Internal.WRustPort.finishDecimal
   finish_eof
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem finishDigitRun_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (run : Lexer.Internal.Helpers.DigitRun)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (start : Span.Location) (base : Nat)
@@ -138,7 +140,7 @@ theorem finishDigitRun_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
   unfold Lexer.Internal.WRustPort.finishDigitRun
   finish_eof
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem finishKeyword_simZ (ho : OpsSim o₁ o₂ LRel) (l ls : Nat)
     (tokenEnd : Lexer.Internal.WRustPort.Slice.TokenEnd) (start : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low start) :

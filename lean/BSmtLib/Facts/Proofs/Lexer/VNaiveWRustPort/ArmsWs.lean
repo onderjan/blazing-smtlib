@@ -38,13 +38,13 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns BSmtLib.Lexer.In
 section
 
 variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} {low : Nat} {hd : Bool}
-    {iv : Token.Version}
+    {iv : Version}
 
 /-- What the loop of `lexWhitespace` from the index `j` keeps: the step from `start0` in the
 pure state `st0` at `loc0` is, at `j`, whitespace in progress with the content of the lexer
 state. -/
-def WsSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv : Token.Version)
-    (ver : Token.Version)
+def WsSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+    (ver : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Span.Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin j : Nat) : Prop :=
@@ -63,7 +63,7 @@ def WsSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv 
       (fun e s' coll' => StepFails C v hd iv input st0 loc0 start0 ver coll held e s'.val coll')
 
 set_option maxHeartbeats 1000000 in
-theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) (start0 : Nat)
+theorem wsSpec_lt (v : Version) (ver : Version) (input : ByteSlice) (start0 : Nat)
     (st0 : St)
     (loc0 : Span.Location) (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location)
     (base : Nat) (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin : Nat) :
@@ -217,7 +217,7 @@ theorem wsSpec_lt (v : Token.Version) (ver : Token.Version) (input : ByteSlice) 
     exact ⟨hts, hcon, rfl, rfl⟩
 
 /-- The arm of `lexStep` for whitespace in progress, which the consumer takes. -/
-theorem arm_whitespace (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_whitespace (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)

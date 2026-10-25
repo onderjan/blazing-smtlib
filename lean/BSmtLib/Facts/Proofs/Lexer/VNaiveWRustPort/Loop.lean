@@ -7,6 +7,8 @@ import all BSmtLib.Lexer.Error
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Span
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -68,7 +70,7 @@ theorem runS_bindA {α β : Type} (x : StateT (Answering C) AnswerM α)
 
 /-- The lexer state resumed at the end `location` of a lexeme handed over, after the loop stopped
 there. -/
-theorem resume_pre {input : ByteSlice} {iv : Token.Version} {hd' : Bool} {p : Prog} {c : WP.WCore}
+theorem resume_pre {input : ByteSlice} {iv : Version} {hd' : Bool} {p : Prog} {c : WP.WCore}
     {location : Span.Location} (resumed : Nat) (h : AfterStop hd' iv input.byteArray p none c)
     (hcol : location.column ≤ location.offset) :
     StepPre C p.ver hd' iv input .idle location [] resumed (c.resumeAt location resumed) :=
@@ -115,9 +117,9 @@ def LoopRel (C : BSmtLibSpec.Lexer.Consumer)
       (C.concrete = false → f.cause ≠ .consumer none) ∧ SpanRel f g rW.2
   | _, _ => False
 
-theorem stAgrees_legacy {v v' : Token.Version} {ws : Bool} {st : St} {c : WP.WCore}
+theorem stAgrees_legacy {v v' : Version} {ws : Bool} {st : St} {c : WP.WCore}
     (h : (v == .v2_0) = (v' == .v2_0)) (hs : StAgrees v ws st c) : StAgrees v' ws st c := by
-  have he : (v = Token.Version.v2_0) = (v' = Token.Version.v2_0) := by
+  have he : (v = Version.v2_0) = (v' = Version.v2_0) := by
     cases v <;> cases v' <;> first | rfl | (exfalso; revert h; decide) | simp
   cases st with
   | idle => exact hs

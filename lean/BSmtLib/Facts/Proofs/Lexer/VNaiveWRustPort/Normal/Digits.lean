@@ -35,7 +35,7 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 set_option hygiene false in
 /-- A token on the slow path into the batch, ending at `hi`, and the loop going on after it, in
@@ -71,7 +71,7 @@ local macro "borrow_push" cat:term:max lo:term:max hi:term:max : tactic => `(tac
       ⟨_, by rw [hC, outcome_pending_prep] <;> rfl⟩ hn'))
 
 /-- `normalSpec_lt` at the digit that starts a numeral or a decimal. -/
-theorem normalSpec_digits (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_digits (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)

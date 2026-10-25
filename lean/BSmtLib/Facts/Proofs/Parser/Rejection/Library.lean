@@ -9,7 +9,7 @@ import all BSmtLib.Parser.Command
 import all BSmtLib.Parser.Command.Internal.Function
 import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
-import all BSmtLib.Plain
+import all BSmtLib.Lexicon.Value
 import all BSmtLib.Token.Reserved
 
 @[expose] public section
@@ -43,7 +43,7 @@ open BSmtLib.Facts.Proofs.Parser.Cut BSmtLib.Facts.Proofs.Parser.RefusedRecord
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic BSmtLib.Facts.Proofs.Parser.Rejection.Lexical
 open BSmtLib.Facts.Proofs.Parser.Rejection.Payload BSmtLib.Facts.Proofs.Parser.Rejection.Script
 open BSmtLib.Facts.Proofs.Parser.Rejection.Unique BSmtLib.Facts.Proofs.Parser.Script
-open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Plain
+open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Lexicon.Value
 
 theorem libEnding_benign {e : Parser.ParseErrorCause Unit} (h : Benign e) :
     libEnding (.error e) = .rejected := by
@@ -68,13 +68,13 @@ theorem received_items {items : List LibItem} {taken : List Received}
   intro item _
   exact received_rcv item.2
 
-theorem scriptInv_new (version : Token.Version) :
+theorem scriptInv_new (version : Version) :
     ScriptInv (Bridge.version version) [] version (ScriptParser.new unrestrictedPosture) :=
   ⟨rfl, Or.inl ⟨[], [], .nil, rfl, cmdInv_awaiting _ _ markers_nonempty,
     cmdInv_awaiting _ _ scriptFollows_nonempty⟩⟩
 
 /-- The run of the driver, through `driveScript`. -/
-theorem driveParse_run (version : Token.Version) (parser : ScriptParser (List Event))
+theorem driveParse_run (version : Version) (parser : ScriptParser (List Event))
     (items : List Parser.Internal.Input) (events : List Event) :
     (driveParse recordingPoints recordingProducer version parser items).run.run events =
       match (driveScript version parser items).run.run events with
@@ -85,7 +85,7 @@ theorem driveParse_run (version : Token.Version) (parser : ScriptParser (List Ev
   rcases (driveScript version parser items).run.run events with ⟨_ | _ | _, events'⟩ <;> rfl
 
 /-- A run that fails over the first items fails over more. -/
-theorem driveScript_fails {version : Token.Version} {parser : ScriptParser (List Event)}
+theorem driveScript_fails {version : Version} {parser : ScriptParser (List Event)}
     {items more : List Parser.Internal.Input} {events events' : List Event}
         {e : Parser.ParseErrorCause Unit}
     (h : (driveScript version parser items).run.run events = (.error e, events')) :
@@ -93,7 +93,7 @@ theorem driveScript_fails {version : Token.Version} {parser : ScriptParser (List
   rw [driveScript_append, run_bind_split, h]
 
 /-- A run that finishes over the first items finishes over more, before them. -/
-theorem driveScript_finishes {version : Token.Version} {parser : ScriptParser (List Event)}
+theorem driveScript_finishes {version : Version} {parser : ScriptParser (List Event)}
     {items more : List Parser.Internal.Input} {events events' : List Event}
         {rest : List Parser.Internal.Input}
     (h : (driveScript version parser items).run.run events = (.ok (.inr ((), rest)), events')) :
@@ -103,7 +103,7 @@ theorem driveScript_finishes {version : Token.Version} {parser : ScriptParser (L
   rfl
 
 /-- A run that goes on over the first items goes on over more from where it is. -/
-theorem driveScript_goes_on {version version' : Token.Version}
+theorem driveScript_goes_on {version version' : Version}
     {parser parser' : ScriptParser (List Event)} {items more : List Parser.Internal.Input}
     {events events' : List Event}
     (h : (driveScript version parser items).run.run events =
@@ -113,7 +113,7 @@ theorem driveScript_goes_on {version version' : Token.Version}
   rw [driveScript_append, run_bind_split, h]
 
 /-- The events of the driver's run are those of `driveScript`. -/
-theorem recordedRun_driveScript (version : Token.Version) (parser : ScriptParser (List Event))
+theorem recordedRun_driveScript (version : Version) (parser : ScriptParser (List Event))
     (items : List Parser.Internal.Input) (events : List Event) :
     recordedRun version parser items events =
       ((driveScript version parser items).run.run events).2.reverse := by
@@ -130,7 +130,7 @@ theorem map_rcv_of_received {inputs : List Parser.Internal.Input} {taken : List 
 
 /-- Where its input stops before the item at position `count` of what a parser takes, the parser
 has done what the traversal does before that item arrives. -/
-theorem placement_prefix_takes {version : Token.Version} {commands : List Tree.Command}
+theorem placement_prefix_takes {version : Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
     (htakes : Takes
         (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}
@@ -157,8 +157,8 @@ theorem placement_prefix_takes {version : Token.Version} {commands : List Tree.C
 
 /-- The items processed in a run that goes on over items are those items. -/
 theorem driveScript_processed : ∀ (items : List Parser.Internal.Input), NoLayout items →
-    ∀ (version : Token.Version) (parser : ScriptParser (List Event)) (events : List Event)
-      {version' : Token.Version} {parser' : ScriptParser (List Event)} {events' : List Event},
+    ∀ (version : Version) (parser : ScriptParser (List Event)) (events : List Event)
+      {version' : Version} {parser' : ScriptParser (List Event)} {events' : List Event},
     (driveScript version parser items).run.run events =
       (.ok (.inl (version', parser')), events') →
     events'.reverse.filterMap Event.processed =
@@ -259,7 +259,7 @@ theorem takes_prefix_length {start : BSmtLibSpec.Lexicon.Version}
 
 /-- Over a start of what a parser takes, of items whose reserved words are those of the version
 in force, the parser goes on, in a state that says what it has taken. -/
-theorem prefix_goes_on {version : Token.Version} {commands : List Tree.Command}
+theorem prefix_goes_on {version : Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
     (htakes : Takes
         (Bridge.version version) commands taken ending) {all : List Parser.Internal.Input}
@@ -427,10 +427,10 @@ processed one are all of them. -/
 def Settled (events : List Event) : Prop :=
   eventsBeforeProcessing (events.countP isProcessing) events = events
 
-theorem settled_start (version : Token.Version) : Settled (startEvents version).reverse := by
+theorem settled_start (version : Version) : Settled (startEvents version).reverse := by
   simp [Settled, startEvents, eventsBeforeProcessing, isProcessing]
 
-theorem recAfter_settled (version : Token.Version) (parser : ScriptParser (List Event))
+theorem recAfter_settled (version : Version) (parser : ScriptParser (List Event))
     {token : Parser.Internal.Input} {received : Received}
         (htoken : Bridge.received token = some received)
     (events : List Event) :
@@ -460,8 +460,8 @@ theorem recAfter_settled (version : Token.Version) (parser : ScriptParser (List 
 
 /-- A run that goes on over items ends settled, one arrival and one processing more per item. -/
 theorem driveScript_settled : ∀ (items : List Parser.Internal.Input), NoLayout items →
-    ∀ (version : Token.Version) (parser : ScriptParser (List Event)) (events : List Event)
-      {version' : Token.Version} {parser' : ScriptParser (List Event)} {events' : List Event},
+    ∀ (version : Version) (parser : ScriptParser (List Event)) (events : List Event)
+      {version' : Version} {parser' : ScriptParser (List Event)} {events' : List Event},
     Settled events.reverse →
     (driveScript version parser items).run.run events =
       (.ok (.inl (version', parser')), events') →
@@ -518,7 +518,7 @@ theorem arrivalCalls_ne_nil {parser : ScriptParser (List Event)} {token : Parser
 /-- Where a body of `define-funs-rec` is due, a `)` fails the parse, with a cause that is no
 version's. -/
 theorem recAfter_close_fails {parser : ScriptParser (List Event)} {token : Parser.Internal.Input}
-    (h : arrivalCalls parser token ≠ []) (version : Token.Version) (events : List Event) :
+    (h : arrivalCalls parser token ≠ []) (version : Version) (events : List Event) :
     ∃ e events', (recAfter version parser .parenClose).run.run events = (.error e, events') ∧
       Benign e := by
   obtain ⟨signatures, state, signature, hphase, hopened, houtside, hsignature⟩ :=
@@ -962,7 +962,7 @@ the traversal of the script has done before it, where a `)` gets none of the cal
 arrival. Where the script has a `)` there, no call is due at the arrival of the input's item
 either: a body due there would fail the script's run at its `)`.
 -/
-theorem placement_processingOf {version : Token.Version} {commands : List Tree.Command}
+theorem placement_processingOf {version : Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     {items : List Parser.Internal.Input} (hlayout : NoLayout items)

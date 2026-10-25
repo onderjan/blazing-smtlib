@@ -89,45 +89,45 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {points : Points (StateT H m)} {α : Type}
 
 omit [Monad m] [LawfulMonad m] in
 @[simp]
 theorem causeOf_comp_handler :
-    (causeOf ∘ Cause.handler : Traits.Handler.Error H → ParseErrorCause (Traits.Handler.Error H)) =
+    (causeOf ∘ Cause.handler : Handler.Error H → ParseErrorCause (Handler.Error H)) =
       ParseErrorCause.handler := rfl
 
 omit [LawfulMonad m] in
 /-- A handler call in a parse is the handler's action, its failure the handler's. -/
-theorem call_eq (action : ExceptT (Traits.Handler.Error H) (StateT H m) α) :
+theorem call_eq (action : ExceptT (Handler.Error H) (StateT H m) α) :
     Parser.Internal.call action = ExceptT.adapt ParseErrorCause.handler action := (rfl)
 
 @[simp]
 theorem adaptRun_pure (a : α) :
-    adaptRun (pure a : Run (StateT H m) (Traits.Handler.Error H) α) = pure a :=
+    adaptRun (pure a : Run (StateT H m) (Handler.Error H) α) = pure a :=
   adapt_pure _ _
 
 @[simp]
-theorem adaptRun_bind {β : Type} (x : Run (StateT H m) (Traits.Handler.Error H) α)
-    (f : α → Run (StateT H m) (Traits.Handler.Error H) β) :
+theorem adaptRun_bind {β : Type} (x : Run (StateT H m) (Handler.Error H) α)
+    (f : α → Run (StateT H m) (Handler.Error H) β) :
     adaptRun (x >>= f) = adaptRun x >>= fun a => adaptRun (f a) :=
   adapt_bind _ _ _
 
 @[simp]
-theorem adaptRun_map {β : Type} (f : α → β) (x : Run (StateT H m) (Traits.Handler.Error H) α) :
+theorem adaptRun_map {β : Type} (f : α → β) (x : Run (StateT H m) (Handler.Error H) α) :
     adaptRun (f <$> x) = f <$> adaptRun x :=
   adapt_map _ _ _
 
 @[simp]
 theorem adaptRun_lift (x : StateT H m α) :
-    adaptRun (ExceptT.lift x : Run (StateT H m) (Traits.Handler.Error H) α) = ExceptT.lift x :=
+    adaptRun (ExceptT.lift x : Run (StateT H m) (Handler.Error H) α) = ExceptT.lift x :=
   adapt_lift _ _
 
 /-- The traversal's handler call, as the parser's call. -/
 @[simp]
 theorem adaptRun_call {values : Values} {returns : Returns}
-    (h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) values)
+    (h : Traversal.Handler (StateT H m) (Handler.Error H) values)
     (request : Call values returns) :
     adaptRun (Traversal.call h request) = Parser.Internal.call (h.call request) := by
   simp [adaptRun, Traversal.call, call_eq]
@@ -136,7 +136,7 @@ theorem adaptRun_call {values : Values} {returns : Returns}
 theorem adaptRun_take {token : Parser.Internal.Input}
     {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
     (h : Bridge.received token = some (.token syntaxToken)) :
-    adaptRun (take points syntaxToken : Run (StateT H m) (Traits.Handler.Error H) Unit) =
+    adaptRun (take points syntaxToken : Run (StateT H m) (Handler.Error H) Unit) =
       tick points token := by
   simp [take, receive, tick, arriveAt, processAt, h]
 
@@ -144,7 +144,7 @@ theorem adaptRun_take {token : Parser.Internal.Input}
 theorem adaptRun_receive {token : Parser.Internal.Input}
     {syntaxToken : BSmtLibSpec.Grammar.SyntaxToken}
     (h : Bridge.received token = some (.token syntaxToken))
-    (atArrival : Run (StateT H m) (Traits.Handler.Error H) Unit) :
+    (atArrival : Run (StateT H m) (Handler.Error H) Unit) :
     adaptRun (receive points (.token syntaxToken) atArrival) =
       tickFirst points (adaptRun atArrival) token := by
   simp [receive, tickFirst, arriveAt, processAt, h]
@@ -153,7 +153,7 @@ theorem adaptRun_receive {token : Parser.Internal.Input}
 theorem adaptRun_takeAll {tokens : List Parser.Internal.Input}
     {syntaxTokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (h : Stands tokens syntaxTokens) :
-    adaptRun (takeAll points syntaxTokens : Run (StateT H m) (Traits.Handler.Error H) Unit) =
+    adaptRun (takeAll points syntaxTokens : Run (StateT H m) (Handler.Error H) Unit) =
       ticks points tokens := by
   induction syntaxTokens generalizing tokens with
   | nil =>
@@ -173,43 +173,43 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 open BSmtLibSpec.Facts.Proofs.Parser (Program.callSort Program.callSExpr Program.callAttribute
     Program.callTerm Program.callScope Program.callUnit)
 
 @[simp]
 theorem adaptRun_callSort (request : Call (valuesOf H) .sort) :
-    adaptRun (α := Traits.Handler.«Sort» H) (Program.callSort h request) =
+    adaptRun (α := Handler.«Sort» H) (Program.callSort h request) =
       Parser.Internal.call (Bridge.callSort h request) := by
   unfold Program.callSort Bridge.callSort adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callSExpr (request : Call (valuesOf H) .sExpr) :
-    adaptRun (α := Traits.Handler.SExpr H) (Program.callSExpr h request) =
+    adaptRun (α := Handler.SExpr H) (Program.callSExpr h request) =
       Parser.Internal.call (Bridge.callSExpr h request) := by
   unfold Program.callSExpr Bridge.callSExpr adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callAttribute (request : Call (valuesOf H) .attribute) :
-    adaptRun (α := Traits.Handler.Attribute H) (Program.callAttribute h request) =
+    adaptRun (α := Handler.Attribute H) (Program.callAttribute h request) =
       Parser.Internal.call (Bridge.callAttribute h request) := by
   unfold Program.callAttribute Bridge.callAttribute adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callTerm (request : Call (valuesOf H) .term) :
-    adaptRun (α := Traits.Handler.Term H) (Program.callTerm h request) =
+    adaptRun (α := Handler.Term H) (Program.callTerm h request) =
       Parser.Internal.call (Bridge.callTerm h request) := by
   unfold Program.callTerm Bridge.callTerm adaptRun Traversal.call
   exact adapt_adapt _ _ _
 
 @[simp]
 theorem adaptRun_callScope (request : Call (valuesOf H) .scope) :
-    adaptRun (α := Traits.Handler.Scope H) (Program.callScope h request) =
+    adaptRun (α := Handler.Scope H) (Program.callScope h request) =
       Parser.Internal.call (Bridge.callScope h request) := by
   unfold Program.callScope Bridge.callScope adaptRun Traversal.call
   exact adapt_adapt _ _ _

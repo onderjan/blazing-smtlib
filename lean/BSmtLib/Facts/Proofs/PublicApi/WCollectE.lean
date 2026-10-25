@@ -56,22 +56,22 @@ theorem collectW_runInputE : ∀ (slices : List ByteList)
         ((runInputE WOps L₂ true slices).run taken).1.1
   | [], L₁, L₂, taken, hcore, hheld => by
     have hsim := lexEofStep_sim consumersW
-      (Recovery.LexRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast) habandon₁ hrec₁ L₁.core L₁.handler L₂.handler taken
     simp only [collectBy, runInputE, ↓reduceIte, WOps, WRustPort.lexOps,
       Lexer.Internal.WRustPort.Lexer.lexEof, Lexer.Internal.WRustPort.Lexer.run, StateT.run_bind]
     rw [← hcore]
     obtain ⟨hr, he⟩ := hsim
     generalize StateT.run (((lexEofStep (H := Collector) (m := CollectM) (ops := Rust.ops)
-      (Recovery.LexRecovery.abandon Recovery.FailFast) (Recovery.LexRecovery.recover
+      (Recovery.LexerRecovery.abandon Recovery.FailFast) (Recovery.LexerRecovery.recover
         Recovery.FailFast)).run L₁.core).run L₁.handler) (taken.map entryOf) = R1 at hr he ⊢
     generalize StateT.run (((lexEofStep (H := Answering concreteCollector) (m := AnswerM)
-      (ops := Rust.ops) (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast)).run L₁.core).run L₂.handler) taken = R2
+      (ops := Rust.ops) (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast)).run L₁.core).run L₂.handler) taken = R2
         at hr he ⊢
     obtain ⟨⟨⟨r1, c1⟩, h1⟩, e1⟩ := R1
     obtain ⟨⟨⟨r2, c2⟩, h2⟩, e2⟩ := R2
@@ -87,11 +87,11 @@ theorem collectW_runInputE : ∀ (slices : List ByteList)
     | .error x1, .error x2, hx => exact ⟨rfl, hx⟩
   | slice :: slices, L₁, L₂, taken, hcore, hheld => by
     have hsim := lexSliceStep_sim consumersW
-      (Recovery.LexRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast) habandon₁ hrec₁ slice.toByteArray.toByteSlice L₁.core L₁.handler
         L₂.handler taken
     simp only [collectBy, runInputE, WOps, WRustPort.lexOps,
@@ -100,12 +100,12 @@ theorem collectW_runInputE : ∀ (slices : List ByteList)
     rw [← hcore]
     obtain ⟨hr, he⟩ := hsim
     generalize StateT.run (((lexSliceStep (H := Collector) (m := CollectM) (ops := Rust.ops)
-      (Recovery.LexRecovery.abandon Recovery.FailFast) (Recovery.LexRecovery.recover
+      (Recovery.LexerRecovery.abandon Recovery.FailFast) (Recovery.LexerRecovery.recover
         Recovery.FailFast) slice.toByteArray.toByteSlice).run L₁.core).run L₁.handler)
         (taken.map entryOf) = R1 at hr he ⊢
     generalize StateT.run (((lexSliceStep (H := Answering concreteCollector) (m := AnswerM)
-      (ops := Rust.ops) (Recovery.LexRecovery.abandon Recovery.FailFast)
-        (Recovery.LexRecovery.recover Recovery.FailFast)
+      (ops := Rust.ops) (Recovery.LexerRecovery.abandon Recovery.FailFast)
+        (Recovery.LexerRecovery.recover Recovery.FailFast)
           slice.toByteArray.toByteSlice).run L₁.core).run L₂.handler) taken = R2 at hr he ⊢
     obtain ⟨⟨⟨r1, c1⟩, h1⟩, e1⟩ := R1
     obtain ⟨⟨⟨r2, c2⟩, h2⟩, e2⟩ := R2

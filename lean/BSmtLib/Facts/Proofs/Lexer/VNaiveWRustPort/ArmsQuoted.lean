@@ -39,13 +39,13 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.FastRuns BSmtLib.Lexer.In
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- What the loop of a quoted symbol keeps, from the index `consumed`: if the lexer state is in
 the quoted symbol from `tokenStart`, and the naive lexer's run from the step's index `start0`
 is its run from the quoted symbol at `consumed`, then the loop ends the step as the naive lexer
 does. -/
-def QuotedSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv : Token.Version)
+def QuotedSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (start0 : Nat) (st0 : St) (loc0 : Span.Location)
     (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin consumed : Nat) : Prop :=
@@ -67,7 +67,7 @@ def QuotedSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) 
       (fun e s' coll' => StepFails C v hd iv input st0 loc0 start0 s.val.version coll
           held e s'.val coll')
 
-theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st0 : St)
+theorem quotedSpec_lt (v : Version) (input : ByteSlice) (start0 : Nat) (st0 : St)
     (loc0 : Span.Location) (coll : List Handed) (held : List Lexeme) (tokenStart : Span.Location)
     (base : Nat) (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (origin : Nat) :
     ∀ (n consumed : Nat), input.size - consumed < n →
@@ -305,7 +305,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
                   CharClass.RUN_QUOTED_PLAIN -
                 consumed)) input[Lexer.Internal.WRustPort.Slice.runEnd input consumed
                     CharClass.RUN_QUOTED_PLAIN] =
-              .error (failAtByte .forbiddenCharInQuotedSymbol tokenStart
+              .error (failAtByte .forbiddenByteInQuotedSymbol tokenStart
                   (afterColumns locq (Lexer.Internal.WRustPort.Slice.runEnd input consumed
                     CharClass.RUN_QUOTED_PLAIN - consumed))) := by
             rw [hIc]
@@ -336,7 +336,7 @@ theorem quotedSpec_lt (v : Token.Version) (input : ByteSlice) (start0 : Nat) (st
     exact ⟨hts, rfl, rfl⟩
 
 /-- The arm of `lexStep` for a quoted symbol. -/
-theorem arm_quotedSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_quotedSymbol (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)

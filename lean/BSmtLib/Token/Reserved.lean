@@ -1,16 +1,14 @@
 module
 
-public import BSmtLib.Token
+public import BSmtLib.Version
 import all Init.Data.Array.Basic
 import all Init.Data.String.Defs
 import all Std.Data.ByteSlice
 
 public section
 
-/- LEAN: in Rust, `token` declares `reserved` as a submodule and re-exports its types, while
-`reserved` uses `Version` from `token`. Lean modules cannot import each other, so this
-module imports `BSmtLib.Token` and declares its types in the same namespace; the root
-module `BSmtLib` imports both. -/
+/- LEAN: in Rust, `token` declares `reserved` as a submodule and re-exports its types. Here
+`BSmtLib.Token` imports this module, as `Token` names `Reserved`. -/
 
 namespace BSmtLib.Token.Reserved
 

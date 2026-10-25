@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Parser.Term
 import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all Std.Data.ByteSlice
 import all Init.Data.String.Defs
 
@@ -19,7 +21,7 @@ data's, and two byte arrays are equal as `==` says exactly when their lists are.
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Bytes
 
 open BSmtLibSpec.Grammar
-open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Parser.Command.Internal.Standard.Symbol BSmtLib.Plain
+open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Parser.Command.Internal.Standard.Symbol BSmtLib.Lexicon.Value
 
 theorem ByteArray.toList_loop_eq (a : ByteArray) (i : Nat) (r : List UInt8) :
     ByteArray.toList.loop a i r = r.reverse ++ a.data.toList.drop i := by
@@ -90,7 +92,7 @@ theorem utf8_2_7 : "2.7".toUTF8.toList = BSmtLibSpec.Regex.chars "2.7" := by
   rw [ByteArray.toList_eq_data]; decide
 
 /-- A symbol the spec names `not` is `not` to the literal parser. -/
-theorem Symbol.isNot_of_name {s : Plain.Symbol} (h :
+theorem Symbol.isNot_of_name {s : Lexicon.Value.Symbol} (h :
     (Bridge.symbol s).name = BSmtLibSpec.Regex.chars "not") :
     (isNot s) = true := by
   unfold Parser.Command.Internal.Standard.Symbol.isNot
@@ -105,25 +107,26 @@ theorem isVersionKeyword_eq (k : Keyword) :
   exact slice_beq_utf8 _ _ utf8_smtLibVersion
 
 /-- The library reads the number of a version as the spec does. -/
-theorem fromDecimal_eq (d : ByteSlice) :
-    Token.Version.fromDecimal? d = (versionOfNumber (Bridge.chars d)).map Bridge.libVersion := by
-  unfold Token.Version.fromDecimal?
+theorem fromDecimal_eq (d : Decimal) :
+    Version.fromDecimal? d = (versionOfNumber (Bridge.chars d.asSlice)).map Bridge.libVersion := by
+  unfold Version.fromDecimal?
+  dsimp only
   rw [slice_beq_slice_utf8 _ _ utf8_2_0, slice_beq_slice_utf8 _ _ utf8_2_5,
     slice_beq_slice_utf8 _ _ utf8_2_6, slice_beq_slice_utf8 _ _ utf8_2_7]
   simp only [versionOfNumber, List.find?, versionNumber]
-  by_cases h0 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.0"
+  by_cases h0 : Bridge.chars d.asSlice = BSmtLibSpec.Regex.chars "2.0"
   · simp [h0, Bridge.libVersion]
-  by_cases h5 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.5"
+  by_cases h5 : Bridge.chars d.asSlice = BSmtLibSpec.Regex.chars "2.5"
   · simp +decide [h5, Bridge.libVersion]
-  by_cases h6 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.6"
+  by_cases h6 : Bridge.chars d.asSlice = BSmtLibSpec.Regex.chars "2.6"
   · simp +decide [h6, Bridge.libVersion]
-  by_cases h7 : Bridge.chars d = BSmtLibSpec.Regex.chars "2.7"
+  by_cases h7 : Bridge.chars d.asSlice = BSmtLibSpec.Regex.chars "2.7"
   · simp +decide [h7, Bridge.libVersion]
   simp [h0, h5, h6, h7, Ne.symm h0, Ne.symm h5, Ne.symm h6, Ne.symm h7]
 
 /-! ## Versions -/
 
-theorem versionAtLeast_v2_7_of_ge {version : Token.Version} (h : version ≥ .v2_7) :
+theorem versionAtLeast_v2_7_of_ge {version : Version} (h : version ≥ .v2_7) :
     versionAtLeast (Bridge.version version) .v2_7 := by
   cases version <;> simp_all [versionAtLeast, Bridge.version, BSmtLibSpec.Lexicon.Version.upTo] <;>
     exact absurd h (by decide)

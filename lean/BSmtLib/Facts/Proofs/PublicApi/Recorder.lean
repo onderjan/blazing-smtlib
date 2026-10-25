@@ -55,7 +55,7 @@ def pattern : Content.Pattern → Tree.Pattern
   | .constructor c args => .constructor (symbol c) (args.map symbolOrWildcard)
 
 /-- The specification's quantifier. -/
-def quantifier : Nodes.QuantifierKind → Tree.Quantifier
+def quantifier : Grammar.Nodes.QuantifierKind → Tree.Quantifier
   | .forall => .forall
   | .exists => .exists
 
@@ -169,35 +169,35 @@ def recorderContent : ContentHandler (List Event) where
 open BSmtLib.Facts.Parser.Adapters.Bridge (Bridge.symbol Bridge.index Bridge.identifier
     Bridge.constant Bridge.symbolOrWildcard Bridge.pattern Bridge.pairs)
 
-theorem symbol_of (s : Plain.Symbol) : ToSpec.symbol (Content.ofSymbol s) = Bridge.symbol s :=
+theorem symbol_of (s : Lexicon.Value.Symbol) : ToSpec.symbol (Content.ofSymbol s) = Bridge.symbol s :=
   rfl
 
-theorem index_of (i : Nodes.Index) : ToSpec.index (Content.ofIndex i) = Bridge.index i := by
+theorem index_of (i : Grammar.Nodes.Index) : ToSpec.index (Content.ofIndex i) = Bridge.index i := by
   cases i <;> rfl
 
-theorem identifier_of (i : Nodes.Ident) :
+theorem identifier_of (i : Grammar.Nodes.Ident) :
     ToSpec.identifier (Content.ofIdentifier i) = Bridge.identifier i := by
   simp [ToSpec.identifier, Content.ofIdentifier, Bridge.identifier, List.map_map,
     Function.comp_def, index_of, symbol_of]
 
-theorem constant_of (c : Nodes.SpecialConstant) :
+theorem constant_of (c : Grammar.Nodes.SpecialConstant) :
     ToSpec.constant (Content.ofConstant c) = Bridge.constant c := by
   cases c <;> rfl
 
-theorem symbolOrWildcard_of (s : Nodes.SimplePattern) :
+theorem symbolOrWildcard_of (s : Grammar.Nodes.SimplePattern) :
     ToSpec.symbolOrWildcard (Content.ofSymbolOrWildcard s) = Bridge.symbolOrWildcard s := by
   cases s <;> rfl
 
-theorem pattern_of (p : Nodes.Pattern) :
+theorem pattern_of (p : Grammar.Nodes.Pattern) :
     ToSpec.pattern (Content.ofPattern p) = Bridge.pattern p := by
   cases p <;> simp [ToSpec.pattern, Content.ofPattern, Bridge.pattern, List.map_map,
     Function.comp_def, symbolOrWildcard_of, symbol_of]
 
-theorem pairs_of {α : Type} (items : Array (Plain.Symbol × α)) :
+theorem pairs_of {α : Type} (items : Array (Lexicon.Value.Symbol × α)) :
     ToSpec.pairs (Content.ofPairs items) = Bridge.pairs items := by
   simp [ToSpec.pairs, Content.ofPairs, Bridge.pairs, List.map_map, Function.comp_def, symbol_of]
 
-theorem termNode_of (n : Nodes.Term Nat Nat) :
+theorem termNode_of (n : Grammar.Nodes.Term Nat Nat) :
     ToSpec.termNode (Content.ofTermNode n) = Parser.Adapters.Handler.termNodeOf
         (values := Recorded) n := by
   cases n <;> simp [ToSpec.termNode, Content.ofTermNode, Parser.Adapters.Handler.termNodeOf,
@@ -205,14 +205,14 @@ theorem termNode_of (n : Nodes.Term Nat Nat) :
     constant_of]
   all_goals rfl
 
-theorem sExprNode_of (n : Nodes.SExpr Nat) :
+theorem sExprNode_of (n : Grammar.Nodes.SExpr Nat) :
     ToSpec.sExprNode (Content.ofSExprNode n) = Parser.Adapters.Handler.sExprNodeOf
         (values := Recorded) n := by
   cases n <;> simp [ToSpec.sExprNode, Content.ofSExprNode, Parser.Adapters.Handler.sExprNodeOf,
       constant_of]
   all_goals rfl
 
-theorem attributeValue_of (n : Nodes.AttributeValue Nat) :
+theorem attributeValue_of (n : Grammar.Nodes.AttributeValue Nat) :
     ToSpec.attributeValue (Content.ofAttributeValueNode n) =
       Parser.Adapters.Handler.attributeValueOf (values := Recorded) n := by
   cases n <;> simp [ToSpec.attributeValue, Content.ofAttributeValueNode,
@@ -235,14 +235,14 @@ theorem instHandler_eq :
   all_goals (rename_i q _ _; cases q <;> rfl)
 
 
-theorem signature_of (sig : Multiple.FunctionSignature Nat) :
+theorem signature_of (sig : Grammar.Multiple.FunctionSignature Nat) :
     ToSpec.signature (Content.ofSignature sig) =
       Parser.Adapters.Bridge.Bridge.signature (H := List Event) sig := by
   simp only [ToSpec.signature, Content.ofSignature, Parser.Adapters.Bridge.Bridge.signature]
   erw [pairs_of]
   rfl
 
-theorem constructor_of (c : Plain.Symbol × Multiple.SortedVars Nat) :
+theorem constructor_of (c : Lexicon.Value.Symbol × Grammar.Multiple.SortedVars Nat) :
     ToSpec.constructor (Content.ofConstructor c) =
       Parser.Adapters.Bridge.Bridge.constructor (H := List Event) c := by
   simp only [ToSpec.constructor, Content.ofConstructor, Parser.Adapters.Bridge.Bridge.constructor]

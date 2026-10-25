@@ -26,10 +26,12 @@ because no parser takes it (`Param.Layout`), at any other token because the pars
 the tokens stand for fails there (`loop_agreeG`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Failing
 
 open BSmtLibSpec
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
@@ -172,7 +174,7 @@ def linkLinkG (version : Lexicon.Version) :
 
 /-- A call whose first token is no whitespace or comment takes that token. -/
 theorem ansRest_handed (version : Lexicon.Version) {b : Token.BatchTag}
-    {cursor : Token.BatchCursor b}
+    {cursor : LexerCursor b}
     (h : cursor.HasNext) (taken : List Handed) {handed : Handed}
     (hh : toHanded cursor (cursor.next h).1 = some handed) :
     ∃ more, (ansRest version cursor taken).2 = taken ++ [handed] ++ more := by

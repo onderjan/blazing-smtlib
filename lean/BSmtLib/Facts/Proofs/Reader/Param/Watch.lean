@@ -26,6 +26,8 @@ whose watched consumer answered an error fails (`UnaryCalls.lexSliceStep_flag`,
 same lexer state, and the state of `C` in the record.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Watch
 
 open BSmtLib.Lexer
@@ -44,7 +46,7 @@ structure _root_.BSmtLib.Facts.Proofs.Reader.Param.Watch (C : Type) : Type where
   the one of the last cursor it gave back. -/
   errored : Bool
   /-- The version of the last cursor it gave back, or the one it started with. -/
-  version : Token.Version
+  version : Version
   /-- Whether the consumer has been called after something went wrong, or handed a cursor in
   another version than the one of the last cursor it gave back. -/
   spoiled : Bool
@@ -54,22 +56,22 @@ structure _root_.BSmtLib.Facts.Proofs.Reader.Param.Watch (C : Type) : Type where
 
 section
 
-variable {C R E : Type} [Token.Consume C R E] [∀ b, Token.ConsumeFrom C (Token.BatchCursor b) Id]
+variable {C R E : Type} [Token.Consume C R E] [∀ b, Token.ConsumeFrom C (LexerCursor b) Id]
 
 instance : Token.Consume (Watch C) R (Option E) where
   isConcrete := Token.Consume.isConcrete (H := C)
 
 /-- What the consumer answers on the cursor from its state: the answer, its error wrapped in
 `some`, the cursor it gives back, and its state after. -/
-def answer (inner : C) {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
-    (Except (Option E) (ControlFlow R) × {c : Token.BatchCursor b // c.Consumed cursor}) × C :=
+def answer (inner : C) {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) :
+    (Except (Option E) (ControlFlow R) × {c : LexerCursor b // c.Consumed cursor}) × C :=
   let r := ((Token.ConsumeFrom.consume cursor h : StateT C Id _).run inner : Id _)
   ((r.1.1.mapError some, r.1.2), r.2)
 
 /-- The record after a call on the cursor that answered `answer`, gave back `next` and left the
 consumer in the state `inner`. -/
-def after (w : Watch C) {b : Token.BatchTag} (cursor : Token.BatchCursor b) {α : Type}
-    (answer : Except (Option E) α) (next : Token.BatchCursor b) (inner : C) : Watch C where
+def after (w : Watch C) {b : Token.BatchTag} (cursor : LexerCursor b) {α : Type}
+    (answer : Except (Option E) α) (next : LexerCursor b) (inner : C) : Watch C where
   inner
   errored := w.errored || cursor.version != w.version || isError answer
   version := next.version
@@ -77,19 +79,19 @@ def after (w : Watch C) {b : Token.BatchTag} (cursor : Token.BatchCursor b) {α 
   layout := if w.errored then w.layout else isLayoutAnswer answer
 
 /-- Takes the tokens as `C` does, and records what went wrong. -/
-def consume {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
+def consume {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) :
     StateT (Watch C) WM
-      (Except (Option E) (ControlFlow R) × {c : Token.BatchCursor b // c.Consumed cursor}) := do
+      (Except (Option E) (ControlFlow R) × {c : LexerCursor b // c.Consumed cursor}) := do
   let w ← get
   let r := Watch.answer w.inner cursor h
   set (w.after cursor r.1.1 r.1.2.val r.2)
   return r.1
 
-instance {b : Token.BatchTag} : Token.ConsumeFrom (Watch C) (Token.BatchCursor b) WM where
+instance {b : Token.BatchTag} : Token.ConsumeFrom (Watch C) (LexerCursor b) WM where
   consume cursor h := Watch.consume cursor h
 
 /-- The record of a consumer before anything went wrong, from the version. -/
-def new (inner : C) (version : Token.Version) : Watch C :=
+def new (inner : C) (version : Version) : Watch C :=
   { inner, errored := false, version, spoiled := false, layout := false }
 
 /-- `Watch C` keeps its record in its fields. -/
@@ -147,10 +149,10 @@ end
 
 section
 
-variable {C R E : Type} [Token.Consume C R E] [∀ b, Token.ConsumeFrom C (Token.BatchCursor b) Id]
+variable {C R E : Type} [Token.Consume C R E] [∀ b, Token.ConsumeFrom C (LexerCursor b) Id]
 
 /-- A call of `Watch C`, run: the answer of `C`, and the record after it. -/
-theorem consume_run {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext)
+theorem consume_run {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext)
     (w : Watch C)
     (u : Unit) :
     ((Token.ConsumeFrom.consume (m := WM) cursor h : StateT (Watch C) WM _).run w).run u =

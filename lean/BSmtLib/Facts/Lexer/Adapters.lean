@@ -40,16 +40,18 @@ the held result as the public calls do; each public call is its step followed by
 result, and by dropping the lexer on an error.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+
 namespace BSmtLib.Facts.Lexer.Adapters
 
 open BSmtLibSpec.Lexer (Handed TokenType ReservedKind)
-open BSmtLib.Token.BatchCursor.Internal (remaining Follows)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining Follows)
 open BSmtLib.Lexer.Error
 
 /-! ## Conversions to the spec's types -/
 
 /-- The library's version for a version of the spec. -/
-def toVersion : BSmtLibSpec.Lexicon.Version → Token.Version
+def toVersion : BSmtLibSpec.Lexicon.Version → Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
@@ -76,7 +78,7 @@ def toTokenType : Token.TokenCategory → Option TokenType
   | .endOfFile => some .endOfFile
 
 /-- The kind of reserved word a syntax token is, if it is one. -/
-def toReservedKind : Token.SyntaxToken → Option ReservedKind
+def toReservedKind : Token → Option ReservedKind
   | .reserved word => some (if word.isCommandName then .command else .general)
   | _ => none
 
@@ -85,7 +87,7 @@ def toContent (content : ByteSlice) : BSmtLibSpec.Regex.Chars :=
   content.toByteArray.toList
 
 /-- A token as the cursor reports it, in the spec's form; none for whitespace and comments. -/
-def toHanded {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) (token : Token batch) :
+def toHanded {batch : Token.BatchTag} (cursor : LexerCursor batch) (token : LexerToken batch) :
     Option Handed :=
   (toTokenType (cursor.category token)).map fun type =>
     { type
@@ -95,8 +97,8 @@ def toHanded {batch : Token.BatchTag} (cursor : Token.BatchCursor batch) (token 
       content := toContent (cursor.content token) }
 
 /-- A piece of whitespace or a comment as the cursor reports it, in the spec's form. -/
-def toLayout {batch : Token.BatchTag} (cursor : Token.BatchCursor batch)
-    (token : Token batch) : Handed :=
+def toLayout {batch : Token.BatchTag} (cursor : LexerCursor batch)
+    (token : LexerToken batch) : Handed :=
   { type := if cursor.category token == .comment then .comment else .whitespace
     start := toLocation (cursor.span token).start
     «end» := toLocation (cursor.span token).end
@@ -135,7 +137,7 @@ instance (consumer : BSmtLibSpec.Lexer.Consumer) : Token.Consume
 piece of whitespace or a comment if the consumer is concrete; none for whitespace or a comment
 handed to a consumer that is not concrete. -/
 def Answering.entry (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
-    (cursor : Token.BatchCursor batch) (token : Token batch) : Option Handed :=
+    (cursor : LexerCursor batch) (token : LexerToken batch) : Option Handed :=
   match toHanded cursor token with
   | some handed => some handed
   | none => if consumer.concrete then some (toLayout cursor token) else none
@@ -143,23 +145,23 @@ def Answering.entry (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.Batch
 /-- The cursor after the switch of the version that the consumer asks for at the last of the
 entries `taken`, if it asks for one. The lexer's cursor never refuses a version. -/
 def Answering.switched (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
-    (taken : List Handed) (cursor : Token.BatchCursor batch) :
-    {c : Token.BatchCursor batch // Follows c cursor} :=
+    (taken : List Handed) (cursor : LexerCursor batch) :
+    {c : LexerCursor batch // Follows c cursor} :=
   match consumer.switchTo taken with
   | none => ⟨cursor, .refl cursor⟩
   | some version =>
     match h : cursor.setVersion (toVersion version) with
-    | .ok next => ⟨next, Token.BatchCursor.setVersion_follows h⟩
+    | .ok next => ⟨next, Lexer.Cursor.LexerCursor.setVersion_follows h⟩
     | .error _ => ⟨cursor, .refl cursor⟩
 
 /-- The cursor after the requests of the consumer at the last of the entries `taken`: the version
 it switches to, and then discarding. -/
 def Answering.requests (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
-    (taken : List Handed) (cursor : Token.BatchCursor batch) :
-    {c : Token.BatchCursor batch // Follows c cursor} :=
+    (taken : List Handed) (cursor : LexerCursor batch) :
+    {c : LexerCursor batch // Follows c cursor} :=
   let switched := Answering.switched consumer taken cursor
   if consumer.discards taken then
-    ⟨switched.val.discardRest, (Token.BatchCursor.discardRest_follows _).trans switched.property⟩
+    ⟨switched.val.discardRest, (Lexer.Cursor.LexerCursor.discardRest_follows _).trans switched.property⟩
   else
     switched
 
@@ -170,9 +172,9 @@ goes on, and makes the requests the spec's consumer makes at it; it stops taking
 where it asks for a version or for discarding, and when the cursor has no entry left.
 -/
 def Answering.consume (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
-    (cursor : Token.BatchCursor batch) (h : cursor.HasNext) :
+    (cursor : LexerCursor batch) (h : cursor.HasNext) :
     AnswerM (Except (Option consumer.Error) (ControlFlow consumer.Result) ×
-      {c : Token.BatchCursor batch // c.Consumed cursor}) :=
+      {c : LexerCursor batch // c.Consumed cursor}) :=
   match cursor.next h with
   | (token, ⟨next, consumed⟩) =>
     match Answering.entry consumer cursor token with
@@ -203,13 +205,13 @@ decreasing_by exact consumed.remaining_lt
 
 /-- `Answering consumer` takes the entries of a cursor by `Answering.consume`. -/
 instance (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag} :
-    Token.ConsumeFrom (Answering consumer) (Token.BatchCursor batch) AnswerM where
+    Token.ConsumeFrom (Answering consumer) (LexerCursor batch) AnswerM where
   consume cursor h := Answering.consume consumer cursor h
 
 /-! ## Running a lexer -/
 
 /-- The spec's version for a version of the library. -/
-def fromVersion : Token.Version → BSmtLibSpec.Lexicon.Version
+def fromVersion : Version → BSmtLibSpec.Lexicon.Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
@@ -219,7 +221,7 @@ def fromVersion : Token.Version → BSmtLibSpec.Lexicon.Version
 its span, with another lexical error, or with the consumer's error. The adapter's own error
 `none`, which its consumer raises if it is handed whitespace or a comment it does not take, is
 given as a lexical error. -/
-def failureOf {ε : Type} (error : LexError (Option ε)) : BSmtLibSpec.Lexer.Failure ε :=
+def failureOf {ε : Type} (error : LexerError (Option ε)) : BSmtLibSpec.Lexer.Failure ε :=
   match error.cause with
   | .lexical kind =>
     if kind == .unexpectedTrailingToken then .trailing (toLocation error.span.start)
@@ -247,22 +249,22 @@ structure LexOps where
   /-- What a failed lexing of the end of the input gives back besides the error. -/
   AfterEofError : BSmtLibSpec.Lexer.Consumer → Type
   /-- Constructs the lexer, which stops at its first error. -/
-  new : (consumer : BSmtLibSpec.Lexer.Consumer) → Answering consumer → Token.Version → Lexer
+  new : (consumer : BSmtLibSpec.Lexer.Consumer) → Answering consumer → Version → Lexer
       consumer
   lexSlice : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → ByteSlice →
-    AnswerM (Except (LexError (Option consumer.Error) × AfterError consumer) (Lexer consumer))
+    AnswerM (Except (LexerError (Option consumer.Error) × AfterError consumer) (Lexer consumer))
   lexEof : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer →
-    AnswerM (Except (LexError (Option consumer.Error) × AfterEofError consumer)
+    AnswerM (Except (LexerError (Option consumer.Error) × AfterEofError consumer)
       (Option (Span.Located consumer.Result) × Lexer consumer))
   /-- The step that `lexSlice` runs, run by the lexer's entry point that gives the lexer back
   also when the step fails. -/
   lexSliceStep : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → ByteSlice →
-    AnswerM (Except (LexError (Option consumer.Error)) (Option (Span.Located consumer.Result)) ×
+    AnswerM (Except (LexerError (Option consumer.Error)) (Option (Span.Located consumer.Result)) ×
       Lexer consumer)
   /-- The step that `lexEof` runs, run by the lexer's entry point that gives the lexer back
   also when the step fails. -/
   lexEofStep : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer →
-    AnswerM (Except (LexError (Option consumer.Error))
+    AnswerM (Except (LexerError (Option consumer.Error))
         (ControlFlow (Span.Located consumer.Result)) ×
       Lexer consumer)
   /-- The result the lexer holds. -/
@@ -272,7 +274,7 @@ structure LexOps where
   withHeld : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer →
     Option (Span.Located consumer.Result) → Lexer consumer
   /-- The version in force. -/
-  version : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → Token.Version
+  version : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → Version
   /-- Where the lexer began to discard, if it discards. -/
   discardedFrom : {consumer : BSmtLibSpec.Lexer.Consumer} → Lexer consumer → Option Span.Location
 
@@ -318,7 +320,7 @@ The lexer that the next input is fed to after an earlier input, fed as slices an
 of the input: the lexer the last call gave back, or, if a call failed, a lexer constructed anew
 with the version, as a lexer that stops at its first error is gone after a failed call.
 -/
-def LexOps.next (ops : LexOps) (consumer : BSmtLibSpec.Lexer.Consumer) (version : Token.Version)
+def LexOps.next (ops : LexOps) (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version)
     (lexer : ops.Lexer consumer) (input : List BSmtLibSpec.Regex.Chars) : ops.Lexer consumer :=
   match ((ops.runInput lexer true input).run []).1 with
   | (.failed _, _) => ops.new consumer {} version
@@ -354,13 +356,13 @@ def VNaive.lexOps : LexOps where
   lexSliceStep lexer slice :=
     lexer.run (Lexer.Internal.VNaive.lexSliceStep
       (Lexer.Recovery.Recovers.recovers Lexer.Recovery.FailFast)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
     lexer.run (Lexer.Internal.VNaive.lexEofStep
       (Lexer.Recovery.Recovers.recovers Lexer.Recovery.FailFast)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast))
   held lexer := lexer.held
   withHeld lexer held := { lexer with held }
   version := Lexer.Internal.VNaive.Lexer.version
@@ -378,12 +380,12 @@ def WRustPort.lexOps : LexOps where
   lexEof := Lexer.Internal.WRustPort.Lexer.lexEof
   lexSliceStep lexer slice :=
     lexer.run (Lexer.Internal.WRustPort.lexSliceStep (ops := Lexer.Internal.WRustPort.Rust.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
     lexer.run (Lexer.Internal.WRustPort.lexEofStep (ops := Lexer.Internal.WRustPort.Rust.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast))
   held lexer := lexer.held
   withHeld lexer held := { lexer with held }
   version := Lexer.Internal.WRustPort.Lexer.version
@@ -402,12 +404,12 @@ def X1BatchInCore.lexOps : LexOps where
   lexEof := Lexer.Internal.X1BatchInCore.Lexer.lexEof
   lexSliceStep lexer slice :=
     lexer.run (Lexer.Internal.WRustPort.lexSliceStep (ops := Lexer.Internal.X1BatchInCore.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
     lexer.run (Lexer.Internal.WRustPort.lexEofStep (ops := Lexer.Internal.X1BatchInCore.ops)
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast))
   held lexer := lexer.held
   withHeld lexer held := { lexer with held }
   version := Lexer.Internal.WRustPort.Lexer.version
@@ -425,12 +427,12 @@ def Lexer.lexOps : LexOps where
   lexEof := BSmtLib.Lexer.lexEof
   lexSliceStep lexer slice :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexSliceStep
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice)
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice)
   lexEofStep lexer :=
     BSmtLib.Lexer.Internal.run lexer (BSmtLib.Lexer.Internal.lexEofStep
-      (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-          (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast))
+      (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+          (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast))
   held := BSmtLib.Lexer.Internal.held
   withHeld := BSmtLib.Lexer.Internal.withHeld
   version := BSmtLib.Lexer.version

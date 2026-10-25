@@ -23,7 +23,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Handler.Reader
 
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Facts.Lexer.Adapters (toVersion)
@@ -43,8 +43,8 @@ theorem readSlice_ofLexer (lexer : HLexer H) (slice : ByteSlice) {lexer' : HLexe
   simp only [BSmtLib.Reader.readSlice, BSmtLib.Reader.Internal.ofLexer, Lexer.lexSlice]
   generalize (Lexer.Internal.run lexer (Lexer.Internal.lexSliceStep
     (H := ParseAdapter H (ScriptParser H)) (m := Id)
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice) : Id _) = r
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice) : Id _) = r
   rcases r with ⟨e | held, l⟩
   · intro h; cases h
   · intro h; cases h; rfl
@@ -58,8 +58,8 @@ theorem readEof_ofLexer (lexer : HLexer H) {result : Option (Span.Located Unit)}
   generalize (Lexer.Internal.run lexer (Lexer.Internal.lexEofStep
     (H := ParseAdapter H (ScriptParser H)) (m := Id) (R := Unit)
     (E := BSmtLib.Parser.ParseError (Handler.Error H))
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)) : Id _) = r
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast)) : Id _) = r
   rcases r with ⟨e | flow, l⟩
   · intro h; cases h
   · intro h; cases h; rfl

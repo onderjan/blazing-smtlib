@@ -40,14 +40,14 @@ open BSmtLib.Facts.Proofs.Parser.Tokens.Stands
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 
 /-- The owned value of what the sorted variable parser's steps give. -/
-abbrev ownSortedVar (pair : Plain.Symbol × Traits.Handler.«Sort» H) :
-    Plain.SymbolBuf × Traits.Handler.«Sort» H :=
+abbrev ownSortedVar (pair : Lexicon.Value.Symbol × Handler.«Sort» H) :
+    Lexicon.Value.SymbolBuf × Handler.«Sort» H :=
   (pair.1.intoOwned, pair.2)
 
-private theorem sortedVar_sim (version : Token.Version) :
+private theorem sortedVar_sim (version : Version) :
     Simulates version (SortedVarParser.mk (H := H))
       (mapSteps ownSortedVar (sortedVarStep version)) SortedVarParser.new := by
   refine ⟨fun _ _ => rfl, fun state token => ?_, fun _ => rfl, fun _ _ => rfl⟩
@@ -61,11 +61,11 @@ private theorem sortedVar_sim (version : Token.Version) :
 
 /-- From its start, the sorted variable parser reads the tokens of a valid sorted variable with
 the traversal's calls for its sort. -/
-theorem sortedVar_runs {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+theorem sortedVar_runs {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (sortedVar : Tree.SortedVar) (hvalid : sortedVar.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens sortedVar.tokens) :
-    ∃ symbol : Plain.Symbol, Bridge.symbol symbol = sortedVar.symbol ∧
+    ∃ symbol : Lexicon.Value.Symbol, Bridge.symbol symbol = sortedVar.symbol ∧
       RunsS noPoints (sortedVarStep version) .start tokens
         ((fun sort => (symbol, sort)) <$> adaptRun (Traversal.sort noPoints h sortedVar.sort))
         fun result => pure (.done result) := by
@@ -84,7 +84,7 @@ theorem sortedVar_runs {version : Token.Version}
       cases step <;> rfl)
     (BSmtLib.Facts.Proofs.Parser.Category.StepsSort.sort_runs (points := noPoints) hA sort
       hvalid hsort [])
-  have hclose : ∀ sort : Traits.Handler.«Sort» H,
+  have hclose : ∀ sort : Handler.«Sort» H,
       RunsS noPoints (sortedVarStep version) (.close symbol sort) [.parenClose]
         (do tick noPoints .parenClose; pure (symbol, sort)) fun result => pure (.done result) :=
     fun sort => RunsS.token (by simp [sortedVarStep, Parser.Category.Token.Internal.expectClose])
@@ -110,11 +110,11 @@ private theorem sortedVar_hparse {Z : Type} [Cursor Z] (p : SortedVarParser H) (
 /-- The sorted variable parser from its start on the tokens of a valid sorted variable: it
 finishes with its symbol, through the bridge, and the handled sort, making the traversal's calls
 for its sort. -/
-theorem sortedVar_parses {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+theorem sortedVar_parses {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (sortedVar : Tree.SortedVar) (hvalid : sortedVar.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens sortedVar.tokens) :
-    ∃ symbol : Plain.Symbol, Bridge.symbol symbol = sortedVar.symbol ∧
+    ∃ symbol : Lexicon.Value.Symbol, Bridge.symbol symbol = sortedVar.symbol ∧
       Finishes version (SortedVarParser.new (H := H)) tokens
         ((fun sort => (symbol.intoOwned, sort)) <$>
           adaptRun (Traversal.sort noPoints h sortedVar.sort))
@@ -125,8 +125,8 @@ theorem sortedVar_parses {version : Token.Version}
   rw [Functor.map_map] at this
   exact ⟨symbol, hsymbol, this⟩
 
-private theorem sortedVar_rejects {version : Token.Version}
-    {state last : SortedVarState (Traits.Handler.«Sort» H)}
+private theorem sortedVar_rejects {version : Version}
+    {state last : SortedVarState (Handler.«Sort» H)}
     {tokens : List Parser.Internal.Input} {token : Parser.Internal.Input} {kind : SyntaxErrorKind}
     (hmoves : Moves (sortedVarStep (H := H) version) state tokens last)
     (hfail : sortedVarStep (H := H) version last token = throw (.syntax kind)) :
@@ -134,7 +134,7 @@ private theorem sortedVar_rejects {version : Token.Version}
   rejects_of_movesS_map (@sortedVar_hparse H m _ _) (sortedVar_sim version) hmoves hfail
 
 /-- The sorted variable parser on a first token that is not `(`. -/
-theorem sortedVar_rejects_open {version : Token.Version} {token : Parser.Internal.Input}
+theorem sortedVar_rejects_open {version : Version} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Rejects version (SortedVarParser.new (H := H)) [token] (pure () : PM H Unit)
       (.expected #[.token .parenOpen]) :=
@@ -143,7 +143,7 @@ theorem sortedVar_rejects_open {version : Token.Version} {token : Parser.Interna
       simp [sortedVarStep, Parser.Category.Token.Internal.expectOpen, Parser.Internal.syntaxError])
 
 /-- The sorted variable parser on `(` and a token that is not a symbol. -/
-theorem sortedVar_rejects_symbol {version : Token.Version} {token : Parser.Internal.Input}
+theorem sortedVar_rejects_symbol {version : Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version (SortedVarParser.new (H := H)) [.parenOpen, token] (pure () : PM H Unit)
       (.expected #[.symbol]) :=
@@ -155,7 +155,7 @@ theorem sortedVar_rejects_symbol {version : Token.Version} {token : Parser.Inter
 
 /-- The sorted variable parser on `(`, a symbol and a token that starts no sort: neither a
 symbol nor `(`. -/
-theorem sortedVar_rejects_sort {version : Token.Version} (symbol : Plain.Symbol)
+theorem sortedVar_rejects_sort {version : Version} (symbol : Lexicon.Value.Symbol)
     {token : Parser.Internal.Input} (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hopen : token ≠ .parenOpen) :
     Rejects version (SortedVarParser.new (H := H)) [.parenOpen, .symbol symbol, token]
@@ -169,10 +169,10 @@ theorem sortedVar_rejects_sort {version : Token.Version} (symbol : Plain.Symbol)
 
 
 /-- The sort parser's steps, within the sorted variable after its symbol. -/
-private theorem sortedVar_sortRuns {version : Token.Version} (symbol : Plain.Symbol)
+private theorem sortedVar_sortRuns {version : Version} (symbol : Lexicon.Value.Symbol)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
-    {next : α → PM H (Parser.Internal.Step (SortState (Traits.Handler.«Sort» H))
-      (Traits.Handler.«Sort» H))}
+    {next : α → PM H (Parser.Internal.Step (SortState (Handler.«Sort» H))
+      (Handler.«Sort» H))}
     (hsort : RunsS noPoints (sortStep version) SortState.init tokens program next) :
     RunsS noPoints (sortedVarStep (H := H) version) .start
       ([.parenOpen] ++ ([.symbol symbol] ++ tokens)) program
@@ -198,7 +198,7 @@ The sorted variable parser on `(`, a symbol and tokens on whose last token the s
 with a syntax error, having made the calls of a program: it rejects them with that error, having
 made those calls.
 -/
-theorem sortedVar_rejects_sort_inner {version : Token.Version} (symbol : Plain.Symbol)
+theorem sortedVar_rejects_sort_inner {version : Version} (symbol : Lexicon.Value.Symbol)
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {kind : SyntaxErrorKind}
     (hsort : RunsS noPoints (sortStep version) SortState.init tokens program
       fun _ => throw (.syntax kind)) :
@@ -216,9 +216,9 @@ theorem sortedVar_rejects_sort_inner {version : Token.Version} (symbol : Plain.S
 /-- The sorted variable parser on `(`, a symbol, the tokens of a valid sort and a token that is
 not `)`: it rejects that token with `expected #[.token .parenClose]`, having made the traversal's
 calls for the sort. -/
-theorem sortedVar_rejects_close {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Plain.Symbol) {sort : Tree.«Sort»} (hvalid : sort.Valid (Bridge.version version))
+theorem sortedVar_rejects_close {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+    (symbol : Lexicon.Value.Symbol) {sort : Tree.«Sort»} (hvalid : sort.Valid (Bridge.version version))
     {sortTokens : List Parser.Internal.Input} (hs : Stands sortTokens sort.tokens)
     {token : Parser.Internal.Input} (htoken : token ≠ .parenClose) :
     Rejects version (SortedVarParser.new (H := H))
@@ -227,7 +227,7 @@ theorem sortedVar_rejects_close {version : Token.Version}
       (.expected #[.token .parenClose]) := by
   have hsort := (BSmtLib.Facts.Proofs.Parser.Category.StepsSort.sort_runs (points := noPoints) hA
     sort hvalid hs [])
-  have hfail : ∀ handled : Traits.Handler.«Sort» H,
+  have hfail : ∀ handled : Handler.«Sort» H,
       RunsS noPoints (sortedVarStep version) (.close symbol handled) [token]
         (do tick noPoints token; pure ())
         fun _ => throw (.syntax (.expected #[.token .parenClose])) :=
@@ -249,7 +249,7 @@ theorem sortedVar_rejects_close {version : Token.Version}
 /-! ## Sorts that fail -/
 
 /-- The sort parser from its start on a token that starts no sort: neither a symbol nor `(`. -/
-theorem sort_fails_first {version : Token.Version} {token : Parser.Internal.Input}
+theorem sort_fails_first {version : Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen) :
     RunsS noPoints (sortStep (H := H) version) SortState.init [token] (pure () : PM H Unit)
       fun _ => throw (.syntax (.expected #[.sort])) :=
@@ -260,7 +260,7 @@ theorem sort_fails_first {version : Token.Version} {token : Parser.Internal.Inpu
 
 /-- The sort parser on `(` and a token that starts no head: neither a symbol, nor `(`, nor
 `_`. -/
-theorem sort_fails_inner {version : Token.Version} {token : Parser.Internal.Input}
+theorem sort_fails_inner {version : Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen)
     (hunderscore : token ≠ .reserved (.general .underscore)) :
     RunsS noPoints (sortStep (H := H) version) SortState.init [.parenOpen, token]
@@ -283,7 +283,7 @@ theorem sort_fails_inner {version : Token.Version} {token : Parser.Internal.Inpu
   simp [tick_noPoints]
 
 /-- The sort parser on `(`, a symbol and `)`: an application without arguments. -/
-theorem sort_fails_empty {version : Token.Version} (symbol : Plain.Symbol) :
+theorem sort_fails_empty {version : Version} (symbol : Lexicon.Value.Symbol) :
     RunsS noPoints (sortStep (H := H) version) SortState.init
       [.parenOpen, .symbol symbol, .parenClose] (pure () : PM H Unit)
       fun _ => throw (.syntax (.empty .sortApplication)) := by
@@ -299,8 +299,8 @@ theorem sort_fails_empty {version : Token.Version} (symbol : Plain.Symbol) :
 /-- The sort parser on `(`, the tokens of a valid identifier, of valid sorts and a token that
 neither starts another argument nor ends the application: it fails at that token, having made
 the traversal's calls for the sorts. -/
-theorem sort_fails_argument {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+theorem sort_fails_argument {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     {head : Tree.Identifier} (hhead : head.Valid (Bridge.version version))
     {headTokens : List Parser.Internal.Input} (hsHead : Stands headTokens head.tokens)
     {sorts : List Tree.«Sort»} (hsorts : Tree.«Sort».ValidAll (Bridge.version version) sorts)
@@ -314,7 +314,7 @@ theorem sort_fails_argument {version : Token.Version}
       fun _ => throw (.syntax (.expected #[.sort])) := by
   obtain ⟨node, _, hheadRuns⟩ := BSmtLib.Facts.Proofs.Parser.Category.StepsSort.head_runs
     (H := H) (points := noPoints) hhead hsHead []
-  have hfail : ∀ handled : List (Traits.Handler.«Sort» H),
+  have hfail : ∀ handled : List (Handler.«Sort» H),
       RunsS noPoints (sortStep (H := H) version)
         { mode := .start, levels := [⟨node, #[] ++ handled.toArray⟩] } [token]
         (do tick noPoints token; (pure () : PM H Unit))
@@ -325,7 +325,7 @@ theorem sort_fails_argument {version : Token.Version}
       (by handler_only)
   have hsortsRuns := BSmtLib.Facts.Proofs.Parser.Category.StepsSort.sorts_runs (H := H)
     (version := version) (points := noPoints) hA sorts hsorts hsSorts node #[] []
-  have h₃ := RunsS.append (middle := fun (handled : List (Traits.Handler.«Sort» H)) =>
+  have h₃ := RunsS.append (middle := fun (handled : List (Handler.«Sort» H)) =>
     ({ mode := .start, levels := [⟨node, #[] ++ handled.toArray⟩] } : SortState _))
     hsortsRuns hfail
   have h₂ := RunsS.append (middle := fun _ =>
@@ -343,7 +343,7 @@ theorem sort_fails_argument {version : Token.Version}
 
 /-- The sorted variable parser on `(`, a symbol, `(` and a token that starts no head of a
 sort. -/
-theorem sortedVar_rejects_sortInner {version : Token.Version} (symbol : Plain.Symbol)
+theorem sortedVar_rejects_sortInner {version : Version} (symbol : Lexicon.Value.Symbol)
     {token : Parser.Internal.Input} (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hopen : token ≠ .parenOpen) (hunderscore : token ≠ .reserved (.general .underscore)) :
     Rejects version (SortedVarParser.new (H := H))
@@ -355,7 +355,7 @@ theorem sortedVar_rejects_sortInner {version : Token.Version} (symbol : Plain.Sy
 
 /-- The sorted variable parser on `(`, a symbol, and `(`, a symbol and `)`: a sort application
 without arguments. -/
-theorem sortedVar_rejects_sortEmpty {version : Token.Version} (symbol head : Plain.Symbol) :
+theorem sortedVar_rejects_sortEmpty {version : Version} (symbol head : Lexicon.Value.Symbol) :
     Rejects version (SortedVarParser.new (H := H))
       [.parenOpen, .symbol symbol, .parenOpen, .symbol head, .parenClose] (pure () : PM H Unit)
       (.empty .sortApplication) := by
@@ -366,9 +366,9 @@ theorem sortedVar_rejects_sortEmpty {version : Token.Version} (symbol head : Pla
 /-- The sorted variable parser on `(`, a symbol, `(`, the tokens of a valid identifier and of
 valid sorts and a token that neither starts another argument of the sort nor ends it: it rejects
 that token with `expected #[.sort]`, having made the traversal's calls for the sorts. -/
-theorem sortedVar_rejects_sortArgument {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Plain.Symbol) {head : Tree.Identifier}
+theorem sortedVar_rejects_sortArgument {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+    (symbol : Lexicon.Value.Symbol) {head : Tree.Identifier}
     (hhead : head.Valid (Bridge.version version))
     {headTokens : List Parser.Internal.Input} (hsHead : Stands headTokens head.tokens)
     {sorts : List Tree.«Sort»} (hsorts : Tree.«Sort».ValidAll (Bridge.version version) sorts)
@@ -394,14 +394,14 @@ abbrev frameTokens (frames : List (Tree.Identifier × List Tree.«Sort»)) :
 
 /-- From any stack, the sort parser reads the tokens of open applications with the traversal's
 calls for their argument sorts, and is then before a sort, the applications open on the stack. -/
-theorem sortFrames_runs {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h) :
+theorem sortFrames_runs {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h) :
     (frames : List (Tree.Identifier × List Tree.«Sort»)) →
     (∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2) →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (frameTokens frames) →
-    ∀ levels : List (SortLevel (Traits.Handler.«Sort» H)),
-    ∃ build : List (List (Traits.Handler.«Sort» H)) → List (SortLevel (Traits.Handler.«Sort» H)),
+    ∀ levels : List (SortLevel (Handler.«Sort» H)),
+    ∃ build : List (List (Handler.«Sort» H)) → List (SortLevel (Handler.«Sort» H)),
       RunsS noPoints (sortStep (H := H) version) { mode := .start, levels } tokens
         (adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))
         fun handled => pure (.more { mode := .start, levels := build handled })
@@ -420,7 +420,7 @@ theorem sortFrames_runs {version : Token.Version}
       (H := H) (points := noPoints) hhead hsHead levels
     have hsortsRuns := BSmtLib.Facts.Proofs.Parser.Category.StepsSort.sorts_runs (H := H)
       (version := version) (points := noPoints) hA frame.2 hsorts hsSorts node #[] levels
-    have hrest := fun (handled : List (Traits.Handler.«Sort» H)) =>
+    have hrest := fun (handled : List (Handler.«Sort» H)) =>
       sortFrames_runs hA frames (fun f hf => hvalid f (List.mem_cons_of_mem _ hf)) hs₂
         (⟨node, #[] ++ handled.toArray⟩ :: levels)
     refine ⟨fun all => match all with
@@ -430,7 +430,7 @@ theorem sortFrames_runs {version : Token.Version}
         [.parenOpen] (tick noPoints .parenOpen)
         fun _ => pure (.more { mode := .opened, levels }) :=
       RunsS.token_more (by simp [sortStep.eq_def])
-    have h₃ := RunsS.append (middle := fun (handled : List (Traits.Handler.«Sort» H)) =>
+    have h₃ := RunsS.append (middle := fun (handled : List (Handler.«Sort» H)) =>
       ({ mode := .start, levels := ⟨node, #[] ++ handled.toArray⟩ :: levels } : SortState _))
       (next := fun all => pure (.more { mode := .start, levels := match all with
         | first :: others => Classical.choose (hrest first) others
@@ -448,14 +448,14 @@ theorem sortFrames_runs {version : Token.Version}
 
 /-- Open applications, then a run from wherever they leave the stack to a syntax error: the sort
 parser from its start fails there, having made the calls for the applications' argument sorts. -/
-theorem sortFrames_fails {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+theorem sortFrames_fails {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     {frames : List (Tree.Identifier × List Tree.«Sort»)}
     (hvalid : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frameTokens frames))
     {tokens' : List Parser.Internal.Input} {kind : SyntaxErrorKind}
-    (hfail : ∀ levels : List (SortLevel (Traits.Handler.«Sort» H)),
+    (hfail : ∀ levels : List (SortLevel (Handler.«Sort» H)),
       RunsS noPoints (sortStep (H := H) version) { mode := .start, levels } tokens'
         (pure () : PM H Unit) fun _ => throw (.syntax kind)) :
     RunsS noPoints (sortStep (H := H) version) SortState.init (tokens ++ tokens')
@@ -467,9 +467,9 @@ theorem sortFrames_fails {version : Token.Version}
       fun handled => hfail (build handled)).congr (by simp [bind_pure_comp]) rfl
 
 /-- Before a sort, on any stack, a token that neither starts a sort nor ends an application. -/
-theorem sortLevels_fails_argument {version : Token.Version} {token : Parser.Internal.Input}
+theorem sortLevels_fails_argument {version : Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen)
-    (hclose : token ≠ .parenClose) (levels : List (SortLevel (Traits.Handler.«Sort» H))) :
+    (hclose : token ≠ .parenClose) (levels : List (SortLevel (Handler.«Sort» H))) :
     RunsS noPoints (sortStep (H := H) version) { mode := .start, levels } [token]
       (pure () : PM H Unit) fun _ => throw (.syntax (.expected #[.sort])) :=
   (RunsS.token (program := (pure () : PM H Unit)) (by
@@ -478,10 +478,10 @@ theorem sortLevels_fails_argument {version : Token.Version} {token : Parser.Inte
     (handlerOnly_pure ())).congr (by simp [tick_noPoints]) rfl
 
 /-- Before a sort, on any stack, `(` and a token that starts no head. -/
-theorem sortLevels_fails_inner {version : Token.Version} {token : Parser.Internal.Input}
+theorem sortLevels_fails_inner {version : Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen)
     (hunderscore : token ≠ .reserved (.general .underscore))
-    (levels : List (SortLevel (Traits.Handler.«Sort» H))) :
+    (levels : List (SortLevel (Handler.«Sort» H))) :
     RunsS noPoints (sortStep (H := H) version) { mode := .start, levels } [.parenOpen, token]
       (pure () : PM H Unit)
       fun _ => throw (.syntax (.expected #[.reserved (.general .underscore), .symbol,
@@ -502,8 +502,8 @@ theorem sortLevels_fails_inner {version : Token.Version} {token : Parser.Interna
   simp [tick_noPoints]
 
 /-- Before a sort, on any stack, `(`, a symbol and `)`. -/
-theorem sortLevels_fails_empty {version : Token.Version} (symbol : Plain.Symbol)
-    (levels : List (SortLevel (Traits.Handler.«Sort» H))) :
+theorem sortLevels_fails_empty {version : Version} (symbol : Lexicon.Value.Symbol)
+    (levels : List (SortLevel (Handler.«Sort» H))) :
     RunsS noPoints (sortStep (H := H) version) { mode := .start, levels }
       [.parenOpen, .symbol symbol, .parenClose] (pure () : PM H Unit)
       fun _ => throw (.syntax (.empty .sortApplication)) := by
@@ -519,9 +519,9 @@ theorem sortLevels_fails_empty {version : Token.Version} (symbol : Plain.Symbol)
 /-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications and a
 token that neither starts another argument nor ends an application: it rejects that token with
 `expected #[.sort]`, having made the traversal's calls for the applications' argument sorts. -/
-theorem sortedVar_rejects_sortDeepArgument {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Plain.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
+theorem sortedVar_rejects_sortDeepArgument {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+    (symbol : Lexicon.Value.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
     (hvalid : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frameTokens frames))
@@ -539,9 +539,9 @@ theorem sortedVar_rejects_sortDeepArgument {version : Token.Version}
 a token that starts no head: it rejects that token with
 `expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, having made the
 traversal's calls for the applications' argument sorts. -/
-theorem sortedVar_rejects_sortDeepInner {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Plain.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
+theorem sortedVar_rejects_sortDeepInner {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+    (symbol : Lexicon.Value.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
     (hvalid : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frameTokens frames))
@@ -558,13 +558,13 @@ theorem sortedVar_rejects_sortDeepInner {version : Token.Version}
 /-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications, and `(`,
 a symbol and `)`: it rejects the `)` with `empty .sortApplication`, having made the traversal's
 calls for the applications' argument sorts. -/
-theorem sortedVar_rejects_sortDeepEmpty {version : Token.Version}
-    {h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
-    (symbol : Plain.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
+theorem sortedVar_rejects_sortDeepEmpty {version : Version}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
+    (symbol : Lexicon.Value.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
     (hvalid : ∀ frame ∈ frames, frame.1.Valid (Bridge.version version) ∧
       Tree.«Sort».ValidAll (Bridge.version version) frame.2)
     {tokens : List Parser.Internal.Input} (hs : Stands tokens (frameTokens frames))
-    (head : Plain.Symbol) :
+    (head : Lexicon.Value.Symbol) :
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: (tokens ++ [.parenOpen, .symbol head, .parenClose]))
       ((fun _ => ()) <$> adaptRun (frames.mapM fun frame => Traversal.sorts noPoints h frame.2))

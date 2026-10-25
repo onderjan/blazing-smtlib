@@ -1,8 +1,8 @@
 module
 
-public import BSmtLib.Nodes
-public import BSmtLib.Multiple.MatchCases
-public import BSmtLib.Multiple
+public import BSmtLib.Grammar.Nodes
+public import BSmtLib.Grammar.Multiple.MatchCases
+public import BSmtLib.Grammar.Multiple
 
 public section
 
@@ -29,9 +29,9 @@ of the class, and `&mut self` is the state of the monad `StateT H m` that every 
 the monad `m` is an `outParam`, determined by the handler's type, as the monad of `Consume` is.
 `Sort` is a keyword of Lean, hence the quotes on the field `«Sort»`. -/
 
-namespace BSmtLib.Traits
+namespace BSmtLib.Handler
 
-open BSmtLib.Nodes BSmtLib.Plain BSmtLib.Multiple
+open BSmtLib.Grammar.Nodes BSmtLib.Lexicon.Value BSmtLib.Grammar.Multiple
 
 /--
 The handler of the categories that terms are built from (`SmtHandler`).
@@ -46,7 +46,7 @@ early check of the scrutinee; each case start and end receives the scrutinee aga
 at the start of every input, before any other call, and the script parser after each version
 declaration, once the producer has switched.
 -/
-class Handler (H : Type) (m : outParam (Type → Type)) where
+class _root_.BSmtLib.Handler (H : Type) (m : outParam (Type → Type)) where
   /-- The handler's errors. -/
   Error : Type
   /-- What the handler makes of an s-expression. -/
@@ -60,21 +60,21 @@ class Handler (H : Type) (m : outParam (Type → Type)) where
   /-- What the handler returns for a scope, and receives back at its end. -/
   Scope : Type
   /-- The version in force, at the start of every input and after a version declaration. -/
-  setVersion : Token.Version → StateT H m Unit
+  setVersion : Version → StateT H m Unit
   /-- A sort: its identifier and its argument sorts, none if it is not applied. -/
-  /- LEAN: Rust's `handle_sort(SmtSort { ident, applied })`; the fields of `SmtSort` are the
+  /- LEAN: Rust's `handle_sort(SmtSort { ident, args })`; the fields of `SmtSort` are the
   arguments, as Lean does not unbox a structure of several fields, so a nested structure would
   be allocated for every sort handed over. -/
-  handleSort : Ident → Sorts «Sort» → ExceptT Error (StateT H m) «Sort»
+  handleSort : Ident → Grammar.Multiple «Sort» → ExceptT Error (StateT H m) «Sort»
   /-- A term that binds nothing: a constant, a qualified identifier or an application. -/
-  handleTerm : Nodes.Term «Sort» Term → ExceptT Error (StateT H m) Term
+  handleTerm : Grammar.Nodes.Term «Sort» Term → ExceptT Error (StateT H m) Term
   /-- An s-expression. -/
-  handleSExpr : Nodes.SExpr SExpr → ExceptT Error (StateT H m) SExpr
+  handleSExpr : Grammar.Nodes.SExpr SExpr → ExceptT Error (StateT H m) SExpr
   /-- An attribute: its keyword and its value, if it has one. -/
   handleAttribute : Keyword → Option (AttributeValue SExpr) →
     ExceptT Error (StateT H m) Attribute
   /-- An annotated term, `(` `!` term attribute+ `)`, at its `)`. -/
-  annotateTerm : Term → Attributes Attribute → ExceptT Error (StateT H m) Term
+  annotateTerm : Term → Grammar.Multiple Attribute → ExceptT Error (StateT H m) Term
   /-- The bindings of a `let`, at the `)` after them, before its body. -/
   startLet : Bindings Term → ExceptT Error (StateT H m) Scope
   /-- The end of a `let`, with its body, at its `)`. -/
@@ -181,4 +181,4 @@ private def symbolText (symbol : SymbolBuf) : String :=
     | .unsupportedNonstandard name => s!"unsupported nonstandard command {symbolText name}"
     | .handler error => toString error
 
-end BSmtLib.Traits
+end BSmtLib.Handler

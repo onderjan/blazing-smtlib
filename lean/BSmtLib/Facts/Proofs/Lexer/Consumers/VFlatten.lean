@@ -37,7 +37,7 @@ theorem lexSliceStep_ops (core : Core) (hp : (Plain core))
       match vBytes consumer core none bytes taken with
       | ((.ok h, core'), taken') => ((.ok h, ⟨{}, core', held⟩), taken')
       | ((.error f, core'), taken') =>
-        ((.error (Lexer.Error.LexError.Internal.new f.cause f.span none), ⟨{}, core', held⟩),
+        ((.error (Lexer.Error.LexerError.Internal.new f.cause f.span none), ⟨{}, core', held⟩),
           taken') := by
   rw [lexOps_lexSliceStep, lexSliceStep_vBytes consumer core hp bytes taken]
   generalize vBytes consumer core none bytes taken = r
@@ -114,7 +114,7 @@ end
 
 /-- The lexer the naive lexer gives the next input, after an input cut into slices, is the one
 after the input as one slice. -/
-theorem next_flatten {consumer : BSmtLibSpec.Lexer.Consumer} (version : Token.Version)
+theorem next_flatten {consumer : BSmtLibSpec.Lexer.Consumer} (version : Version)
     (L : VNaive.lexOps.Lexer consumer) (hp : (Plain L.core))
     (input : List BSmtLibSpec.Regex.Chars) :
     VNaive.lexOps.next consumer version L input =

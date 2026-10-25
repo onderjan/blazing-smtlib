@@ -37,11 +37,11 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.NumeralRuns BSmtLib.Lexer
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The naive lexer's pure state that agrees with a lexer state other than the normal one is a
 token in progress. -/
-theorem token_of_agrees {v : Token.Version} {st : St} {c : WP.WCore}
+theorem token_of_agrees {v : Version} {st : St} {c : WP.WCore}
     (h : StAgrees v C.concrete st c)
     (hn : c.state ≠ .normal) : ∃ p, st = .token p := by
   cases st with
@@ -56,7 +56,7 @@ local macro "token_arm" arm:term : tactic => `(tactic| (
   exact afterStep_wp v input start hstart s coll _ location held _ $arm))
 
 /-- A step of the loop over a slice keeps the correspondence with the naive lexer. -/
-theorem lexStep_wp (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem lexStep_wp (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (state : Lexer.Internal.Helpers.LexerState)
     (tokenStart : Span.Location)
     (base : Nat) (hpending : state = .normal ∨ Lexer.Internal.WRustPort.Started floor low

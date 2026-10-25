@@ -27,7 +27,7 @@ variable (consumer : BSmtLibSpec.Lexer.Consumer)
 
 /-- The naive lexer's step at the end of the input. -/
 def vEnd (core : Core) (taken : List Handed) :
-    VRes (Except (LexError (Option consumer.Error)) (ControlFlow (Span.Located consumer.Result))) :=
+    VRes (Except (LexerError (Option consumer.Error)) (ControlFlow (Span.Located consumer.Result))) :=
   vRun consumer (lexEofStep (H := Answering consumer) false (fun _ => pure ()) (fun _ => pure ())
     core) taken
 
@@ -49,7 +49,7 @@ theorem vEnd_eof (core : Core) (taken : List Handed)
         match r with
         | .ok none => ((.ok .continue, core2.reset), taken2)
         | .ok (some located) => ((.ok (.break located), core2.reset), taken2)
-        | .error f => ((.error (LexError.Internal.new f.cause f.span none), core2), taken2) := by
+        | .error f => ((.error (LexerError.Internal.new f.cause f.span none), core2), taken2) := by
   intro r core2 taken2 hr
   have hrun := run_of_vRun consumer hr
   rcases ha with ha | ⟨s, ha⟩
@@ -92,7 +92,7 @@ theorem vEnd_finish_none (core : Core) (taken : List Handed) {p : Pending}
         match r with
         | .ok none => ((.ok .continue, core2.reset), taken2)
         | .ok (some located) => ((.ok (.break located), core2.reset), taken2)
-        | .error f => ((.error (LexError.Internal.new f.cause f.span none), core2), taken2)) := by
+        | .error f => ((.error (LexerError.Internal.new f.cause f.span none), core2), taken2)) := by
   have hw : withEq core.activity = ⟨_, ha⟩ := Subtype.ext ha
   have hfs : finishS consumer.concrete p core.location = ⟨.none, trivial⟩ := Subtype.ext hf
   constructor
@@ -121,7 +121,7 @@ theorem vEnd_finish_none (core : Core) (taken : List Handed) {p : Pending}
 theorem vEnd_finish_error (core : Core) (taken : List Handed) {p : Pending} {f : LexFailure}
     (ha : core.activity = .token p) (hf : finish consumer.concrete p core.location = .error f) :
     vEnd consumer core taken =
-      ((.error (LexError.Internal.new (.lexical f.kind) f.span none), core), taken) := by
+      ((.error (LexerError.Internal.new (.lexical f.kind) f.span none), core), taken) := by
   have hw : withEq core.activity = ⟨_, ha⟩ := Subtype.ext ha
   have hfs : finishS consumer.concrete p core.location = ⟨.error f, trivial⟩ := Subtype.ext hf
   simp only [vEnd, lexEofStep, lexEnd, ha, Bool.false_eq_true, ite_false, pure_bind]
@@ -139,7 +139,7 @@ theorem vEnd_finish_token (core : Core) (taken : List Handed) {p : Pending} {l :
       vRun consumer (handOverAt (H := Answering consumer) (idleAt core) l hl) taken =
         ((.error f, core2), taken2) →
       vEnd consumer core taken =
-        ((.error (LexError.Internal.new f.cause f.span none), core2), taken2)) ∧
+        ((.error (LexerError.Internal.new f.cause f.span none), core2), taken2)) ∧
     (∀ {located core2 taken2},
       vRun consumer (handOverAt (H := Answering consumer) (idleAt core) l hl) taken =
         ((.ok (some located), core2), taken2) →
@@ -154,7 +154,7 @@ theorem vEnd_finish_token (core : Core) (taken : List Handed) {p : Pending} {l :
           match r with
           | .ok none => ((.ok .continue, core3.reset), taken3)
           | .ok (some located) => ((.ok (.break located), core3.reset), taken3)
-          | .error f => ((.error (LexError.Internal.new f.cause f.span none), core3), taken3)) := by
+          | .error f => ((.error (LexerError.Internal.new f.cause f.span none), core3), taken3)) := by
   have hw : withEq core.activity = ⟨_, ha⟩ := Subtype.ext ha
   have hft := finish_token hf
   have hl : l.Valid := .inl (by rw [hft.1, hft.2]; exact core.started ha)

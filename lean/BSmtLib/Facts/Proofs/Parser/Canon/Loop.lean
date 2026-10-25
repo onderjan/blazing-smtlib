@@ -6,9 +6,10 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 public import BSmtLib.Facts.Proofs.Reader.Param.Adapter
 public import BSmtLib.Facts.Proofs.Parser.HandOver
 import all BSmtLib.Parser
-import all BSmtLib.Plain
+import all BSmtLib.Lexicon.Value
 import all BSmtLib.Token
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Token.Cursor
 import all BSmtLib.Parser.Script
 
@@ -27,12 +28,13 @@ the same answer and log, canonically equal parsers, and cursors that agree again
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Loop
 
-open BSmtLib.Parser BSmtLib.Nodes
-open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes
+open BSmtLib.Lexicon.Value (Symbol Numeral Decimal HexDigits BinDigits
   StringContent Keyword)
 open Basic States Simp
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 
 /-! ## The inputs a cursor views -/
 
@@ -44,16 +46,16 @@ theorem canonSlice_canonSlice (s : ByteSlice) : canonSlice (canonSlice s) = cano
 /-- What a token's category and content stand for, canonicalised, reads its content only as
 bytes. -/
 theorem canonInput_fromParts (category : Token.TokenCategory) (content : ByteSlice)
-    (version : Token.Version) :
+    (version : Version) :
     canonInput (Internal.Input.ofSyntax
-        (Token.SyntaxToken.Internal.fromParts category content version)) =
+        (Token.Internal.fromParts category content version)) =
       canonInput (Internal.Input.ofSyntax
-        (Token.SyntaxToken.Internal.fromParts category (canonSlice content) version)) := by
+        (Token.Internal.fromParts category (canonSlice content) version)) := by
   have hr : Token.Reserved.fromBytes? (canonSlice content) version =
       Token.Reserved.fromBytes? content version :=
     BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes.fromBytes_toByteArray content version
   cases category <;>
-    simp only [Token.SyntaxToken.Internal.fromParts, Internal.Input.ofSyntax, canonInput,
+    simp only [Token.Internal.fromParts, Internal.Input.ofSyntax, canonInput,
       Canon.canon, canonConstant, canonSymbol, canon_simps, canonSlice_canonSlice]
   all_goals first
     | rfl
@@ -65,12 +67,12 @@ variable {g g' : Token.BatchTag}
 
 /-- Two cursors that agree view tokens at the same index as inputs with the same
 canonicalisation. -/
-theorem canon_syntax {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
-    {t : BSmtLib.Token g} {t' : BSmtLib.Token g'} (et : tokenIndex t = tokenIndex t')
+theorem canon_syntax {c : LexerCursor g} {d : LexerCursor g'} (h : CursorAgree c d)
+    {t : LexerToken g} {t' : LexerToken g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) :
     canonInput (Internal.Input.ofSyntax (c.syntax t)) =
       canonInput (Internal.Input.ofSyntax (d.syntax t')) := by
-  unfold Token.BatchCursor.syntax Token.SyntaxToken.fromToken
+  unfold LexerCursor.syntax Token.fromLexerToken
   rw [canonInput_fromParts, canonInput_fromParts (d.category t'), h.category et ht, h.version]
   have hc : canonSlice (c.content t) = canonSlice (d.content t') := by
     show (c.content t).toByteArray.toByteSlice = (d.content t').toByteArray.toByteSlice
@@ -79,17 +81,17 @@ theorem canon_syntax {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : C
 
 /-! ## The actions on agreeing cursors -/
 
-theorem CursorAgree.setVersion {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
-    (h : CursorAgree c d) (v : Token.Version) {c' : Token.BatchCursor g}
-    {d' : Token.BatchCursor g'} (hc : c.setVersion v = .ok c') (hd : d.setVersion v = .ok d') :
+theorem CursorAgree.setVersion {c : LexerCursor g} {d : LexerCursor g'}
+    (h : CursorAgree c d) (v : Version) {c' : LexerCursor g}
+    {d' : LexerCursor g'} (hc : c.setVersion v = .ok c') (hd : d.setVersion v = .ok d') :
     CursorAgree c' d' := by
   have hv := h.version
-  unfold Token.BatchCursor.setVersion at hc hd
+  unfold LexerCursor.setVersion at hc hd
   injection hc with hc
   injection hd with hd
   subst hc hd
   rw [hv]
-  by_cases hrx : ((d.version == Token.Version.v2_0) != (v == .v2_0)) = true
+  by_cases hrx : ((d.version == Version.v2_0) != (v == .v2_0)) = true
   · simp only [hrx, ite_true]
     refine ⟨rfl, ?_, h.first, h.next, h.next, rfl, h.discard, ?_⟩
     · rw [intoBatch_eq _ c, intoBatch_eq _ d]; exact h.batch
@@ -100,7 +102,7 @@ theorem CursorAgree.setVersion {c : Token.BatchCursor g} {d : Token.BatchCursor 
     · rw [intoBatch_eq _ c, intoBatch_eq _ d]; exact h.batch
     · rw [intoBatch_eq _ c]; exact h.bounded
 
-theorem CursorAgree.discardRest {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.discardRest {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d) : CursorAgree c.discardRest d.discardRest := by
   refine ⟨h.version, ?_, h.first, h.next, h.next, h.relex, rfl, ?_⟩
   · rw [intoBatch_eq _ c, intoBatch_eq _ d]; exact h.batch
@@ -129,7 +131,7 @@ theorem CSim.agree {α : Type} [Canon α] {x x' y : RPM α} (h : CSim x y) (h' :
   exact ⟨congrArg Prod.fst e', congrArg (fun p => p.2) e'⟩
 
 /-- A token's arrival at the script parser and its step, canonicalised. -/
-theorem block_canon (version : Token.Version) (parser : ScriptParser (List Event))
+theorem block_canon (version : Version) (parser : ScriptParser (List Event))
     (input : Internal.Input) :
     CSim (do Internal.ParseByToken.arrive parser input
              Internal.ParseByToken.step version parser input)
@@ -138,7 +140,7 @@ theorem block_canon (version : Token.Version) (parser : ScriptParser (List Event
   CSim.bind (ScriptParser_arrive_canon rfl rfl) fun _ => ScriptParser_step_canon rfl rfl
 
 /-- The arrival of a token at the script parser, then its step. -/
-abbrev block (version : Token.Version) (parser : ScriptParser (List Event))
+abbrev block (version : Version) (parser : ScriptParser (List Event))
     (input : Internal.Input) :
     RPM (Internal.Flow RPM (ScriptParser (List Event)) Unit) :=
   Internal.ParseByToken.arrive parser input >>= fun _ =>
@@ -146,7 +148,7 @@ abbrev block (version : Token.Version) (parser : ScriptParser (List Event))
 
 /-- The arrival and step of canonically equal parsers at canonically equal inputs give
 canonically equal results and the same log. -/
-theorem block_agree (version : Token.Version) {p₁ p₂ : ScriptParser (List Event)}
+theorem block_agree (version : Version) {p₁ p₂ : ScriptParser (List Event)}
     (hp : canon p₁ = canon p₂) {i₁ i₂ : Internal.Input} (hi : canonInput i₁ = canonInput i₂)
     (log : List Event) :
     ((block version p₁ i₁).run.run log).1.map canon =
@@ -192,19 +194,19 @@ theorem resumed_rel {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ = c
 /-- A relation between cursors that the script parser cannot tell apart: related cursors have
 the same version and whether a token remains, view their next tokens as canonically equal
 inputs and leave related cursors after them, and stay related through the actions of a step. -/
-structure CursorRel (Rel : Token.BatchCursor g → Token.BatchCursor g' → Prop) : Prop where
+structure CursorRel (Rel : LexerCursor g → LexerCursor g' → Prop) : Prop where
   version : ∀ {c d}, Rel c d → c.version = d.version
   hasNext : ∀ {c d}, Rel c d → (c.HasNext ↔ d.HasNext)
   next : ∀ {c d}, Rel c d → ∀ (hc : c.HasNext) (hd : d.HasNext),
     Rel (c.next hc).2.1 (d.next hd).2.1 ∧
       canonInput (Internal.Input.ofSyntax ((c.next hc).2.1.syntax (c.next hc).1)) =
         canonInput (Internal.Input.ofSyntax ((d.next hd).2.1.syntax (d.next hd).1))
-  setVersion : ∀ {c d}, Rel c d → ∀ (v : Token.Version) {c' d'}, c.setVersion v = .ok c' →
+  setVersion : ∀ {c d}, Rel c d → ∀ (v : Version) {c' d'}, c.setVersion v = .ok c' →
     d.setVersion v = .ok d' → Rel c' d'
   discardRest : ∀ {c d}, Rel c d → Rel c.discardRest d.discardRest
 
 /-- The token a cursor yields next lies below the length of its batch. -/
-theorem index_lt_len {c : Token.BatchCursor g} {c' : Token.BatchCursor g'} (h : CursorAgree c c')
+theorem index_lt_len {c : LexerCursor g} {c' : LexerCursor g'} (h : CursorAgree c c')
     (hc : c.HasNext) :
     tokenIndex (c.next hc).1 < (BSmtLib.Lexer.Internal.intoBatch (c.next hc).2.1).len := by
   rw [tokenIndex_next, intoBatch_eq _ c]
@@ -221,7 +223,7 @@ theorem cursorRel_agree : CursorRel (CursorAgree (g := g) (g' := g')) where
   discardRest h := CursorAgree.discardRest h
 
 /-- The same cursor. -/
-theorem cursorRel_eq : CursorRel (fun (c d : Token.BatchCursor g) => c = d) where
+theorem cursorRel_eq : CursorRel (fun (c d : LexerCursor g) => c = d) where
   version h := by rw [h]
   hasNext h := by rw [h]
   next h hc hd := by subst h; exact ⟨rfl, rfl⟩
@@ -230,11 +232,11 @@ theorem cursorRel_eq : CursorRel (fun (c d : Token.BatchCursor g) => c = d) wher
 
 /-! ## A token taken by the script parser from cursors that agree -/
 
-variable {Rel : Token.BatchCursor g → Token.BatchCursor g' → Prop}
+variable {Rel : LexerCursor g → LexerCursor g' → Prop}
 
 theorem takeOne_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ = canon p₂)
-    {c₁ n₁ : Token.BatchCursor g} {c₂ n₂ : Token.BatchCursor g'} {t₁ : BSmtLib.Token g}
-    {t₂ : BSmtLib.Token g'} (k₁ : Token.Cursor.Consumed n₁ c₁)
+    {c₁ n₁ : LexerCursor g} {c₂ n₂ : LexerCursor g'} {t₁ : LexerToken g}
+    {t₂ : LexerToken g'} (k₁ : Token.Cursor.Consumed n₁ c₁)
     (k₂ : Token.Cursor.Consumed n₂ c₂) (hR : CursorRel Rel) (hn : Rel n₁ n₂)
     (hi : canonInput (Internal.Input.ofSyntax (n₁.syntax t₁)) =
       canonInput (Internal.Input.ofSyntax (n₂.syntax t₂)))
@@ -275,11 +277,11 @@ theorem takeOne_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ =
       dsimp only
       split
       · rename_i heq
-        simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
+        simp [Token.Cursor.setVersion, LexerCursor.setVersion] at heq
       · rename_i s₁ hs₁
         split
         · rename_i heq
-          simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
+          simp [Token.Cursor.setVersion, LexerCursor.setVersion] at heq
         · rename_i s₂ hs₂
           have hag := hR.setVersion hn v hs₁ hs₂
           simp only [StateT.run_bind, id_bind_eq]
@@ -322,18 +324,18 @@ theorem takeOne_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ =
 
 /-- The parser's answer, its parser, the cursor it leaves and its log, on the two sides: the same
 answer and log, canonically equal parsers and cursors that agree. -/
-def LoopRel (Rel : Token.BatchCursor g → Token.BatchCursor g' → Prop)
-    {o₁ : Token.BatchCursor g} {o₂ : Token.BatchCursor g'}
+def LoopRel (Rel : LexerCursor g → LexerCursor g' → Prop)
+    {o₁ : LexerCursor g} {o₂ : LexerCursor g'}
     (r₁ : (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
-      { z : Token.BatchCursor g // Token.Cursor.Consumed z o₁ }) × List Event)
+      { z : LexerCursor g // Token.Cursor.Consumed z o₁ }) × List Event)
     (r₂ : (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
-      { z : Token.BatchCursor g' // Token.Cursor.Consumed z o₂ }) × List Event) : Prop :=
+      { z : LexerCursor g' // Token.Cursor.Consumed z o₂ }) × List Event) : Prop :=
   r₁.1.1 = r₂.1.1 ∧ canon r₁.1.2.1 = canon r₂.1.2.1 ∧ Rel r₁.1.2.2.val r₂.1.2.2.val ∧
     r₁.2 = r₂.2
 
 theorem rest_agree (hR : CursorRel Rel) (n : Nat) :
     ∀ {p₁ p₂ : ScriptParser (List Event)}, canon p₁ = canon p₂ →
-    ∀ {o₁ c₁ : Token.BatchCursor g} {o₂ c₂ : Token.BatchCursor g'}
+    ∀ {o₁ c₁ : LexerCursor g} {o₂ c₂ : LexerCursor g'}
       (k₁ : Token.Cursor.Consumed c₁ o₁) (k₂ : Token.Cursor.Consumed c₂ o₂),
       Rel c₁ c₂ → remaining c₁ < n → ∀ log : List Event,
       LoopRel Rel ((Internal.rest o₁ p₁ c₁ k₁).run log)
@@ -346,11 +348,11 @@ theorem rest_agree (hR : CursorRel Rel) (n : Nat) :
   by_cases h₁ : c₁.HasNext
   · have h₂ : c₂.HasNext := (hR.hasNext hc).mp h₁
     have e₁ : Token.Cursor.next? c₁ = some (c₁.next h₁) := by
-      show Token.BatchCursor.next? c₁ = _
-      simp [Token.BatchCursor.next?, h₁]
+      show LexerCursor.next? c₁ = _
+      simp [LexerCursor.next?, h₁]
     have e₂ : Token.Cursor.next? c₂ = some (c₂.next h₂) := by
-      show Token.BatchCursor.next? c₂ = _
-      simp [Token.BatchCursor.next?, h₂]
+      show LexerCursor.next? c₂ = _
+      simp [LexerCursor.next?, h₂]
     simp only [e₁, e₂]
     obtain ⟨hn, hi⟩ := hR.next hc h₁ h₂
     obtain ⟨ha, hag, hl⟩ := takeOne_agree hp (c₁.next h₁).2.2 (c₂.next h₂).2.2 hR hn hi log
@@ -369,18 +371,18 @@ theorem rest_agree (hR : CursorRel Rel) (n : Nat) :
       exact ⟨rfl, rfl, hag, rfl⟩
   · have h₂ : ¬ c₂.HasNext := fun h => h₁ ((hR.hasNext hc).mpr h)
     have e₁ : Token.Cursor.next? c₁ = none := by
-      show Token.BatchCursor.next? c₁ = _
-      simp [Token.BatchCursor.next?, h₁]
+      show LexerCursor.next? c₁ = _
+      simp [LexerCursor.next?, h₁]
     have e₂ : Token.Cursor.next? c₂ = none := by
-      show Token.BatchCursor.next? c₂ = _
-      simp [Token.BatchCursor.next?, h₂]
+      show LexerCursor.next? c₂ = _
+      simp [LexerCursor.next?, h₂]
     simp only [e₁, e₂]
     exact ⟨rfl, hp, hc, rfl⟩
 
 /-- The script parser's parse of cursors that agree, from canonically equal parsers: the same
 answer, state and log, canonically equal parsers, and cursors that agree. -/
 theorem parseByToken_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p₁ = canon p₂)
-    (st : ParseState (List Event)) {c₁ : Token.BatchCursor g} {c₂ : Token.BatchCursor g'}
+    (st : ParseState (List Event)) {c₁ : LexerCursor g} {c₂ : LexerCursor g'}
     (hR : CursorRel Rel) (hc : Rel c₁ c₂) (log : List Event) :
     ((Internal.parseByToken p₁ st c₁).run log).1.1 =
         ((Internal.parseByToken p₂ st c₂).run log).1.1 ∧
@@ -397,11 +399,11 @@ theorem parseByToken_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p
   by_cases h₁ : c₁.HasNext
   · have h₂ : c₂.HasNext := (hR.hasNext hc).mp h₁
     have e₁ : Token.Cursor.next? c₁ = some (c₁.next h₁) := by
-      show Token.BatchCursor.next? c₁ = _
-      simp [Token.BatchCursor.next?, h₁]
+      show LexerCursor.next? c₁ = _
+      simp [LexerCursor.next?, h₁]
     have e₂ : Token.Cursor.next? c₂ = some (c₂.next h₂) := by
-      show Token.BatchCursor.next? c₂ = _
-      simp [Token.BatchCursor.next?, h₂]
+      show LexerCursor.next? c₂ = _
+      simp [LexerCursor.next?, h₂]
     split
     · rename_i heq; rw [e₁] at heq; cases heq
     · rename_i token₁ next₁ consumed₁ heq₁
@@ -441,11 +443,11 @@ theorem parseByToken_agree {p₁ p₂ : ScriptParser (List Event)} (hp : canon p
           refine ⟨?_, ?_, ?_, hag, ?_⟩ <;> first | rfl | trivial
   · have h₂ : ¬ c₂.HasNext := fun h => h₁ ((hR.hasNext hc).mpr h)
     have e₁ : Token.Cursor.next? c₁ = none := by
-      show Token.BatchCursor.next? c₁ = _
-      simp [Token.BatchCursor.next?, h₁]
+      show LexerCursor.next? c₁ = _
+      simp [LexerCursor.next?, h₁]
     have e₂ : Token.Cursor.next? c₂ = none := by
-      show Token.BatchCursor.next? c₂ = _
-      simp [Token.BatchCursor.next?, h₂]
+      show LexerCursor.next? c₂ = _
+      simp [LexerCursor.next?, h₂]
     split
     · split
       · exact ⟨rfl, hp, rfl, hc, rfl⟩

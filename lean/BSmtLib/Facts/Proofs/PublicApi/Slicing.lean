@@ -44,8 +44,8 @@ abbrev VOps := BSmtLib.Facts.Lexer.Adapters.VNaive.lexOps
 
 /-- A result of the collector's run against one of the naive lexer with the concrete collector:
 the same result, or errors of the same lexical kind and span, the first not going on. -/
-def Matches : Except (LexError Empty) (Option (Span.Located Unit)) →
-    Except (LexError (Option concreteCollector.Error))
+def Matches : Except (LexerError Empty) (Option (Span.Located Unit)) →
+    Except (LexerError (Option concreteCollector.Error))
       (Option (Span.Located concreteCollector.Result)) → Prop
   | .ok o, .ok o' => o = o'
   | .error e, .error e' => (∃ kind, e.cause = .lexical kind ∧ e'.cause = .lexical kind) ∧
@@ -54,8 +54,8 @@ def Matches : Except (LexError Empty) (Option (Span.Located Unit)) →
 
 /-- Two results of the collector's run that match the same one of the naive lexer are the
 same. -/
-theorem matches_unique {c₁ c₂ : Except (LexError Empty) (Option (Span.Located Unit))}
-    {r : Except (LexError (Option concreteCollector.Error))
+theorem matches_unique {c₁ c₂ : Except (LexerError Empty) (Option (Span.Located Unit))}
+    {r : Except (LexerError (Option concreteCollector.Error))
       (Option (Span.Located concreteCollector.Result))}
     (h₁ : Matches c₁ r) (h₂ : Matches c₂ r) : c₁ = c₂ := by
   match c₁, c₂, r, h₁, h₂ with
@@ -82,7 +82,7 @@ theorem oRel_eq {o : Option (Span.Located Unit)} {o' : Option (Span.Located Unit
 
 /-- The precise failures of an error of the Rust port and of a lexical one of the naive lexer
 other than trailing input agree only if the two have the same cause and span. -/
-theorem precise_lexical {ε : Type} {w v : LexError (Option ε)}
+theorem precise_lexical {ε : Type} {w v : LexerError (Option ε)}
     (h : preciseOf w = preciseOf v) (hv : IsLexicalNT v) :
     w.cause = v.cause ∧ w.span = v.span := by
   obtain ⟨k, hk, hnt⟩ := hv
@@ -104,7 +104,7 @@ theorem precise_lexical {ε : Type} {w v : LexError (Option ε)}
 
 /-- The collector's run ends as the naive lexer with the concrete collector, fed the cut of the
 slices, ends, and writes down the entries it takes. -/
-theorem collect_naive (version : Token.Version) (slices : List ByteList) :
+theorem collect_naive (version : Version) (slices : List ByteList) :
     (collect version slices).2 = ((runInputE VOps (VOps.new concreteCollector {} version) true
         (X1BatchInCoreLexer.Chunks.cutAll slices)).run []).2.map entryOf ∧
       Matches (collect version slices).1 ((runInputE VOps (VOps.new concreteCollector {} version)
@@ -195,7 +195,7 @@ theorem collect_naive (version : Token.Version) (slices : List ByteList) :
     exact oRel_eq hC2
 
 /-- The collector's run does not tell how its input is cut into slices. -/
-theorem slicing (version : Token.Version) (slices : List ByteList) :
+theorem slicing (version : Version) (slices : List ByteList) :
     collect version slices = collect version [slices.flatten] := by
   obtain ⟨a1, a2⟩ := collect_naive version slices
   obtain ⟨b1, b2⟩ := collect_naive version [slices.flatten]

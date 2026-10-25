@@ -6,6 +6,8 @@ public import BSmtLib.Facts.Proofs.Reader.Lexes.Through
 public import BSmtLib.Facts.Proofs.Reader.Session
 public import BSmtLib.Facts.Parser
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
 import all BSmtLib.Lexer.Internal.VNaive
@@ -27,6 +29,8 @@ gives (`fields_afterC`); the adapter stands where the recording run over the tok
 the parser, which has finished, as the stand-in consumer has.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.PublicApi.ReaderAfter
 
 open BSmtLib.Lexer BSmtLib.Lexer.Error
@@ -40,7 +44,7 @@ open BSmtLib.Facts.Proofs.Lexer.Consumers.Alike BSmtLib.Facts.Proofs.Lexer.Consu
 /-- The library's lexer with the adapter's consumer for a consumer of the spec, fed an input to
 the end without failing, has the version it was constructed with as its initial one, and does not
 recover. -/
-theorem fields_afterC (C : BSmtLibSpec.Lexer.Consumer) (version : Token.Version)
+theorem fields_afterC (C : BSmtLibSpec.Lexer.Consumer) (version : Version)
     (slices : List BSmtLibSpec.Regex.Chars)
     (hok : ((ZOps.runInput (ZOps.new C {} version) true slices).run
       []).1.1.isFailed = false) :
@@ -108,7 +112,7 @@ omit [Token.Consume H R E] in
 resets the state. -/
 theorem tail_okI (x : InnerM H Id (Except (Failure E) (ControlFlow (Span.Located R))))
     (K : Except (Failure E) (ControlFlow (Span.Located R)) →
-      InnerM H Id (Except (LexError E) (ControlFlow (Span.Located R))))
+      InnerM H Id (Except (LexerError E) (ControlFlow (Span.Located R))))
     (hok : ∀ flow, K (.ok flow) = (Internal.reset >>= fun _ => Pure.pure (.ok flow)))
     (herr : ∀ f c h, ∃ e, (irunI (K (.error f)) c h).1.1 = .error e)
     {c : LexerCore} {h : H} {flow : ControlFlow (Span.Located R)} {c' : LexerCore} {h' : H}
@@ -129,11 +133,11 @@ theorem tail_okI (x : InnerM H Id (Except (Failure E) (ControlFlow (Span.Located
     cases he
 
 /-- A successful end of the input leaves the lexer's state reset. -/
-theorem eofStep_okI [∀ b, Token.ConsumeFrom H (Token.BatchCursor b) Id] {c : LexerCore} {h : H}
+theorem eofStep_okI [∀ b, Token.ConsumeFrom H (LexerCursor b) Id] {c : LexerCore} {h : H}
     {flow : ControlFlow (Span.Located R)} {c' : LexerCore} {h' : H}
     (hrun : irunI (Internal.lexEofStep (R := R) (E := E)
-      (Recovery.LexRecovery.abandon Recovery.FailFast)
-      (Recovery.LexRecovery.recover Recovery.FailFast)) c h = ((.ok flow, c'), h')) :
+      (Recovery.LexerRecovery.abandon Recovery.FailFast)
+      (Recovery.LexerRecovery.recover Recovery.FailFast)) c h = ((.ok flow, c'), h')) :
     ∃ c₀, c' = resetOf c₀ := by
   unfold Internal.lexEofStep at hrun
   rw [irunI_bind] at hrun
@@ -162,8 +166,8 @@ theorem readEof_reset {reader : RecReader} {result : Option (Span.Located Unit)}
   simp only [Reader.readEof, BSmtLib.Lexer.lexEof] at h
   rw [run_eqI] at h
   generalize hR : ((Internal.lexEofStep (R := Unit) (E := Parser.ParseError Unit)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast)).run (Internal.core reader.lexer)).run
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast)).run (Internal.core reader.lexer)).run
       (Internal.handler reader.lexer) = Q at h
   obtain ⟨⟨r, c'⟩, h'⟩ := Q
   cases r with

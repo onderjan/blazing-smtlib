@@ -17,6 +17,8 @@ position returned: the steps of a token in progress keep it, and the normal stat
 that position.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Step
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -34,7 +36,7 @@ abbrev StepPost (start : Nat) {floor : Option Nat} {low : Nat} {lo : USize}
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
 theorem afterStep_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)

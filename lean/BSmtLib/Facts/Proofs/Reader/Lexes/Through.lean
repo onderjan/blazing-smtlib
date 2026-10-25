@@ -51,7 +51,7 @@ theorem eof_stepC (hnl : NoLayout (scriptConsumer version) (toVersion version))
     (a : FLexer version) (p : PLexer) (taken : List Handed)
     (hI : InvF version a p taken)
     (hR : Reach (scriptConsumer version) (toVersion version) (Internal.core a))
-    {res : Except (LexError (Option (scriptConsumer version).Error))
+    {res : Except (LexerError (Option (scriptConsumer version).Error))
       (ControlFlow (Span.Located (scriptConsumer version).Result))} {a' : FLexer version}
     {taken' : List Handed}
     (hr : (Param.Flagged.flaggedOps.lexEofStep a).run taken = ((res, a'), taken'))
@@ -70,8 +70,8 @@ theorem eof_stepC (hnl : NoLayout (scriptConsumer version) (toVersion version))
   have halike := answering_eof_alike (Internal.core a) (Internal.handler a) taken
   have hA : ∀ e, (((Internal.lexEofStep (H := Answering (scriptConsumer version)) (m := AnswerM)
       (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
-      (Recovery.LexRecovery.abandon Recovery.FailFast)
-          (Recovery.LexRecovery.recover Recovery.FailFast)).run
+      (Recovery.LexerRecovery.abandon Recovery.FailFast)
+          (Recovery.LexerRecovery.recover Recovery.FailFast)).run
         (Internal.core a)).run {} |>.run taken).1.1.1 = .error e →
       e.cause ≠ .consumer none :=
     fun e he => (hnl _ hR).2 (Internal.held a) taken e he
@@ -84,19 +84,19 @@ theorem eof_stepC (hnl : NoLayout (scriptConsumer version) (toVersion version))
   generalize ((StateT.run (Internal.lexEofStep (H := Answering (scriptConsumer version))
       (m := AnswerM)
     (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast))
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast))
     (Internal.core a)).run {}).run taken = RA at halike hA
   generalize ((StateT.run (Internal.lexEofStep (H := Flagged (scriptConsumer version))
       (m := AnswerM)
     (R := (scriptConsumer version).Result) (E := Option (scriptConsumer version).Error)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast))
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler a)).run taken = R at hr h2 hok halike
   generalize (StateT.run (Internal.lexEofStep (H := RecAdapter) (m := Id) (R := Unit)
     (E := Parser.ParseError Unit)
-    (Recovery.LexRecovery.abandon Recovery.FailFast)
-    (Recovery.LexRecovery.recover Recovery.FailFast))
+    (Recovery.LexerRecovery.abandon Recovery.FailFast)
+    (Recovery.LexerRecovery.recover Recovery.FailFast))
     (Internal.core a)).run (Internal.handler p) = R₂ at h2 ⊢
   obtain ⟨⟨⟨res', core'⟩, fl'⟩, taken''⟩ := R
   obtain ⟨⟨⟨resA, coreA⟩, _⟩, _⟩ := RA

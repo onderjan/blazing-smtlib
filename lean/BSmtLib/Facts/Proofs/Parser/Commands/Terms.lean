@@ -43,16 +43,16 @@ macro "payload_step" : tactic =>
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- A part that ends the payload, run in a payload mode, then the command's `)` and last call. -/
 theorem part_then_close {σ ρ : Type} {inner : σ → Parser.Internal.Input → PM H
     (Parser.Internal.Step σ ρ)} {init : σ}
     {wrap : σ → Parser.Command.Internal.Standard.PayloadOf H}
-    {final : ρ → FinalCall (Traits.Handler.Attribute H) (Traits.Handler.«Sort» H)
-      (Traits.Handler.Term H)}
+    {final : ρ → FinalCall (Handler.Attribute H) (Handler.«Sort» H)
+      (Handler.Term H)}
     (hstep : ∀ state token, payloadStep version (wrap state) token =
       inner state token >>= Parser.Internal.Step.wrap wrap fun r => pure (.more (.closing
           (final r))))
@@ -195,15 +195,15 @@ theorem defineSort_payload (name : Tree.Symbol) (parameters : List Tree.Symbol) 
           (by simp [ListState.step, ListState.between])).congr ?_ rfl
     simp [ticks_append]
   have hlistPayload := Runs.bind_next
-    (following := fun _ => Parser.Internal.call (Traits.CommandHandler.startDefineSort (H := H) symbol
-      (Multiple.Symbols.Internal.new (#[] ++ symbols.toArray))))
+    (following := fun _ => Parser.Internal.call (Handler.CommandHandler.startDefineSort (H := H) symbol
+      (Grammar.Multiple.Symbols.Internal.new (#[] ++ symbols.toArray))))
     (next := fun _ => pure (.more (Payload.defineSortBody .init)))
     ((Runs.embedA (outer := payloadStep version)
         (outerArrival := Parser.Command.Internal.Standard.payloadArrive)
             (Payload.defineSortParameters symbol)
       (fun parameters => do
-        Parser.Internal.call (Traits.CommandHandler.startDefineSort (H := H) symbol
-          (Multiple.Symbols.Internal.new parameters))
+        Parser.Internal.call (Handler.CommandHandler.startDefineSort (H := H) symbol
+          (Grammar.Multiple.Symbols.Internal.new parameters))
         pure (.more (.defineSortBody .init)))
       (by payload_step) hlistRuns).congr rfl (by funext; simp [Parser.Internal.Step.wrap]))
   rw [show Parser.Internal.Input.symbol symbol :: (Parser.Internal.Input.parenOpen ::
@@ -261,10 +261,10 @@ theorem defineConst_payload (name : Tree.Symbol) (sort : Tree.«Sort») (body : 
 
 /-- `define-fun` and `define-fun-rec`: the signature, its start, the body, its end. -/
 theorem definition_payload (definition : Parser.Command.Internal.Definition.DefinitionEnd
-    (Traits.Handler.«Sort» H))
-    (start : Multiple.FunctionSignature (Traits.Handler.«Sort» H) → PM H Unit)
-    (final : Traits.Handler.Term H → FinalCall (Traits.Handler.Attribute H)
-      (Traits.Handler.«Sort» H) (Traits.Handler.Term H))
+    (Handler.«Sort» H))
+    (start : Grammar.Multiple.FunctionSignature (Handler.«Sort» H) → PM H Unit)
+    (final : Handler.Term H → FinalCall (Handler.Attribute H)
+      (Handler.«Sort» H) (Handler.Term H))
     (hsignatureStep : ∀ state token,
       payloadStep version (.defineSignature definition state) token =
         Parser.Command.Internal.Function.signatureStep version state token
@@ -276,13 +276,13 @@ theorem definition_payload (definition : Parser.Command.Internal.Definition.Defi
       Parser.Category.Term.Internal.termStep version state token >>= Parser.Internal.Step.wrap
           (.defineBody definition)
         fun body => pure (.more (.closing (final body))))
-    {request : Traits.Handler.Term H → Call (valuesOf H) .nothing}
+    {request : Handler.Term H → Call (valuesOf H) .nothing}
     (hrequest : ∀ body, finalCall (final body) = Parser.Internal.call
         (Bridge.callUnit h (request body)))
     (houtcome : ∀ body, finalOutcome (final body) = .command)
     (functionDef : Tree.FunctionDef) (hvalid : functionDef.Valid (Bridge.version version))
     {payload : List Parser.Internal.Input} (hs : Stands payload functionDef.tokens) :
-    ∃ program : PM H (Multiple.FunctionSignature (Traits.Handler.«Sort» H)),
+    ∃ program : PM H (Grammar.Multiple.FunctionSignature (Handler.«Sort» H)),
       Bridge.signature <$> program = adaptRun (Traversal.signature points h functionDef.symbol
         functionDef.parameters functionDef.result) ∧
       PayloadRuns points version (.defineSignature definition .start)
@@ -328,7 +328,7 @@ theorem defineFun_payload (functionDef : Tree.FunctionDef)
         Program.callUnit h (.endDefineFun handledBody)))
       fun _ => pure (.done .command) := by
   obtain ⟨program, hprogram, hruns⟩ := definition_payload hA .defineFun
-    (fun signature => Parser.Internal.call (Traits.CommandHandler.startDefineFun signature))
+    (fun signature => Parser.Internal.call (Handler.CommandHandler.startDefineFun signature))
     (fun body => .endDefineFun body) (by payload_step) (by payload_step)
     (request := fun body => .endDefineFun body)
     (fun body => by simp [finalCall, hA.endDefineFun]) (fun _ => rfl) functionDef hvalid hs
@@ -349,7 +349,7 @@ theorem defineFunRec_payload (functionDef : Tree.FunctionDef)
         Program.callUnit h (.endDefineFunRec handledBody)))
       fun _ => pure (.done .command) := by
   obtain ⟨program, hprogram, hruns⟩ := definition_payload hA .defineFunRec
-    (fun signature => Parser.Internal.call (Traits.CommandHandler.startDefineFunRec signature))
+    (fun signature => Parser.Internal.call (Handler.CommandHandler.startDefineFunRec signature))
     (fun body => .endDefineFunRec body) (by payload_step) (by payload_step)
     (request := fun body => .endDefineFunRec body)
     (fun body => by simp [finalCall, hA.endDefineFunRec]) (fun _ => rfl) functionDef hvalid hs
@@ -358,9 +358,9 @@ theorem defineFunRec_payload (functionDef : Tree.FunctionDef)
 
 /-- A list of terms with its own `(`, then the command's `)` and last call. -/
 theorem terms_then_close {wrap : ListState (Parser.Category.Term.Internal.TermStateOf
-    H) (Traits.Handler.Term H) →
+    H) (Handler.Term H) →
       Parser.Command.Internal.Standard.PayloadOf H}
-    {after : Array (Traits.Handler.Term H) → PM H (Parser.Internal.Step
+    {after : Array (Handler.Term H) → PM H (Parser.Internal.Step
     (Parser.Command.Internal.Standard.PayloadOf H) CommandOutcome)}
     (hstep : ∀ state token, payloadStep version (wrap state) token =
       state.step .init
@@ -368,12 +368,12 @@ theorem terms_then_close {wrap : ListState (Parser.Category.Term.Internal.TermSt
               Parser.Internal.Step.wrap wrap
           after)
     (terms : List Tree.Term) (hvalid : Tree.Term.ValidAll (Bridge.version version) terms)
-    (final : Array (Traits.Handler.Term H) → FinalCall (Traits.Handler.Attribute H)
-      (Traits.Handler.«Sort» H) (Traits.Handler.Term H))
-    (hafter : ∀ l : List (Traits.Handler.Term H), l.length = terms.length →
+    (final : Array (Handler.Term H) → FinalCall (Handler.Attribute H)
+      (Handler.«Sort» H) (Handler.Term H))
+    (hafter : ∀ l : List (Handler.Term H), l.length = terms.length →
       after l.toArray = pure (.more (.closing (final l.toArray))))
-    {request : List (Traits.Handler.Term H) → Call (valuesOf H) .nothing}
-    (hrequest : ∀ l : List (Traits.Handler.Term H),
+    {request : List (Handler.Term H) → Call (valuesOf H) .nothing}
+    (hrequest : ∀ l : List (Handler.Term H),
       finalCall (final l.toArray) = Parser.Internal.call (Bridge.callUnit h (request l)))
     (houtcome : ∀ l, finalOutcome (final l) = .command)
     {payload : List Parser.Internal.Input} (hs : Stands payload (paren (Tree.Term.tokensAll terms)))

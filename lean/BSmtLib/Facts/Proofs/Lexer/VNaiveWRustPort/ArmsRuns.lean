@@ -38,10 +38,10 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.TextRuns BSmtLib.Lexer.In
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The arm of `lexStep` for a simple symbol. -/
-theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_simpleSymbol (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)
@@ -186,7 +186,7 @@ theorem arm_simpleSymbol (v : Token.Version) (input : ByteSlice) (start : Nat)
     · exact hloc.afterColumns (Nat.le_of_eq hpre.base) hle
 
 /-- The arm of `lexStep` for a keyword. -/
-theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_keyword (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)
@@ -366,7 +366,7 @@ theorem arm_keyword (v : Token.Version) (input : ByteSlice) (start : Nat)
 
 
 /-- The arm of `lexStep` for the digits of a hexadecimal or binary literal. -/
-theorem arm_digitRun (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_digitRun (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)
@@ -539,7 +539,7 @@ theorem arm_digitRun (v : Token.Version) (input : ByteSlice) (start : Nat)
     · exact hloc.afterColumns (Nat.le_of_eq hpre.base) hle
 
 /-- The arm of `lexStep` for a comment, which the consumer takes. -/
-theorem arm_comment_ws (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_comment_ws (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)
@@ -741,7 +741,7 @@ theorem arm_comment_ws (v : Token.Version) (input : ByteSlice) (start : Nat)
     exact ⟨hps, hm, fun _ => rfl⟩
 
 /-- The arm of `lexStep` for a comment. -/
-theorem arm_comment (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_comment (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)

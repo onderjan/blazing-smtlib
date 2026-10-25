@@ -31,7 +31,7 @@ variable {C : BSmtLibSpec.Lexer.Consumer}
 
 /-- The naive lexer's pure state that the Rust port's state agrees with, for a consumer that does
 not take whitespace, has no whitespace in progress. -/
-theorem st_taken {v : Token.Version} {st : St} {c : WP.WCore}
+theorem st_taken {v : Version} {st : St} {c : WP.WCore}
     (h : StAgrees v false st c) : st.Taken := by
   cases st with
   | idle => trivial
@@ -55,7 +55,7 @@ theorem st_taken {v : Token.Version} {st : St} {c : WP.WCore}
         | (simp_all; done)
 
 /-- A consumer takes every lexeme that is not whitespace or a comment. -/
-theorem lexemeEntry_taken (concrete : Bool) (v : Token.Version) {l : Lexeme} (h : (Taken l)) :
+theorem lexemeEntry_taken (concrete : Bool) (v : Version) {l : Lexeme} (h : (Taken l)) :
     lexemeEntry concrete v l ≠ none := by
   unfold Lexeme.Taken at h
   unfold lexemeEntry lexemeHanded
@@ -91,7 +91,7 @@ theorem handAll_ne_layout (hd : Bool) :
         · repeat' split at heq
           all_goals cases heq
 
-theorem lexBytesW_taken {v : Token.Version} {st : St} {location : Span.Location}
+theorem lexBytesW_taken {v : Version} {st : St} {location : Span.Location}
     {bytes : List UInt8}
     (hst : st.Taken) :
     match lexBytesW v false st location bytes with
@@ -107,7 +107,7 @@ theorem lexBytesW_taken {v : Token.Version} {st : St} {location : Span.Location}
 /-- A consumer that does not take whitespace and comments, handed what the naive lexer's pure run
 finishes from a state with no whitespace in progress, does not stop at whitespace or a
 comment. -/
-theorem outcome_ne_layout (hc : C.concrete = false) {hd : Bool} {q : Prog} {v : Token.Version}
+theorem outcome_ne_layout (hc : C.concrete = false) {hd : Bool} {q : Prog} {v : Version}
     {st : St} (hst : st.Taken) {location : Span.Location} {bytes : List UInt8} (l : Lexeme)
     (p : Prog) :
     outcome C hd (.cont q) (lexBytesF v C.concrete st location bytes) ≠ .stopped (.layout l) p := by
@@ -159,7 +159,7 @@ theorem finishLs_taken {st : St} {location : Span.Location} {ls : List Lexeme} (
 
 /-- A consumer that does not take whitespace and comments does not stop at whitespace or a
 comment at the end of the input, from a state with no whitespace in progress. -/
-theorem eofOut_ne_layout {hd : Bool} {ver : Token.Version} {coll : List Handed} {st : St}
+theorem eofOut_ne_layout {hd : Bool} {ver : Version} {coll : List Handed} {st : St}
     {location : Span.Location} (hst : st.Taken) {h : HandOut C} {d : Option Span.Location}
     (heq : eofOut C hd false ver coll st location = some (h, d)) :
     ∀ l p, h ≠ .stop (.layout l) p := by

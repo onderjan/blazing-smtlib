@@ -52,21 +52,21 @@ theorem radix_ne_close (r : Radix) : r.category ≠ .parenClose := by
   cases r <;> nofun
 
 /-- A byte with no token in progress starts no whitespace. -/
-theorem start_taken {version : Token.Version} {location : Span.Location} {c : UInt8} {p : Pending}
+theorem start_taken {version : Version} {location : Span.Location} {c : UInt8} {p : Pending}
     (h : start version false location c = .pending p) : p.mode ≠ .whitespace := by
   simp only [start] at h
   repeat' split at h
   all_goals (cases h <;> simp_all)
 
 /-- A byte with no token in progress is a token by itself only as a parenthesis. -/
-theorem start_paren {version : Token.Version} {location : Span.Location} {c : UInt8} {l : Lexeme}
+theorem start_paren {version : Version} {location : Span.Location} {c : UInt8} {l : Lexeme}
     (h : start version false location c = .token l) : (Lexeme.Taken l) ∧ (Lexeme.IsParen l) := by
   simp only [start] at h
   repeat' split at h
   all_goals (cases h <;> first | exact ⟨rfl, Or.inl rfl⟩ | exact ⟨rfl, Or.inr rfl⟩)
 
 /-- A delimiter starts no error. -/
-theorem start_delimiter {version : Token.Version} {location : Span.Location} {c : UInt8}
+theorem start_delimiter {version : Version} {location : Span.Location} {c : UInt8}
     (hc : isDelimiter c = true) (f : LexFailure) : start version false location c ≠ .error f := by
   intro h
   simp only [start] at h
@@ -115,7 +115,7 @@ theorem finish_paren {p : Pending} {location : Span.Location} {l : Lexeme}
   all_goals (cases h <;> simp [Lexeme.IsParen, radix_ne_open, radix_ne_close])
 
 /-- A byte keeps the state taken, and the consumer takes the lexemes it finishes. -/
-theorem byteStep_taken {version : Token.Version} {st st' : St} {location : Span.Location}
+theorem byteStep_taken {version : Version} {st st' : St} {location : Span.Location}
     {c : UInt8}
     {ls : List Lexeme} (h : byteStep version st location c = some (st', ls)) (hst : st.Taken) :
     st'.Taken ∧ ∀ l ∈ ls, (Lexeme.Taken l) := by
@@ -147,7 +147,7 @@ theorem byteStep_taken {version : Token.Version} {st st' : St} {location : Span.
     · cases h
 
 /-- In a taken state, a byte that fails finishes no lexeme before it. -/
-theorem failedBefore_nil {version : Token.Version} {st : St} {location : Span.Location} {c : UInt8}
+theorem failedBefore_nil {version : Version} {st : St} {location : Span.Location} {c : UInt8}
     (h : byteStep version st location c = none) (hst : st.Taken) :
     failedBefore st location c = [] := by
   cases st with
@@ -165,7 +165,7 @@ theorem failedBefore_nil {version : Token.Version} {st : St} {location : Span.Lo
 
 /-- From a taken state, the run keeps the state taken, and the consumer takes the lexemes it
 finishes, also up to an error. -/
-theorem lexBytes_taken {version : Token.Version} (bytes : List UInt8) :
+theorem lexBytes_taken {version : Version} (bytes : List UInt8) :
     ∀ {st : St} {location : Span.Location}, st.Taken →
       match lexBytes version st location bytes with
       | .ok (st', _, ls) => st'.Taken ∧ ∀ l ∈ ls, (Lexeme.Taken l)
@@ -198,7 +198,7 @@ theorem lexBytes_taken {version : Token.Version} (bytes : List UInt8) :
         · exact this l hl
 
 /-- The consumer records the lexemes it takes. -/
-theorem handedAll_taken (version : Token.Version) (ls : List Lexeme)
+theorem handedAll_taken (version : Version) (ls : List Lexeme)
     (h : ∀ l ∈ ls, (Lexeme.Taken l)) :
     ∃ hs, handedAll version ls = some hs := by
   induction ls with
@@ -254,7 +254,7 @@ theorem endStep_taken {st : St} {location : Span.Location} {ls : List Lexeme}
 
 /-- The pure run fed bytes from the start, also up to an error, and then, if the input has
 ended, the end of the input, as the consumer records it. -/
-theorem fedOf_isSome (version : Token.Version) (ended : Bool) (bytes : List UInt8) :
+theorem fedOf_isSome (version : Version) (ended : Bool) (bytes : List UInt8) :
     ∃ r, fedOf version ended (lexBytes version .idle Span.Location.initial bytes) = some r := by
   have h := lexBytes_taken (version := version) (location := Span.Location.initial) bytes
     (st := .idle) trivial
@@ -282,7 +282,7 @@ theorem fedOf_isSome (version : Token.Version) (ended : Bool) (bytes : List UInt
 /-! ## Where the lexemes end -/
 
 /-- A parenthesis ends just after its byte; any other lexeme a byte finishes ends at it. -/
-theorem byteStep_ends {version : Token.Version} {st st' : St} {location : Span.Location} {c : UInt8}
+theorem byteStep_ends {version : Version} {st st' : St} {location : Span.Location} {c : UInt8}
     {ls : List Lexeme} (h : byteStep version st location c = some (st', ls)) :
     ∀ l ∈ ls, ((Lexeme.IsParen l) → l.end.offset = location.offset + 1) ∧
       (¬ (Lexeme.IsParen l) → l.end.offset = location.offset) := by
@@ -355,7 +355,7 @@ theorem advanceLoc_offset (location : Span.Location) (bytes : List UInt8) :
 
 /-- The lexemes that the run finishes over bytes end before the location after them, except a
 parenthesis, which may end at it. -/
-theorem feedBytes_ends {version : Token.Version} (bytes : List UInt8) :
+theorem feedBytes_ends {version : Version} (bytes : List UInt8) :
     ∀ {st st' : St} {location location' : Span.Location} {ls : List Lexeme},
       feedBytes version st location bytes = some (st', location', ls) →
       ∀ l ∈ ls, l.end.offset ≤ location'.offset ∧
@@ -388,7 +388,7 @@ theorem feedBytes_ends {version : Token.Version} (bytes : List UInt8) :
 
 /-- The lexemes that the run finishes from `location` on, up to the end of the input, end at or
 after it, and a parenthesis after it. -/
-theorem runFrom_ends {version : Token.Version} (bytes : List UInt8) :
+theorem runFrom_ends {version : Version} (bytes : List UInt8) :
     ∀ {st : St} {location : Span.Location} {ls : List Lexeme},
       runFrom version st location bytes = some ls →
       ∀ l ∈ ls, location.offset ≤ l.end.offset ∧ ((Lexeme.IsParen l) → location.offset <
@@ -414,7 +414,7 @@ theorem runFrom_ends {version : Token.Version} (bytes : List UInt8) :
       exact ⟨by omega, fun hp => by have := this.2 hp; omega⟩
 
 /-- The run up to the end of the input finishes at least the end-of-file lexeme. -/
-theorem runFrom_ne_nil {version : Token.Version} {st : St} {location : Span.Location}
+theorem runFrom_ne_nil {version : Version} {st : St} {location : Span.Location}
     {bytes : List UInt8}
     {ls : List Lexeme} (h : runFrom version st location bytes = some ls) : ls ≠ [] := by
   simp only [runFrom] at h
@@ -437,7 +437,7 @@ theorem push_not_isEmpty (a : ByteArray) (c : UInt8) : (a.push c).isEmpty = fals
     simp at h
 
 /-- From every state, some bytes complete the input to one that the run finishes. -/
-theorem runFrom_completes (version : Token.Version) (st : St) (location : Span.Location) :
+theorem runFrom_completes (version : Version) (st : St) (location : Span.Location) :
     ∃ rest ls, runFrom version st location rest = some ls := by
   cases st with
   | idle => exact ⟨[], _, rfl⟩

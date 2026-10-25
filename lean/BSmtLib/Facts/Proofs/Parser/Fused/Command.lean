@@ -10,7 +10,9 @@ import all BSmtLib.Parser.Internal.Fused
 import all BSmtLib.Parser.Internal.Fused.Basic
 import all BSmtLib.Parser.Internal.Fused.Category
 import all BSmtLib.Parser.Script
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -24,14 +26,16 @@ the same handler calls in the same order, the others by the port's step itself.
 
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Command
 
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Command.Internal (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
+open BSmtLib.Token (BatchTag Cursor)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib.Version (VersionPosture)
 open BSmtLib.Facts.Proofs.Parser.Fused.Loop
 open BSmtLib.Facts.Proofs.Parser.Fused.Run
 open BSmtLib.Facts.Proofs.Parser.Fused.Category
@@ -45,7 +49,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandle
 /-! ## Commands -/
 
 /-- How the port's script step goes on, as the fused command step's continuation. -/
-def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor batch)
+def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : LexerCursor batch)
     {β : Type} (k : OutcomeOf H next → m β) :
     Except (Cause H) (Parser.Internal.Flow (PM H) (ScriptParser H) Unit) × H → m β
   | (.error e, h) =>
@@ -59,7 +63,7 @@ def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor
       k <| .stop (.error (ParseError.Internal.new (.version .unsupported)))
         (ScriptParser.new posture) next (.refl _) h
     | .ok switched => do
-      let follows := Token.BatchCursor.setVersion_follows switch
+      let follows := Lexer.Cursor.LexerCursor.setVersion_follows switch
       match ← runParser resume h with
       | (.error e, h) =>
         k <| .stop (.error (ParseError.Internal.new e)) (ScriptParser.new posture) switched
@@ -69,7 +73,7 @@ def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor
         k <| .stop (.ok (.break r)) (ScriptParser.new posture) switched follows h
   | (.ok (.discardRest resume), h) => do
     let discarded := next.discardRest
-    let follows := Token.BatchCursor.discardRest_follows next
+    let follows := Lexer.Cursor.LexerCursor.discardRest_follows next
     match ← runParser resume h with
     | (.error e, h) =>
       k <| .stop (.error (ParseError.Internal.new e)) (ScriptParser.new posture) discarded follows h
@@ -79,7 +83,7 @@ def scriptCont (posture : VersionPosture) {batch : BatchTag} (next : BatchCursor
 
 omit [LawfulMonad m] in
 theorem portStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (declarations : Nat)
-    (command : CommandStateOf H) (token : Token batch) (next : BatchCursor batch) {β : Type}
+    (command : CommandStateOf H) (token : LexerToken batch) (next : LexerCursor batch) {β : Type}
     (k : OutcomeOf H next → m β) :
     portStep posture h declarations command token next k =
       (ScriptParser.Internal.arrive (ScriptParser.Internal.mk posture command declarations)
@@ -93,8 +97,8 @@ theorem portStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
 
 set_option maxHeartbeats 400000 in
 theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
-    {origin next : BatchCursor batch} (h : H) (declarations : Nat) (command : CommandStateOf H)
-    (token : Token batch) (consumed : next.Consumed origin) {β : Type}
+    {origin next : LexerCursor batch} (h : H) (declarations : Nat) (command : CommandStateOf H)
+    (token : LexerToken batch) (consumed : next.Consumed origin) {β : Type}
     (k : PortOut H origin → m β) :
     Parser.Internal.Fused.commandStep posture h declarations command token next
         (fun out => k (toPort posture consumed out)) =
@@ -109,7 +113,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.commandArrive,
         ScriptParser.Internal.step,
       Parser.Command.Internal.commandStep, inputOf]
-    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
+    cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [scriptCont, fail, syntaxError]
@@ -120,7 +124,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.commandArrive,
         ScriptParser.Internal.step,
       Parser.Command.Internal.commandStep, inputOf, Reserved.contentOf_eq, Reserved.reservedAt_eq]
-    cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
+    cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
       (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
       simp [scriptCont, fail, syntaxError]
@@ -144,7 +148,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, inputOf]
-      cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
+      cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
@@ -162,7 +166,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.Standard.payloadStep, inputOf, Category.symbolOf?,
             Reserved.contentOf_eq,
         Reserved.reservedAt_eq]
-      cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
+      cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
@@ -261,7 +265,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
-      cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
+      cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
@@ -275,7 +279,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.Standard.payloadArrive, ScriptParser.Internal.step,
             Parser.Command.Internal.commandStep,
         Parser.Command.Internal.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
-      cases next.category token <;> simp only [Token.SyntaxToken.Internal.fromParts,
+      cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
         (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>

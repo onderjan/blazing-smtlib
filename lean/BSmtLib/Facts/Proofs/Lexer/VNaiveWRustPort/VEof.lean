@@ -34,27 +34,27 @@ variable (C : BSmtLibSpec.Lexer.Consumer)
 gave `r`. -/
 def eofAfter (r : Except (Failure (Option C.Error)) (Option (Span.Located C.Result))) (core3 : Core)
     (taken3 : List Handed) :
-    VRes (Except (LexError (Option C.Error)) (ControlFlow (Span.Located C.Result))) :=
+    VRes (Except (LexerError (Option C.Error)) (ControlFlow (Span.Located C.Result))) :=
   match r with
   | .ok none => ((.ok .continue, core3.reset), taken3)
   | .ok (some located) => ((.ok (.break located), core3.reset), taken3)
-  | .error f => ((.error (LexError.Internal.new f.cause f.span none), core3), taken3)
+  | .error f => ((.error (LexerError.Internal.new f.cause f.span none), core3), taken3)
 
 /-- The lexer state after the end of the input that did not fail is reset. -/
-def ResetOk (iv : Token.Version)
-    (r : VRes (Except (LexError (Option C.Error)) (ControlFlow (Span.Located C.Result)))) : Prop :=
+def ResetOk (iv : Version)
+    (r : VRes (Except (LexerError (Option C.Error)) (ControlFlow (Span.Located C.Result)))) : Prop :=
   r.1.1.isOk = true → r.1.2 = Core.initial iv
 
 theorem failureOf_trailing (l : Lexeme) :
     failureOf (ε := C.Error)
-      (LexError.Internal.new (.lexical .unexpectedTrailingToken) (trailingSpan l) none) =
+      (LexerError.Internal.new (.lexical .unexpectedTrailingToken) (trailingSpan l) none) =
       .trailing (toLocation l.start) :=
   (rfl)
 
 theorem failureOf_lexical {k : LexicalErrorKind} {span : Span}
     (h : k ≠ .unexpectedTrailingToken) :
-    failureOf (ε := C.Error) (LexError.Internal.new (.lexical k) span none) = .lexical := by
-  simp only [failureOf, LexError.Internal.cause_new]
+    failureOf (ε := C.Error) (LexerError.Internal.new (.lexical k) span none) = .lexical := by
+  simp only [failureOf, LexerError.Internal.cause_new]
   have : (k == .unexpectedTrailingToken) = false := by
     cases k <;> first | rfl | exact absurd rfl h
   rw [this]
@@ -78,7 +78,7 @@ theorem discardedOf_fail {X c' : Core} {dd : Bool} {l : Lexeme}
 result. -/
 theorem eof_tail (X : Core) (tk : List Handed) (hX : X.holding = false)
     {d d0 : Option Span.Location}
-    (hd : discardedOf X = d.or d0) {iv : Token.Version} (hiv : X.initialVersion = iv)
+    (hd : discardedOf X = d.or d0) {iv : Version} (hiv : X.initialVersion = iv)
     (loc : Span.Location) :
     ∀ {r core3 taken3},
       vRun C (handOverAt (H := Answering C) X (eofAt loc) (eofAt_valid _)) tk =

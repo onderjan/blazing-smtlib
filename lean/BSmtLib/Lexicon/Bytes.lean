@@ -4,7 +4,7 @@ public import Std.Data.ByteSlice
 
 public section
 
-namespace BSmtLib.Bytes
+namespace BSmtLib.Lexicon.Bytes
 
 /-- An owned string of bytes. -/
 /- LEAN: `ByteArray` is Lean's `Vec<u8>`. Lean values are immutable and reference-counted;
@@ -18,7 +18,7 @@ structure BytesBuf where
 /-- A view of a string of bytes. -/
 /- LEAN: `ByteSlice` from Lean's `Std` is the counterpart of `&[u8]`: a reference to a
 byte array with a start and a stop. -/
-structure _root_.BSmtLib.Bytes where
+structure _root_.BSmtLib.Lexicon.Bytes where
   private ofSlice ::
   private slice : ByteSlice
   deriving Inhabited
@@ -150,4 +150,4 @@ def eqSlice (self : Bytes) (other : ByteSlice) : Bool := self.slice == other
 /-- Whether the bytes are those of the owned string. -/
 def eqOwned (self : Bytes) (other : BytesBuf) : Bool := self.slice == other.asSlice
 
-end BSmtLib.Bytes
+end BSmtLib.Lexicon.Bytes

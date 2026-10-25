@@ -184,7 +184,7 @@ theorem toLocation_locAfter_append (bytes more : List UInt8) :
         (bytes ++ more) bytes.length := by
   rw [locate_append, toLocation_locAfter]
 
-theorem feedBytes_location {version : Token.Version} {st st' : St}
+theorem feedBytes_location {version : Version} {st st' : St}
     {location location' : Span.Location}
     {bytes : List UInt8} {ls : List Lexeme}
     (h : feedBytes version st location bytes = some (st', location', ls)) :

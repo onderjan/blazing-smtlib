@@ -10,8 +10,10 @@ public import BSmtLib
 public section
 
 open BSmtLib
-open BSmtLib.Token (Version TokenCategory)
+open BSmtLib.Token (TokenCategory)
+open BSmtLib (Version)
 open BSmtLib.Lexer (LexicalErrorKind)
+open BSmtLib.Span (Location)
 
 def location (location : Location) : String :=
   s!"{location.offset}:{location.line}:{location.column}"
@@ -50,16 +52,16 @@ def tokenTypeName : TokenCategory → String
 
 /-- The lexer error kind, spelled as the Rust `Debug` form of the kind. -/
 def errorKindName : LexicalErrorKind → String
-  | .unexpectedCharacter => "UnexpectedByte"
+  | .unexpectedByte => "UnexpectedByte"
   | .expected .fractionDigit => "Expected(FractionDigit)"
   | .expected .hexadecimalDigit => "Expected(HexadecimalDigit)"
   | .expected .binaryDigit => "Expected(BinaryDigit)"
   | .expected .base => "Expected(Base)"
-  | .unclosedStringLiteral => "UnclosedString"
-  | .forbiddenCharInString => "ForbiddenByteInString"
+  | .unclosedString => "UnclosedString"
+  | .forbiddenByteInString => "ForbiddenByteInString"
   | .emptyKeyword => "EmptyKeyword"
   | .backslashInQuotedSymbol => "BackslashInQuotedSymbol"
-  | .forbiddenCharInQuotedSymbol => "ForbiddenByteInQuotedSymbol"
+  | .forbiddenByteInQuotedSymbol => "ForbiddenByteInQuotedSymbol"
   | .unclosedQuotedSymbol => "UnclosedQuotedSymbol"
   | .numeralLeadingZero => "NumeralLeadingZero"
   | .missingDelimiter => "MissingDelimiter"
@@ -83,7 +85,8 @@ def unhex (digits : String) : Except String ByteArray := do
   return bytes
 
 def readVersion (word : String) : Except String Version :=
-  match Version.fromDecimal? word.toUTF8.toByteSlice with
+  let decimal := (Lexicon.Value.Decimal.new word.toUTF8.toByteSlice).toOption
+  match decimal.bind Version.fromDecimal? with
   | some version => pure version
   | none => throw s!"unknown version {repr word}"
 

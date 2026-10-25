@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Proofs.Reader.Param.Stop
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Script
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Facts.Proofs.Reader.Param.Stop
 import all BSmtLib.Facts.Parser.Adapters.Run
 
@@ -21,9 +23,11 @@ list, and the driver of the parser's proofs (`Run.driveParse`) is it with the re
 (`driveParse_eq`). Nothing here depends on the handler.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Handler.Drive
 
-open BSmtLib.Parser BSmtLib.Traits BSmtLib.Parser.Script
+open BSmtLib.Parser BSmtLib.Handler BSmtLib.Parser.Script
 open BSmtLib.Parser.Internal (PM)
 open BSmtLibSpec.Parser.Traversal (Points Producer)
 open BSmtLib.Facts.Parser.Adapters.Run (driveParse arriveAt processAt)
@@ -40,21 +44,21 @@ def nullPoints : Points (StateT H Id) := ⟨fun _ => pure (), fun _ => pure ()�
 def nullProducer : Producer (StateT H Id) := ⟨fun _ => pure (), pure ()⟩
 
 /-- What the driver does with one token, with token points and a producer that do nothing. -/
-abbrev tokenStep (version : Token.Version) (parser : ScriptParser H)
-    (token : Internal.Input) : PM H ((Token.Version × ScriptParser H) ⊕ Unit) :=
+abbrev tokenStep (version : Version) (parser : ScriptParser H)
+    (token : Internal.Input) : PM H ((Version × ScriptParser H) ⊕ Unit) :=
   afterToken nullPoints nullProducer version parser token
 
 /-- The script parser over the tokens, from the version and the parser: where it goes on after
 the last, in which version and state, or its end and the tokens after it. -/
-def drive : Token.Version → ScriptParser H → List Internal.Input →
-    PM H ((Token.Version × ScriptParser H) ⊕ (Unit × List Internal.Input))
+def drive : Version → ScriptParser H → List Internal.Input →
+    PM H ((Version × ScriptParser H) ⊕ (Unit × List Internal.Input))
   | version, parser, [] => pure (.inl (version, parser))
   | version, parser, token :: tokens => do
     match ← tokenStep version parser token with
     | .inl (version', parser') => drive version' parser' tokens
     | .inr () => pure (.inr ((), tokens))
 
-theorem drive_append (version : Token.Version) (parser : ScriptParser H)
+theorem drive_append (version : Version) (parser : ScriptParser H)
     (items items' : List Internal.Input) :
     drive version parser (items ++ items') =
       drive version parser items >>= fun r => match r with
@@ -71,7 +75,7 @@ theorem drive_append (version : Token.Version) (parser : ScriptParser H)
 
 /-- The driver of the parser's proofs, with token points and a producer that do nothing, is
 `drive` with its result read. -/
-theorem driveParse_eq (version : Token.Version) (parser : ScriptParser H)
+theorem driveParse_eq (version : Version) (parser : ScriptParser H)
     (items : List Internal.Input) :
     driveParse nullPoints nullProducer version parser items =
       drive version parser items >>= fun r => match r with
@@ -90,8 +94,8 @@ theorem driveParse_eq (version : Token.Version) (parser : ScriptParser H)
 /-- What the reader proofs' adapter did with a token, as the driver's step: going on, also after
 an action on the cursor, in the cursor's version, or the end, or the failure. -/
 def afterOf {b : Token.BatchTag} :
-    Internal.After (ScriptParser H) Unit (Handler.Error H) × Token.BatchCursor b →
-      Except (ParseErrorCause (Handler.Error H)) ((Token.Version × ScriptParser H) ⊕ Unit)
+    Internal.After (ScriptParser H) Unit (Handler.Error H) × LexerCursor b →
+      Except (ParseErrorCause (Handler.Error H)) ((Version × ScriptParser H) ⊕ Unit)
   | (.goOn parser, cursor) => .ok (.inl (cursor.version, parser))
   | (.stop (.ok .continue) parser, cursor) => .ok (.inl (cursor.version, parser))
   | (.stop (.ok (.break ())) _, _) => .ok (.inr ())
@@ -113,7 +117,7 @@ theorem processAt_null (token : Internal.Input) :
 
 /-- The reader proofs' adapter takes a token of a batch cursor as the driver's step does. -/
 theorem takeOne_drive {b : Token.BatchTag} (parser : ScriptParser H)
-    (cursor next : Token.BatchCursor b) (token : BSmtLib.Token b)
+    (cursor next : LexerCursor b) (token : Lexer.Cursor.LexerToken b)
     (consumed : Token.Cursor.Consumed next cursor) (s : H) :
     (tokenStep next.version parser (Internal.Input.ofSyntax (next.syntax token))).run.run s =
       (afterOf (((Stop.takeOne (m := Id) parser cursor token next consumed).run s).1.1,
@@ -144,13 +148,13 @@ theorem takeOne_drive {b : Token.BatchTag} (parser : ScriptParser H)
         dsimp only
         split
         · rename_i heq
-          simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
+          simp [Token.Cursor.setVersion, Lexer.Cursor.LexerCursor.setVersion] at heq
         · rename_i switched hsw
           simp only [nullProducer, ExceptT.run_bind, StateT.run_bind, id_bind]
           have hv : switched.version = declared := by
             unfold Token.Cursor.setVersion at hsw
-            change Token.BatchCursor.setVersion next declared = _ at hsw
-            unfold Token.BatchCursor.setVersion at hsw
+            change Lexer.Cursor.LexerCursor.setVersion next declared = _ at hsw
+            unfold Lexer.Cursor.LexerCursor.setVersion at hsw
             injection hsw with hsw
             rw [← hsw]
           have hl : ((ExceptT.lift (m := StateT H Id) (ε := ParseErrorCause (Handler.Error H))

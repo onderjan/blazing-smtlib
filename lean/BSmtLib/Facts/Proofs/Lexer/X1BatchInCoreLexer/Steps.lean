@@ -19,6 +19,8 @@ quoted symbols and whitespace are simulated by induction on the bytes left after
 they go on from.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Steps
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -117,10 +119,10 @@ def nextMap (s0 : Nat) {lo : USize} {lo' : Nat} (e : ix s0 lo = lo')
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem extendContent_sim' (slice : ByteSlice) (h : slice.stop < USize.size)
     (p q : USize) (p' q' : Nat) (ep : ix slice.start p = p') (eq : ix slice.start q = q')
     (hp : slice.start ≤ p.toNat) (hq : slice.start ≤ q.toNat) :
@@ -131,7 +133,7 @@ theorem extendContent_sim' (slice : ByteSlice) (h : slice.stop < USize.size)
   subst ep eq
   exact extendContent_sim b slice h p q hp hq
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem markLineFeedAt_sim' (start : Nat) (position : USize) (position' : Nat)
     (ep : ix start position = position') (hb : start ≤ b.toNat)
     (hp : b.toNat ≤ position.toNat) :
@@ -142,7 +144,7 @@ theorem markLineFeedAt_sim' (start : Nat) (position : USize) (position' : Nat)
   subst ep
   exact markLineFeedAt_sim start b position hb hp
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem failAt_sim' {α β : Type} (start : Nat) (ψ : α → β) (kind : LexicalErrorKind)
     (position : USize) (position' : Nat) (ep : ix start position = position')
     (hb : start ≤ b.toNat) (hp : b.toNat < position.toNat) (Q : α → ZS floor low → Prop) :
@@ -152,7 +154,7 @@ theorem failAt_sim' {α β : Type} (start : Nat) (ψ : α → β) (kind : Lexica
   subst ep
   exact failAt_sim start ψ b kind position hb hp Q
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem failAt_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (kind : LexicalErrorKind)
     (position : USize) (position' : Nat) (ep : ix start position = position')
     (hb : start ≤ b.toNat) (hp : b.toNat < position.toNat) (Q : γ → ZS floor low → Prop)
@@ -164,7 +166,7 @@ theorem failAt_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (ki
   subst ep
   exact failAt_bind_sim start ψ b kind position hb hp Q k k'
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem expectDelimiter_sim' (start : Nat) (next : UInt8) (position : USize) (position' : Nat)
     (ep : ix start position = position') (hb : start ≤ b.toNat) (hp : b.toNat ≤ position.toNat)
     (hno : position.toNat + 1 < USize.size) :
@@ -283,7 +285,7 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
 theorem lexFractionFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)
@@ -406,7 +408,7 @@ theorem lexQuotedSymbolClosed_sim (slice : ByteSlice) (h : slice.stop < USize.si
   refine SimP.seq (setNormal_sim slice.start b) fun _ => ?_
   exact SimP.pure (fun _ h => h) (Subtype.ext es)
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem lexBaseSelection_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start : USize)
     (start' : Nat) (es : ix slice.start start = start') (hstart) (hw)
     (tokenStart : Span.Location)
@@ -433,7 +435,7 @@ theorem lexBaseSelection_sim (slice : ByteSlice) (h : slice.stop < USize.size) (
     exact SimP.pure (fun _ h => h) (Subtype.ext e1')
   · exact failAt_bind_sim' b slice.start _ _ _ _ e1' hb (by omega) _ _ _
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem consumes_sim (start : Nat) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.consumesWhitespaceAndComments (H := H) (m := m) (R := R) (E := E))
@@ -506,7 +508,7 @@ theorem lexComment_sim (slice : ByteSlice) (h : slice.stop < USize.size) (start 
 
 
 omit [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H
-    (Token.BatchCursor batch) m] in
+    (LexerCursor batch) m] in
 /-- The position after one with a position after it has the index after its index. -/
 theorem ix_add_one_of_lt_size {s0 : Nat} {p : USize} (hp : s0 ≤ p.toNat)
     (hlt : p.toNat + 1 < USize.size) : ix s0 (p + 1) = ix s0 p + 1 := by
@@ -735,7 +737,7 @@ theorem lexQuotedSymbol_sim (slice : ByteSlice) (h : slice.stop < USize.size) (o
       exact SimP.pure (fun _ h => h) (Subtype.ext ix_stop)
 
 omit [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H
-    (Token.BatchCursor batch) m] in
+    (LexerCursor batch) m] in
 /-- A branch of the first lexer, by cases on its condition. -/
 theorem SimP.ite_left {start : Nat} {α β : Type} {Q : α → ZS floor low → Prop} {ψ : α → β}
     {P : ZS floor low → Prop} {c : Prop} [Decidable c]
@@ -748,7 +750,7 @@ theorem SimP.ite_left {start : Nat} {α β : Type} {Q : α → ZS floor low → 
   · simp only [hc, ↓reduceIte]; exact h₂ hc
 
 omit [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H
-    (Token.BatchCursor batch) m] in
+    (LexerCursor batch) m] in
 theorem runEnd_ix3 {slice : ByteSlice} {h : slice.stop < USize.size} {p : USize} {p' : Nat}
     (ep : ix slice.start p = p') (hp : slice.start ≤ p.toNat) (mask : UInt8) :
     p.toNat ≤ (CharClass.runEnd (inputOf slice h) p mask).toNat ∧
@@ -865,7 +867,7 @@ theorem lexStringLiteralFrom_sim (slice : ByteSlice) (h : slice.stop < USize.siz
     · exact absurd (hg0.trans hX) (fun hs => hnone first' hs (attach_of_eq hs))
 
 omit [LawfulMonad m] [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H
-    (Token.BatchCursor batch) m] in
+    (LexerCursor batch) m] in
 theorem runEndAll_ix3 {slice : ByteSlice} {h : slice.stop < USize.size} {p : USize} {p' : Nat}
     (ep : ix slice.start p = p') (hp : slice.start ≤ p.toNat) (mask : UInt8) :
     p.toNat ≤ (CharClass.runEndAll (inputOf slice h) p mask).toNat ∧

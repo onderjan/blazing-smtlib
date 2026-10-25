@@ -48,7 +48,7 @@ open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 /-! ## Symbols and sort declarations -/
 
 /-- Every step of the parser of a symbol as a list element advances. -/
-theorem symbolStep_advances (version : Token.Version) :
+theorem symbolStep_advances (version : Version) :
     StepsAdvance version (symbolStep (H := List Event)) (fun _ => SymbolLang)
       fun _ _ => SymbolLang := by
   intro _ token item hitem _
@@ -80,7 +80,7 @@ theorem sortDecRem_nonempty (state : SortDecState) : ∃ u, sortDecRem state u :
   | close _ _ => exact ⟨_, tok_intro _⟩
 
 /-- Every step of the sort declaration parser advances. -/
-theorem sortDecStep_advances (version : Token.Version) :
+theorem sortDecStep_advances (version : Version) :
     StepsAdvance version (SortDecState.step (H := List Event)) sortDecRem
       fun state _ => sortDecRem state := by
   intro state token item hitem _
@@ -143,7 +143,7 @@ def literalRem (state : LiteralState Nat Nat Nat Nat Nat) : Lang :=
 
 theorem literalLang_nonempty : ∃ u, LiteralLang u := ⟨_, ⟨.positive ⟨[], false⟩, trivial, rfl⟩⟩
 
-theorem notLang_symbol {s : Plain.Symbol} (h : (isNot s) = true) :
+theorem notLang_symbol {s : Lexicon.Value.Symbol} (h : (isNot s) = true) :
     NotLang [.token (.symbol (Bridge.symbol s))] := by
   refine ⟨Bridge.symbol s, ?_, rfl⟩
   unfold Parser.Command.Internal.Standard.Symbol.isNot at h
@@ -155,7 +155,7 @@ theorem notLang_nonempty : ∃ u, NotLang u := ⟨_, ⟨⟨BSmtLibSpec.Regex.cha
 theorem literalRem_init : ∀ u, literalRem .init u → LiteralLang u := fun _ h => h.2
 
 /-- A step of the literal parser fails with no rejection of a version declaration. -/
-theorem literalStep_benign (version : Token.Version) (state : LiteralState Nat Nat Nat Nat Nat)
+theorem literalStep_benign (version : Version) (state : LiteralState Nat Nat Nat Nat Nat)
     {token : Parser.Internal.Input} {item : Received} (hitem : Bridge.received token = some item)
     (hlex : item.OfVersion (Bridge.version version)) :
     Sound (fun _ => True) Benign (literalStep (H := List Event) version state token) := by
@@ -175,7 +175,7 @@ theorem literalStep_benign (version : Token.Version) (state : LiteralState Nat N
   all_goals fail_step
 
 /-- Every step of the literal parser advances. -/
-theorem literalStep_advances (version : Token.Version) :
+theorem literalStep_advances (version : Version) :
     StepsAdvance version (literalStep (H := List Event) version) literalRem
       fun state _ => literalRem state := by
   intro ⟨shape, term⟩ token item hitem hlex
@@ -200,7 +200,7 @@ theorem literalStep_advances (version : Token.Version) :
       item_of hitem
       rw [show termStep (H := List Event) version .init (.symbol s) =
         (Parser.Internal.call
-            (Traits.Handler.handleTerm (H := List Event) (.qualifiedIdent ⟨s, #[]⟩ none)) >>=
+            (Handler.handleTerm (H := List Event) (.qualifiedIdent ⟨s, #[]⟩ none)) >>=
           fun t => termComplete [] t) from rfl, bind_assoc]
       call_step
       rw [show ∀ t, termComplete (H := List Event) [] t = pure (.done t) from fun _ => rfl,
@@ -229,7 +229,7 @@ theorem literalStep_advances (version : Token.Version) :
       rw [show termStep (H := List Event) version ⟨.start, [.application f none #[]]⟩
           (.symbol s) =
         (Parser.Internal.call
-            (Traits.Handler.handleTerm (H := List Event) (.qualifiedIdent ⟨s, #[]⟩ none)) >>=
+            (Handler.handleTerm (H := List Event) (.qualifiedIdent ⟨s, #[]⟩ none)) >>=
           fun t => termComplete [.application f none #[]] t) from rfl, bind_assoc]
       refine Sound.bind (Sound.ofCall fun _ => ⟨_, _, rfl⟩) fun t _ => ?_
       rw [show termComplete (H := List Event) [.application f none #[]] t =
@@ -245,8 +245,8 @@ theorem literalStep_advances (version : Token.Version) :
       rw [show termStep (H := List Event) version ⟨.start, [.application f none #[a]]⟩
           .parenClose =
         (Parser.Internal.call
-            (Traits.Handler.handleTerm (H := List Event)
-              (.application f none (.new #[a]) (Multiple.len_pos_new (by simp)))) >>=
+            (Handler.handleTerm (H := List Event)
+              (.application f none (.new #[a]) (Grammar.Multiple.len_pos_new (by simp)))) >>=
           fun t => termComplete [] t) from rfl, bind_assoc]
       call_step
       rw [show ∀ t, termComplete (H := List Event) [] t = pure (.done t) from fun _ => rfl,
@@ -293,7 +293,7 @@ theorem functionDecLang_nonempty : ∃ u, FunctionDecLang version u :=
 end
 
 /-- Every step of the signature parser advances. -/
-theorem signatureStep_advances (version : Token.Version) :
+theorem signatureStep_advances (version : Version) :
     StepsAdvance version (signatureStep (H := List Event) version)
       (signatureRem (Bridge.version version))
       fun state _ => signatureRem (Bridge.version version) state := by
@@ -342,7 +342,7 @@ theorem signatureStep_advances (version : Token.Version) :
     | done result => exact Sound.pure fun _ => hr
 
 /-- Every step of the function declaration parser advances. -/
-theorem functionDecStep_advances (version : Token.Version) :
+theorem functionDecStep_advances (version : Version) :
     StepsAdvance version (functionDecStep (H := List Event) version)
       (functionDecRem (Bridge.version version))
       fun state _ => functionDecRem (Bridge.version version) state := by
@@ -445,7 +445,7 @@ theorem constructorLang_opened {u : List Received} (h : constructorRem version .
 end
 
 /-- Every step of the constructor parser advances. -/
-theorem constructorStep_advances (version : Token.Version) :
+theorem constructorStep_advances (version : Version) :
     StepsAdvance version (constructorStep (H := List Event) version)
       (constructorRem (Bridge.version version))
       fun state _ => constructorRem (Bridge.version version) state := by
@@ -554,8 +554,8 @@ end
 
 /-- Every step of the datatype declaration parser advances, whatever it calls at the start of a
 declaration, as long as that never fails. -/
-theorem datatypeStep_advances (version : Token.Version)
-    {start : Array Plain.Symbol → Quiet.RPM Unit}
+theorem datatypeStep_advances (version : Version)
+    {start : Array Lexicon.Value.Symbol → Quiet.RPM Unit}
     (hstart : ∀ parameters, Sound (fun _ => True) Benign (start parameters)) :
     StepsAdvance version (datatypeStep (H := List Event) start version)
       (datatypeRem (Bridge.version version))
@@ -678,7 +678,7 @@ theorem datatypeStep_advances (version : Token.Version)
 /-! ## The bodies of recursive functions -/
 
 /-- Every step of the parser of a recursive body advances, as the term parser's. -/
-theorem bodyStep_advances (version : Token.Version) :
+theorem bodyStep_advances (version : Version) :
     StepsAdvance version (bodyStep (H := List Event) version) (termRem (Bridge.version version))
       fun state _ => termRem (Bridge.version version) state := by
   intro state token item hitem hlex
@@ -701,7 +701,7 @@ theorem termRem_init_nonempty (version : BSmtLibSpec.Lexicon.Version) :
   termRem_nonempty version _ trivial
 
 /-- Every step of the parser of the recursive bodies advances, for exactly `count` bodies. -/
-theorem bodiesStep_advances (version : Token.Version) (count : Nat) :
+theorem bodiesStep_advances (version : Version) (count : Nat) :
     StepsAdvance version (bodiesStep (H := List Event) count version)
       (listRem (termRem (Bridge.version version)) (TermLang (Bridge.version version))
         Parser.Category.Term.Internal.TermState.init count (some count))
@@ -718,7 +718,7 @@ theorem bodiesStep_advances (version : Token.Version) (count : Nat) :
     state token item hitem hlex
 
 /-- The parser of recursive bodies writes no event where it finishes. -/
-theorem bodiesStep_quiet (count : Nat) (version : Token.Version)
+theorem bodiesStep_quiet (count : Nat) (version : Version)
     (state : ListState (Parser.Category.Term.Internal.TermStateOf (List Event)) Unit)
         (token : Parser.Internal.Input) :
     ∀ events b events', (bodiesStep (H := List Event) count version state token).run.run events =

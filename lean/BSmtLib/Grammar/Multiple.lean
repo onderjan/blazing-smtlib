@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Plain
+public import BSmtLib.Lexicon.Value
 public import BSmtLib.Token.AppendTokens
 
 public section
@@ -14,7 +14,7 @@ buffers from which a user builds them.
 -/
 /- LEAN: Rust's `multiple.rs`. Its match cases hold patterns, and `nodes.rs` holds multiple
 values; Lean's modules cannot import each other, so the match cases are in the module
-`BSmtLib.Multiple.MatchCases`, which imports `BSmtLib.Nodes`.
+`BSmtLib.Grammar.Multiple.MatchCases`, which imports `BSmtLib.Grammar.Nodes`.
 
 Each container is a structure of one array, which the compiler represents as the array itself,
 so handing one over costs nothing. Lean values are immutable: Rust's in-place access (`get_mut`,
@@ -24,9 +24,9 @@ value builds a new one. A `for` loop over a container (`ForIn`) is Rust's `iter`
 `Inhabited` instance of a buffer is its `Default`. A buffer's methods that change it in Rust return
 the changed buffer, as `BytesBuf`'s do. -/
 
-namespace BSmtLib
+namespace BSmtLib.Grammar
 
-open BSmtLib.Plain (SymbolBuf Symbol NumeralBuf Numeral)
+open BSmtLib.Lexicon.Value (SymbolBuf Symbol NumeralBuf Numeral)
 
 /--
 Multiple values to be handled.
@@ -89,79 +89,75 @@ such as let bindings or sorted variables.
 
 The values can be inspected, and a `for` loop goes through them in order.
 -/
-structure Named (V : Type) where
+structure NamedValues (V : Type) where
   private mk ::
   /-- The names with their values, in order. -/
   toArray : Array (Symbol × V)
 
 /-- Let bindings to be handled: the names with their terms. -/
-abbrev Bindings (T : Type) := Named T
+abbrev Bindings (T : Type) := NamedValues T
 
 /-- Sorted variables to be handled: the names with their sorts. -/
-abbrev SortedVars (S : Type) := Named S
+abbrev SortedVars (S : Type) := NamedValues S
 
-namespace Named
+namespace NamedValues
 
 /- LEAN: crate-private in Rust; the library builds the view. -/
 @[inline]
-def Internal.new {V : Type} (toArray : Array (Symbol × V)) : Named V := ⟨toArray⟩
+def Internal.new {V : Type} (toArray : Array (Symbol × V)) : NamedValues V := ⟨toArray⟩
 
 @[simp]
 theorem Internal.toArray_new {V : Type} (toArray : Array (Symbol × V)) :
-    (Internal.new toArray : Named V).toArray = toArray :=
+    (Internal.new toArray : NamedValues V).toArray = toArray :=
   (rfl)
 
 variable {V : Type}
 
 @[inline]
-def len (self : Named V) : Nat := self.toArray.size
+def len (self : NamedValues V) : Nat := self.toArray.size
 
 @[inline]
-def isEmpty (self : Named V) : Bool := self.toArray.isEmpty
+def isEmpty (self : NamedValues V) : Bool := self.toArray.isEmpty
 
 @[inline]
-def get? (self : Named V) (index : Nat) : Option (Symbol × V) := self.toArray[index]?
+def get? (self : NamedValues V) (index : Nat) : Option (Symbol × V) := self.toArray[index]?
 
-@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m (Named V) (Symbol × V) where
+@[no_expose] instance {m : Type → Type} [Monad m] : ForIn m (NamedValues V) (Symbol × V) where
   forIn self init f := ForIn.forIn self.toArray init f
 
-@[no_expose] instance [Repr V] : Repr (Named V) := ⟨fun self p => reprPrec self.toArray p⟩
+@[no_expose] instance [Repr V] : Repr (NamedValues V) := ⟨fun self p => reprPrec self.toArray p⟩
 
-end Named
+end NamedValues
 
-/-- Owned named values, from which `Named` is viewed. -/
+/-- Owned named values, from which `NamedValues` is viewed. -/
 /- LEAN: each name is a view of a copy of its bytes that the buffer made, so the view needs no
 copy. -/
-structure NamedBuf (V : Type) where
+structure NamedValuesBuf (V : Type) where
   private ofArray ::
   private entries : Array (Symbol × V)
 
-/-- Owned let bindings. -/
-abbrev BindingsBuf (T : Type) := NamedBuf T
-
-/-- Owned sorted variables. -/
-abbrev SortedVarsBuf (S : Type) := NamedBuf S
-
-namespace NamedBuf
+namespace NamedValuesBuf
 
 variable {V : Type}
 
-def new : NamedBuf V := ⟨#[]⟩
+def new : NamedValuesBuf V := ⟨#[]⟩
 
-def push (self : NamedBuf V) (name : Symbol) (value : V) : NamedBuf V :=
+def push (self : NamedValuesBuf V) (name : Symbol) (value : V) : NamedValuesBuf V :=
   ⟨self.entries.push (name.intoOwned.view, value)⟩
 
-def clear (_ : NamedBuf V) : NamedBuf V := new
+def clear (_ : NamedValuesBuf V) : NamedValuesBuf V := new
 
-def viewMut (self : NamedBuf V) : Named V := ⟨self.entries⟩
+def viewMut (self : NamedValuesBuf V) : NamedValues V := ⟨self.entries⟩
 
-def len (self : NamedBuf V) : Nat := self.entries.size
+def len (self : NamedValuesBuf V) : Nat := self.entries.size
 
-def isEmpty (self : NamedBuf V) : Bool := self.entries.isEmpty
+def isEmpty (self : NamedValuesBuf V) : Bool := self.entries.isEmpty
 
-@[no_expose] instance : Inhabited (NamedBuf V) := ⟨new⟩
+@[no_expose] instance : Inhabited (NamedValuesBuf V) := ⟨new⟩
 
-end NamedBuf
+@[no_expose] instance [Repr V] : Repr (NamedValuesBuf V) := ⟨fun self p => reprPrec self.viewMut p⟩
+
+end NamedValuesBuf
 
 /-! ## Symbols -/
 
@@ -219,6 +215,8 @@ def len (self : SymbolsBuf) : Nat := self.entries.size
 def isEmpty (self : SymbolsBuf) : Bool := self.entries.isEmpty
 
 @[no_expose] instance : Inhabited SymbolsBuf := ⟨new⟩
+
+@[no_expose] instance : Repr SymbolsBuf := ⟨fun self p => reprPrec self.view p⟩
 
 end SymbolsBuf
 
@@ -280,6 +278,8 @@ def len (self : SortAritiesBuf) : Nat := self.entries.size
 def isEmpty (self : SortAritiesBuf) : Bool := self.entries.isEmpty
 
 @[no_expose] instance : Inhabited SortAritiesBuf := ⟨new⟩
+
+@[no_expose] instance : Repr SortAritiesBuf := ⟨fun self p => reprPrec self.view p⟩
 
 end SortAritiesBuf
 
@@ -357,6 +357,9 @@ def clear (_ : ConstructorsBuf S) : ConstructorsBuf S := new
 def viewMut (self : ConstructorsBuf S) : Constructors S := ⟨self.entries⟩
 
 @[no_expose] instance : Inhabited (ConstructorsBuf S) := ⟨new⟩
+
+@[no_expose] instance [Repr S] : Repr (ConstructorsBuf S) :=
+  ⟨fun self p => reprPrec self.viewMut p⟩
 
 end ConstructorsBuf
 
@@ -488,13 +491,17 @@ def get? (self : FunctionSignaturesBuf S) (index : Nat) : Option (FunctionSignat
 
 @[no_expose] instance : Inhabited (FunctionSignaturesBuf S) := ⟨new⟩
 
+@[no_expose] instance [Repr S] : Repr (FunctionSignaturesBuf S) :=
+  ⟨fun self p => reprPrec self.view p⟩
+
 end FunctionSignaturesBuf
 
 /-! ## Tokens of the values -/
 
 section AppendTokens
 
-open BSmtLib.Token (AppendTokens SyntaxToken TokensCursor)
+open BSmtLib.Token (AppendTokens TokensCursor)
+open BSmtLib (Token)
 
 /-- Appends the values in order, without enclosing parentheses. -/
 @[no_expose] instance {α : Type} [AppendTokens α] : AppendTokens (Multiple α) :=
@@ -511,16 +518,16 @@ private def appendNamed {V : Type} [AppendTokens V] (named : Array (Symbol × V)
 
 /-- Appends each name with its value as `(name value)`, in order, without enclosing
 parentheses. -/
-@[no_expose] instance {V : Type} [AppendTokens V] : AppendTokens (Named V) :=
+@[no_expose] instance {V : Type} [AppendTokens V] : AppendTokens (NamedValues V) :=
   ⟨fun self tokens => appendNamed self.toArray tokens⟩
 
 /-- Appends each name with its value as `(name value)`, in order, without enclosing
 parentheses. -/
-@[no_expose] instance {V : Type} [AppendTokens V] : AppendTokens (NamedBuf V) :=
+@[no_expose] instance {V : Type} [AppendTokens V] : AppendTokens (NamedValuesBuf V) :=
   ⟨fun self tokens => appendNamed self.viewMut.toArray tokens⟩
 
 end AppendTokens
 
 end Multiple
 
-end BSmtLib
+end BSmtLib.Grammar

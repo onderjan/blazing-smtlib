@@ -25,14 +25,14 @@ loop). Rust keeps a pending term beside its state; here the modes that wait for 
 
 namespace BSmtLib.Parser.Category.Term
 
-open BSmtLib.Plain (Symbol)
-open BSmtLib.Nodes BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
+open BSmtLib.Lexicon.Value (Symbol)
+open BSmtLib.Grammar.Nodes BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Attribute.Internal
 open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.Pattern BSmtLib.Parser.Category.QualifiedIdent
 open BSmtLib.Parser.Category.Pattern.Internal
 open BSmtLib.Parser.Category.QualifiedIdent.Internal
-open BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Token BSmtLib.Traits
+open BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Token BSmtLib.Handler
 open BSmtLib.Parser.Category.SortedVar.Internal
 open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Parser.Internal (PM call syntaxError)
@@ -156,8 +156,8 @@ def startBinder (binder : SortedBinder) (variables : Array (Symbol × Handler.«
     PM H (Handler.Scope H) :=
   match binder with
   | .quantifier quantifier => call (Handler.startQuantifier quantifier
-    (Multiple.Named.Internal.new variables))
-  | .lambda => call (Handler.startLambda (Multiple.Named.Internal.new variables))
+    (Grammar.Multiple.NamedValues.Internal.new variables))
+  | .lambda => call (Handler.startLambda (Grammar.Multiple.NamedValues.Internal.new variables))
 
 /-- The end of a binder, with its scope value and its body. -/
 def endBinder (kind : BinderKind) (scope : Handler.Scope H) (body : Handler.Term H) :
@@ -197,7 +197,7 @@ ends at its own `)`. A match starts at its scrutinee's last token; each case sta
 pattern's last token and ends at its `)`; the match is handled at its `)`. An annotation is
 handled at its `)`, after its attributes.
 -/
-def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.Input) :
+def termStep (version : Version) (self : TermStateOf H) (token : Internal.Input) :
     PM H (Internal.Step (TermStateOf H) (Handler.Term H)) := do
   let into mode := pure (Internal.Step.more { self with mode })
   match self.mode with
@@ -210,7 +210,7 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
         if hne : arguments.isEmpty then syntaxError (.empty .termApplication)
         else
           let term ← call (Handler.handleTerm
-            (.application function sort (.new arguments) (Multiple.len_pos_new hne)))
+            (.application function sort (.new arguments) (Grammar.Multiple.len_pos_new hne)))
           termComplete outer term
       | _ => syntaxError (.expected #[.term])
     | .symbol symbol =>
@@ -240,7 +240,7 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     | .parenOpen => into (.letBindingSymbol bindings)
     | .parenClose =>
       if bindings.isEmpty then syntaxError (.empty .letBindings)
-      let scope ← call (Handler.startLet (Multiple.Named.Internal.new bindings))
+      let scope ← call (Handler.startLet (Grammar.Multiple.NamedValues.Internal.new bindings))
       return .more { mode := .start, levels := .binder .let scope :: self.levels }
     | _ => syntaxError (.expected #[.token .parenOpen, .token .parenClose])
   | .letBindingSymbol bindings =>
@@ -255,8 +255,8 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     | .done variables =>
       if variables.isEmpty then
         syntaxError (match binder with
-          | .lambda => (.empty .lambdaBindings)
-          | _ => (.empty .quantifierBindings))
+          | .lambda => (.empty .lambdaVars)
+          | _ => (.empty .quantifierVars))
       let scope ← startBinder binder variables
       return .more { mode := .start, levels := .binder (.sorted binder) scope :: self.levels }
   | .binderClose kind scope body =>
@@ -286,7 +286,7 @@ def termStep (version : Token.Version) (self : TermStateOf H) (token : Internal.
     into (.matchCaseOpen scrutinee (cases.push (pattern, handled)))
   | .matchClose scrutinee cases =>
     expectClose token
-    let term ← call (Handler.endMatch scrutinee (Multiple.MatchCases.Internal.new cases))
+    let term ← call (Handler.endMatch scrutinee (Grammar.Multiple.MatchCases.Internal.new cases))
     termComplete self.levels term
   | .annotating term state =>
     match ← attributeStep false version state token with

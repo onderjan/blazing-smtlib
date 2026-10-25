@@ -14,14 +14,15 @@ a constructor, and a datatype declaration with or without `par`.
 
 namespace BSmtLib.Parser.Command.Internal.Datatype
 
-open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.Sort
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.Sort
 open BSmtLib.Parser.Category.Combinator.Internal
 open BSmtLib.Parser.Category.SortedVar BSmtLib.Parser.Category.Token
 open BSmtLib.Parser.Category.SortedVar.Internal
 open BSmtLib.Parser.Category.Token.Internal
-open BSmtLib.Plain (Numeral Symbol)
-open BSmtLib.Multiple (SortedVars)
-open BSmtLib.Token (Version)
+open BSmtLib.Lexicon.Value (Numeral Symbol)
+open BSmtLib.Grammar.Multiple (SortedVars)
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 section
@@ -89,7 +90,7 @@ def constructorStep (version : Version) (self : ConstructorState (Handler.«Sort
   | .selectors symbol state =>
     match ← state.step .start (sortedVarStep version) none token with
     | .more state => return .more (.selectors symbol state)
-    | .done selectors => return .done (symbol, Multiple.Named.Internal.new selectors)
+    | .done selectors => return .done (symbol, Grammar.Multiple.NamedValues.Internal.new selectors)
 
 /--
 A step of the parser of a datatype declaration, `(` ⟨constructor_dec⟩+ `)` |

@@ -197,7 +197,7 @@ theorem borrowedLexeme_eq {c : WP.WCore} {offset base i j : Nat} {location : Spa
   obtain ⟨h1, h2, h3⟩ := h
   omega
 
-theorem start_whitespaceRun (v : Token.Version) (location : Span.Location) {c : UInt8}
+theorem start_whitespaceRun (v : Version) (location : Span.Location) {c : UInt8}
     (h : isWhitespaceRun c = true) : start v false location c = .idle := by
   rw [start_space v false location c h]
   rfl

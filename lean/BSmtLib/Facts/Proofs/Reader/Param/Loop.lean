@@ -3,7 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Reader.Param.Link
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -17,10 +18,12 @@ answer and the same cursor, while the tokens taken stand for a start of the scri
 (`Param.Stop`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Loop
 
 open BSmtLibSpec BSmtLibSpec.Grammar
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
@@ -36,9 +39,9 @@ open BSmtLib.Facts.Reader.Adapters
 attribute [local instance high] Stop.consumeFrom
 
 /-- The adapter's consumer's loop from a cursor, which may have no token left. -/
-def ansRest (version : Lexicon.Version) {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+def ansRest (version : Lexicon.Version) {b : Token.BatchTag} (cursor : LexerCursor b)
     (taken : List Handed) :
-    (Except (Option ScriptError) (ControlFlow Unit) × Token.BatchCursor b) × List Handed :=
+    (Except (Option ScriptError) (ControlFlow Unit) × LexerCursor b) × List Handed :=
   if h : cursor.HasNext then
     ((((Answering.consume (scriptConsumer version) cursor h).run taken).1.1,
       ((Answering.consume (scriptConsumer version) cursor h).run taken).1.2.val),
@@ -48,7 +51,7 @@ def ansRest (version : Lexicon.Version) {b : Token.BatchTag} (cursor : Token.Bat
 /-- Where the adapter stands after the items, in the version: the recording run's parser, and its
 log with the events that are not calls left out as the log the adapter's handler holds when its
 next loop begins; after the end of the script, its log. -/
-def AdapterAt (version : Lexicon.Version) (items : List LibItem) (v : Token.Version)
+def AdapterAt (version : Lexicon.Version) (items : List LibItem) (v : Version)
     (adapter : RecAdapter) : Prop :=
   match recRun version items with
   | (.ok (.inl (v', parser)), log) =>
@@ -62,7 +65,7 @@ abbrev Shape {ε ε' α α' : Type} : Except ε (ControlFlow α) → Except ε' 
 
 theorem requests_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed)
     {b : Token.BatchTag}
-    (cursor : Token.BatchCursor b) :
+    (cursor : LexerCursor b) :
     (Answering.requests consumer taken cursor).val =
       applyRequests cursor (consumer.switchTo taken) (consumer.discards taken) := by
   unfold Answering.requests Answering.switched applyRequests
@@ -71,7 +74,7 @@ theorem requests_eq (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List Handed
     split <;> rename_i hsw <;> simp only [hsw] <;>
     (try (split <;> rename_i hset <;> simp only [hset]))
 
-theorem ansRest_step (version : Lexicon.Version) {b : Token.BatchTag} {cursor : Token.BatchCursor b}
+theorem ansRest_step (version : Lexicon.Version) {b : Token.BatchTag} {cursor : LexerCursor b}
     (h : cursor.HasNext) (taken : List Handed) :
     ansRest version cursor taken =
       match toHanded cursor (cursor.next h).1 with
@@ -119,7 +122,7 @@ theorem ansRest_step (version : Lexicon.Version) {b : Token.BatchTag} {cursor : 
       · unfold ansRest
         split <;> rfl
 
-theorem paLoop_step {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cursor.HasNext)
+theorem paLoop_step {b : Token.BatchTag} {cursor : LexerCursor b} (h : cursor.HasNext)
     (parser : ScriptParser (List Event)) (handler : List Event) :
     (paLoop parser cursor).run handler =
       match (Stop.takeOne (H := List Event) (m := Id) parser cursor (cursor.next h).1
@@ -138,7 +141,7 @@ theorem paLoop_step {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cur
 
 /-- The adapter's consumer only adds to the tokens taken. -/
 theorem ansRest_extends (version : Lexicon.Version) {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed), remaining cursor < n →
+    ∀ (n : Nat) (cursor : LexerCursor b) (taken : List Handed), remaining cursor < n →
       ∃ more, (ansRest version cursor taken).2 = taken ++ more
   | 0, _, _, hn => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, taken, hn => by
@@ -163,7 +166,7 @@ theorem ansRest_extends (version : Lexicon.Version) {b : Token.BatchTag} :
       rw [dite_eq_right_of_eq_false (eq_false h)]
       exact ⟨[], by simp⟩
 
-theorem applyRequests_version {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+theorem applyRequests_version {b : Token.BatchTag} (cursor : LexerCursor b)
     (switch : Option Lexicon.Version) (discard : Bool) :
     (applyRequests cursor switch discard).version =
       match switch with
@@ -178,7 +181,7 @@ theorem applyRequests_version {b : Token.BatchTag} (cursor : Token.BatchCursor b
 for a start of the script. -/
 theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
     (hscript : Script version commands) {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed) (items : List LibItem)
+    ∀ (n : Nat) (cursor : LexerCursor b) (taken : List Handed) (items : List LibItem)
       (parser : ScriptParser (List Event)) (log : List Event), remaining cursor < n →
       items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf) →
       recRun version items = (.ok (.inl (cursor.version, parser)), log) →
@@ -219,7 +222,7 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
         rw [← hitemdef] at htake
         change _ = paOf parser (cursor.next h).2.val
           ((recAfter cursor.version parser item.val).run.run log) at htake
-        have hver : ∀ {v' : Token.Version} {p' : ScriptParser (List Event)} {log' : List Event},
+        have hver : ∀ {v' : Version} {p' : ScriptParser (List Event)} {log' : List Event},
             (recAfter cursor.version parser item.val).run.run log = (.ok (.inl (v', p')), log') →
             v' = match Parser.Adapters.Run.switchOf log'.reverse with
               | some switched => toVersion switched
@@ -312,7 +315,7 @@ theorem loop_agree {version : Lexicon.Version} {commands : List Tree.Command}
 
 /-- A call that does not fail takes a token. -/
 theorem ansRest_grows (version : Lexicon.Version) {b : Token.BatchTag}
-    {cursor : Token.BatchCursor b}
+    {cursor : LexerCursor b}
     (h : cursor.HasNext) (taken : List Handed)
     (herr : Flagged.isError (ansRest version cursor taken).1.1 = false) :
     taken.length < (ansRest version cursor taken).2.length := by

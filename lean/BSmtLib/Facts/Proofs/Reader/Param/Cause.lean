@@ -15,6 +15,8 @@ the stand-in consumer took stand for items on which the recording run fails with
 (`consume_errG`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Cause
 
 open BSmtLibSpec
@@ -30,7 +32,7 @@ open BSmtLib.Facts.Proofs.Reader.Param.Layout BSmtLib.Facts.Proofs.Reader.Param.
 open BSmtLib.Facts.Proofs.Reader.Param.Loop BSmtLib.Facts.Proofs.Reader.Param.Relate
 open BSmtLib.Facts.Proofs.Reader.Param.UnarySteps BSmtLib.Facts.Reader.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Failing
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 
 /-- The parse adapter's error `ae`, after the stand-in consumer took the tokens `taken`: the tokens
 stand for items on which the recording run fails with it. -/
@@ -42,7 +44,7 @@ def CauseOf (version : Lexicon.Version) (ae : Parser.ParseError Unit) (taken : L
 attribute [local instance high] Stop.consumeFrom
 
 theorem consume_errG (version : Lexicon.Version) {b : Token.BatchTag}
-    (cursor : Token.BatchCursor b) (h : cursor.HasNext)
+    (cursor : LexerCursor b) (h : cursor.HasNext)
     (flagged : Flagged (scriptConsumer version)) (taken : List Handed) (adapter : RecAdapter)
     (hinv : InvG version flagged taken adapter)
     (hgood : Dom.Good version

@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Parser.Canon.Steps
 import all BSmtLib.Parser
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all Std.Data.ByteSlice
 import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Category.Term
@@ -25,7 +27,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Canon.Commands
 
 open Basic States Simp Bridge Steps
 
-open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Parser.Category.Combinator BSmtLib.Parser.Category.SortedVar
 open BSmtLib.Parser.Category.«Sort» BSmtLib.Parser.Category.Term
 open BSmtLib.Parser.Command BSmtLib.Parser.Command.Internal.Datatype
@@ -47,26 +49,27 @@ open BSmtLib.Parser.Command.Internal
   unfold ByteSlice.beq
   rw [toByteArray_canonSlice]
 
-@[canon_simps] theorem isNot_canonSymbol (s : Plain.Symbol) :
+@[canon_simps] theorem isNot_canonSymbol (s : Lexicon.Value.Symbol) :
     Standard.Symbol.isNot (canonSymbol s) = Standard.Symbol.isNot s := by
   cases s
   simp only [Standard.Symbol.isNot, canon_simps]
 
-@[canon_simps] theorem isVersionKeyword_canon (k : BSmtLib.Plain.Keyword) :
-    isVersionKeyword (BSmtLib.Plain.Keyword.Internal.newUnchecked (canonSlice k.asSlice)) =
+@[canon_simps] theorem isVersionKeyword_canon (k : BSmtLib.Lexicon.Value.Keyword) :
+    isVersionKeyword (BSmtLib.Lexicon.Value.Keyword.Internal.newUnchecked (canonSlice k.asSlice)) =
       isVersionKeyword k := by
   simp only [isVersionKeyword, canon_simps]
 
-@[canon_simps] theorem fromDecimal?_canonSlice (s : ByteSlice) :
-    Token.Version.fromDecimal? (canonSlice s) = Token.Version.fromDecimal? s := by
-  simp only [Token.Version.fromDecimal?, beq_canonSlice]
+@[canon_simps] theorem fromDecimal?_canon (d : Lexicon.Value.Decimal) :
+    Version.fromDecimal? (Lexicon.Value.Decimal.Internal.newUnchecked (canonSlice d.asSlice)) =
+      Version.fromDecimal? d := by
+  simp only [Version.fromDecimal?, canon_simps]
 
 @[canon_simps] theorem next_canonInput (d : Declaration) (t : Internal.Input) :
     d.next (canonInput t) = d.next t := by
   cases d <;> cases t <;> (try rename_i c; cases c) <;>
     simp only [Declaration.next, canonInput, canon_simps, Canon.canon]
 
-attribute [canon_simps] Traits.CommandHandler.nonstandardCommand Array.getElem?_map
+attribute [canon_simps] Handler.CommandHandler.nonstandardCommand Array.getElem?_map
 
 variable {token' : Internal.Input}
 
@@ -77,15 +80,15 @@ theorem SortDecState_step_canon {state state' : SortDecState} {token : Internal.
     CSim (SortDecState.step (H := List Event) state token) (SortDecState.step state' token') := by
   subst hs ht; unfold SortDecState.step; canon_step []
 
-theorem constructorStep_canon {version : Token.Version} {state state' : ConstructorState RSort}
+theorem constructorStep_canon {version : Version} {state state' : ConstructorState RSort}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (constructorStep (H := List Event) version state token)
       (constructorStep version state' token') := by
   subst hs ht; unfold constructorStep; canon_step []
 
-theorem datatypeStep_canon {start start' : Array Plain.Symbol → RPM Unit}
+theorem datatypeStep_canon {start start' : Array Lexicon.Value.Symbol → RPM Unit}
     (hstart : ∀ ps ps', ps' = canon ps → CSim (start ps) (start' ps'))
-    {version : Token.Version} {state state' : DatatypeState RSort} {token : Internal.Input}
+    {version : Version} {state state' : DatatypeState RSort} {token : Internal.Input}
     (hs : state' = canon state) (ht : token' = canon token) :
     CSim (datatypeStep (H := List Event) start version state token)
       (datatypeStep start' version state' token') := by
@@ -93,24 +96,24 @@ theorem datatypeStep_canon {start start' : Array Plain.Symbol → RPM Unit}
 
 /-! ## The functions -/
 
-theorem signatureStep_canon {version : Token.Version} {state state' : SignatureState RSort}
+theorem signatureStep_canon {version : Version} {state state' : SignatureState RSort}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (signatureStep (H := List Event) version state token)
       (signatureStep version state' token') := by
   subst hs ht; unfold signatureStep; canon_step []
 
-theorem functionDecStep_canon {version : Token.Version} {state state' : FunctionDecState RSort}
+theorem functionDecStep_canon {version : Version} {state state' : FunctionDecState RSort}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (functionDecStep (H := List Event) version state token)
       (functionDecStep version state' token') := by
   subst hs ht; unfold functionDecStep; canon_step []
 
-theorem bodyStep_canon {version : Token.Version} {state state' : TermStateOf (List Event)}
+theorem bodyStep_canon {version : Version} {state state' : TermStateOf (List Event)}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (bodyStep (H := List Event) version state token) (bodyStep version state' token') := by
   subst hs ht; unfold bodyStep; canon_step []
 
-theorem bodiesStep_canon {count : Nat} {version : Token.Version}
+theorem bodiesStep_canon {count : Nat} {version : Version}
     {state state' : ListState (TermStateOf (List Event)) Unit} {token : Internal.Input}
     (hs : state' = canon state) (ht : token' = canon token) :
     CSim (bodiesStep (H := List Event) count version state token)
@@ -118,7 +121,7 @@ theorem bodiesStep_canon {count : Nat} {version : Token.Version}
   subst hs ht; unfold bodiesStep; canon_step []
 
 set_option maxHeartbeats 2000000 in
-theorem bodiesArrive_canon {signatures signatures' : Array (Multiple.FunctionSignature RSort)}
+theorem bodiesArrive_canon {signatures signatures' : Array (Grammar.Multiple.FunctionSignature RSort)}
     {state state' : ListState (TermStateOf (List Event)) Unit} {token : Internal.Input}
     (hg : signatures' = canon signatures) (hs : state' = canon state)
     (ht : token' = canon token) :
@@ -129,7 +132,7 @@ theorem bodiesArrive_canon {signatures signatures' : Array (Multiple.FunctionSig
 /-! ## The other commands -/
 
 set_option maxHeartbeats 4000000 in
-theorem literalStep_canon {version : Token.Version} {state state' : LiteralStateOf (List Event)}
+theorem literalStep_canon {version : Version} {state state' : LiteralStateOf (List Event)}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (literalStep (H := List Event) version state token)
       (literalStep version state' token') := by
@@ -141,7 +144,7 @@ theorem finalCall_canon {final final' : FinalCall RAttribute RSort RTerm}
   subst hf; unfold finalCall; canon_step []
 
 set_option maxHeartbeats 16000000 in
-theorem payloadStep_canon {version : Token.Version} {state state' : PayloadOf (List Event)}
+theorem payloadStep_canon {version : Version} {state state' : PayloadOf (List Event)}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (payloadStep (H := List Event) version state token)
       (payloadStep version state' token') := by
@@ -152,7 +155,7 @@ theorem payloadArrive_canon {state state' : PayloadOf (List Event)} {token : Int
     CSim (payloadArrive (H := List Event) state token) (payloadArrive state' token') := by
   subst hs ht; unfold payloadArrive; canon_step []
 
-theorem commandStep_canon {version : Token.Version} {state state' : CommandStateOf (List Event)}
+theorem commandStep_canon {version : Version} {state state' : CommandStateOf (List Event)}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (commandStep (H := List Event) version state token)
       (commandStep version state' token') := by
@@ -187,7 +190,7 @@ theorem ScriptParser_arrive_canon {parser parser' : ScriptParser (List Event)}
       (ScriptParser.Internal.arrive parser' token') := by
   subst hp ht; unfold ScriptParser.Internal.arrive; canon_step []
 
-theorem ScriptParser_step_canon {version : Token.Version}
+theorem ScriptParser_step_canon {version : Version}
     {parser parser' : ScriptParser (List Event)}
     {token : Internal.Input} (hp : parser' = canon parser) (ht : token' = canon token) :
     CSim (ScriptParser.Internal.step (H := List Event) version parser token)

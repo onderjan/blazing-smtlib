@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Proofs.PublicApi.CollectE
 public import BSmtLib.Facts.PublicApi.Adapters.Chain
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -34,11 +36,11 @@ theorem len_batch (l : Lexeme) (h : l.Valid) : (l.batch h).len = 1 := by
   exact Token.Internal.TokenBatch.len_push ..
 
 /-- The cursor over a lexeme alone has no token after its first. -/
-theorem single_next (version : Token.Version) (l : Lexeme) (h : l.Valid)
-    (hn : (Token.BatchCursor.Internal.new version (l.batch h)).HasNext) :
-    ¬ ((Token.BatchCursor.Internal.new version (l.batch h)).next hn).2.1.HasNext := by
+theorem single_next (version : Version) (l : Lexeme) (h : l.Valid)
+    (hn : (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).HasNext) :
+    ¬ ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).next hn).2.1.HasNext := by
   have := len_batch l h
-  simp only [Token.BatchCursor.HasNext, Token.BatchCursor.next, Token.BatchCursor.Internal.new,
+  simp only [Lexer.Cursor.LexerCursor.HasNext, Lexer.Cursor.LexerCursor.next, Lexer.Cursor.LexerCursor.Internal.new,
     this]
   omega
 
@@ -49,16 +51,16 @@ theorem vConsumers : VConsumers link where
     intro a b taken
     rw [collector_consume_run]
     have e : ((Token.ConsumeFrom.consume (H := Answering concreteCollector) (m := AnswerM)
-        (Token.BatchCursor.Internal.new version (l.batch h)) (l.hasNext h version)).run b).run
+        (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)) (l.hasNext h version)).run b).run
           taken =
-        ((((Answering.consume concreteCollector (Token.BatchCursor.Internal.new version (l.batch h))
+        ((((Answering.consume concreteCollector (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h))
           (l.hasNext h version)).run taken).1, b),
-          ((Answering.consume concreteCollector (Token.BatchCursor.Internal.new version (l.batch h))
+          ((Answering.consume concreteCollector (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h))
           (l.hasNext h version)).run taken).2) := rfl
     rw [e, answering_step]
     have hs := single_next version l h (l.hasNext h version)
-    by_cases he : (Token.BatchCursor.Internal.new version (l.batch h)).category
-        ((Token.BatchCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) ==
+    by_cases he : (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).category
+        ((Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)).peek (l.hasNext h version)) ==
           .endOfFile
     · simp only [he, ↓reduceIte, List.map_append, List.map_cons, List.map_nil,
         entryOf_handedAt]
@@ -77,15 +79,15 @@ abbrev VOps := BSmtLib.Facts.Lexer.Adapters.VNaive.lexOps
 
 theorem hrec₁ (l : Span.Location) :
     link.rc.rel (· = ·)
-      (Recovery.LexRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast l)
-      (Recovery.LexRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast l)
+      (Recovery.LexerRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast l) :=
   rel_pure (L := link) rfl
 
 theorem habandon₁ (l : Span.Location) :
     link.rc.rel (· = ·)
-      (Recovery.LexRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast l)
-      (Recovery.LexRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast l)
+      (Recovery.LexerRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast l) :=
   rel_pure (L := link) rfl
 
@@ -107,11 +109,11 @@ theorem collectV_runInputE : ∀ (slices : List ByteList)
         ((runInputE VOps L₂ true slices).run taken).1.1
   | [], L₁, L₂, taken, hcore, hheld => by
     have hsim := lexEofStep_sim vConsumers
-      (Recovery.LexRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast) hrec₁ L₁.core L₁.handler L₂.handler taken
     simp only [collectBy, runInputE, ↓reduceIte, VOps, VNaive.lexOps,
       Lexer.Internal.VNaive.Lexer.lexEof, Lexer.Internal.VNaive.Lexer.run, StateT.run_bind]
@@ -119,10 +121,10 @@ theorem collectV_runInputE : ∀ (slices : List ByteList)
     simp only [show Recovery.Recovers.recovers Recovery.FailFast = false from rfl]
     obtain ⟨hr, he⟩ := hsim
     generalize StateT.run ((lexEofStep (H := Collector) (m := CollectM) false
-      (Recovery.LexRecovery.abandon Recovery.FailFast) (Recovery.LexRecovery.recover
+      (Recovery.LexerRecovery.abandon Recovery.FailFast) (Recovery.LexerRecovery.recover
         Recovery.FailFast) L₁.core).run L₁.handler) (taken.map entryOf) = R1 at hr he ⊢
     generalize StateT.run ((lexEofStep (H := Answering concreteCollector) (m := AnswerM) false
-      (Recovery.LexRecovery.abandon Recovery.FailFast) (Recovery.LexRecovery.recover
+      (Recovery.LexerRecovery.abandon Recovery.FailFast) (Recovery.LexerRecovery.recover
         Recovery.FailFast) L₁.core).run L₂.handler) taken = R2 at hr he ⊢
     obtain ⟨⟨⟨r1, c1⟩, h1⟩, e1⟩ := R1
     obtain ⟨⟨⟨r2, c2⟩, h2⟩, e2⟩ := R2
@@ -138,11 +140,11 @@ theorem collectV_runInputE : ∀ (slices : List ByteList)
     | .error x1, .error x2, hx => exact ⟨rfl, hx⟩
   | slice :: slices, L₁, L₂, taken, hcore, hheld => by
     have hsim := lexSliceStep_sim vConsumers
-      (Recovery.LexRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
-      (Recovery.LexRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.abandon (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.recover (H := Collector) (m := CollectM) Recovery.FailFast)
+      (Recovery.LexerRecovery.abandon (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast)
-      (Recovery.LexRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
+      (Recovery.LexerRecovery.recover (H := Answering concreteCollector) (m := AnswerM)
         Recovery.FailFast) hrec₁ slice.toByteArray.toByteSlice L₁.core L₁.handler L₂.handler taken
     simp only [collectBy, runInputE, VOps, VNaive.lexOps,
       Lexer.Internal.VNaive.Lexer.lexSlice, Lexer.Internal.VNaive.Lexer.run, StateT.run_bind]
@@ -150,11 +152,11 @@ theorem collectV_runInputE : ∀ (slices : List ByteList)
     simp only [show Recovery.Recovers.recovers Recovery.FailFast = false from rfl]
     obtain ⟨hr, he⟩ := hsim
     generalize StateT.run ((lexSliceStep (H := Collector) (m := CollectM) false
-      (Recovery.LexRecovery.abandon Recovery.FailFast) (Recovery.LexRecovery.recover
+      (Recovery.LexerRecovery.abandon Recovery.FailFast) (Recovery.LexerRecovery.recover
         Recovery.FailFast) slice.toByteArray.toByteSlice L₁.core).run L₁.handler)
         (taken.map entryOf) = R1 at hr he ⊢
     generalize StateT.run ((lexSliceStep (H := Answering concreteCollector) (m := AnswerM) false
-      (Recovery.LexRecovery.abandon Recovery.FailFast) (Recovery.LexRecovery.recover
+      (Recovery.LexerRecovery.abandon Recovery.FailFast) (Recovery.LexerRecovery.recover
         Recovery.FailFast) slice.toByteArray.toByteSlice L₁.core).run L₂.handler) taken = R2
         at hr he ⊢
     obtain ⟨⟨⟨r1, c1⟩, h1⟩, e1⟩ := R1

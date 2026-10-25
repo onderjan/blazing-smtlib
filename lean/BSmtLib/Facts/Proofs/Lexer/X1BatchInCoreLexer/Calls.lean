@@ -16,6 +16,8 @@ and it sets the base before it reads it, so it is coupled from every related sta
 over a slice is coupled in `Slice`.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Calls
 
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
@@ -28,7 +30,7 @@ open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Slice
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
 theorem lexEofInner_couple :
     Coupled Eq (BSmtLib.Lexer.Internal.lexEofInner (H := H) (m := m) (R := R) (E := E))
@@ -69,7 +71,7 @@ end
 section
 
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {R E : Type} [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
 theorem stop_slice_lt {slice : ByteSlice} (h : slice.stop < USize.size) (k : Nat) :
     (slice.slice k).stop < USize.size := by

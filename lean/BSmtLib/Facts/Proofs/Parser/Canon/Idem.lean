@@ -1,9 +1,9 @@
 module
 
 public import BSmtLib.Facts.Proofs.Parser.Canon.Loop
-import all BSmtLib.Plain
-import all BSmtLib.Multiple
-import all BSmtLib.Multiple.MatchCases
+import all BSmtLib.Lexicon.Value
+import all BSmtLib.Grammar.Multiple
+import all BSmtLib.Grammar.Multiple.MatchCases
 
 @[expose] public section
 
@@ -16,9 +16,10 @@ canonicalising a state of the parser twice is canonicalising it once.
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Idem
 
-open BSmtLib.Multiple (FunctionSignature)
-open BSmtLib.Parser BSmtLib.Nodes
-open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+open BSmtLib.Grammar.Multiple (FunctionSignature)
+open BSmtLib.Grammar (Multiple)
+open BSmtLib.Parser BSmtLib.Grammar.Nodes
+open BSmtLib.Lexicon.Value (Symbol Numeral Decimal HexDigits BinDigits
   StringContent Keyword)
 open Basic States Simp Loop
 open BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
@@ -62,7 +63,7 @@ instance {α : Type} [Canon α] [CanonIdem α] : CanonIdem (Option α) := ⟨fun
   cases o <;> simp⟩
 
 instance {α : Type} [Canon α] [CanonIdem α] : CanonIdem (Multiple α) := ⟨fun m => by
-  show Multiple.new (canon (canon m.asSlice)) = Multiple.new (canon m.asSlice)
+  show Grammar.Multiple.new (canon (canon m.asSlice)) = Grammar.Multiple.new (canon m.asSlice)
   rw [CanonIdem.idem]⟩
 
 instance {α β : Type} [Canon α] [Canon β] [CanonIdem α] [CanonIdem β] : CanonIdem (α × β) :=
@@ -124,9 +125,9 @@ instance : CanonIdem (FunctionSignature S) := ⟨fun s => by
   simp only [canonSignature, FunctionSignature.Internal.name_new,
     FunctionSignature.Internal.params_new, FunctionSignature.Internal.resultSort_new,
     CanonIdem.idem]⟩
-instance {V : Type} [Canon V] [CanonIdem V] : CanonIdem (Multiple.Named V) := ⟨fun v => by
-  show Multiple.Named.Internal.new (canon (canon v.toArray)) =
-    Multiple.Named.Internal.new (canon v.toArray)
+instance {V : Type} [Canon V] [CanonIdem V] : CanonIdem (Grammar.Multiple.NamedValues V) := ⟨fun v => by
+  show Grammar.Multiple.NamedValues.Internal.new (canon (canon v.toArray)) =
+    Grammar.Multiple.NamedValues.Internal.new (canon v.toArray)
   rw [CanonIdem.idem]⟩
 instance : CanonIdem (ConstructorState S) := ⟨by idem_by canonConstructorState⟩
 instance : CanonIdem (DatatypeState S) := ⟨by idem_by canonDatatypeState⟩

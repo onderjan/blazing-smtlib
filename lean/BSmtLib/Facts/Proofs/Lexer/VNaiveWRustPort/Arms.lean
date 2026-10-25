@@ -37,12 +37,12 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Delimiters BSmtLib.Lexer.
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- What an arm of `lexStep` keeps: the step's postcondition, with the lexer's index of its
 offset unchanged, and the normal state if the arm consumed nothing. -/
-def ArmPost (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv : Token.Version)
-    (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat) (ver : Token.Version)
+def ArmPost (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+    (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat) (ver : Version)
     (coll : List Handed) (held : List Lexeme) (next : Nat) (c : WP.WCore) (coll' : List Handed) :
     Prop :=
   StepPost C v hd iv input st location start ver coll held next c coll' ∧ c.base = start ∧
@@ -50,7 +50,7 @@ def ArmPost (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv
 
 /-- An arm followed by `afterStep`, which goes on in the normal state if the arm consumed
 nothing. -/
-theorem afterStep_wp (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem afterStep_wp (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (s : WP.BS floor low) (coll : List Handed) (st : St)
     (location : Span.Location) (held : List Lexeme)
     (arm : WP.M C floor low {next : Nat // start ≤ next})
@@ -90,8 +90,8 @@ theorem afterStep_wp (v : Token.Version) (input : ByteSlice) (start : Nat)
 
 /-- An arm that has handed the token over alone, ended at `pos`, and gone back to the normal
 state: `s0` is the lexer state before the hand-over, `s2` the one after. -/
-theorem armPost_finish {v : Token.Version} {input : ByteSlice} {st : St} {location : Span.Location}
-    {start : Nat} {coll : List Handed} {held : List Lexeme} {s0 s2 : WP.WCore} {ver : Token.Version}
+theorem armPost_finish {v : Version} {input : ByteSlice} {st : St} {location : Span.Location}
+    {start : Nat} {coll : List Handed} {held : List Lexeme} {s0 s2 : WP.WCore} {ver : Version}
     {coll2 : List Handed} {pos : Nat} {l : Lexeme} {locp : Span.Location}
     (hfix : Fixed v hd iv s0) (hbase : s0.base = start) (hpos : start ≤ pos)
     (hbytes : s0.batch.bytes = input.byteArray)
@@ -122,8 +122,8 @@ theorem armPost_finish {v : Token.Version} {input : ByteSlice} {st : St} {locati
 
 /-- An arm that has left the token in progress at `pos`, after `start`: `s0` is the lexer state
 when the arm started, `s2` the one it leaves. -/
-theorem armPost_pending {v : Token.Version} {input : ByteSlice} {st : St} {location : Span.Location}
-    {start : Nat} {coll : List Handed} {held : List Lexeme} {s0 s2 : WP.WCore} {ver : Token.Version}
+theorem armPost_pending {v : Version} {input : ByteSlice} {st : St} {location : Span.Location}
+    {start : Nat} {coll : List Handed} {held : List Lexeme} {s0 s2 : WP.WCore} {ver : Version}
     {pos : Nat} {q : Pending} {locp : Span.Location}
     (hfix : Fixed v hd iv s0) (hbase : s0.base = start) (hpos : start < pos)
     (hholds : Holds s0.batch held) (hbytes : s0.batch.bytes = input.byteArray)
@@ -149,8 +149,8 @@ theorem armPost_pending {v : Token.Version} {input : ByteSlice} {st : St} {locat
 
 /-- An arm that has ended the token at `pos` without handing it over, and gone back to the
 normal state: `s0` is the lexer state when the arm started, `s2` the one it leaves. -/
-theorem armPost_idle {v : Token.Version} {input : ByteSlice} {st : St} {location : Span.Location}
-    {start : Nat} {coll : List Handed} {held : List Lexeme} {s0 s2 : WP.WCore} {ver : Token.Version}
+theorem armPost_idle {v : Version} {input : ByteSlice} {st : St} {location : Span.Location}
+    {start : Nat} {coll : List Handed} {held : List Lexeme} {s0 s2 : WP.WCore} {ver : Version}
     {pos : Nat} {locp : Span.Location}
     (hfix : Fixed v hd iv s0) (hbase : s0.base = start) (hpos : start < pos)
     (hholds : Holds s0.batch held) (hbytes : s0.batch.bytes = input.byteArray)
@@ -200,20 +200,20 @@ theorem stepLocation_eq' {c : WP.WCore} {low base j pos : Nat} {location : Span.
   refine ⟨?_, h2.symm, ?_⟩ <;> omega
 
 /-- The agreement of a token in progress, in the state of the lexer. -/
-theorem token_agrees {v : Token.Version} {c : WP.WCore} {p : Pending}
+theorem token_agrees {v : Version} {c : WP.WCore} {p : Pending}
     {state : Lexer.Internal.Helpers.LexerState}
     (h : StAgrees v C.concrete (.token p) c) (hs : c.state = state) :
     TokenAgrees v C.concrete state c.tokenStart (contentBytes c.tokenContent) p := by
   rw [← hs]; exact h.1
 
 /-- The content buffer of a token in progress fits its array. -/
-theorem token_fits {v : Token.Version} {c : WP.WCore} {p : Pending} (h : StAgrees v
+theorem token_fits {v : Version} {c : WP.WCore} {p : Pending} (h : StAgrees v
     C.concrete (.token p) c) :
     Fits c.tokenContent :=
   h.2
 
 /-- The arm of `lexStep` for a quoted symbol closed by its pipe. -/
-theorem arm_quotedSymbolClosed (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_quotedSymbolClosed (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)

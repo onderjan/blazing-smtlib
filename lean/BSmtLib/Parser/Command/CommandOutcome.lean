@@ -12,7 +12,7 @@ The outcome of the command parser at the end of a command (`SmtCommandOutcome`).
 
 namespace BSmtLib.Parser.Command
 
-open BSmtLib.Token (Version)
+open BSmtLib (Version)
 
 /-- How a command ended (`SmtCommandOutcome`). -/
 inductive CommandOutcome where

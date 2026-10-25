@@ -16,7 +16,7 @@ lookup is the library's on the slice that the bounds make.
 
 namespace BSmtLib.Parser.Internal.Fused.Reserved
 
-open BSmtLib.Token (Version)
+open BSmtLib (Version)
 
 /-- The table has a slot for every hash. -/
 theorem size_table : Token.Reserved.Internal.reservedTable.size = 128 :=

@@ -41,7 +41,8 @@ open BSmtLib.Parser
 open BSmtLib.Facts.PublicApi.Adapters BSmtLib.Facts.PublicApi.Adapters.Content
 open BSmtLib.Facts.PublicApi.Adapters.Reprinter BSmtLib.Facts.PublicApi.Adapters.Chain
 open BSmtLib.Facts.PublicApi.Adapters.Builder
-open BSmtLib.Token (Version)
+open BSmtLib (Version)
+open BSmtLib.Span (Located)
 
 /-! ## Reprinting -/
 
@@ -242,7 +243,7 @@ BSmtLib.Facts.PublicApi.Adapters:
   BSmtLib.Facts.PublicApi.Adapters.collectWith
   BSmtLib.Facts.PublicApi.Adapters.feed
   BSmtLib.Facts.PublicApi.Adapters.instConsumeCollectorUnitEmpty
-  BSmtLib.Facts.PublicApi.Adapters.instConsumeFromCollectorBatchCursorCollectMUnitEmpty
+  BSmtLib.Facts.PublicApi.Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty
   BSmtLib.Facts.PublicApi.Adapters.readThrough
   BSmtLib.Facts.PublicApi.Adapters.readUpTo
   BSmtLib.Facts.PublicApi.Adapters.resultOf
@@ -318,7 +319,7 @@ BSmtLib.Facts.PublicApi.lexers_agree:
     Adapters.Chain.collectV, Adapters.Chain.collectW, Adapters.Chain.collectX1, Adapters.CollectM,
     Adapters.Collector, Adapters.Entry, Adapters.collect, Adapters.collectWith,
     Adapters.instConsumeCollectorUnitEmpty,
-    Adapters.instConsumeFromCollectorBatchCursorCollectMUnitEmpty, Adapters.resultOf
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf
   chain: BSmtLib.Lexer.Internal.VNaive.Lexer, BSmtLib.Lexer.Internal.VNaive.Lexer.AfterEofError,
     BSmtLib.Lexer.Internal.VNaive.Lexer.AfterError, BSmtLib.Lexer.Internal.VNaive.Lexer.lexEof,
     BSmtLib.Lexer.Internal.VNaive.Lexer.lexSlice, BSmtLib.Lexer.Internal.VNaive.Lexer.new,
@@ -330,19 +331,19 @@ BSmtLib.Facts.PublicApi.lexers_agree:
 BSmtLib.Facts.PublicApi.lexing_composes:
   small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry, Adapters.collect,
     Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,
-    Adapters.instConsumeFromCollectorBatchCursorCollectMUnitEmpty, Adapters.resultOf, Adapters.shift
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf, Adapters.shift
 BSmtLib.Facts.PublicApi.lexing_lossless:
   small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry, Adapters.Tiles,
     Adapters.collect, Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,
-    Adapters.instConsumeFromCollectorBatchCursorCollectMUnitEmpty, Adapters.resultOf
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf
 BSmtLib.Facts.PublicApi.lexing_resets:
   small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry,
     Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,
-    Adapters.instConsumeFromCollectorBatchCursorCollectMUnitEmpty, Adapters.resultOf
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf
 BSmtLib.Facts.PublicApi.lexing_slicing:
   small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry, Adapters.collect,
     Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,
-    Adapters.instConsumeFromCollectorBatchCursorCollectMUnitEmpty, Adapters.resultOf
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf
 BSmtLib.Facts.PublicApi.reading_resets:
   small: Adapters.ByteList, Adapters.Content.AttributeValueNode, Adapters.Content.Constant,
     Adapters.Content.Constructor, Adapters.Content.ContentHandler,

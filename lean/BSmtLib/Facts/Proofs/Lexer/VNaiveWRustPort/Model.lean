@@ -35,7 +35,7 @@ open BSmtLibSpec.Lexer (Handed)
 force. -/
 structure Prog where
   taken : List Handed
-  ver : Token.Version
+  ver : Version
 
 section
 
@@ -78,10 +78,10 @@ inductive Out where
 end
 
 /-- Whether the switch from one version to the other changes the lexical rules. -/
-def crosses (a b : Token.Version) : Bool := (a == .v2_0) != (b == .v2_0)
+def crosses (a b : Version) : Bool := (a == .v2_0) != (b == .v2_0)
 
 /-- The version in force after the consumer asked for `o`, if it did. -/
-def switchedTo (ver : Token.Version) : Option BSmtLibSpec.Lexicon.Version → Token.Version
+def switchedTo (ver : Version) : Option BSmtLibSpec.Lexicon.Version → Version
   | some v => toVersion v
   | none => ver
 
@@ -122,7 +122,7 @@ def handAll (h : HandOut C) (ls : List Lexeme) : HandOut C := ls.foldl (hand1 C 
 
 /-- What the consumer does with the lexemes, from the tokens `coll` it has taken under the
 version `ver`. -/
-def pending (ver : Token.Version) (coll : List Handed) (ls : List Lexeme) : HandOut C :=
+def pending (ver : Version) (coll : List Handed) (ls : List Lexeme) : HandOut C :=
   handAll C hd (.cont ⟨coll, ver⟩) ls
 
 /-- What the consumer has done at the end of a run, from where it was. -/
@@ -150,20 +150,20 @@ theorem handAll_stop (s : Stop C) (p : Prog) : ∀ ls, handAll C hd (.stop s p) 
   | [] => rfl
   | _ :: ls => handAll_stop s p ls
 
-theorem pending_nil (ver : Token.Version) (coll : List Handed) :
+theorem pending_nil (ver : Version) (coll : List Handed) :
     pending C hd ver coll [] = .cont ⟨coll, ver⟩ := rfl
 
-theorem pending_append (ver : Token.Version) (coll : List Handed) (xs ys : List Lexeme) :
+theorem pending_append (ver : Version) (coll : List Handed) (xs ys : List Lexeme) :
     pending C hd ver coll (xs ++ ys) = handAll C hd (pending C hd ver coll xs) ys :=
   handAll_append C hd _ xs ys
 
 /-- What the consumer does after lexemes depends only on where it is after them. -/
-theorem pending_congr_append {ver ver' : Token.Version} {c₁ c₂ : List Handed} {xs ys : List Lexeme}
+theorem pending_congr_append {ver ver' : Version} {c₁ c₂ : List Handed} {xs ys : List Lexeme}
     (h : pending C hd ver c₁ xs = pending C hd ver' c₂ ys) (zs : List Lexeme) :
     pending C hd ver c₁ (xs ++ zs) = pending C hd ver' c₂ (ys ++ zs) := by
   rw [pending_append, pending_append, h]
 
-theorem pending_stop_append {ver : Token.Version} {coll : List Handed} {xs : List Lexeme}
+theorem pending_stop_append {ver : Version} {coll : List Handed} {xs : List Lexeme}
     {s : Stop C}
     {p : Prog} (h : pending C hd ver coll xs = .stop s p) (ys : List Lexeme) :
     pending C hd ver coll (xs ++ ys) = .stop s p := by
@@ -182,7 +182,7 @@ theorem outcome_prep (h : HandOut C) (held ls : List Lexeme)
     obtain ⟨ls', f⟩ := r
     simp only [outcome, Prep, Consumers.Pure.withBeforeF, handAll_append]
 
-theorem outcome_pending_prep (ver : Token.Version) (coll : List Handed) (held ls : List Lexeme)
+theorem outcome_pending_prep (ver : Version) (coll : List Handed) (held ls : List Lexeme)
     (e : Consumers.Pure.RunF) :
     outcome C hd (pending C hd ver coll held) (Prep ls e) =
       outcome C hd (pending C hd ver coll (held ++ ls)) e :=
@@ -257,7 +257,7 @@ def OutFailTaken (o : Out C) : Prop :=
   ∀ e d l p, o = .stopped (.fail e d l) p →
     ∃ x, p.taken.getLast? = some x ∧ x.start = toLocation l.start ∧ x.end = toLocation l.end
 
-theorem lexemeEntry_locs {concrete : Bool} {version : Token.Version} {l : Lexeme}
+theorem lexemeEntry_locs {concrete : Bool} {version : Version} {l : Lexeme}
     {x : BSmtLibSpec.Lexer.Handed} (h : lexemeEntry concrete version l = some x) :
     x.start = toLocation l.start ∧ x.end = toLocation l.end := by
   unfold lexemeEntry lexemeHanded at h

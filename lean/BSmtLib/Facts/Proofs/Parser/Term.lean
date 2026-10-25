@@ -42,7 +42,7 @@ open BSmtLibSpec.Facts.Proofs.Parser.Equations (term_constant term_application t
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {points : Points (StateT H m)} {σ ρ α β : Type}
 
 omit [LawfulMonad m] in
@@ -70,9 +70,9 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- The token after the first of the attributes: the next keyword, or the `)` after them. -/
 def followingOf : List Tree.Attribute → BSmtLibSpec.Grammar.SyntaxToken
@@ -81,9 +81,9 @@ def followingOf : List Tree.Attribute → BSmtLibSpec.Grammar.SyntaxToken
 
 /-- The attributes after the first. -/
 def othersOf (points : Points (StateT H m))
-    (h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)) :
+    (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)) :
     List Tree.Attribute →
-      Run (StateT H m) (Traits.Handler.Error H) (List (Traits.Handler.Attribute H))
+      Run (StateT H m) (Handler.Error H) (List (Handler.Attribute H))
   | [] => pure []
   | next :: rest => attributesThen points h next.keyword next.value rest
 
@@ -91,7 +91,7 @@ def othersOf (points : Points (StateT H m))
 theorem attributesThen_eq (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tree.AttributeValue)
     (rest : List Tree.Attribute) :
     attributesThen points h keyword value rest =
-      (fun (pair : Traits.Handler.Attribute H × List (Traits.Handler.Attribute H)) =>
+      (fun (pair : Handler.Attribute H × List (Handler.Attribute H)) =>
         pair.1 :: pair.2) <$> (do
         let first ← attributeThen points h keyword (followingOf rest) value
         let others ← othersOf points h rest
@@ -118,14 +118,14 @@ theorem annotation_runs
         let attributes ← adaptRun (do
           take points (.keyword first.keyword)
           attributesThen points h first.keyword first.value rest)
-        Parser.Internal.call (Traits.Handler.annotateTerm handled (.new attributes.toArray)))
+        Parser.Internal.call (Handler.annotateTerm handled (.new attributes.toArray)))
       fun r => termComplete levels r := by
   obtain ⟨name, value⟩ := first
   have hinner := attributes_runs_init (points := points) hA ⟨name, value⟩ rest hvalid hs
   have hsplit : adaptRun (do
         take points (.keyword name)
         attributesThen points h name value rest) =
-      (fun (pair : Traits.Handler.Attribute H × List (Traits.Handler.Attribute H)) =>
+      (fun (pair : Handler.Attribute H × List (Handler.Attribute H)) =>
         pair.1 :: pair.2) <$> adaptRun (do
         take points (.keyword name)
         let first ← attributeThen points h name (followingOf rest) value
@@ -133,13 +133,13 @@ theorem annotation_runs
         pure (first, others)) := by
     rw [attributesThen_eq]
     simp
-  have hembed := fun (term : Traits.Handler.Term H) => Runs.bind_next
-    (following := fun (pair : Traits.Handler.Attribute H × List (Traits.Handler.Attribute H)) =>
+  have hembed := fun (term : Handler.Term H) => Runs.bind_next
+    (following := fun (pair : Handler.Attribute H × List (Handler.Attribute H)) =>
       Parser.Internal.call
-        (Traits.Handler.annotateTerm term (.new (pair.1 :: pair.2 : List _).toArray)))
+        (Handler.annotateTerm term (.new (pair.1 :: pair.2 : List _).toArray)))
     (next := termComplete levels)
     (Runs.of_map_program
-      (f := fun (pair : Traits.Handler.Attribute H × List (Traits.Handler.Attribute H)) =>
+      (f := fun (pair : Handler.Attribute H × List (Handler.Attribute H)) =>
         pair.1 :: pair.2)
       ((Runs.embed (outer := termStep version)
         (fun state => ({ mode := .annotating term state, levels } : TermStateOf H)) _
@@ -158,7 +158,7 @@ theorem annotation_runs
   simp
 
 /-- The cases of a `match` as the spec hands them over, from the parser's. -/
-def specCases {T : Type} (cases : List (Nodes.Pattern × T)) : List (Tree.Pattern × T) :=
+def specCases {T : Type} (cases : List (Grammar.Nodes.Pattern × T)) : List (Tree.Pattern × T) :=
   cases.map fun (pattern, body) => (Bridge.pattern pattern, body)
 
 set_option maxHeartbeats 1000000
@@ -176,7 +176,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
         Stands tokens term.tokens → TermRunsFirst points h version tokens term
   | .constant constant, _, _, hs, atArrival, levels => by
     obtain ⟨constant', rfl, rfl⟩ := Stands.constant hs
-    exact (RunsFirst.token (program := Parser.Internal.call (Traits.Handler.handleTerm
+    exact (RunsFirst.token (program := Parser.Internal.call (Handler.handleTerm
       (.specialConstant constant'))) (by simp [termStep])).congr (by simp [term_constant,
         adaptRun_receive (token := .constant constant') rfl, hA.handleTerm, Bridge.termNode]) rfl
   | .identifier qualified, hvalid, _, hs, atArrival, levels =>
@@ -189,16 +189,16 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
       hsHead levels
     obtain ⟨first, rest, rfl⟩ := List.exists_cons_of_ne_nil hne
     obtain ⟨firstTokens, restTokens, rfl, hs₁, hs₂⟩ := Stands.split hsArguments
-    have hclose : ∀ (sort : Option (Traits.Handler.«Sort» H)) (r : Traits.Handler.Term H)
-        (handled : List (Traits.Handler.Term H)),
+    have hclose : ∀ (sort : Option (Handler.«Sort» H)) (r : Handler.Term H)
+        (handled : List (Handler.Term H)),
         Runs points (termStep version)
           ({ mode := .start, levels := .application head sort (#[].push r ++ handled.toArray) ::
             levels } : TermStateOf H) [.parenClose]
           (do
             tick points .parenClose
-            Parser.Internal.call (Traits.Handler.handleTerm
+            Parser.Internal.call (Handler.handleTerm
               (.application head sort (.new (#[].push r ++ handled.toArray))
-                (Multiple.len_pos_new (by simp)))))
+                (Grammar.Multiple.len_pos_new (by simp)))))
           fun r => termComplete levels r :=
       fun _ _ _ => Runs.token (by simp [termStep])
     have harguments' := fun sort => Runs.append (middle := fun r =>
@@ -236,14 +236,14 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
     obtain ⟨symbol, hsymbolName, rfl, hbinding⟩ := binding_runs (points := points) hsymbol
       (term_runs' hA bound hbound hsBound).plain
     obtain ⟨program, hprogram, hothersRuns⟩ := bindings_runs hA others hothers hs₂
-    have hstart : ∀ (b : Plain.Symbol × Traits.Handler.Term H)
-        (handled : List (Plain.Symbol × Traits.Handler.Term H)),
+    have hstart : ∀ (b : Lexicon.Value.Symbol × Handler.Term H)
+        (handled : List (Lexicon.Value.Symbol × Handler.Term H)),
         Runs points (termStep version)
           ({ mode := .letBindingOpen (#[].push b ++ handled.toArray), levels } : TermStateOf H)
           [.parenClose]
           (do
             tick points .parenClose
-            Parser.Internal.call (Traits.Handler.startLet (Multiple.Named.Internal.new
+            Parser.Internal.call (Handler.startLet (Grammar.Multiple.NamedValues.Internal.new
               (#[].push b ++ handled.toArray))))
           fun scope => pure (.more { mode := .start, levels := .binder .let scope :: levels }) :=
       fun _ _ => Runs.token (by simp [termStep])
@@ -353,14 +353,14 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
       (term_runs' hA firstBody hbody hsBody).plain
     obtain ⟨program, hprogram, hothersRuns⟩ := cases_runs hA others hothers hs₂
     have hscrutineeRuns := Runs.bind_next
-      (following := fun r => do Parser.Internal.call (Traits.Handler.startMatch r); pure r)
+      (following := fun r => do Parser.Internal.call (Handler.startMatch r); pure r)
       (next := fun r => pure (.more ({ mode := .matchCasesOpen r, levels } : TermStateOf H)))
       (((term_runs' hA scrutinee hscrutinee hsScrutinee).plain
         (.matchScrutinee :: levels)).congr rfl
         (by funext; simp [termComplete]))
-    have hclose : ∀ (scrutinee : Traits.Handler.Term H)
-        (c : Nodes.Pattern × Traits.Handler.Term H)
-        (handled : List (Nodes.Pattern × Traits.Handler.Term H)),
+    have hclose : ∀ (scrutinee : Handler.Term H)
+        (c : Grammar.Nodes.Pattern × Handler.Term H)
+        (handled : List (Grammar.Nodes.Pattern × Handler.Term H)),
         Runs points (termStep version)
           ({ mode := .matchCaseOpen scrutinee (#[].push c ++ handled.toArray), levels } :
             TermStateOf H) [.parenClose, .parenClose]
@@ -368,7 +368,7 @@ theorem term_runs' (hA : TermAgrees h) : (term : Tree.Term) →
             tick points .parenClose
             tick points .parenClose
             Parser.Internal.call
-                (Traits.Handler.endMatch scrutinee (Multiple.MatchCases.Internal.new
+                (Handler.endMatch scrutinee (Grammar.Multiple.MatchCases.Internal.new
                   (#[].push c ++ handled.toArray))))
           fun r => termComplete levels r := fun scrutinee c handled =>
       Runs.append (middle := fun _ =>
@@ -432,8 +432,8 @@ the tokens of terms with the traversal's effects, and appends them to those argu
 theorem terms_runs (hA : TermAgrees h) : (terms : List Tree.Term) →
     Tree.Term.ValidAll (Bridge.version version) terms →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.tokensAll terms) →
-    ∀ (head : Nodes.Ident) (sort : Option (Traits.Handler.«Sort» H))
-      (found : Array (Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
+    ∀ (head : Grammar.Nodes.Ident) (sort : Option (Handler.«Sort» H))
+      (found : Array (Handler.Term H)) (levels : List (TermLevelOf H)),
     Runs points (termStep version)
       ({ mode := .start, levels := .application head sort found :: levels } : TermStateOf H)
       tokens
@@ -470,9 +470,9 @@ those found so far.
 theorem bindings_runs (hA : TermAgrees h) : (bindings : List (Tree.Symbol × Tree.Term)) →
     Tree.Term.ValidBindings (Bridge.version version) bindings →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.bindingTokens bindings) →
-    ∃ program : PM H (List (Plain.Symbol × Traits.Handler.Term H)),
+    ∃ program : PM H (List (Lexicon.Value.Symbol × Handler.Term H)),
       Bridge.specPairs <$> program = adaptRun (Traversal.bindings points h bindings) ∧
-      ∀ (found : Array (Plain.Symbol × Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
+      ∀ (found : Array (Lexicon.Value.Symbol × Handler.Term H)) (levels : List (TermLevelOf H)),
       Runs points (termStep version) ({ mode := .letBindingOpen found, levels } : TermStateOf H)
         tokens program
         fun handled => pure (.more { mode := .letBindingOpen (found ++ handled.toArray), levels })
@@ -517,11 +517,11 @@ found so far.
 theorem cases_runs (hA : TermAgrees h) : (cases : List (Tree.Pattern × Tree.Term)) →
     Tree.Term.ValidCases (Bridge.version version) cases →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens (Tree.Term.caseTokens cases) →
-    ∃ program : Traits.Handler.Term H → PM H (List (Nodes.Pattern × Traits.Handler.Term H)),
+    ∃ program : Handler.Term H → PM H (List (Grammar.Nodes.Pattern × Handler.Term H)),
       (∀ scrutinee, specCases <$> program scrutinee =
         adaptRun (Traversal.cases points h scrutinee cases)) ∧
-      ∀ (scrutinee : Traits.Handler.Term H)
-        (found : Array (Nodes.Pattern × Traits.Handler.Term H)) (levels : List (TermLevelOf H)),
+      ∀ (scrutinee : Handler.Term H)
+        (found : Array (Grammar.Nodes.Pattern × Handler.Term H)) (levels : List (TermLevelOf H)),
       Runs points (termStep version)
         ({ mode := .matchCaseOpen scrutinee found, levels } : TermStateOf H) tokens
         (program scrutinee)
@@ -542,10 +542,10 @@ theorem cases_runs (hA : TermAgrees h) : (cases : List (Tree.Pattern × Tree.Ter
     refine ⟨fun scrutinee => do
       tick points .parenOpen
       ticks points patternTokens
-      let scope ← Parser.Internal.call (Traits.Handler.startMatchCase scrutinee parsed)
+      let scope ← Parser.Internal.call (Handler.startMatchCase scrutinee parsed)
       let result ← adaptRun (Traversal.term points h body)
       tick points .parenClose
-      let handled ← Parser.Internal.call (Traits.Handler.endMatchCase scope scrutinee result)
+      let handled ← Parser.Internal.call (Handler.endMatchCase scope scrutinee result)
       let others ← program scrutinee
       pure ((parsed, handled) :: others), fun scrutinee => ?_, fun scrutinee found levels => ?_⟩
     · simp [cases_cons, ← hprogram scrutinee, specCases, hparsed, hA.startMatchCase,
@@ -585,7 +585,7 @@ theorem term_runs_init (hA : TermAgrees h) (term : Tree.Term)
 token's arrival, and ends with it. -/
 theorem term_runs_first_init (hA : TermAgrees h) (term : Tree.Term)
     (hvalid : term.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
-    (hs : Stands tokens term.tokens) (first : Run (StateT H m) (Traits.Handler.Error H) Unit) :
+    (hs : Stands tokens term.tokens) (first : Run (StateT H m) (Handler.Error H) Unit) :
     RunsFirst points (adaptRun first)
         (termStep version) Parser.Category.Term.Internal.TermState.init tokens
       (adaptRun (Traversal.term points h term first))

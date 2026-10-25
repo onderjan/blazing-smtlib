@@ -28,7 +28,7 @@ open BSmtLib.Facts.Proofs.Parser.Drive
 
 section
 
-variable {Z : Type} [Cursor Z] {version : Token.Version}
+variable {Z : Type} [Cursor Z] {version : Version}
 
 theorem Takes.cons_inv {cursor next : Z} {token : Parser.Internal.Input}
     {tokens : List Parser.Internal.Input} (h : Takes version cursor (token :: tokens) next) :
@@ -121,7 +121,7 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 
 @[simp]
 theorem tick_noPoints (token : Parser.Internal.Input) :
@@ -135,8 +135,8 @@ end
 
 section
 
-variable {H P R σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable [ParseByToken P H m (Traits.Handler.Error H) R]
+variable {H P R σ : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable [ParseByToken P H m (Handler.Error H) R]
 
 /-- A step of the steps as the step of the parser. -/
 def flowOf (mk : σ → P) : Parser.Internal.Step σ R → Parser.Internal.Flow (PM H) P R
@@ -148,7 +148,7 @@ The parser in the version is the state `mk state` of the steps `step`: no call i
 arrival, a step of the parser is the step of its state, it goes back to `fresh` when it
 finishes, and it hands no cursor over.
 -/
-structure Simulates (version : Token.Version) (mk : σ → P)
+structure Simulates (version : Version) (mk : σ → P)
     (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ R)) (fresh : P) : Prop where
   arrive : ∀ (parser : P) (token : Parser.Internal.Input),
     ParseByToken.arrive parser token = (pure () : PM H Unit)
@@ -158,13 +158,13 @@ structure Simulates (version : Token.Version) (mk : σ → P)
   handOver : ∀ {Z : Type} [Cursor Z] (state : σ) (cursor : Z),
     ParseByToken.handOver? (mk state) cursor = none
 
-variable {version : Token.Version} {mk : σ → P}
+variable {version : Version} {mk : σ → P}
   {step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ R)} {fresh : P}
 
 /-- What the loop does with what a step gave. -/
 def afterOf (mk : σ → P) (fresh : P) :
-    Except (ParseErrorCause (Traits.Handler.Error H)) (Parser.Internal.Step σ R) → After P R
-      (Traits.Handler.Error H)
+    Except (ParseErrorCause (Handler.Error H)) (Parser.Internal.Step σ R) → After P R
+      (Handler.Error H)
   | .error error => .stop (.error (Parser.ParseError.Internal.new error)) fresh
   | .ok (.more state) => .goOn (mk state)
   | .ok (.done result) => .stop (.ok (.break result)) fresh

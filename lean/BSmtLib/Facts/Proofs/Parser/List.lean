@@ -29,7 +29,7 @@ open BSmtLib.Facts.Parser.Adapters.Run BSmtLib.Facts.Proofs.Parser.Drive
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {points : Points (StateT H m)} {σ ρ α : Type}
 
 omit [LawfulMonad m] in

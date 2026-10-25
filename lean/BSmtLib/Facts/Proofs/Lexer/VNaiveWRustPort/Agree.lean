@@ -59,7 +59,7 @@ theorem last?_stored {buf : Lexer.Internal.Helpers.ContentBuffer} (h : Fits buf)
 /-- The Rust port's token in progress, in the state `state` from `start` with the content
 `content`, is the naive lexer's token in progress `p`, under the version, for a consumer that does
 not take whitespace and comments. -/
-def TokenAgreesNoWs (v : Token.Version) (state : LexerState) (start : Span.Location)
+def TokenAgreesNoWs (v : Version) (state : LexerState) (start : Span.Location)
     (content : ByteArray)
     (p : Pending) : Prop :=
   p.start = start ∧
@@ -99,7 +99,7 @@ theorem LocAt.congr {c c' : WP.WCore} {offset base index : Nat} {location : Span
   exact ⟨h1, by rw [hl]; exact h2, by rw [hs]; exact h3⟩
 
 /-- The Rust port's lexer state is fixed while it lexes a slice. -/
-structure Fixed (v : Token.Version) (hd : Bool) (iv : Token.Version) (c : WP.WCore) : Prop where
+structure Fixed (v : Version) (hd : Bool) (iv : Version) (c : WP.WCore) : Prop where
   version : (c.version == .v2_0) = (v == .v2_0)
   recovers : c.recovers = false
   discardedFrom : c.discardedFrom = none
@@ -110,7 +110,7 @@ structure Fixed (v : Token.Version) (hd : Bool) (iv : Token.Version) (c : WP.WCo
 /-- The Rust port's token in progress, in the state `state` from `start` with the content
 `content`, is the naive lexer's token in progress `p`, under the version, for a consumer that
 takes whitespace and comments if `ws`. -/
-def TokenAgrees (v : Token.Version) (ws : Bool) (state : LexerState) (start : Span.Location)
+def TokenAgrees (v : Version) (ws : Bool) (state : LexerState) (start : Span.Location)
     (content : ByteArray) (p : Pending) : Prop :=
   match state with
   | .whitespace => p.start = start ∧ ws = true ∧ p.mode = .whitespace ∧ p.content = content
@@ -118,7 +118,7 @@ def TokenAgrees (v : Token.Version) (ws : Bool) (state : LexerState) (start : Sp
   | _ => TokenAgreesNoWs v state start content p
 
 /-- The Rust port's lexer state is the naive lexer's pure state, under the version. -/
-def StAgrees (v : Token.Version) (ws : Bool) : St → WP.WCore → Prop
+def StAgrees (v : Version) (ws : Bool) : St → WP.WCore → Prop
   | .idle, c => c.state = .normal
   | .token p, c =>
     TokenAgrees v ws c.state c.tokenStart (contentBytes c.tokenContent) p ∧ Fits c.tokenContent
@@ -145,17 +145,17 @@ theorem key_fields {c c' : WP.WCore} (hk : key c' = key c) :
   injection hk with e10 e11
   exact ⟨⟨e1, e1'⟩, e2, e3, e4, e5, e6, e7, e8, e9, e10, e11⟩
 
-theorem fixed_of_key {v : Token.Version} {hd : Bool} {iv : Token.Version} {c c' : WP.WCore}
+theorem fixed_of_key {v : Version} {hd : Bool} {iv : Version} {c c' : WP.WCore}
     (h : Fixed v hd iv c) (hk : key c' = key c) : Fixed v hd iv c' := by
   obtain ⟨⟨e1, e1'⟩, -, e3, e4, e5, -⟩ := key_fields hk
   simp only [Prod.mk.injEq] at e3
   exact ⟨e1.trans h.1, e4.trans h.2, e3.1.trans h.3, e3.2.trans h.4, e5.trans h.5, e1'.trans h.6⟩
 
-theorem fixed_of_key' {v : Token.Version} {hd : Bool} {iv : Token.Version} {c c' : WP.WCore}
+theorem fixed_of_key' {v : Version} {hd : Bool} {iv : Version} {c c' : WP.WCore}
     (hk : key c' = key c) (h : Fixed v hd iv c) : Fixed v hd iv c' :=
   fixed_of_key h hk
 
-theorem stAgrees_of_key {v : Token.Version} {ws : Bool} {st : St} {c c' : WP.WCore}
+theorem stAgrees_of_key {v : Version} {ws : Bool} {st : St} {c c' : WP.WCore}
     (h : StAgrees v ws st c) (hk : key c' = key c) : StAgrees v ws st c' := by
   obtain ⟨-, e2, -, -, -, e6, e7, -⟩ := key_fields hk
   cases st with

@@ -27,9 +27,9 @@ variable (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
 again when they do not fail, and weakly related lexers. -/
 def StepsAlikeF {β : Type}
     (step₁ : ops₁.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₁.Lexer consumer))
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₁.Lexer consumer))
     (step₂ : ops₂.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₂.Lexer consumer)) : Prop :=
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₂.Lexer consumer)) : Prop :=
   ∀ a b (taken : List Handed), Rel a b →
     ((step₁ a).run taken).1.1.mapError failureOf =
         ((step₂ b).run taken).1.1.mapError failureOf ∧
@@ -40,11 +40,11 @@ def StepsAlikeF {β : Type}
 
 /-- Steps that give results alike as `g` says, the same tokens taken, lexers related again when
 they do not fail, and weakly related lexers. -/
-def StepsAlikeG {β γ : Type} (g : LexError (Option consumer.Error) → γ)
+def StepsAlikeG {β γ : Type} (g : LexerError (Option consumer.Error) → γ)
     (step₁ : ops₁.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₁.Lexer consumer))
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₁.Lexer consumer))
     (step₂ : ops₂.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₂.Lexer consumer)) : Prop :=
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₂.Lexer consumer)) : Prop :=
   ∀ a b (taken : List Handed), Rel a b →
     ((step₁ a).run taken).1.1.mapError g = ((step₂ b).run taken).1.1.mapError g ∧
       ((step₁ a).run taken).2 = ((step₂ b).run taken).2 ∧
@@ -58,12 +58,12 @@ theorem mapError_comp {ε γ δ β : Type} {g : ε → γ} (k : γ → δ) {x y 
   cases x <;> cases y <;> simp_all [Except.mapError]
 
 /-- Steps alike as a `g` that determines `failureOf` says are alike as `StepsAlikeF` says. -/
-theorem StepsAlikeG.toF {β γ : Type} {g : LexError (Option consumer.Error) → γ}
+theorem StepsAlikeG.toF {β γ : Type} {g : LexerError (Option consumer.Error) → γ}
     (k : γ → BSmtLibSpec.Lexer.Failure consumer.Error) (hk : ∀ e, k (g e) = failureOf e)
     {step₁ : ops₁.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₁.Lexer consumer)}
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₁.Lexer consumer)}
     {step₂ : ops₂.Lexer consumer →
-      AnswerM (Except (LexError (Option consumer.Error)) β × ops₂.Lexer consumer)}
+      AnswerM (Except (LexerError (Option consumer.Error)) β × ops₂.Lexer consumer)}
     (h : StepsAlikeG ops₁ ops₂ Rel Weak g step₁ step₂) :
     StepsAlikeF ops₁ ops₂ Rel Weak step₁ step₂ := by
   intro a b taken hr

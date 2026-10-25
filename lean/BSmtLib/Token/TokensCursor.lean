@@ -16,16 +16,17 @@ lifetime of the tokens' bytes is the views' own: a view keeps the bytes it views
 /--
 A cursor over a dynamic array of tokens.
 
-The cursor is consumed under a given version and refuses
-version switch requests. If the consumer requests discarding,
-currently present tokens are discarded up to before the first EOF.
+The cursor is consumed under a given version: it accepts a request
+for that version and refuses a switch to any other. If the consumer
+requests discarding, currently present tokens are discarded up to
+before the first EOF.
 If no EOF is currently present, the cursor switches to a discarding mode
 and no new tokens are pushed until a pushed EOF token resets
 the discarding mode. EOF tokens are never discarded themselves.
 -/
 structure _root_.BSmtLib.Token.TokensCursor where
   private mk ::
-  private tokens : Array SyntaxToken
+  private tokens : Array Token
   private head : Nat
   /-- Whether the tokens are discarded until an end-of-file token is pushed. -/
   private discarding : Bool
@@ -43,7 +44,7 @@ other than EOF is silently dropped, so the cursor
 remains empty.
 -/
 @[inline]
-def push (self : TokensCursor) (token : SyntaxToken) : TokensCursor :=
+def push (self : TokensCursor) (token : Token) : TokensCursor :=
   let append (self : TokensCursor) : TokensCursor :=
     -- the tokens are all consumed, so the array starts anew
     if self.head == self.tokens.size then { self with tokens := #[token], head := 0 }
@@ -79,11 +80,11 @@ def Internal.Consumed (next cursor : TokensCursor) : Prop :=
   Internal.remaining next < Internal.remaining cursor
 
 /-- The next token, if any, without consuming it. -/
-def Internal.peek? (self : TokensCursor) : Option SyntaxToken := self.tokens[self.head]?
+def Internal.peek? (self : TokensCursor) : Option Token := self.tokens[self.head]?
 
 /-- Consumes the next token, if any. -/
 def Internal.next? (self : TokensCursor) :
-    Option (SyntaxToken × { next : TokensCursor // Internal.Consumed next self }) :=
+    Option (Token × { next : TokensCursor // Internal.Consumed next self }) :=
   if h : self.head < self.tokens.size then
     some (self.tokens[self.head],
       ⟨{ self with head := self.head + 1 },
@@ -99,7 +100,7 @@ theorem Internal.isSome_next? {self : TokensCursor} (h : Internal.HasNext self) 
 def Internal.version (self : TokensCursor) : Version := self.versionInForce
 
 /-- The position of the first end-of-file token from `i` on, if there is one. -/
-private def eofFrom (tokens : Array SyntaxToken) (i : Nat) : Option { j : Nat // i ≤ j } :=
+private def eofFrom (tokens : Array Token) (i : Nat) : Option { j : Nat // i ≤ j } :=
   if h : i < tokens.size then
     match tokens[i] with
     | .endOfFile => some ⟨i, Nat.le_refl i⟩
@@ -134,7 +135,7 @@ def Internal.consumeAll (self : TokensCursor) :
       omega⟩
 
 instance : Cursor TokensCursor where
-  Token := SyntaxToken
+  Token := Token
   «syntax» _ token := token
   HasNext := Internal.HasNext
   decideHasNext cursor := inferInstanceAs (Decidable (Internal.HasNext cursor))
@@ -142,13 +143,17 @@ instance : Cursor TokensCursor where
   peek? := Internal.peek?
   next? := Internal.next?
   version := Internal.version
-  -- the tokens were put in already classified, so they cannot be read anew
-  setVersion _ _ := .error {}
+  -- the tokens were put in already classified under the cursor's
+  -- version, so they cannot be read under any other
+  setVersion self version := if version == Internal.version self then .ok self else .error {}
   discardRest := Internal.discardRest
   next?_isSome := Internal.isSome_next?
   consumed_trans h₁ h₂ := Nat.lt_trans h₁ h₂
   consumed_wf := (measure Internal.remaining).wf
-  setVersion_consumed _ h := nomatch h
+  setVersion_consumed consumed h := by
+    split at h
+    · cases h; exact consumed
+    · cases h
   discardRest_consumed h := Nat.lt_of_le_of_lt (Internal.remaining_discardRest_le _) h
   consumeAll := Internal.consumeAll
 

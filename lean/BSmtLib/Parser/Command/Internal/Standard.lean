@@ -16,7 +16,7 @@ the last call that each command makes at its `)`.
 
 namespace BSmtLib.Parser.Command.Internal.Standard
 
-open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Attribute
+open BSmtLib.Grammar.Nodes BSmtLib.Handler BSmtLib.Parser.Category.Attribute
     BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Attribute.Internal
 open BSmtLib.Parser.Category.Combinator.Internal
@@ -26,9 +26,9 @@ open BSmtLib.Parser.Category.Term.Internal
 open BSmtLib.Parser.Category.Token.Internal
 open BSmtLib.Parser.Command.Internal.Datatype BSmtLib.Parser.Command.Internal.Definition
     BSmtLib.Parser.Command.Internal.Function
-open BSmtLib.Plain (Numeral Keyword StringContent Symbol)
-open BSmtLib.Multiple (SortedVars)
-open BSmtLib.Token (Version)
+open BSmtLib.Lexicon.Value (Numeral Keyword StringContent Symbol)
+open BSmtLib.Grammar.Multiple (SortedVars)
+open BSmtLib (Version)
 open BSmtLib.Token.Reserved (CommandNameReserved)
 open BSmtLib.Parser.Internal (PM call syntaxError versionError)
 
@@ -132,7 +132,7 @@ def finalCall : FinalCall (Handler.Attribute H) (Handler.«Sort» H) (Handler.Te
   | .declareSortParameter symbol =>
     call (CommandHandler.commandDeclareSortParameter (H := H) symbol)
   | .endDeclareDatatype constructors => call (CommandHandler.endDeclareDatatype
-    (Multiple.Constructors.Internal.new constructors))
+    (Grammar.Multiple.Constructors.Internal.new constructors))
   | .endDeclareDatatypes => call (CommandHandler.endDeclareDatatypes (H := H))
   | .defineConst symbol sort body => call (CommandHandler.commandDefineConst symbol sort body)
   | .endDefineFun body => call (CommandHandler.endDefineFun body)
@@ -189,7 +189,7 @@ def Declaration.next (self : Declaration) (token : Internal.Input) : Declaration
   match self, token with
   | .start, .keyword name => if isVersionKeyword name then .keyword else .other
   | .start, _ => .other
-  | .keyword, .constant (.decimal text) => .value (Version.fromDecimal? text.asSlice)
+  | .keyword, .constant (.decimal text) => .value (Version.fromDecimal? text)
   | .keyword, _ => .value none
   | declaration, _ => declaration
 
@@ -223,9 +223,10 @@ inductive Payload (HandledSExpr HandledAttribute HandledSort HandledTerm Scope :
   | defineBody (definition : DefinitionEnd HandledSort)
       (state : TermState HandledSExpr HandledAttribute HandledSort HandledTerm Scope)
   | defineFunsRecDeclarations
-      (state : ListState (FunctionDecState HandledSort) (Multiple.FunctionSignature HandledSort))
+      (state : ListState (FunctionDecState HandledSort)
+        (Grammar.Multiple.FunctionSignature HandledSort))
   /-- The bodies of `define-funs-rec`, with the signatures of the functions, one per body. -/
-  | defineFunsRecBodies (signatures : Array (Multiple.FunctionSignature HandledSort))
+  | defineFunsRecBodies (signatures : Array (Grammar.Multiple.FunctionSignature HandledSort))
       (state : ListState (TermState HandledSExpr HandledAttribute HandledSort HandledTerm Scope)
         Unit)
   | echo
@@ -346,7 +347,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
   | .declareSort symbol => close (.declareSort symbol (← expectNumeral token))
   | .declareDatatype symbol state =>
     let start parameters := call (CommandHandler.startDeclareDatatype symbol
-      (Multiple.Symbols.Internal.new parameters))
+      (Grammar.Multiple.Symbols.Internal.new parameters))
     match ← datatypeStep start version state token with
     | .more state => return .more (.declareDatatype symbol state)
     | .done constructors => close (.endDeclareDatatype constructors)
@@ -356,17 +357,17 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     | .done sorts =>
       if sorts.isEmpty then syntaxError (.empty .datatypeIntroductions)
       call (CommandHandler.startDeclareDatatypes (H := H)
-        (Multiple.SortArities.Internal.new sorts))
+        (Grammar.Multiple.SortArities.Internal.new sorts))
       return .more (.declareDatatypesDatatypes sorts.size (ListState.paren .start))
   | .declareDatatypesDatatypes count state =>
     let start parameters := call (CommandHandler.startDatatypeDeclaration (H := H)
-      (Multiple.Symbols.Internal.new parameters))
+      (Grammar.Multiple.Symbols.Internal.new parameters))
     let datatype (state : DatatypeState (Handler.«Sort» H)) (token : Internal.Input) := do
       match ← datatypeStep start version state token with
       | .more state => return Internal.Step.more state
       | .done constructors =>
         call (CommandHandler.endDatatypeDeclaration
-          (Multiple.Constructors.Internal.new constructors))
+          (Grammar.Multiple.Constructors.Internal.new constructors))
         return .done ()
     match ← state.step .start datatype (some count) token with
     | .more state => return .more (.declareDatatypesDatatypes count state)
@@ -378,7 +379,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     | .more state => return .more (.defineSortParameters symbol state)
     | .done parameters =>
       call (CommandHandler.startDefineSort (H := H) symbol
-        (Multiple.Symbols.Internal.new parameters))
+        (Grammar.Multiple.Symbols.Internal.new parameters))
       return .more (.defineSortBody .init)
   | .defineSortBody state =>
     match ← sortStep version state token with
@@ -411,7 +412,7 @@ def payloadStep (version : Version) (self : PayloadOf H) (token : Internal.Input
     | .done signatures =>
       if signatures.isEmpty then syntaxError (.empty .functionSignatures)
       call (CommandHandler.startDefineFunsRec
-        (Multiple.FunctionSignatures.Internal.new signatures))
+        (Grammar.Multiple.FunctionSignatures.Internal.new signatures))
       return .more (.defineFunsRecBodies signatures (ListState.paren .init))
   | .defineFunsRecBodies signatures state =>
     match ← bodiesStep signatures.size version state token with

@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Lexer.Cursor
+import all BSmtLib.Version
 
 @[expose] public section
 

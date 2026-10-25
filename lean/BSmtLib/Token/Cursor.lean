@@ -1,16 +1,19 @@
 module
 
 public import BSmtLib.Token
-public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Lexer.Cursor
 public import BSmtLib.Token.Lookahead
 
 public section
 
-/- LEAN: in Rust, `SmtCursor` and `SmtConsumeFrom` are in `token` with the cursor. The producer
-views its tokens as `SyntaxToken`s, whose module imports `BSmtLib.Token`, so the two classes
-have modules of their own here; the root module `BSmtLib` imports them. -/
+/- LEAN: in Rust, `SmtCursor` and `SmtConsumeFrom` are in `token` with the cursor. The class
+`Cursor` names the lexer's cursor (`Internal.BatchView`), whose module imports `BSmtLib.Token`,
+so the two classes have modules of their own here; the root module `BSmtLib` imports them. -/
 
 namespace BSmtLib.Token.Cursor
+
+open BSmtLib.Lexer.Cursor
+
 /--
 A producer seen as a cursor of a batch of the library's lexer: the cursor, which is the producer
 itself, and the producer that a cursor after it stands for, which is that cursor itself.
@@ -25,19 +28,19 @@ structure Internal.BatchView (Z : Type) (HasNext : Z → Prop) (Consumed : Z →
   /-- The tag of the cursor's batch. -/
   tag : BatchTag
   /-- The producer as a cursor. -/
-  cursor : BatchCursor tag
+  cursor : LexerCursor tag
   /-- The producer that a cursor after `cursor` stands for. -/
-  back : BatchCursor tag → Z
+  back : LexerCursor tag → Z
   /-- The producer's type is the batch cursor's. -/
-  isCursor : Z = BatchCursor tag
+  isCursor : Z = LexerCursor tag
   /-- The cursor is the producer itself. -/
   cursor_eq : cursor = cast isCursor z
   /-- A cursor after `cursor` stands for itself. -/
-  back_eq (next : BatchCursor tag) : back next = cast isCursor.symm next
+  back_eq (next : LexerCursor tag) : back next = cast isCursor.symm next
   /-- The cursor has a token if the producer has. -/
   hasNext : HasNext z → cursor.HasNext
   /-- A cursor that consumed tokens of `cursor` stands for a producer that consumed tokens. -/
-  consumed {next : BatchCursor tag} : next.Consumed cursor → Consumed (back next) z
+  consumed {next : LexerCursor tag} : next.Consumed cursor → Consumed (back next) z
 
 /-- A producer, ordered by consumption with the relation `Consumed`, which `wf` shows to be
 well-founded: a loop over its tokens descends by it. -/
@@ -83,7 +86,7 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
   -/
   Token : Type
   /-- Views the user token as a library token under the version in force. -/
-  «syntax» : Z → Token → SyntaxToken
+  «syntax» : Z → Token → _root_.BSmtLib.Token
   /-- Whether a token remains to be consumed. -/
   HasNext : Z → Prop
   /-- Whether a token remains to be consumed, decided. -/
@@ -206,33 +209,33 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
         Internal.drain next? next?_isSome consumed_trans consumed_wf cursor
       ⟨next, empty, fun has => after.elim (fun e => absurd (e ▸ has) empty) id⟩
 
-instance {batch : BatchTag} : Cursor (BatchCursor batch) where
-  Token := BSmtLib.Token batch
-  «syntax» := BatchCursor.«syntax»
-  HasNext := BatchCursor.HasNext
+instance {batch : BatchTag} : Cursor (LexerCursor batch) where
+  Token := LexerToken batch
+  «syntax» := LexerCursor.«syntax»
+  HasNext := LexerCursor.HasNext
   decideHasNext cursor := inferInstanceAs (Decidable cursor.HasNext)
-  Consumed := BatchCursor.Consumed
-  peek? := BatchCursor.peek?
-  next? := BatchCursor.next?
-  isEmpty := BatchCursor.isEmpty
-  Lookahead := BatchCursor.TokenWindow batch
-  attempt := BatchCursor.attempt
-  version := BatchCursor.version
-  setVersion := BatchCursor.setVersion
-  discardRest := BatchCursor.discardRest
+  Consumed := LexerCursor.Consumed
+  peek? := LexerCursor.peek?
+  next? := LexerCursor.next?
+  isEmpty := LexerCursor.isEmpty
+  Lookahead := LexerWindow batch
+  attempt := LexerCursor.attempt
+  version := LexerCursor.version
+  setVersion := LexerCursor.setVersion
+  discardRest := LexerCursor.discardRest
   asBatch? cursor :=
     some
       { tag := batch, cursor, back := id, isCursor := rfl, cursor_eq := rfl,
         back_eq := fun _ => rfl, hasNext := id, consumed := id }
-  next?_isSome := BatchCursor.isSome_next?
-  consumed_trans := BatchCursor.Consumed.trans
+  next?_isSome := LexerCursor.isSome_next?
+  consumed_trans := LexerCursor.Consumed.trans
   consumed_wf :=
-    Subrelation.wf (fun h => BatchCursor.Consumed.remaining_lt h)
-      (measure BatchCursor.Internal.remaining).wf
-  setVersion_consumed consumed h := (BatchCursor.setVersion_follows h).trans_consumed consumed
-  discardRest_consumed consumed := (BatchCursor.discardRest_follows _).trans_consumed consumed
-  isEmpty_iff := BatchCursor.isEmpty_iff
+    Subrelation.wf (fun h => LexerCursor.Consumed.remaining_lt h)
+      (measure LexerCursor.Internal.remaining).wf
+  setVersion_consumed consumed h := (LexerCursor.setVersion_follows h).trans_consumed consumed
+  discardRest_consumed consumed := (LexerCursor.discardRest_follows _).trans_consumed consumed
+  isEmpty_iff := LexerCursor.isEmpty_iff
   consumeAll cursor :=
-    ⟨cursor.consumeAll, cursor.not_hasNext_consumeAll, BatchCursor.consumeAll_consumed⟩
+    ⟨cursor.consumeAll, cursor.not_hasNext_consumeAll, LexerCursor.consumeAll_consumed⟩
 
 end BSmtLib.Token.Cursor

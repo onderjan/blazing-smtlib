@@ -675,7 +675,8 @@ theorem commands_cons_none {command : Tree.Command} (hne : command ≠ .exit)
         Traversal.commands P B N VersionPolicy.unrestricted declarations commands) := by
   cases command <;> first | exact absurd rfl hne | simp [Traversal.commands, hd, hn]
 
-theorem commands_cons_some {command : Tree.Command} (hne : command ≠ .exit) {version : Version}
+theorem commands_cons_some {command : Tree.Command} (hne : command ≠ .exit)
+    {version : Lexicon.Version}
     (hd : command.declaredVersion = some version) (declarations : Nat)
     (commands : List Tree.Command) :
     Traversal.commands P B N VersionPolicy.unrestricted declarations (command :: commands) =
@@ -684,7 +685,7 @@ theorem commands_cons_some {command : Tree.Command} (hne : command ≠ .exit) {v
         Traversal.commands P B N VersionPolicy.unrestricted (declarations + 1) commands) := by
   cases command <;> first | exact absurd rfl hne | simp [Traversal.commands, hd]
 
-theorem commands_yields : ∀ (commands : List Tree.Command) (version : Version)
+theorem commands_yields : ∀ (commands : List Tree.Command) (version : Lexicon.Version)
     (built : List Tree.Command) (declarations : Nat), Script version commands →
     ∃ version', Yields (Traversal.commands P B N VersionPolicy.unrestricted declarations commands)
       (version, built) () (version', commands.reverse ++ built)
@@ -720,7 +721,7 @@ theorem commands_yields : ∀ (commands : List Tree.Command) (version : Version)
 
 /-- The traversal of a valid script with the builder, from any version and no commands, does not
 fail and leaves the script's commands, newest first. -/
-theorem script_builds (start version : Version) (commands : List Tree.Command)
+theorem script_builds (start version : Lexicon.Version) (commands : List Tree.Command)
     (h : Script version commands) :
     ∃ version', (Traversal.script P B N VersionPolicy.unrestricted version commands).run.run
       (start, []) = (.ok (), (version', commands.reverse)) := by

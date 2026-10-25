@@ -22,7 +22,7 @@ buffered reader or when the resources should serve several reads. The lexer and 
 also be used on their own.
 -/
 
-open BSmtLib.Lexer.Error BSmtLib.Parser.Adapter BSmtLib.Parser.Script BSmtLib.Traits
+open BSmtLib.Lexer.Error BSmtLib.Parser.Adapter BSmtLib.Parser.Script BSmtLib.Handler
 
 namespace BSmtLib.Reader
 
@@ -147,9 +147,9 @@ def ReadError.ofParse {E : Type} (err : ParseError E) (span : Span) : ReadError 
   { cause, span }
 
 /-- Converts the error of a lexer over a parser into a read error. -/
-/- LEAN: Rust's `impl From<SmtLexError<SmtParseError<E>>> for SmtReadError<E>`, which Lean's
+/- LEAN: Rust's `impl From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E>`, which Lean's
 conversion by name stands for. -/
-def ReadError.ofLex {E : Type} (err : LexError (ParseError E)) : ReadError E :=
+def ReadError.ofLex {E : Type} (err : LexerError (ParseError E)) : ReadError E :=
   let span := err.span
   match err.cause with
   | .lexical kind => { cause := .lexical kind, span }
@@ -171,64 +171,6 @@ structure ReadFailure (H P : Type) {m : Type → Type} [Monad m] {E R : Type} [P
 instance {H P : Type} {m : Type → Type} [Monad m] {E R : Type} [Parse P H m E R] [Inhabited H] :
     Inhabited (ReadFailure H P) :=
   ⟨{ error := default, handler := default }⟩
-
-/- LEAN: Rust's `std::io::BufRead`, which Lean's standard library does not have. Methods taking
-`&mut self` return the updated reader; an I/O error is returned rather than thrown, as Rust
-returns it. -/
-/--
-A source of bytes read through a buffer, in the monad `n`.
-
-`fillBuf` returns the bytes buffered and not consumed yet, filling the buffer from the source
-first if none are left; it returns no bytes at the end of the input. `consume` marks the given
-number of bytes at the start of the buffer as consumed, so that `fillBuf` does not return them
-again.
--/
-class BufRead (B : Type) (n : Type → Type) where
-  /--
-  Returns the bytes buffered and not consumed yet, filling the buffer from the source if none
-  are left. No bytes are returned at the end of the input.
-  -/
-  fillBuf : B → n (Except IO.Error (ByteSlice × B))
-  /--
-  Marks the first `amount` bytes of the buffer as consumed.
-
-  The amount must not be more than `fillBuf` returned last.
-  -/
-  consume : B → Nat → B
-
-/- LEAN: Rust's `impl BufRead for &[u8]`. -/
-/-- Bytes in memory read as a whole: the buffer is the bytes not consumed yet. -/
-instance {n : Type → Type} [Monad n] : BufRead ByteSlice n where
-  fillBuf slice := pure (.ok (slice, slice))
-  consume slice amount := slice.slice amount
-
-/- LEAN: Rust's `std::io::BufReader`, over a stream, which Lean's file handles and in-memory
-buffers both give (`IO.FS.Stream.ofHandle`, `IO.FS.Stream.ofBuffer`). -/
-/-- A stream read through a buffer of a fixed capacity. -/
-structure BufReader where
-  private mk ::
-  private stream : IO.FS.Stream
-  private capacity : Nat
-  /-- The bytes read from the stream last. -/
-  private buffer : ByteArray
-  /-- The number of bytes of the buffer consumed. -/
-  private position : Nat
-
-/-- Creates a reader of `stream` through a buffer of `capacity` bytes. -/
-/- LEAN: Rust's `BufReader::with_capacity`. -/
-def BufReader.new (stream : IO.FS.Stream) (capacity : Nat) : BufReader :=
-  { stream, capacity, buffer := ByteArray.empty, position := 0 }
-
-@[no_expose] instance {n : Type → Type} [Monad n] [MonadLiftT IO n] : BufRead BufReader n where
-  fillBuf self := do
-    if self.position < self.buffer.size then
-      return .ok (self.buffer.toByteSlice self.position, self)
-    -- the buffer has been consumed, fill it from the stream
-    let read : IO (Except IO.Error ByteArray) := (self.stream.read self.capacity.toUSize).toBaseIO
-    match ← read with
-    | .ok buffer => return .ok (buffer.toByteSlice, { self with buffer, position := 0 })
-    | .error err => return .error err
-  consume self amount := { self with position := self.position + amount }
 
 /- LEAN: not in Rust. The type of the reader's parser names the handler, so that the default
 parser, made where it is used, can find the handler's script parser. -/
@@ -283,7 +225,7 @@ The version under which the script is read can be changed by `set-info` commands
 the version-change posture and the initial version used before any commands are read must be
 provided.
 -/
-def script (handler : H) (posture : Token.VersionPosture) (initialVersion : Token.Version) :
+def script (handler : H) (posture : Version.VersionPosture) (initialVersion : Version) :
     Reader H (ScriptParser H) :=
   { lexer := Lexer.new (ParseAdapter.new handler (ScriptParser.new posture)) initialVersion }
 
@@ -299,7 +241,7 @@ Creates a reader of the input `parser` accepts, over `handler`.
 The version passed is the initial one. Parsers may request the lexer to change versions, and the
 lexer will always comply. No standard parser changes versions except for `ScriptParser`.
 -/
-def new (handler : H) (parser : P) (version : Token.Version) : Reader H P :=
+def new (handler : H) (parser : P) (version : Version) : Reader H P :=
   { lexer := Lexer.new (ParseAdapter.new handler parser) version }
 
 /--
@@ -308,7 +250,7 @@ The SMT-LIB version currently in force.
 The version can change if the token consumer asks for it from the cursor. The end of the input
 resets the version to the initial one.
 -/
-def version (self : Reader H P) : Token.Version :=
+def version (self : Reader H P) : Version :=
   self.lexer.version
 
 /--
@@ -377,13 +319,27 @@ def readEof (self : Reader H P) :
   | .error (err, adapter) =>
     return .error { error := ReadError.ofLex err, handler := adapter.handler }
 
-/- LEAN: Rust's `read_all` takes `&mut self` and the buffered reader; this takes the reader and
+/--
+Reads the slice as the whole input.
+
+Returns the located parser result if successful, `none` if the parser broke its contract (see
+`readEof`), and the reader, reset.
+
+If an error occurs, the reader is not given back; the failure carries the handler.
+-/
+def readAll (self : Reader H P) (input : ByteSlice) :
+    m (Except (ReadFailure H P) (Option (Span.Located R) × Reader H P)) := do
+  match ← self.readSlice input with
+  | .ok self => self.readEof
+  | .error err => return .error err
+
+/- LEAN: Rust's `read_from` takes `&mut self` and the buffered reader; this takes the reader and
 the buffered reader and gives both back, the buffered reader also after an error. The loop is the
 recursion, a tail call; it is `partial`, as a buffered reader may give bytes without end. -/
 /--
 Reads the content of the buffered reader.
 
-Returns the parser result if successful, `none` if the parser broke its contract (see
+Returns the located parser result if successful, `none` if the parser broke its contract (see
 `readEof`), and the reader, reset; and, in any case, the buffered reader.
 
 The input is considered to end when the buffered reader returns no bytes. A failure while
@@ -396,12 +352,12 @@ processed without reading further.
 If an error occurs, the reader is not given back; the failure carries the handler.
 -/
 @[specialize]
-partial def readAll {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [BufRead B n]
+partial def readFrom {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [BufRead B n]
     (self : Reader H P) (bufReader : B) :
-    n (Except (ReadFailure H P) (Option R × Reader H P) × B) := do
+    n (Except (ReadFailure H P) (Option (Span.Located R) × Reader H P) × B) := do
   if self.discardedFrom.isSome then
     -- the lexer does not care about any subsequent bytes, break
-    return (← readRest self, bufReader)
+    return (← (self.readEof : m _), bufReader)
 
   match ← BufRead.fillBuf bufReader with
   | .error err =>
@@ -414,7 +370,9 @@ partial def readAll {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [B
   | .ok (buffer, bufReader) =>
     if buffer.size == 0 then
       -- end of file reached
-      return (← readRest self, bufReader)
+      -- end of stream, process EOF
+      -- this will reset the lexer and return the break value
+      return (← (self.readEof : m _), bufReader)
 
     -- remember the current offset and process the buffer
     let startOffset := self.lexer.currentLocation.offset
@@ -425,26 +383,18 @@ partial def readAll {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [B
       -- this might not be all bytes when discarding is set
       -- use the current lexer location offset minus our start offset
       let len := self.lexer.currentLocation.offset - startOffset
-      readAll self (BufRead.consume (n := n) bufReader len)
-where
-  /-- Processes the end of the input, returning the result without its location. -/
-  readRest (self : Reader H P) : n (Except (ReadFailure H P) (Option R × Reader H P)) := do
-    -- end of stream, process EOF
-    -- this will reset the lexer and return the break value
-    match ← (self.readEof : m _) with
-    | .error err => return .error err
-    | .ok (result, self) =>
-      -- do not return the result location as most callers will not want it
-      return .ok (result.map fun located => located.value, self)
+      readFrom self (BufRead.consume (n := n) bufReader len)
 
 /- LEAN: Rust's `BufReader::with_capacity`, 1 MiB. -/
 /-- The capacity of the buffer through which `readFile` reads a file. -/
 def Internal.BUF_READER_CAPACITY : Nat := 1024 * 1024
 
+/- LEAN: Rust's `path` is anything that is `AsRef<Path>`; here a `System.FilePath`, to which a
+string is coerced. -/
 /--
 Opens the file at `path` and reads it.
 
-Returns the parser result if successful, `none` if the parser broke its contract (see
+Returns the located parser result if successful, `none` if the parser broke its contract (see
 `readEof`), and the reader, reset.
 
 A failure to open the file is reported as an I/O error with an empty span at the start of the
@@ -453,7 +403,8 @@ input. An I/O read error is reported as an empty span at the respective position
 If an error occurs, the reader is not given back; the failure carries the handler.
 -/
 def readFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n] (self : Reader H P)
-    (path : System.FilePath) : n (Except (ReadFailure H P) (Option R × Reader H P)) := do
+    (path : System.FilePath) :
+    n (Except (ReadFailure H P) (Option (Span.Located R) × Reader H P)) := do
   let opened : IO (Except IO.Error IO.FS.Handle) := (IO.FS.Handle.mk path .read).toBaseIO
   match ← opened with
   | .error err =>
@@ -463,7 +414,7 @@ def readFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n] (s
     -- make the buffered reader use a 1 MiB buffer so that we can
     -- lex/parse more efficiently with larger batches
     let bufReader := BufReader.new (IO.FS.Stream.ofHandle file) Internal.BUF_READER_CAPACITY
-    let (result, _) ← self.readAll bufReader
+    let (result, _) ← self.readFrom bufReader
     return result
 
 end
@@ -487,14 +438,14 @@ input.
 -/
 def readSmtFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n] (handler : H)
     (path : System.FilePath) : n (Except (ReadFailure H (ScriptParser H)) H) := do
-  let reader := Reader.script handler Token.VersionPosture.default default
+  let reader := Reader.script handler Version.VersionPosture.default default
   match ← reader.readFile path with
   | .ok (_, reader) => return .ok reader.handler
   | .error err => return .error err
 
 /- LEAN: Rust's `read_smt` lends the handler and takes the buffered reader, which may be lent too;
 here both are given and given back, also after an error: the handler in the failure, the buffered
-reader as `readAll` gives it back. -/
+reader as `readFrom` gives it back. -/
 /--
 Reads SMT-LIB input from `bufReader`, delivering its content to `handler`, and returns the
 handler (in the failure, if reading fails) and the buffered reader.
@@ -510,8 +461,8 @@ reads or to feed the input in pieces.
 -/
 def readSmt {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [BufRead B n] (handler : H)
     (bufReader : B) : n (Except (ReadFailure H (ScriptParser H)) H × B) := do
-  let reader := Reader.script handler Token.VersionPosture.default default
-  match ← reader.readAll bufReader with
+  let reader := Reader.script handler Version.VersionPosture.default default
+  match ← reader.readFrom bufReader with
   | (.ok (_, reader), bufReader) => return (.ok reader.handler, bufReader)
   | (.error err, bufReader) => return (.error err, bufReader)
 

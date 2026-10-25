@@ -21,12 +21,12 @@ open BSmtLib.Facts.Proofs.Lexer.Consumers.Pure BSmtLib.Facts.Proofs.Lexer.VNaive
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix.Lexeme BSmtLib.Facts.Proofs.Lexer.VNaive.Run
 open BSmtLib.Lexer.Internal.VNaive
 
-theorem start_ws_eq {version : Token.Version} {location : Span.Location} {c : UInt8}
+theorem start_ws_eq {version : Version} {location : Span.Location} {c : UInt8}
     (h : isWhitespace c = false) :
     start version true location c = start version false location c := by
   simp only [start, h, Bool.false_eq_true, ite_false]
 
-theorem start_ws_true {version : Token.Version} {location : Span.Location} {c : UInt8}
+theorem start_ws_true {version : Version} {location : Span.Location} {c : UInt8}
     (h : isWhitespace c = true) :
     start version true location c =
       .pending { mode := .whitespace, start := location, content := ByteArray.empty.push c } ∧
@@ -86,7 +86,7 @@ def StepPlain : Option (St × List Lexeme) → Option (St × List Lexeme) → Pr
   | some (stW, lsW), some (stP, lsP) => PlainOf stW stP ∧ plainOf lsW = lsP
   | _, _ => False
 
-theorem startStep_plain (version : Token.Version) (location : Span.Location) (c : UInt8) :
+theorem startStep_plain (version : Version) (location : Span.Location) (c : UInt8) :
     StepPlain (startStepW version true location c) (startStepW version false location c) := by
   cases hw : isWhitespace c with
   | true =>
@@ -133,7 +133,7 @@ theorem stepPlain_layout {l : Lexeme} {a b : Option (St × List Lexeme)} (h : St
       simp only [plainOf, List.filter_cons, hl, Bool.false_eq_true, ite_false] at h2 ⊢
       exact h2
 
-theorem byteStep_plain (version : Token.Version) {stW stP : St} (h : PlainOf stW stP)
+theorem byteStep_plain (version : Version) {stW stP : St} (h : PlainOf stW stP)
     (location : Span.Location) (c : UInt8) :
     StepPlain (byteStepW version true stW location c) (byteStepW version false stP location c) := by
   cases stW with
@@ -181,7 +181,7 @@ theorem byteStep_plain (version : Token.Version) {stW stP : St} (h : PlainOf stW
             (advance_tokenBefore_taken ha hp).2
         | error f => trivial
 
-theorem failedBefore_plain (version : Token.Version) {stW stP : St} (h : PlainOf stW stP)
+theorem failedBefore_plain (version : Version) {stW stP : St} (h : PlainOf stW stP)
     (location : Span.Location) (c : UInt8) (hP : byteStepW version false stP location c = none) :
     plainOf (failedBeforeW true stW location c) = failedBeforeW false stP location c := by
   cases stW with
@@ -245,7 +245,7 @@ theorem runPlain_withBefore {lsW lsP : List Lexeme}
     | ok _ => exact h.elim
     | error y => show plainOf (lsW ++ x) = lsP ++ y; rw [plainOf_append, hl, h]
 
-theorem lexBytes_plain (version : Token.Version) (bytes : List UInt8) :
+theorem lexBytes_plain (version : Version) (bytes : List UInt8) :
     ∀ {stW stP : St} (location : Span.Location), PlainOf stW stP →
       RunPlain (lexBytesW version true stW location bytes)
         (lexBytesW version false stP location bytes) := by

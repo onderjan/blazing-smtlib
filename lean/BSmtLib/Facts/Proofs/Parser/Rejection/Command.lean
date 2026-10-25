@@ -31,7 +31,7 @@ open BSmtLib.Parser.Category.Attribute.Internal (AttributeState)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLib.Facts.Proofs.Parser.Rejection.CommandParts BSmtLib.Facts.Proofs.Parser.Rejection.Parts
 open BSmtLib.Facts.Proofs.Parser.Rejection.SExpr BSmtLib.Facts.Proofs.Parser.Rejection.«Sort»
-open BSmtLib.Facts.Proofs.Parser.Rejection.Term BSmtLib.Plain
+open BSmtLib.Facts.Proofs.Parser.Rejection.Term BSmtLib.Lexicon.Value
 
 open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 
@@ -126,13 +126,13 @@ def setInfoRem (declaration : Declaration) (state : AttributeState Nat Nat) : La
     follows (setInfoEnd version declaration a) b ∧ u = a ++ b
 
 /-- Sort declarations, between `lo` and `hi` of them, then as many datatype declarations. -/
-def datatypesRem (state : ListState SortDecState (Plain.Symbol × Numeral)) : Lang :=
+def datatypesRem (state : ListState SortDecState (Lexicon.Value.Symbol × Numeral)) : Lang :=
   fun u => ∃ n, 1 ≤ n ∧ cat (listRem sortDecRem SortDecLang .start n (some n) state)
     (cat (tok openItem) (cat (rep (DatatypeLang version) n (some n))
       (cat (tok closeItem) (closeNext version follows)))) u
 
 /-- Function declarations, then as many bodies. -/
-def funsRecRem (state : ListState (FunctionDecState Nat) (Multiple.FunctionSignature Nat)) : Lang :=
+def funsRecRem (state : ListState (FunctionDecState Nat) (Grammar.Multiple.FunctionSignature Nat)) : Lang :=
   fun u => ∃ n, 1 ≤ n ∧ cat (listRem (functionDecRem version) (FunctionDecLang version) .start n
     (some n) state) (cat (tok openItem) (cat (rep (TermLang version) n (some n))
       (cat (tok closeItem) (closeNext version follows)))) u

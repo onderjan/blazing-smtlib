@@ -58,6 +58,8 @@ The proof, in parts:
 - `WRustPortX1BatchInCore.Handed`: the constructed lexers.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch (ConsumesAlike)
@@ -66,10 +68,10 @@ open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple (MCouple)
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {recovery : Type}
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- The code of the Rust port over two structures of operations that simulate each other runs
 alike: the step of a call on a slice and the step of a call at the end of the input, run on
 lexers that correspond, give the same result with lexers that correspond again, whether the call
@@ -134,7 +136,7 @@ end
 /-- A lexer constructed for the Rust port and the lexer with the batch in its state, which have
 the same constructor, corresponds to itself. -/
 theorem WRustPort.new_sim_x1BatchInCore {H R E : Type} [Token.Consume H R E] (consumer : H)
-    (version : Token.Version) :
+    (version : Version) :
     Calls.LexRel (Lexer.Internal.WRustPort.Lexer.new consumer version)
         (Lexer.Internal.WRustPort.Lexer.new consumer version) :=
   Handed.new_rel consumer version
@@ -143,8 +145,8 @@ theorem WRustPort.new_sim_x1BatchInCore {H R E : Type} [Token.Consume H R E] (co
 state corresponds to itself. -/
 theorem WRustPort.newRecovering_sim_x1BatchInCore {H R E : Type} [Token.Consume H R E]
     {m : Type → Type}
-    [Token.Recover H m]
-    (consumer : H) (version : Token.Version) :
+    [Lexer.Recovery.Recover H m]
+    (consumer : H) (version : Version) :
     Calls.LexRel (Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version)
       (Lexer.Internal.WRustPort.Lexer.newRecovering (m := m) consumer version) :=
   Handed.newRecovering_rel consumer version
@@ -152,14 +154,14 @@ theorem WRustPort.newRecovering_sim_x1BatchInCore {H R E : Type} [Token.Consume 
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {recovery : Type}
 
 /-- The Rust port and the lexer with the batch in its state, with the same consumer, which reads
 the cursors only below the length of their batches, lex a slice alike from lexers that
 correspond: the same result, with lexers that correspond again. -/
 theorem WRustPort.lexSlice_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
-    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (w x : Lexer.Internal.WRustPort.Lexer H recovery)
     (h : Calls.LexRel w x)
     (slice : ByteSlice) :
@@ -172,7 +174,7 @@ theorem WRustPort.lexSlice_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
 the cursors only below the length of their batches, lex the end of the input alike from lexers
 that correspond: the same result, with lexers that correspond again. -/
 theorem WRustPort.lexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
-    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexRecovery recovery H m]
+    [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (w x : Lexer.Internal.WRustPort.Lexer H recovery)
     (h : Calls.LexRel w x) :
     MCouple (Api.ResRel Api.EofRel (Api.AfterEofRel recovery))
@@ -182,7 +184,7 @@ theorem WRustPort.lexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
 
 /-- The Rust port and the lexer with the batch in its state, recovering at the end of the input,
 lex the end of the input again alike. -/
-theorem WRustPort.pendingLexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E) [Token.Recover H
+theorem WRustPort.pendingLexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E) [Lexer.Recovery.Recover H
     m]
     (w x : Lexer.Internal.WRustPort.Lexer.PendingEof H) (h : Calls.LexRel w.lexer x.lexer) :
     MCouple (Api.ResRel (Api.EofRel (recovery := Lexer.Recovery.Recovering)) Calls.LexRel)

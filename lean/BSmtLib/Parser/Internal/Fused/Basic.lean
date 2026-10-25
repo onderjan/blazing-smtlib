@@ -18,17 +18,20 @@ does not fuse.
 
 namespace BSmtLib.Parser.Internal.Fused.Basic
 
-open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Token.BatchCursor.Internal (Follows)
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (Follows)
 open BSmtLib.Parser.Category.Term BSmtLib.Parser.Command
 open BSmtLib.Parser.Category.Term.Internal
 open BSmtLib.Parser.Command.Internal
 open BSmtLib.Parser.Command.Internal.Definition BSmtLib.Parser.Script
 open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser,
   command → commandOf, declarations → declarationsOf
-open BSmtLib.Plain (Symbol Numeral Decimal HexDigits BinDigits
+open BSmtLib.Lexicon.Value (Symbol Numeral Decimal HexDigits BinDigits
   StringContent)
-open BSmtLib.Token (BatchTag BatchCursor TokenCategory Version VersionPosture)
+open BSmtLib.Token (BatchTag TokenCategory)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib (Version)
+open BSmtLib.Version (VersionPosture)
 
 /-- The cause of a failed parse with the handler. -/
 abbrev Cause (H : Type) {m : Type → Type} [Handler H m] := ParseErrorCause (Handler.Error H)
@@ -43,11 +46,11 @@ inductive TermContext (HandledSort : Type) where
 in the command's term, with the command around it and the term's mode and levels; go on from
 the parser with the cursor (which follows `next`) after the step acted on it; or stop with the
 answer, the parser to go on from, the cursor (which follows `next`) and the handler. -/
-inductive Outcome (H σ γ μ L P ε : Type) {batch : BatchTag} (next : BatchCursor batch) where
+inductive Outcome (H σ γ μ L P ε : Type) {batch : BatchTag} (next : LexerCursor batch) where
   | command (h : H) (declarations : Nat) (command : σ)
   | term (h : H) (declarations : Nat) (context : γ) (mode : μ) (levels : L)
-  | resume (h : H) (parser : P) (cursor : BatchCursor batch) (follows : Follows cursor next)
-  | stop (answer : Except ε (ControlFlow Unit)) (parser : P) (cursor : BatchCursor batch)
+  | resume (h : H) (parser : P) (cursor : LexerCursor batch) (follows : Follows cursor next)
+  | stop (answer : Except ε (ControlFlow Unit)) (parser : P) (cursor : LexerCursor batch)
       (follows : Follows cursor next) (h : H)
 
 /-- The term mode of the handler. -/
@@ -57,15 +60,15 @@ abbrev TermModeOf (H : Type) {m : Type → Type} [Handler H m] :=
 
 /-- The loop's outcome of a step for the handler. -/
 abbrev OutcomeOf (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
-    (next : BatchCursor batch) :=
+    (next : LexerCursor batch) :=
   Outcome H (CommandStateOf H) (TermContext (Handler.«Sort» H)) (TermModeOf H)
     (List (TermLevelOf H)) (ScriptParser H) (ParseError (Handler.Error H)) next
 
 /-- The result of the loop over a hand-over from `origin`. -/
 abbrev LoopResult (H : Type) {m : Type → Type} [CommandHandler H m] {batch : BatchTag}
-    (origin : BatchCursor batch) :=
+    (origin : LexerCursor batch) :=
   Except (ParseError (Handler.Error H)) (ControlFlow Unit) × ScriptParser H ×
-    { cursor : BatchCursor batch // cursor.Consumed origin } × H
+    { cursor : LexerCursor batch // cursor.Consumed origin } × H
 
 section
 
@@ -82,20 +85,22 @@ def runHandler [Handler H m] {α : Type} (action : ExceptT (Handler.Error H) (St
 def runParser [Handler H m] {α : Type} (action : PM H α) (h : H) : m (Except (Cause H) α × H) :=
   action.run.run h
 
-/-- The token's content (`BatchCursor.content`), made where it is used, so that the compiler
+/-- The token's content (`LexerCursor.content`), made where it is used, so that the compiler
 drops it where nothing uses it. -/
 @[inline]
-def contentOf {batch : BatchTag} (next : BatchCursor batch) (token : Token batch) : ByteSlice :=
-  (Token.Internal.contentBytes next token).toByteSlice (Token.Internal.contentStart next token)
-    (Token.Internal.contentStop next token)
+def contentOf {batch : BatchTag} (next : LexerCursor batch) (token : LexerToken batch) :
+    ByteSlice :=
+  (Lexer.Cursor.Internal.contentBytes next token).toByteSlice
+    (Lexer.Cursor.Internal.contentStart next token) (Lexer.Cursor.Internal.contentStop next token)
 
 /-- The reserved word that the token's content spells in the version, if any, read from the
 content's bytes without making the content. -/
 @[inline]
-def reservedAt? {batch : BatchTag} (version : Version) (next : BatchCursor batch)
-    (token : Token batch) : Option Token.Reserved :=
-  Reserved.ofBounds? (Token.Internal.contentBytes next token)
-    (Token.Internal.contentStart next token) (Token.Internal.contentStop next token) version
+def reservedAt? {batch : BatchTag} (version : Version) (next : LexerCursor batch)
+    (token : LexerToken batch) : Option Token.Reserved :=
+  Reserved.ofBounds? (Lexer.Cursor.Internal.contentBytes next token)
+    (Lexer.Cursor.Internal.contentStart next token) (Lexer.Cursor.Internal.contentStop next token)
+    version
 
 /-- The constant of a token of a constant's category. -/
 @[inline]
@@ -111,7 +116,7 @@ variable [CommandHandler H m]
 
 /-- A failure at the token. -/
 @[inline]
-def fail {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch) (h : H)
+def fail {batch : BatchTag} (posture : VersionPosture) (next : LexerCursor batch) (h : H)
     (cause : Cause H) {β : Type} (k : OutcomeOf H next → m β) : m β :=
   k <| .stop (.error (ParseError.Internal.new cause)) (ScriptParser.new posture) next (.refl _) h
 
@@ -119,7 +124,7 @@ def fail {batch : BatchTag} (posture : VersionPosture) (next : BatchCursor batch
 it (`Parser.Internal.takeOne`). -/
 @[inline]
 def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
-    (command : CommandStateOf H) (token : Token batch) (next : BatchCursor batch) {β : Type}
+    (command : CommandStateOf H) (token : LexerToken batch) (next : LexerCursor batch) {β : Type}
     (k : OutcomeOf H next → m β) : m β := do
   let parser : ScriptParser H := scriptParser posture command declarations
   let fresh : ScriptParser H := ScriptParser.new posture
@@ -137,14 +142,14 @@ def portStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations
       k <| .stop (.error (ParseError.Internal.new (.version .unsupported))) fresh next
         (.refl _) h
     | .ok switched =>
-      let follows := BatchCursor.setVersion_follows switch
+      let follows := LexerCursor.setVersion_follows switch
       match ← runParser resume h with
       | (.error e, h) => k <| .stop (.error (ParseError.Internal.new e)) fresh switched follows h
       | (.ok (.more p), h) => k <| .resume h p switched follows
       | (.ok (.done r), h) => k <| .stop (.ok (.break r)) fresh switched follows h
   | (.ok (.discardRest resume), h) =>
     let discarded := next.discardRest
-    let follows := BatchCursor.discardRest_follows next
+    let follows := LexerCursor.discardRest_follows next
     match ← runParser resume h with
     | (.error e, h) => k <| .stop (.error (ParseError.Internal.new e)) fresh discarded follows h
     | (.ok (.more p), h) => k <| .resume h p discarded follows

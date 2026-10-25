@@ -13,9 +13,9 @@ each as part of a larger construct.
 
 namespace BSmtLib.Parser.Category.Token
 
-open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Plain (NumeralBuf Numeral KeywordBuf Keyword StringContentBuf StringContent SymbolBuf
-  Symbol)
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib.Lexicon.Value (NumeralBuf Numeral KeywordBuf Keyword StringContentBuf StringContent
+  SymbolBuf Symbol)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 namespace Internal
 
@@ -84,21 +84,27 @@ its kind, and needs no state. -/
 
 /-- The parser of a symbol (`SmtSymbolParser`). -/
 structure SymbolParser where
+  private mk ::
 
 /-- The parser of a `(` (`SmtOpenParenParser`). -/
 structure OpenParenParser where
+  private mk ::
 
 /-- The parser of a `)` (`SmtCloseParenParser`). -/
 structure CloseParenParser where
+  private mk ::
 
 /-- The parser of a numeral (`SmtNumeralParser`). -/
 structure NumeralParser where
+  private mk ::
 
 /-- The parser of a keyword (`SmtKeywordParser`). -/
 structure KeywordParser where
+  private mk ::
 
 /-- The parser of a string literal (`SmtStringParser`). -/
 structure StringParser where
+  private mk ::
 
 /-- The symbol parser. -/
 def SymbolParser.new : SymbolParser := {}

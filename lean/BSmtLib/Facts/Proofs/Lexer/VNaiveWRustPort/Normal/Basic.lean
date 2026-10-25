@@ -50,7 +50,7 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 theorem push_append' (a b : ByteArray) (c : UInt8) : (a ++ b).push c = a ++ b.push c := by
   apply ByteArray.ext
@@ -73,25 +73,25 @@ theorem advance_comment_end_ws (start : Span.Location) (content : ByteArray)
   simp only [isCommentRun, Bool.and_eq_false_iff, bne_eq_false_iff_eq] at hc
   rcases hc with h | h <;> subst h <;> rfl
 
-theorem byteStep_token_with {v : Token.Version} {ws : Bool} {q : Pending} {location : Span.Location}
+theorem byteStep_token_with {v : Version} {ws : Bool} {q : Pending} {location : Span.Location}
     {c : UInt8} {l : Lexeme} (h : advance ws q location c = .tokenWith l) :
     byteStepW v ws (.token q) location c = some (.idle, [l]) := by
   simp [byteStepW, h]
 
 theorem answering_concrete : Token.Consume.isConcrete (H := Answering C) = C.concrete := rfl
 
-theorem start_parenClose (v : Token.Version) (ws : Bool) (location : Span.Location) :
+theorem start_parenClose (v : Version) (ws : Bool) (location : Span.Location) :
     start v ws location 41 =
       .token ⟨.parenClose, ByteArray.empty.push 41, location, location.afterByte 41⟩ := (rfl)
 
-theorem start_parenOpen (v : Token.Version) (ws : Bool) (location : Span.Location) :
+theorem start_parenOpen (v : Version) (ws : Bool) (location : Span.Location) :
     start v ws location 40 =
       .token ⟨.parenOpen, ByteArray.empty.push 40, location, location.afterByte 40⟩ := (rfl)
 
 /-- The rest of a step, from a later state whose outcome is that of the earlier one. -/
-theorem wp_recurse {α : Type} {x : WP.M C floor low α} {f : α → Nat} {v : Token.Version}
+theorem wp_recurse {α : Type} {x : WP.M C floor low α} {f : α → Nat} {v : Version}
     {input : ByteSlice} {st st1 : St} {location location1 : Span.Location} {start start1 : Nat}
-    {ver ver1 : Token.Version} {coll coll1 : List Handed} {held held1 : List Lexeme}
+    {ver ver1 : Version} {coll coll1 : List Handed} {held held1 : List Lexeme}
     {s : WP.BS floor low}
     (h : WP x s coll1
       (fun r s' coll' =>
@@ -136,7 +136,7 @@ theorem wp_store {β : Type} {locals : FastState} {s : WP.BS floor low} {coll : 
 /-- What the loop of the normal state keeps, from the index `index`: if the lexer state is in
 the normal state at `location`, with the loop's copies of its offset, index of the offset and
 line, and the loop holds a batch of lexemes, then the loop keeps the correspondence. -/
-def NormalSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv : Token.Version)
+def NormalSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (index : Nat) : Prop :=
   ∀ (batch : Token.Internal.TokenBatch) (locals : FastState) (hindex : base ≤ index)

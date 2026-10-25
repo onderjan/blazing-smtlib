@@ -93,8 +93,8 @@ theorem step_fit (l : Lexer.lexOps.Lexer consumer) (x : X1BatchInCore.lexOps.Lex
       ((Lexer.lexOps.lexSliceStep l slice).run t).2 =
         ((X1BatchInCore.lexOps.lexSliceStep x slice).run t).2 := by
   have hc := run_lexSliceStep (m := AnswerM) (R := consumer.Result) (E := Option consumer.Error)
-    (Lexer.Recovery.LexRecovery.abandon FailFast)
-    (Lexer.Recovery.LexRecovery.recover FailFast) l
+    (Lexer.Recovery.LexerRecovery.abandon FailFast)
+    (Lexer.Recovery.LexerRecovery.recover FailFast) l
     { x with held := BSmtLib.Lexer.Internal.held l } (LexerRel.of h rfl) slice hs
   obtain ⟨⟨e1, e2⟩, e3⟩ := mcouple_answerM hc t
   simp only [X1BatchInCore.lexOps, Lexer.lexOps]
@@ -106,15 +106,15 @@ goes on from the next chunk, with the result held from it, if the call continues
 theorem run_lexChunks_lt (l : Lexer.lexOps.Lexer consumer) (s : BSmtLibSpec.Regex.Chars) (p : Nat)
     (hp : p < s.length) (acc : Option (Span.Located consumer.Result)) :
     BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
-        (Lexer.Recovery.LexRecovery.abandon FailFast)
-        (Lexer.Recovery.LexRecovery.recover FailFast) s.toByteArray.toByteSlice p
+        (Lexer.Recovery.LexerRecovery.abandon FailFast)
+        (Lexer.Recovery.LexerRecovery.recover FailFast) s.toByteArray.toByteSlice p
             acc) =
       (Lexer.lexOps.lexSliceStep l (Chunks.chunkAt s p).toByteArray.toByteSlice >>= fun q =>
         match q.1 with
         | .ok ch => BSmtLib.Lexer.Internal.run q.2
-            (BSmtLib.Lexer.Internal.lexChunks (Lexer.Recovery.LexRecovery.abandon
+            (BSmtLib.Lexer.Internal.lexChunks (Lexer.Recovery.LexerRecovery.abandon
                 FailFast)
-            (Lexer.Recovery.LexRecovery.recover FailFast) s.toByteArray.toByteSlice
+            (Lexer.Recovery.LexerRecovery.recover FailFast) s.toByteArray.toByteSlice
             (p + BSmtLib.Lexer.Internal.CHUNK_SIZE) (ch.or acc))
         | .error err => pure (.error err, q.2)) := by
   have hp' : p < s.toByteArray.toByteSlice.size := by
@@ -122,12 +122,12 @@ theorem run_lexChunks_lt (l : Lexer.lexOps.Lexer consumer) (s : BSmtLibSpec.Rege
   rw [BSmtLib.Lexer.Internal.lexChunks, dite_eq_left_of_eq_true (eq_true hp'), zrun_bind]
   have hfit : ∀ h, BSmtLib.Lexer.Internal.lexSliceFitting (H := Answering consumer) (m := AnswerM)
       (R := consumer.Result) (E := Option consumer.Error)
-      (Lexer.Recovery.LexRecovery.abandon FailFast) (Lexer.Recovery.LexRecovery.recover FailFast)
+      (Lexer.Recovery.LexerRecovery.abandon FailFast) (Lexer.Recovery.LexerRecovery.recover FailFast)
       (s.toByteArray.toByteSlice.byteArray.extract (s.toByteArray.toByteSlice.start + p)
         (min (s.toByteArray.toByteSlice.start + p + BSmtLib.Lexer.Internal.CHUNK_SIZE)
           s.toByteArray.toByteSlice.stop)).toByteSlice h =
-      BSmtLib.Lexer.Internal.lexSliceStep (Lexer.Recovery.LexRecovery.abandon FailFast)
-          (Lexer.Recovery.LexRecovery.recover FailFast)
+      BSmtLib.Lexer.Internal.lexSliceStep (Lexer.Recovery.LexerRecovery.abandon FailFast)
+          (Lexer.Recovery.LexerRecovery.recover FailFast)
         (Chunks.chunkAt s p).toByteArray.toByteSlice := by
     rw [Chunks.chunk_eq s p]
     intro h
@@ -152,8 +152,8 @@ theorem runInput_cons (ops : LexOps) (lexer : ops.Lexer consumer) (ended : Bool)
 theorem run_lexChunks_ge (l : Lexer.lexOps.Lexer consumer) (s : BSmtLibSpec.Regex.Chars) (p : Nat)
     (hp : ¬ p < s.length) (acc : Option (Span.Located consumer.Result)) :
     BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
-        (Lexer.Recovery.LexRecovery.abandon FailFast)
-        (Lexer.Recovery.LexRecovery.recover FailFast) s.toByteArray.toByteSlice p
+        (Lexer.Recovery.LexerRecovery.abandon FailFast)
+        (Lexer.Recovery.LexerRecovery.recover FailFast) s.toByteArray.toByteSlice p
             acc) =
       pure (.ok acc, l) := by
   have hp' : ¬ p < s.toByteArray.toByteSlice.size := by
@@ -173,8 +173,8 @@ theorem chunks_rel (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.
       LooseRel l x → x.held = acc.or (BSmtLib.Lexer.Internal.held l) →
       ∀ r (l' : Lexer.lexOps.Lexer consumer) t',
         (BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
-            (Lexer.Recovery.LexRecovery.abandon FailFast)
-          (Lexer.Recovery.LexRecovery.recover FailFast) s.toByteArray.toByteSlice p
+            (Lexer.Recovery.LexerRecovery.abandon FailFast)
+          (Lexer.Recovery.LexerRecovery.recover FailFast) s.toByteArray.toByteSlice p
               acc)).run t =
           ((r, l'), t') →
         ∃ x' : X1BatchInCore.lexOps.Lexer consumer, LooseRel l' x' ∧
@@ -292,8 +292,8 @@ theorem slice_cut (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.C
     have hs' : ¬ s.toByteArray.toByteSlice.stop < USize.size := by
       rw [Chunks.stop_toByteSlice, List.size_toByteArray]; exact hs
     have hz' : (BSmtLib.Lexer.Internal.run l (BSmtLib.Lexer.Internal.lexChunks
-        (Lexer.Recovery.LexRecovery.abandon FailFast)
-        (Lexer.Recovery.LexRecovery.recover FailFast) s.toByteArray.toByteSlice 0
+        (Lexer.Recovery.LexerRecovery.abandon FailFast)
+        (Lexer.Recovery.LexerRecovery.recover FailFast) s.toByteArray.toByteSlice 0
             none)).run t =
         ((r, l'), t') := by
       rw [← hz]
@@ -328,8 +328,8 @@ theorem runInput_cut (ended : Bool) : ∀ (slices : List BSmtLibSpec.Regex.Chars
     | true =>
       rw [runInput_nil_true, runInput_nil_true]
       have hc := run_lexEofStep (m := AnswerM) (R := consumer.Result)
-        (E := Option consumer.Error) (Lexer.Recovery.LexRecovery.abandon FailFast)
-        (Lexer.Recovery.LexRecovery.recover FailFast) l x h
+        (E := Option consumer.Error) (Lexer.Recovery.LexerRecovery.abandon FailFast)
+        (Lexer.Recovery.LexerRecovery.recover FailFast) l x h
       obtain ⟨⟨e1, e2⟩, e3⟩ := mcouple_answerM hc t
       change ((Lexer.lexOps.lexEofStep l).run t).1.1 =
         ((X1BatchInCore.lexOps.lexEofStep x).run t).1.1 at e1

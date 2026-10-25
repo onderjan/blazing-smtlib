@@ -10,6 +10,8 @@ import all BSmtLib.Lexer.Internal.WRustPort
 # The finishing of a stored token by the library's lexer and `X1BatchInCore`
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Finish
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -19,10 +21,10 @@ open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.HandOver
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (start : Nat) (b : USize)
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem locationFrom_sim (base position : USize) (hb : start ≤ base.toNat)
     (hp : base.toNat ≤ position.toNat) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id

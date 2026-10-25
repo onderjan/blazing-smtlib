@@ -27,14 +27,14 @@ open BSmtLibSpec.Facts.Proofs.Lexicon.Unique
 
 /-- `Reaches version st location bytes st'`: the bytes take the run from `st` at `location` to
 `st'`, finishing no lexeme. -/
-def Reaches (version : Token.Version) (st : St) (location : Span.Location) (bytes : List UInt8)
+def Reaches (version : Version) (st : St) (location : Span.Location) (bytes : List UInt8)
     (st' : St) : Prop :=
   feedBytes version st location bytes = some (st', advanceLoc location bytes, [])
 
-theorem reaches_nil {version : Token.Version} {st : St} {location : Span.Location} :
+theorem reaches_nil {version : Version} {st : St} {location : Span.Location} :
     Reaches version st location [] st := rfl
 
-theorem reaches_cons {version : Token.Version} {st st₁ st' : St} {location : Span.Location}
+theorem reaches_cons {version : Version} {st st₁ st' : St} {location : Span.Location}
     {c : UInt8}
     {cs : List UInt8} (h : byteStep version st location c = some (st₁, []))
     (h' : Reaches version st₁ (location.afterByte c) cs st') :
@@ -43,7 +43,7 @@ theorem reaches_cons {version : Token.Version} {st st₁ st' : St} {location : S
   simp only [feedBytes, h, h', Option.map_some, List.nil_append]
   rfl
 
-theorem reaches_append {version : Token.Version} {st st₁ st' : St} {location : Span.Location}
+theorem reaches_append {version : Version} {st st₁ st' : St} {location : Span.Location}
     {a b : List UInt8} (h : Reaches version st location a st₁)
     (h' : Reaches version st₁ (advanceLoc location a) b st') :
     Reaches version st location (a ++ b) st' := by
@@ -51,13 +51,13 @@ theorem reaches_append {version : Token.Version} {st st₁ st' : St} {location :
   rw [feedBytes_append, h]
   simp [h', advanceLoc_append]
 
-theorem reaches_pending {version : Token.Version} {p p' : Pending} {location : Span.Location}
+theorem reaches_pending {version : Version} {p p' : Pending} {location : Span.Location}
     {c : UInt8}
     (h : advance false p location c = .pending p') :
     byteStep version (.token p) location c = some (.token p', []) := by
   simp [byteStep, h]
 
-theorem runFrom_reaches {version : Token.Version} {st st' : St} {location : Span.Location}
+theorem runFrom_reaches {version : Version} {st st' : St} {location : Span.Location}
     {a b : List UInt8} (h : Reaches version st location a st') :
     runFrom version st location (a ++ b) = runFrom version st' (advanceLoc location a) b := by
   rw [runFrom_append, h]
@@ -65,7 +65,7 @@ theorem runFrom_reaches {version : Token.Version} {st st' : St} {location : Span
 
 /-- Bytes that each go on with the token in progress, keeping the invariant `I` of it and of
 the bytes so far. -/
-theorem reaches_segment {version : Token.Version} {I : Pending → Chars → Prop} (xs : Chars)
+theorem reaches_segment {version : Version} {I : Pending → Chars → Prop} (xs : Chars)
     (hstep : ∀ q pre location x, I q pre → x ∈ xs →
       ∃ q', advance false q location x = .pending q' ∧ I q' (pre ++ [x])) :
     ∀ p pre location, I p pre →
@@ -81,19 +81,19 @@ theorem reaches_segment {version : Token.Version} {I : Pending → Chars → Pro
 
 /-! ## Whitespace -/
 
-theorem start_whitespace {version : Token.Version} {location : Span.Location} {c : UInt8}
+theorem start_whitespace {version : Version} {location : Span.Location} {c : UInt8}
     (h : whiteSpaceChar [c]) : start version false location c = .idle := by
   have hw := (whitespace_iff c).mpr h
   simp [start, hw]
 
-theorem start_comment (version : Token.Version) (location : Span.Location) :
+theorem start_comment (version : Version) (location : Span.Location) :
     start version false location 59 =
       .pending { mode := .comment, start := location, content := .empty } := by
   rfl
 
 
 /-- A comment without its line break leaves the run in a comment. -/
-theorem reaches_openComment {version : Token.Version} {location : Span.Location} {b : Chars}
+theorem reaches_openComment {version : Version} {location : Span.Location} {b : Chars}
     (hb : ∀ x ∈ b, ¬ LineBreak x.toNat) :
     ∃ p, Reaches version .idle location (59 :: b) (.token p) ∧ p.mode = .comment := by
   obtain ⟨p', hr, hm⟩ := reaches_segment (version := version)
@@ -108,7 +108,7 @@ theorem reaches_openComment {version : Token.Version} {location : Span.Location}
   exact ⟨p', reaches_cons (by simp [byteStep, startStep, start_comment]) hr, hm⟩
 
 /-- A comment and the line break that ends it leave the run with no token in progress. -/
-theorem reaches_comment {version : Token.Version} {location : Span.Location} {b : Chars} {l : UInt8}
+theorem reaches_comment {version : Version} {location : Span.Location} {b : Chars} {l : UInt8}
     (hb : ∀ x ∈ b, ¬ LineBreak x.toNat) (hl : LineBreak l.toNat) :
     Reaches version .idle location (59 :: (b ++ [l])) .idle := by
   obtain ⟨p, hr, hm⟩ := reaches_openComment (version := version) (location := location) hb
@@ -116,7 +116,7 @@ theorem reaches_comment {version : Token.Version} {location : Span.Location} {b 
   exact reaches_append (a := 59 :: b) hr
     (reaches_cons (st₁ := .idle) (by simp [byteStep, advance, hm, hl']) reaches_nil)
 
-theorem reaches_wsPart {version : Token.Version} {location : Span.Location} {p : Chars}
+theorem reaches_wsPart {version : Version} {location : Span.Location} {p : Chars}
     (h : alt whiteSpaceChar comment p) : Reaches version .idle location p .idle := by
   rcases h with h | h
   · obtain ⟨c, rfl, -⟩ := whiteSpaceChar_inv h
@@ -125,7 +125,7 @@ theorem reaches_wsPart {version : Token.Version} {location : Span.Location} {p :
     exact reaches_comment hb hl
 
 /-- Whitespace leaves the run with no token in progress. -/
-theorem reaches_whitespace {version : Token.Version} {w : Chars} (h : whitespace w) :
+theorem reaches_whitespace {version : Version} {w : Chars} (h : whitespace w) :
     ∀ location, Reaches version .idle location w .idle := by
   obtain ⟨parts, rfl, hparts⟩ := h
   induction parts with
@@ -136,7 +136,7 @@ theorem reaches_whitespace {version : Token.Version} {w : Chars} (h : whitespace
       (ih (fun q hq => hparts q (List.mem_cons_of_mem _ hq)) _)
 
 /-- Whitespace at the end of the input finishes only the end-of-file lexeme. -/
-theorem runFrom_whitespaceAtEnd {version : Token.Version} {e : Chars} (h : whitespaceAtEnd e)
+theorem runFrom_whitespaceAtEnd {version : Version} {e : Chars} (h : whitespaceAtEnd e)
     (location : Span.Location) :
     runFrom version .idle location e = some [eofLexeme (advanceLoc location e)] := by
   obtain ⟨w, z, rfl, hw, hz⟩ := h
@@ -325,12 +325,12 @@ theorem closes_string {version : BSmtLibSpec.Lexicon.Version} {start : Span.Loca
 
 /-! ## Passing over a token -/
 
-theorem reaches_start {version : Token.Version} {location : Span.Location} {c : UInt8} {p : Pending}
+theorem reaches_start {version : Version} {location : Span.Location} {c : UInt8} {p : Pending}
     (h : start version false location c = .pending p) :
     Reaches version .idle location [c] (.token p) :=
   reaches_cons (by simp [byteStep, startStep, h]) reaches_nil
 
-theorem reaches_one {version : Token.Version} {location : Span.Location} {c : UInt8}
+theorem reaches_one {version : Version} {location : Span.Location} {c : UInt8}
     {p p' : Pending}
     (h : advance false p location c = .pending p') :
     Reaches version (.token p) location [c] (.token p') :=
@@ -338,7 +338,7 @@ theorem reaches_one {version : Token.Version} {location : Span.Location} {c : UI
 
 /-- Parts that each take the token in progress on, keeping the invariant `I` of it and of the
 bytes so far. -/
-theorem reaches_parts {version : Token.Version} {I : Pending → Chars → Prop} {r : Regex}
+theorem reaches_parts {version : Version} {I : Pending → Chars → Prop} {r : Regex}
     (hunit : ∀ q pre location u, I q pre → r u →
       ∃ q', Reaches version (.token q) location u (.token q') ∧ I q' (pre ++ u))
     {b : Chars} (hb : star r b) :
@@ -367,7 +367,7 @@ theorem symChar_facts {d : UInt8} (h : SymChar d.toNat) :
 
 theorem symChar_of_digit {d : UInt8} (h : IsDigit d.toNat) : SymChar d.toNat := Or.inr (Or.inl h)
 
-theorem start_digit {version : Token.Version} {location : Span.Location} {d : UInt8}
+theorem start_digit {version : Version} {location : Span.Location} {d : UInt8}
     (h : IsDigit d.toNat) :
     start version false location d =
       .pending
@@ -377,7 +377,7 @@ theorem start_digit {version : Token.Version} {location : Span.Location} {d : UI
   have hd := (isDigit_iff d).mpr h
   simp [start, h1, h2, h3, h4, h5, h6, h7, h8, hd]
 
-theorem start_symbol {version : Token.Version} {location : Span.Location} {d : UInt8}
+theorem start_symbol {version : Version} {location : Span.Location} {d : UInt8}
     (h : SymChar d.toNat) (hn : ¬ IsDigit d.toNat) :
     start version false location d =
       .pending
@@ -390,7 +390,7 @@ theorem start_symbol {version : Token.Version} {location : Span.Location} {d : U
   simp [start, h1, h2, h3, h4, h5, h6, h7, h8, hd, h9]
 
 /-- A segment of digits in a numeral other than `0`. -/
-theorem reaches_digits_numeral {version : Token.Version} {ds : Chars}
+theorem reaches_digits_numeral {version : Version} {ds : Chars}
     (hds : ∀ x ∈ ds, IsDigit x.toNat) (p : Pending) (pre : Chars) (location : Span.Location)
     (h : p.mode = .numeral false ∧ p.content.data.toList = pre) :
     ∃ p', Reaches version (.token p) location ds (.token p') ∧
@@ -406,7 +406,7 @@ theorem reaches_digits_numeral {version : Token.Version} {ds : Chars}
     p pre location ⟨h, rfl⟩
   exact ⟨p', hr, hI⟩
 
-theorem reaches_numeral {version : Token.Version} {s : Chars} (hs : numeral s)
+theorem reaches_numeral {version : Version} {s : Chars} (hs : numeral s)
     (location : Span.Location) :
     ∃ p, Reaches version .idle location s (.token p) ∧ (∃ zero, p.mode = .numeral zero) ∧
       p.start = location ∧ p.content.data.toList = s := by
@@ -483,7 +483,7 @@ theorem run_decimal (version : BSmtLibSpec.Lexicon.Version) {s : Chars} (hs : de
 
 /-- Bytes each of which extends the token in progress in the mode `m` when it has the
 property `P`. -/
-theorem reaches_extend {version : Token.Version} {m : Mode} {P : UInt8 → Prop} {xs : Chars}
+theorem reaches_extend {version : Version} {m : Mode} {P : UInt8 → Prop} {xs : Chars}
     (hstep : ∀ (q : Pending) location x, q.mode = m → P x →
       advance false q location x = .pending { q with mode := m, content := q.content.push x })
     (hxs : ∀ x ∈ xs, P x) (p : Pending) (location : Span.Location) (hm : p.mode = m) :

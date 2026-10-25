@@ -13,9 +13,9 @@ import all BSmtLib.Parser.Category.Combinator
 /-!
 # The parser of sorted variables in parentheses on a cursor
 
-`ParenSortedVarsParser` is the list parser enclosed in `(` and `)` of the sorted variable
-parser; its lemma is the list parser's (`Category.Multiple`) with the sorted variable parser's
-(`Category.SortedVar`) for each variable.
+The sorted variables in parentheses are parsed by the list parser enclosed in `(` and `)`,
+`ParenMultipleParser`, of the sorted variable parser; its lemma is the list parser's
+(`Category.Multiple`) with the sorted variable parser's (`Category.SortedVar`) for each variable.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.SortedVars
@@ -34,9 +34,9 @@ open BSmtLib.Facts.Proofs.Parser.Lemmas BSmtLib.Facts.Proofs.Parser.Tokens
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- The sorted variables as values of the sorted variable parser. -/
 theorem sortedVars_values (hA : TermAgrees h) : (variables : List Tree.SortedVar) →
@@ -44,12 +44,12 @@ theorem sortedVars_values (hA : TermAgrees h) : (variables : List Tree.SortedVar
     ∀ {tokens : List Parser.Internal.Input},
       Stands tokens (variables.flatMap Tree.SortedVar.tokens) →
     ∃ (values :
-        List (List Parser.Internal.Input × PM H (Plain.SymbolBuf × Traits.Handler.«Sort» H)))
-      (symbols : List Plain.Symbol),
+        List (List Parser.Internal.Input × PM H (Lexicon.Value.SymbolBuf × Handler.«Sort» H)))
+      (symbols : List Lexicon.Value.Symbol),
       ValuesParse version (SortedVarParser.new (H := H)) values ∧ valuesTokens values = tokens ∧
       symbols.map Bridge.symbol = variables.map (·.symbol) ∧
       (values.mapM fun value => value.2) =
-        (fun pairs => (symbols.map Plain.Symbol.intoOwned).zip (pairs.map (·.2))) <$>
+        (fun pairs => (symbols.map Lexicon.Value.Symbol.intoOwned).zip (pairs.map (·.2))) <$>
           adaptRun (Traversal.sortedVars noPoints h variables)
   | [], _, _, hs => by
     have := Stands.eq_nil hs
@@ -86,13 +86,13 @@ theorem parenSortedVars_parses (hA : TermAgrees h) (variables : List Tree.Sorted
     (hvalid : ∀ variable_ ∈ variables, variable_.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input}
     (hs : Stands tokens (paren (variables.flatMap Tree.SortedVar.tokens))) :
-    ∃ symbols : List Plain.Symbol, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
+    ∃ symbols : List Lexicon.Value.Symbol, symbols.map Bridge.symbol = variables.map (·.symbol) ∧
       Finishes version
-        (ParenSortedVarsParser.new (ClosedMultipleParser.new (SortedVarParser.new (H := H))) :
-          ParenSortedVarsParser H) tokens
-        ((fun pairs => ((symbols.map Plain.Symbol.intoOwned).zip (pairs.map (·.2))).toArray) <$>
+        (ParenMultipleParser.new (SortedVarParser.new (H := H)) :
+          ParenMultipleParser H (SortedVarParser H)) tokens
+        ((fun pairs => ((symbols.map Lexicon.Value.Symbol.intoOwned).zip (pairs.map (·.2))).toArray) <$>
           adaptRun (Traversal.sortedVars noPoints h variables))
-        (ParenSortedVarsParser.new (ClosedMultipleParser.new SortedVarParser.new)) := by
+        (ParenMultipleParser.new SortedVarParser.new) := by
   obtain ⟨inner, rfl, hinner⟩ := Stands.split_paren hs
   obtain ⟨values, symbols, hvalues, htokens, hsymbols, hprogram⟩ :=
     sortedVars_values hA variables hvalid hinner

@@ -459,7 +459,7 @@ Every step of the parser, in the version, advances: on every token that stands f
 a lexer of the version can hand over, its results advance with that item, and its failures are no
 rejection of a version declaration.
 -/
-def StepsAdvance {σ ρ : Type} (version : Token.Version)
+def StepsAdvance {σ ρ : Type} (version : Version)
     (step : σ → Parser.Internal.Input → Quiet.RPM (Parser.Internal.Step σ ρ)) (rem : σ → Lang)
         (fin : σ → ρ → Lang) : Prop :=
   ∀ state token item, Bridge.received token = some item →
@@ -508,7 +508,7 @@ end
 
 section
 
-variable {version : Token.Version}
+variable {version : Version}
 
 theorem atLeast_v2_5_of_ge (h : version ≥ .v2_5) :
     versionAtLeast (Bridge.version version) .v2_5 := by

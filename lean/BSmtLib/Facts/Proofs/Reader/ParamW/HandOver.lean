@@ -15,10 +15,12 @@ says (`ConsumersW`), so are the operations of the Rust port that hand over (`Rus
 the lemmas for the helpers of the lexer's state and for these operations.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.ParamW.HandOver
 
 open BSmtLib.Lexer
-open BSmtLib.Token.BatchCursor.Internal (EndsAfter)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (EndsAfter)
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Proofs.Reader.Param.Basic
 open BSmtLib.Lexer.Internal.WRustPort
@@ -30,17 +32,17 @@ variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂
 
 /-- The Rust port's handovers of the same new cursor to the two consumers are related as the
 link says. Both consumers take whitespace and comments, or neither does. -/
-structure ConsumersW [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-    [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+structure ConsumersW [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+    [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂]
     (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂) : Prop where
   concrete : Token.Consume.isConcrete (H := H₁) = Token.Consume.isConcrete (H := H₂)
-  flushNew {floor : Option Nat} {low : Nat} (version : Token.Version)
+  flushNew {floor : Option Nat} {low : Nat} (version : Version)
     (batch : Token.Internal.TokenBatch)
-    (hfloor : ∀ p, floor = some p → EndsAfter (Token.BatchCursor.Internal.new version batch) p) :
+    (hfloor : ∀ p, floor = some p → EndsAfter (Lexer.Cursor.LexerCursor.Internal.new version batch) p) :
     LSim L (· = ·) (Rust.flushCursor (H := H₁) (m := m₁) (R := R₁) (E := E₁) (low := low)
-        (Token.BatchCursor.Internal.new version batch) hfloor)
+        (Lexer.Cursor.LexerCursor.Internal.new version batch) hfloor)
       (Rust.flushCursor (H := H₂) (m := m₂) (R := R₂) (E := E₂)
-        (Token.BatchCursor.Internal.new version batch) hfloor)
+        (Lexer.Cursor.LexerCursor.Internal.new version batch) hfloor)
 
 end
 
@@ -171,8 +173,8 @@ section Consumer
 
 variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂] {R₁ R₂ E₁ E₂ : Type}
   [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, Token.ConsumeFrom H₁
-      (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+      (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂]
   {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂} {floor : Option Nat} {low : Nat}
 
 /-! ## The handover -/
@@ -187,9 +189,9 @@ theorem consumesWhitespaceAndComments_sim (hc : ConsumersW L) :
 
 theorem flushCursor_sim (hc : ConsumersW L) (version batch hfloor) :
     LSim L (· = ·) (Rust.flushCursor (H := H₁) (m := m₁) (R := R₁) (E := E₁) (floor := floor)
-        (low := low) (Token.BatchCursor.Internal.new version batch) hfloor)
+        (low := low) (Lexer.Cursor.LexerCursor.Internal.new version batch) hfloor)
       (Rust.flushCursor (H := H₂) (m := m₂) (R := R₂) (E := E₂)
-        (Token.BatchCursor.Internal.new version batch) hfloor) :=
+        (Lexer.Cursor.LexerCursor.Internal.new version batch) hfloor) :=
   hc.flushNew version batch hfloor
 
 theorem flushBatch_sim (hc : ConsumersW L) :

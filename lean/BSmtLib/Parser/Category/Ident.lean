@@ -12,9 +12,9 @@ The parser of an identifier: a symbol, or an indexed identifier `(` `_` ⟨symbo
 
 namespace BSmtLib.Parser.Category.Ident
 
-open BSmtLib.Plain (Symbol)
-open BSmtLib.Nodes BSmtLib.Traits
-open BSmtLib.Token (Version)
+open BSmtLib.Lexicon.Value (Symbol)
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal

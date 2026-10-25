@@ -12,6 +12,8 @@ Every function of the lexer above the handover, taken apart by `usim`; the recur
 recursion on what they recurse on, as in step 1.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.UnaryNormal
 
 open BSmtLib.Lexer
@@ -20,7 +22,7 @@ open BSmtLib.Facts.Proofs.Reader.Param.Unary
 section
 
 variable {F σ R E : Type} [Token.Consume F R (Option E)]
-  [∀ b, Token.ConsumeFrom F (Token.BatchCursor b) (StateM σ)] [Watched F σ R E]
+  [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] [Watched F σ R E]
   {floor : Option Nat} {low : Nat}
 
 theorem flushBatch_usim : UL (Internal.flushBatch : FM F σ floor low Unit) := by

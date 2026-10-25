@@ -27,17 +27,23 @@ import Parse
 
 open BSmtLib
 open BSmtLib.Token
-open BSmtLib.Lexer.Error (LexError LexicalErrorKind)
+open BSmtLib.Lexer.Error (LexerError LexicalErrorKind)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib.Lexer (Recover)
+open BSmtLib.Span (Location Located)
+
+/- The token constructors that `open BSmtLib.Token` brings in would capture this name. -/
+variable {whitespace : Bool}
 
 /- The loops over a cursor's tokens end as each step consumes a token: they descend by the
 producer's consumption, which is well-founded. -/
-local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
+local instance {batch : BatchTag} : WellFoundedRelation (LexerCursor batch) :=
   ⟨Cursor.Consumed, Cursor.consumed_wf⟩
 
 /-- The response line of a token of the cursor, under the version. -/
-def tokenLine {batch : BatchTag} (cursor : BatchCursor batch) (token : Token batch)
+def tokenLine {batch : BatchTag} (cursor : LexerCursor batch) (token : LexerToken batch)
     (version : Version) : String :=
-  let reserved := match SyntaxToken.fromToken cursor token version with
+  let reserved := match Token.fromLexerToken cursor token version with
     | .reserved (.general _) => "general"
     | .reserved (.commandName _) => "command"
     | _ => "-"
@@ -167,7 +173,7 @@ structure Scripted (whitespace : Bool) where
 reply does not take through an attempt that takes every token and then fails; a Lean cursor
 is a value, so this walks a copy of it instead, which leaves the cursor itself untouched. -/
 /-- The lines of every token remaining in the cursor, and their number. -/
-def describeAll {batch : BatchTag} (cursor : BatchCursor batch) (version : Version) :
+def describeAll {batch : BatchTag} (cursor : LexerCursor batch) (version : Version) :
     String × Nat :=
   match cursor.next? with
   | none => ("", 0)
@@ -179,8 +185,8 @@ decreasing_by assumption
 
 /-- Takes every token remaining in the cursor, which has one, writing a line for each. -/
 def takeAll {batch : BatchTag} (out : IO.Ref String) (version : Version)
-    (cursor : BatchCursor batch)
-    (h : cursor.HasNext) : IO { c : BatchCursor batch // c.Consumed cursor } := do
+    (cursor : LexerCursor batch)
+    (h : cursor.HasNext) : IO { c : LexerCursor batch // c.Consumed cursor } := do
   let (token, ⟨next, consumed⟩) := cursor.next h
   out.modify (· ++ tokenLine cursor token version)
   if h : next.HasNext then
@@ -192,8 +198,8 @@ termination_by cursor
 decreasing_by exact consumed
 
 /-- Takes the next token, which there is, and then up to `more` further ones. -/
-def takeSome {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext) (more : Nat) :
-    { c : BatchCursor batch // c.Consumed cursor } :=
+def takeSome {batch : BatchTag} (cursor : LexerCursor batch) (h : cursor.HasNext) (more : Nat) :
+    { c : LexerCursor batch // c.Consumed cursor } :=
   let (_, ⟨next, consumed⟩) := cursor.next h
   match more with
   | more + 1 =>
@@ -206,11 +212,11 @@ def takeSome {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext
 
 /-- The cursor after a switch of the version, which the lexer's cursor never refuses; a refusal
 would leave it as it is. -/
-def switchVersion {batch : BatchTag} {origin : BatchCursor batch}
-    (next : { c : BatchCursor batch // c.Consumed origin }) (version : Version) :
-    { c : BatchCursor batch // c.Consumed origin } :=
+def switchVersion {batch : BatchTag} {origin : LexerCursor batch}
+    (next : { c : LexerCursor batch // c.Consumed origin }) (version : Version) :
+    { c : LexerCursor batch // c.Consumed origin } :=
   match h : next.1.setVersion version with
-  | .ok switched => ⟨switched, (BatchCursor.setVersion_follows h).trans_consumed next.2⟩
+  | .ok switched => ⟨switched, (LexerCursor.setVersion_follows h).trans_consumed next.2⟩
   | .error _ => next
 
 /--
@@ -219,14 +225,14 @@ a closing parenthesis that closes nothing, and on the end-of-file token inside a
 or on every one if `refuseEnd` is set; the symbol `to-2.0` sets the version.
 -/
 def takeByRules {batch : BatchTag} (refuseEnd : Bool) (version : Version)
-    (cursor : BatchCursor batch) (h : cursor.HasNext) :
+    (cursor : LexerCursor batch) (h : cursor.HasNext) :
     StateT (Scripted whitespace) IO
-      (Except String (ControlFlow Bool) × { c : BatchCursor batch // c.Consumed cursor }) := do
+      (Except String (ControlFlow Bool) × { c : LexerCursor batch // c.Consumed cursor }) := do
   let (token, ⟨next, consumed⟩) := cursor.next h
   let state : Scripted whitespace ← get
   state.out.modify (· ++ tokenLine cursor token version)
   let content := cursor.content token
-  let mut next : { c : BatchCursor batch // c.Consumed cursor } := ⟨next, consumed⟩
+  let mut next : { c : LexerCursor batch // c.Consumed cursor } := ⟨next, consumed⟩
   match cursor.category token with
   | .parenOpen => set ({ state with opened := state.opened + 1 } : Scripted whitespace)
   | .parenClose =>
@@ -258,7 +264,7 @@ instance : Consume (Scripted whitespace) Bool String where
   isConcrete := whitespace
 
 /-- The answer of the consumer, which breaks on the end-of-file token where it would continue. -/
-def breakAtEnd {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNext)
+def breakAtEnd {batch : BatchTag} (cursor : LexerCursor batch) (h : cursor.HasNext)
     (result : Except String (ControlFlow Bool)) : Except String (ControlFlow Bool) :=
   match result with
   | .ok .continue =>
@@ -266,7 +272,7 @@ def breakAtEnd {batch : BatchTag} (cursor : BatchCursor batch) (h : cursor.HasNe
     if cursor.category (cursor.peek h) == .endOfFile then .ok (.break false) else result
   | _ => result
 
-instance {batch : BatchTag} : ConsumeFrom (Scripted whitespace) (BatchCursor batch) IO where
+instance {batch : BatchTag} : ConsumeFrom (Scripted whitespace) (LexerCursor batch) IO where
   consume cursor h := do
     let state : Scripted whitespace ← get
     -- the version the tokens of this hand-over were lexed under
@@ -288,7 +294,7 @@ instance {batch : BatchTag} : ConsumeFrom (Scripted whitespace) (BatchCursor bat
           | .switchAndFinish taken _ => min taken count
         -- every reply takes a token, and the cursor has one
         let ⟨next, consumed⟩ := takeSome cursor h (taken - 1)
-        let switched (version : Version) : { c : BatchCursor _ // c.Consumed cursor } :=
+        let switched (version : Version) : { c : LexerCursor _ // c.Consumed cursor } :=
           switchVersion ⟨next, consumed⟩ version
         pure <| match reply with
           | .takeAll | .leave _ => (.ok .continue, ⟨next, consumed⟩)
@@ -313,7 +319,7 @@ instance : Recover (Scripted whitespace) IO where
 The line of the error. With `recover`, it ends with where the input continues from, if it
 does.
 -/
-def errorLine (err : LexError String) (recover : Bool) : Except String String := do
+def errorLine (err : LexerError String) (recover : Bool) : Except String String := do
   let line ← match err.cause with
     | .lexical kind => pure s!"err {errorKindName kind} {location err.span.start} \
         {location err.span.end}"
@@ -513,18 +519,18 @@ structure Ops (whitespace : Bool) where
   new : Scripted whitespace → Version → Lexer
   newRecovering : Scripted whitespace → Version → Recovering
   lexSlice : Lexer → ByteSlice →
-    IO (Except (LexError String × Scripted whitespace) Lexer)
+    IO (Except (LexerError String × Scripted whitespace) Lexer)
   lexEof : Lexer →
-    IO (Except (LexError String × Scripted whitespace) (Option (Located Bool) × Lexer))
+    IO (Except (LexerError String × Scripted whitespace) (Option (Located Bool) × Lexer))
   currentLocation : Lexer → Location
   version : Lexer → Version
   recoveringLexSlice : Recovering → ByteSlice →
-    IO (Except (LexError String × Recovering) Recovering)
+    IO (Except (LexerError String × Recovering) Recovering)
   recoveringLexEof : Recovering →
-    IO (Except (LexError String × AfterEof) (Option (Located Bool) × Recovering))
+    IO (Except (LexerError String × AfterEof) (Option (Located Bool) × Recovering))
   /-- The lexer after its end of the input failed, or the end of the input to lex again. -/
   afterEof : AfterEof → Sum Recovering
-    (IO (Except (LexError String × Recovering) (Option (Located Bool) × Recovering)))
+    (IO (Except (LexerError String × Recovering) (Option (Located Bool) × Recovering)))
   recoveringLocation : Recovering → Location
   recoveringVersion : Recovering → Version
 

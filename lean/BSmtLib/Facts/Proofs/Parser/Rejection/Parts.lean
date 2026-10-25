@@ -69,8 +69,8 @@ theorem patternRem_nonempty (state : PatternState) : ∃ u, patternRem version s
 
 end
 
-theorem symbolOrWildcard?_some {version : Token.Version} {token : Parser.Internal.Input}
-    {s : Nodes.SimplePattern}
+theorem symbolOrWildcard?_some {version : Version} {token : Parser.Internal.Input}
+    {s : Grammar.Nodes.SimplePattern}
     (h : PatternState.symbolOrWildcard? version token = some s) :
     Bridge.received token = some (.token (Bridge.symbolOrWildcard s).token) ∧
       (Bridge.symbolOrWildcard s).Valid (Bridge.version version) := by
@@ -88,7 +88,7 @@ theorem symbolOrWildcard?_some {version : Token.Version} {token : Parser.Interna
     · cases h
 
 /-- Every step of the pattern parser advances. -/
-theorem patternStep_advances (version : Token.Version) :
+theorem patternStep_advances (version : Version) :
     StepsAdvance version (PatternState.step (H := List Event) version)
       (patternRem (Bridge.version version))
       fun state _ => patternRem (Bridge.version version) state := by
@@ -187,7 +187,7 @@ theorem qualLang_of_opened {a : List Received} (h : qualRem version .opened a) :
 end
 
 /-- Every step of the qualified identifier parser advances. -/
-theorem qualIdentStep_advances (version : Token.Version) :
+theorem qualIdentStep_advances (version : Version) :
     StepsAdvance version (qualIdentStep (H := List Event) version)
       (qualRem (Bridge.version version)) fun state _ => qualRem (Bridge.version version) state := by
   intro state token item hitem hlex
@@ -286,7 +286,7 @@ theorem sortedVarRem_nonempty (state : SortedVarState Nat) :
 end
 
 /-- Every step of the sorted variable parser advances. -/
-theorem sortedVarStep_advances (version : Token.Version) :
+theorem sortedVarStep_advances (version : Version) :
     StepsAdvance version (sortedVarStep (H := List Event) version)
       (sortedVarRem (Bridge.version version))
       fun state _ => sortedVarRem (Bridge.version version) state := by
@@ -473,7 +473,7 @@ def ListAdvances {σ ρ : Type} (inner : σ → Lang) (element : Lang) (init : �
 
 /-- A step of the list parser advances, for lists of at least `lo` and at most `hi` elements,
 whatever its own maximum. -/
-theorem listStep_implies {σ ρ : Type} (version : Token.Version) (init : σ)
+theorem listStep_implies {σ ρ : Type} (version : Version) (init : σ)
     {step : σ → Parser.Internal.Input → Quiet.RPM
         (Parser.Internal.Step σ ρ)} {inner : σ → Lang} {element : Lang}
     (hstep : StepsAdvance version step inner fun state _ => inner state)
@@ -614,7 +614,7 @@ theorem listStep_implies {σ ρ : Type} (version : Token.Version) (init : σ)
 /-- Every step of the list parser advances, for lists of at least `lo` and at most `maximum`
 elements: it finishes, at the `)`, with its elements, and where they are at least `lo`, and not
 too many, the `)` completes the list. -/
-theorem listStep_advances {σ ρ : Type} (version : Token.Version) (init : σ)
+theorem listStep_advances {σ ρ : Type} (version : Version) (init : σ)
     {step : σ → Parser.Internal.Input → Quiet.RPM
         (Parser.Internal.Step σ ρ)} {inner : σ → Lang} {element : Lang}
     (hstep : StepsAdvance version step inner fun state _ => inner state)

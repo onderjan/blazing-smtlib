@@ -6,12 +6,14 @@ import all BSmtLib.Parser
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Parser.Script
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 open BSmtLib.Parser.Script.ScriptParser.Internal renaming mk → scriptParser, posture → postureOf,
   command → commandOf, declarations → declarationsOf
 open BSmtLib.Parser.Script.Internal
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 
 /-!
 # A handler under a posture is told only versions the posture allows
@@ -26,6 +28,8 @@ posture allows, tells its handler only such versions and gives back cursors in s
 (`keeps_allowed`), and a reader under the posture from a version it allows that reads an input to
 the end ends with a handler told only versions the posture allows (`readThrough_allowed`).
 -/
+
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
 
 namespace BSmtLib.Facts.Proofs.Reader.Declared
 
@@ -42,20 +46,20 @@ open BSmtLib.Facts.Proofs.Reader.Looser (Good KeepsI readerWith readThrough_loos
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Proofs.Parser.Cut
 open BSmtLib.Facts.Proofs.Parser.Script BSmtLib.Parser.Adapter BSmtLib.Parser.Command
 open BSmtLib.Parser.Command.Internal
-open BSmtLib.Parser.Script BSmtLib.Parser.Script.Internal.VersionPosture BSmtLib.Traits
+open BSmtLib.Parser.Script BSmtLib.Parser.Script.Internal.VersionPosture BSmtLib.Handler
 
 /-- The handler was told only versions the posture allows. -/
-def ToldAllowed (posture : Token.VersionPosture) (events : List Event) : Prop :=
+def ToldAllowed (posture : Version.VersionPosture) (events : List Event) : Prop :=
   ∀ version, Event.handlerSwitch (Bridge.version version) ∈ events →
     posture.allowed.contains version = true
 
 /-- The record's version is one the posture allows, and the handler was told only such. -/
-def Allowed (posture : Token.VersionPosture) (w : Watch RecAdapter) : Prop :=
+def Allowed (posture : Version.VersionPosture) (w : Watch RecAdapter) : Prop :=
   posture.allowed.contains w.version = true ∧ ToldAllowed posture w.inner.handler
 
 section
 
-variable {posture : Token.VersionPosture}
+variable {posture : Version.VersionPosture}
 
 theorem toldAllowed_append {added events : List Event} (h₁ : ∀ e ∈ added, isSwitch e = false)
     (h₂ : ToldAllowed posture events) : ToldAllowed posture (added ++ events) := by
@@ -65,7 +69,7 @@ theorem toldAllowed_append {added events : List Event} (h₁ : ∀ e ∈ added, 
     simp [isSwitch] at this
   · exact h₂ version h
 
-theorem toldAllowed_cons {version : Token.Version} {events : List Event}
+theorem toldAllowed_cons {version : Version} {events : List Event}
     (h₁ : posture.allowed.contains version = true) (h₂ : ToldAllowed posture events) :
     ToldAllowed posture (.handlerSwitch (Bridge.version version) :: events) := by
   intro v hmem
@@ -92,7 +96,7 @@ theorem arrivalCalls_switchless (parser : ScriptParser (List Event))
       · cases he
     · cases he
 
-theorem allowed_of_check {declarations : Nat} {version : Token.Version}
+theorem allowed_of_check {declarations : Nat} {version : Version}
     (h : (check posture) declarations version = none) :
     posture.allowed.contains version = true := by
   unfold VersionPosture.check at h
@@ -106,10 +110,10 @@ theorem allowed_of_check {declarations : Nat} {version : Token.Version}
     · assumption
     · cases h
 
-theorem setVersion_version {b : Token.BatchTag} {cursor next : Token.BatchCursor b}
-    {version : Token.Version}
+theorem setVersion_version {b : Token.BatchTag} {cursor next : LexerCursor b}
+    {version : Version}
     (h : cursor.setVersion version = .ok next) : next.version = version := by
-  unfold Token.BatchCursor.setVersion at h
+  unfold Lexer.Cursor.LexerCursor.setVersion at h
   injection h with h
   subst h
   rfl
@@ -121,9 +125,9 @@ end
 /-- The adapter, taking a token in a version the posture allows under the posture, tells its
 handler only versions the posture allows and leaves the cursor in such a version, unless it
 fails. -/
-theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (List Event))
-    (hp : postureOf parser = strict) {b : Token.BatchTag} (cursor next : Token.BatchCursor b)
-    (token : Token b)
+theorem takeOne_allowed {strict : Version.VersionPosture} (parser : ScriptParser (List Event))
+    (hp : postureOf parser = strict) {b : Token.BatchTag} (cursor next : LexerCursor b)
+    (token : LexerToken b)
     (consumed : next.Consumed cursor) (hv : strict.allowed.contains next.version = true)
     (handler : List Event) (hh : ToldAllowed strict handler) :
     IsFailure ((Param.Stop.takeOne (H := List Event) (m := Id) parser cursor token next
@@ -201,17 +205,17 @@ theorem takeOne_allowed {strict : Token.VersionPosture} (parser : ScriptParser (
 
 /-! ## A call -/
 
-theorem looser_refl (posture : Token.VersionPosture) : Looser posture posture :=
+theorem looser_refl (posture : Version.VersionPosture) : Looser posture posture :=
   ⟨rfl, fun _ h => h⟩
 
-theorem next_version {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
+theorem next_version {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) :
     (cursor.next h).2.val.version = cursor.version := (rfl)
 
 /-- The adapter's loop over a cursor in a version the posture allows, under the posture, tells its
 handler only versions the posture allows and leaves the cursor in such a version, unless it
 fails. -/
-theorem paLoop_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
-    ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
+theorem paLoop_allowed {strict : Version.VersionPosture} {b : Token.BatchTag} :
+    ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : LexerCursor b)
       (handler : List Event), remaining cursor < n → postureOf parser = strict →
       strict.allowed.contains cursor.version = true → ToldAllowed strict handler →
       (∃ e, ((paLoop parser cursor).run handler).1.1 = .error e) ∨
@@ -250,7 +254,7 @@ theorem paLoop_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
               · exact ha.2
               · cases ha
           exact paLoop_allowed n p₁ later₁ h₁
-            (Nat.lt_of_lt_of_le (Token.BatchCursor.Consumed.remaining_lt taken₁)
+            (Nat.lt_of_lt_of_le (Lexer.Cursor.LexerCursor.Consumed.remaining_lt taken₁)
                 (Nat.le_of_lt_succ hn))
             hp₁ hv₁ hh₁
         · exact .inr ⟨hh₁, hv₁⟩
@@ -264,8 +268,8 @@ attribute [local instance high] Param.Stop.consumeFrom
 /-- A call of the adapter that stops, under the posture, on a cursor in a version the posture
 allows, from a handler told only such versions, tells its handler only such versions and leaves
 the cursor in such a version, unless it fails. -/
-theorem consume_allowedS {strict : Token.VersionPosture} {b : Token.BatchTag}
-    (cursor : Token.BatchCursor b) (h : cursor.HasNext) (A : RecAdapter)
+theorem consume_allowedS {strict : Version.VersionPosture} {b : Token.BatchTag}
+    (cursor : LexerCursor b) (h : cursor.HasNext) (A : RecAdapter)
     (hp : postureOf A.parser = strict) (hv : strict.allowed.contains cursor.version = true)
     (hh : ToldAllowed strict (startLog A cursor.version)) :
     (∃ e, ((Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run A).1.1 =
@@ -299,8 +303,8 @@ open BSmtLib.Facts.Proofs.Parser.HandOver (recording_noHandOver)
 from a handler told only such versions, tells its handler only such versions and leaves the
 cursor in such a version, unless it fails: from the call of the adapter that stops, which does so
 (`consume_allowedS`), and the call from where that stopped. -/
-theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (h : cursor.HasNext) (A : RecAdapter),
+theorem outN_allowed {strict : Version.VersionPosture} {b : Token.BatchTag} :
+    ∀ (n : Nat) (cursor : LexerCursor b) (h : cursor.HasNext) (A : RecAdapter),
       (remaining cursor) < n → postureOf A.parser = strict →
       strict.allowed.contains cursor.version = true →
       ToldAllowed strict (startLog A cursor.version) →
@@ -357,7 +361,7 @@ theorem outN_allowed {strict : Token.VersionPosture} {b : Token.BatchTag} :
 end Continue
 
 /-- Where nothing went wrong, a call of the watched adapter under the posture keeps `Allowed`. -/
-theorem keeps_allowed (strict : Token.VersionPosture) : KeepsI strict (Allowed strict) := by
+theorem keeps_allowed (strict : Version.VersionPosture) : KeepsI strict (Allowed strict) := by
   intro b cursor h w he hg hfin
   rw [consume_run] at hfin ⊢
   simp only [Watch.after, he, Bool.false_or, Bool.or_eq_false_iff, bne_eq_false_iff_eq] at hfin

@@ -41,9 +41,9 @@ open BSmtLibSpec.Facts.Proofs.Parser (Program.callUnit)
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- Two states that step alike after two first tokens that only move them read alike. -/
 theorem _root_.BSmtLib.Facts.Proofs.Parser.Drive.Runs.second {σ ρ α : Type}
@@ -109,7 +109,7 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
     (Payload.setInfo (.value none))
     (fun attributes => do
       let some info := attributes[0]? | Parser.Internal.syntaxError (.expected #[.attribute])
-      Parser.Internal.call (Traits.CommandHandler.commandSetInfo info)
+      Parser.Internal.call (Handler.CommandHandler.commandSetInfo info)
       Parser.Internal.versionError .unsupported)
     (by
       intro state token
@@ -121,7 +121,7 @@ theorem setInfo_payload_refused (value : Option Tree.AttributeValue) (hvalue : N
       | done r =>
         simp only [Parser.Internal.Step.wrap, Declaration.next]
         cases r[0]? <;> rfl) hruns).congr rfl
-    (next' := fun r => Parser.Internal.call (Traits.CommandHandler.commandSetInfo r) >>=
+    (next' := fun r => Parser.Internal.call (Handler.CommandHandler.commandSetInfo r) >>=
       fun _ => Parser.Internal.versionError .unsupported)
     (by funext; simp [Parser.Internal.Step.wrap]))
   -- the keyword, then the token after it: the value's first, or the `)`
@@ -170,15 +170,15 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- The frame of a command whose payload parser fails at its end (see `command_frame`). -/
 theorem command_frame_throw {name : Token.Reserved.CommandNameReserved} {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     {payload : List Parser.Internal.Input} {program : PM H Unit}
-    {e : Parser.ParseErrorCause (Traits.Handler.Error H)}
+    {e : Parser.ParseErrorCause (Handler.Error H)}
     (hruns : PayloadRuns points version (Payload.init name version) payload program
       fun _ => throw e)
     (rest : List Parser.Internal.Input) :
@@ -278,9 +278,9 @@ theorem commands_refused {m : Type → Type} [Monad m] {ε : Type} {values : Val
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
 variable {points : Points (StateT H m)}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /--
 The script parser under the posture before a command, over what a parser takes for commands and
@@ -288,10 +288,10 @@ any rest: the spec's commands under the policy of the posture. Where a declarati
 supported version ends the commands, both fail after it.
 -/
 theorem takes_runs (hA : Agrees h) (producer : Producer (StateT H m))
-    (posture : Token.VersionPosture) {start : BSmtLibSpec.Lexicon.Version}
+    (posture : Version.VersionPosture) {start : BSmtLibSpec.Lexicon.Version}
     {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending) :
-    ∀ (version : Token.Version), Bridge.version version = start →
+    ∀ (version : Version), Bridge.version version = start →
     ∀ (declarations : Nat) {inputs : List Parser.Internal.Input},
     inputs.map Bridge.received = taken.map some → ∀ rest : List Parser.Internal.Input,
     driveParse points producer version

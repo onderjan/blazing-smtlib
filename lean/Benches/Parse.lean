@@ -43,11 +43,12 @@ import BSmtLib.Lexer.Internal.VNaive
 
 open BSmtLib
 open BSmtLib.Token
-open BSmtLib.Lexer.Error (LexError)
+open BSmtLib.Lexer.Error (LexerError)
+open BSmtLib.Lexer.Cursor (LexerCursor)
 
 /- The loops over a cursor's tokens end as each step consumes a token: they descend by the
 producer's consumption, which is well-founded. -/
-local instance {batch : BatchTag} : WellFoundedRelation (BatchCursor batch) :=
+local instance {batch : BatchTag} : WellFoundedRelation (LexerCursor batch) :=
   ⟨Cursor.Consumed, Cursor.consumed_wf⟩
 
 /-- Default timed runs per file; additional warm-up runs are discarded. -/
@@ -105,17 +106,17 @@ the loop, as consuming nothing is no `Consumed`. -/
 Takes every token remaining in the cursor, which has one, running `step` for each.
 -/
 @[specialize step]
-def takeEach [Monad m] {batch : BatchTag} (step : m Unit) (cursor : BatchCursor batch)
+def takeEach [Monad m] {batch : BatchTag} (step : m Unit) (cursor : LexerCursor batch)
     (h : cursor.HasNext) :
-    m { c : BatchCursor batch // c.Consumed cursor } := do
+    m { c : LexerCursor batch // c.Consumed cursor } := do
   let (_, ⟨next, consumed⟩) := cursor.next h
   step
   go next consumed
 where
   /-- Takes every token remaining in `current`, which has consumed from `cursor`. -/
   @[specialize step]
-  go (current : BatchCursor batch) (consumed : current.Consumed cursor) :
-      m { c : BatchCursor batch // c.Consumed cursor } := do
+  go (current : LexerCursor batch) (consumed : current.Consumed cursor) :
+      m { c : LexerCursor batch // c.Consumed cursor } := do
     if h : current.HasNext then
       let (_, ⟨next, taken⟩) := current.next h
       step
@@ -128,7 +129,7 @@ where
 instance : Consume DiscardTokens Unit Empty where
   isConcrete := false
 
-instance {batch : BatchTag} : ConsumeFrom DiscardTokens (BatchCursor batch) Id where
+instance {batch : BatchTag} : ConsumeFrom DiscardTokens (LexerCursor batch) Id where
   consume cursor h := do
     let step := modify fun (handler : DiscardTokens) => { tokens := handler.tokens + 1 }
     return (.ok .continue, ← takeEach step cursor h)
@@ -141,7 +142,8 @@ abbrev CheckingAdapter :=
 /-- Lexes and parses the in-memory file, failing unless it parsed without an error. -/
 def parseFromMemory (data : ByteArray) (path : String) : IO Unit := do
   let adapter : CheckingAdapter :=
-    Parser.Adapter.ParseAdapter.new {} (Parser.Script.ScriptParser.new Token.VersionPosture.default)
+    Parser.Adapter.ParseAdapter.new {}
+      (Parser.Script.ScriptParser.new Version.VersionPosture.default)
   match Id.run ((Lexer.new adapter default).lexAll data.toByteSlice) with
   | .ok _ => pure ()
   | .error (err, _) =>
@@ -160,7 +162,7 @@ def parseFromMemory (data : ByteArray) (path : String) : IO Unit := do
           {(String.fromUTF8? nonstandard.name.asSlice.toByteArray).getD "(not UTF-8)"}"
 
 /-- Fails unless the file lexed without an error. -/
-def checkLexed (result : Except (LexError Empty × β) α) (path : String) : IO Unit :=
+def checkLexed (result : Except (LexerError Empty × β) α) (path : String) : IO Unit :=
   match result with
   | .ok _ => pure ()
   | .error (err, _) =>
@@ -204,7 +206,7 @@ structure CountTokens where
 instance : Consume CountTokens Unit Empty where
   isConcrete := false
 
-instance {batch : BatchTag} : ConsumeFrom CountTokens (BatchCursor batch) IO where
+instance {batch : BatchTag} : ConsumeFrom CountTokens (LexerCursor batch) IO where
   consume cursor h := do
     let tokens := (← get).tokens
     return (.ok .continue, ← takeEach (tokens.modify (· + 1)) cursor h)

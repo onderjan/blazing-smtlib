@@ -35,10 +35,10 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.NumeralRuns BSmtLib.Lexer
 section
 
 variable {floor : Option Nat} {low : Nat}
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- The arm of `lexStep` for the base selection after a `#`. -/
-theorem arm_baseSelection (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_baseSelection (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)
@@ -143,7 +143,7 @@ theorem fractionChecks_run (input : ByteSlice) (content : ByteArray) {j e : Nat}
 set_option maxHeartbeats 400000 in
 /-- The fraction's digits from `j`, in a step that started at `start0`, where the naive lexer
 was at the fraction `q` at `locq`. -/
-theorem fractionFrom_wp (v : Token.Version) (input : ByteSlice) (j : Nat) (hj : j ≤ input.size)
+theorem fractionFrom_wp (v : Version) (input : ByteSlice) (j : Nat) (hj : j ≤ input.size)
     (start0 : Nat) (hstart0 : start0 < input.size) (hj0 : start0 ≤ j) (tokenStart : Span.Location)
     (base : Nat) (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed) (st0 : St) (loc0 : Span.Location) (held : List Lexeme) (q : Pending)
@@ -388,7 +388,7 @@ theorem fractionChecks_dot (c : ByteArray) : fractionChecks (c.push 46) = false 
 
 set_option maxHeartbeats 400000 in
 /-- The arm of `lexStep` for a numeral, which may go on to a fraction. -/
-theorem arm_numeralOrDecimal (v : Token.Version) (input : ByteSlice) (start : Nat)
+theorem arm_numeralOrDecimal (v : Version) (input : ByteSlice) (start : Nat)
     (hstart : start < input.size) (tokenStart : Span.Location) (base : Nat)
     (h : Lexer.Internal.WRustPort.Started floor low tokenStart) (s : WP.BS floor low)
     (coll : List Handed)

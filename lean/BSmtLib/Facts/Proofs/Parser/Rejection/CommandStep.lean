@@ -51,7 +51,7 @@ def commandAddedIn : Token.Reserved.CommandNameReserved → BSmtLibSpec.Lexicon.
 
 set_option maxHeartbeats 2000000 in
 /-- A command name that is a reserved word of the version is a command of the version. -/
-theorem commandName_lexical {version : Token.Version} {name : Token.Reserved.CommandNameReserved}
+theorem commandName_lexical {version : Version} {name : Token.Reserved.CommandNameReserved}
     (h : (Received.token (.reserved (Bridge.reserved (.commandName name)))).OfVersion
       (Bridge.version version)) :
     versionAtLeast (Bridge.version version) (commandAddedIn name) := by
@@ -82,7 +82,7 @@ abbrev nameItem (name : Token.Reserved.CommandNameReserved) : Received :=
 
 section
 
-variable (version : Token.Version) (follows : CmdEnd → Lang)
+variable (version : Version) (follows : CmdEnd → Lang)
 
 /-- A command's tokens, from its `(`, its name and the rest. -/
 macro "command_tokens" : tactic => `(tactic|
@@ -341,7 +341,7 @@ def commandFin (state : CommandState Nat Nat Nat Nat Nat Empty) (outcome : Comma
     commandRem (Bridge.version version) follows state (u ++ w)
 
 /-- The recording handler rejects every non-standard command at its name. -/
-private theorem commandStep_symbol (version : Token.Version) (symbol : Plain.Symbol) :
+private theorem commandStep_symbol (version : Version) (symbol : Lexicon.Value.Symbol) :
     commandStep (H := List Event) version .opened (.symbol symbol) = throw (.handler ()) :=
   rfl
 

@@ -30,9 +30,9 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
-theorem normalSpec_lt (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_lt (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) :
     ∀ (n index : Nat), input.size - index < n →
       Basic.NormalSpec C v hd iv input offset base hframe index := by

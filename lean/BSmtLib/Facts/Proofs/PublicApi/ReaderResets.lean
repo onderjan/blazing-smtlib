@@ -40,7 +40,7 @@ def ReadLex :
     Except (Reader.ReadFailure (List BSmtLibSpec.Parser.Properties.Event)
         (ScriptParser (List BSmtLibSpec.Parser.Properties.Event)))
       (Option (Span.Located Unit) × RecReader × RecReader) →
-    Except (LexError (ParseError Unit)) (Option (Span.Located Unit) × PLexer × PLexer) →
+    Except (LexerError (ParseError Unit)) (Option (Span.Located Unit) × PLexer × PLexer) →
       Prop
   | .error f, .error e => f.error = Reader.ReadError.ofLex e
   | .ok (r, b, a), .ok (r', b', a') =>
@@ -56,8 +56,8 @@ theorem readThrough_lex : ∀ (slices : List ByteList) (l : PLexer),
     simp only [lexFeed, Reader.readEof, BSmtLib.Lexer.lexEof]
     rw [show (Reader.Internal.ofLexer l : RecReader).lexer = l from rfl]
     generalize Internal.run l (Internal.lexEofStep (R := Unit) (E := ParseError Unit)
-      (Recovery.LexRecovery.abandon Recovery.FailFast)
-      (Recovery.LexRecovery.recover Recovery.FailFast)) = Q
+      (Recovery.LexerRecovery.abandon Recovery.FailFast)
+      (Recovery.LexerRecovery.recover Recovery.FailFast)) = Q
     obtain ⟨r, l'⟩ := Q
     cases r with
     | ok flow =>
@@ -72,8 +72,8 @@ theorem readThrough_lex : ∀ (slices : List ByteList) (l : PLexer),
     simp only [lexFeed, Reader.readSlice, BSmtLib.Lexer.lexSlice]
     rw [show (Reader.Internal.ofLexer l : RecReader).lexer = l from rfl]
     generalize Internal.run l (Internal.lexSliceStep (R := Unit) (E := ParseError Unit)
-      (Recovery.LexRecovery.abandon Recovery.FailFast)
-      (Recovery.LexRecovery.recover Recovery.FailFast) slice.toByteArray.toByteSlice) = Q
+      (Recovery.LexerRecovery.abandon Recovery.FailFast)
+      (Recovery.LexerRecovery.recover Recovery.FailFast) slice.toByteArray.toByteSlice) = Q
     obtain ⟨r, l'⟩ := Q
     cases r with
     | ok held =>
@@ -84,7 +84,7 @@ theorem readThrough_lex : ∀ (slices : List ByteList) (l : PLexer),
 
 /-- Two reads that show the same outside the handler's state: the same error, or the same result,
 handler and discarding. -/
-def SameRead {H P E R : Type} [Parse P H Id E R] [Traits.Handler H Id] :
+def SameRead {H P E R : Type} [Parse P H Id E R] [Handler H Id] :
     Except (Reader.ReadFailure H P) (Option (Span.Located R) × Reader H P × Reader H P) →
     Except (Reader.ReadFailure H P) (Option (Span.Located R) × Reader H P × Reader H P) → Prop
   | .error f, .error g => f.error = g.error
@@ -101,7 +101,7 @@ open Canonical Adapter in
 theorem linkRel_canonLexer (l : PLexer) : LinkRel l (canonLexer l) :=
   ⟨rfl, rfl, rfl⟩
 
-theorem toVersion_fromVersion (version : Token.Version) :
+theorem toVersion_fromVersion (version : Version) :
     BSmtLib.Facts.Lexer.Adapters.toVersion (BSmtLib.Facts.Lexer.Adapters.fromVersion version) =
       version := by
   cases version <;> rfl
@@ -112,7 +112,7 @@ theorem parseState_eq (s t : ParseState (List BSmtLibSpec.Parser.Properties.Even
 open Canonical Adapter Chain in
 /-- The script reader over the recording handler, allowing every version, after an input it read
 to the end, and a new script reader over its handler, read the next input alike. -/
-theorem resets_recording (version : Token.Version) (first next : List ByteList)
+theorem resets_recording (version : Version) (first next : List ByteList)
     {result : Option (Span.Located Unit)} {before after : RecReader}
     (h : readThrough (Reader.script ([] : List BSmtLibSpec.Parser.Properties.Event) allVersions
       version) first = .ok (result, before, after)) :
@@ -203,10 +203,10 @@ attribute [-instance] BSmtLib.Facts.Parser.Adapters.Handler.recordingLibraryTerm
 
 /-- `reading_resets` of a library handler with the recording handler's state, outside the
 printer. -/
-def ResetsWith (I : Traits.CommandHandler (List BSmtLibSpec.Parser.Properties.Event) Id) :
+def ResetsWith (I : Handler.CommandHandler (List BSmtLibSpec.Parser.Properties.Event) Id) :
     Prop :=
   letI := I
-  ∀ (version : Token.Version) (first next : List ByteList) (result : Option (Span.Located Unit))
+  ∀ (version : Version) (first next : List ByteList) (result : Option (Span.Located Unit))
     (before after : Reader (List BSmtLibSpec.Parser.Properties.Event)
       (ScriptParser (List BSmtLibSpec.Parser.Properties.Event) (m := Id)) (m := Id)),
     readThrough (Reader.script ([] : List BSmtLibSpec.Parser.Properties.Event) allVersions

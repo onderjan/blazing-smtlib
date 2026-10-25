@@ -154,7 +154,7 @@ theorem script_U_run (version : BSmtLibSpec.Lexicon.Version) (commands : List Tr
 /-- The parser's recording run on what a parser takes, and any rest, the handler told the version
 first: the recording run of the traversal with the library's handler, its errors as the parser's
 causes. -/
-theorem parserRun_takes {version : Token.Version} {commands : List Tree.Command}
+theorem parserRun_takes {version : Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
     (htakes : Takes
         (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}
@@ -181,7 +181,7 @@ theorem parserRun_takes {version : Token.Version} {commands : List Tree.Command}
      rfl)
 
 /-- The parser's recording run on what a parser takes writes what `record` writes. -/
-theorem parserRecord_takes {version : Token.Version} {commands : List Tree.Command}
+theorem parserRecord_takes {version : Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
     (htakes : Takes
         (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}
@@ -197,7 +197,7 @@ theorem parserRecord_takes {version : Token.Version} {commands : List Tree.Comma
 
 /-- On what a parser takes, the parser's recording run finishes before the rest, or fails with
 a cause that is no handler's. -/
-theorem parserResult_takes {version : Token.Version} {commands : List Tree.Command}
+theorem parserResult_takes {version : Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
     (htakes : Takes
         (Bridge.version version) commands taken ending) {inputs : List Parser.Internal.Input}

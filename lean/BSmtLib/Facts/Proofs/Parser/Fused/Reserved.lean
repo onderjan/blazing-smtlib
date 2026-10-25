@@ -22,7 +22,9 @@ namespace BSmtLib.Facts.Proofs.Parser.Fused.Reserved
 
 open BSmtLib.Parser.Internal.Fused.Reserved
 open BSmtLib.Parser.Internal.Fused.Basic (contentOf reservedAt?)
-open BSmtLib.Token (BatchTag BatchCursor Version)
+open BSmtLib.Token (BatchTag)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib (Version)
 
 /-- The bounds of a slice made within its array. -/
 theorem toByteSlice_parts (bytes : ByteArray) {start stop : Nat} (ordered : start ≤ stop)
@@ -212,15 +214,15 @@ theorem ofBounds?_eq (bytes : ByteArray) (start stop : Nat) (version : Version) 
       rw [dite_eq_left (Nat.sub_self _)]
 
 /-- The fused reader's content is the cursor's. -/
-theorem contentOf_eq {batch : BatchTag} (next : BatchCursor batch) (token : Token batch) :
+theorem contentOf_eq {batch : BatchTag} (next : LexerCursor batch) (token : LexerToken batch) :
     contentOf next token = next.content token :=
-  (Token.Internal.content_eq_parts next token).symm
+  (Lexer.Cursor.Internal.content_eq_parts next token).symm
 
 /-- The reserved-word lookup on the content's bytes is the library's on the content. -/
-theorem reservedAt_eq {batch : BatchTag} (version : Version) (next : BatchCursor batch)
-    (token : Token batch) :
+theorem reservedAt_eq {batch : BatchTag} (version : Version) (next : LexerCursor batch)
+    (token : LexerToken batch) :
     reservedAt? version next token = Token.Reserved.fromBytes? (next.content token) version := by
   unfold reservedAt?
-  rw [ofBounds?_eq, Token.Internal.content_eq_parts]
+  rw [ofBounds?_eq, Lexer.Cursor.Internal.content_eq_parts]
 
 end BSmtLib.Facts.Proofs.Parser.Fused.Reserved

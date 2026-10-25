@@ -12,9 +12,9 @@ The parser of a sort, and the parser of one sort that a driver runs (`SortParser
 
 namespace BSmtLib.Parser.Category.«Sort»
 
-open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Ident
+open BSmtLib.Grammar.Nodes BSmtLib.Handler BSmtLib.Parser.Category.Ident
 open BSmtLib.Parser.Category.Ident.Internal
-open BSmtLib.Token (Version)
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal

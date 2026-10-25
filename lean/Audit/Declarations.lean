@@ -49,10 +49,11 @@ def allowedAxioms : List Name := [``propext, ``Classical.choice, ``Quot.sound]
 whose proofs are still to come. Shrink-only. -/
 def sorryAllowed : List Name := []
 
-/-- The definitions that may be `partial`: the reader's loop over a whole input, and two
-functions of the naming check. Shrink-only. -/
+/-- The definitions that may be `partial`: the loops of the reader and the lexer over a whole
+input from a buffered reader, and two functions of the naming check. Shrink-only. -/
 def partialAllowed : List Name := [
-  `BSmtLib.Reader.readAll,
+  `BSmtLib.Reader.readFrom,
+  `BSmtLib.Lexer.lexFrom,
   `BSmtLib.Facts.Naming.belowInstance,
   `BSmtLib.Facts.Naming.longestModule]
 

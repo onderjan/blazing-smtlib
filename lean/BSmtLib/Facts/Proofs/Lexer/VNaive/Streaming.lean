@@ -48,7 +48,7 @@ open BSmtLibSpec.Facts.Proofs.Lexicon.Unique
 
 /-- The kind of reserved word the consumer records for a lexeme of the category with the
 content, under the version. -/
-def lexemeReserved (version : Token.Version) (category : Token.TokenCategory)
+def lexemeReserved (version : Version) (category : Token.TokenCategory)
     (content : ByteArray) :
     Option BSmtLibSpec.Lexer.ReservedKind :=
   match category with
@@ -56,7 +56,7 @@ def lexemeReserved (version : Token.Version) (category : Token.TokenCategory)
   | _ => none
 
 /-- What the consumer records of a lexeme, field by field. -/
-theorem lexemeHanded_eq (version : Token.Version) (l : Lexeme) :
+theorem lexemeHanded_eq (version : Version) (l : Lexeme) :
     lexemeHanded version l = (toTokenType l.category).map fun type =>
       { type, start := toLocation l.start, «end» := toLocation l.end,
         reserved := lexemeReserved version l.category l.content,
@@ -135,7 +135,7 @@ theorem lexemeHanded_token {version : BSmtLibSpec.Lexicon.Version} {input : Char
       simp [hbasic, this, hcmd]
   all_goals simp
 
-theorem lexemeHanded_eof (version : Token.Version) (input : Chars) :
+theorem lexemeHanded_eof (version : Version) (input : Chars) :
     lexemeHanded version (eofLexeme (locAfter input)) = some
         (BSmtLibSpec.Lexer.endOfFile input) := by
   rw [lexemeHanded_eq]
@@ -423,7 +423,7 @@ theorem reached {version : BSmtLibSpec.Lexicon.Version} {start : Chars} {st : St
 
 /-- A run that fails gets through the bytes before the byte it fails at, and has finished the
 lexemes before it. -/
-theorem lexBytes_error {version : Token.Version} (bytes : List UInt8) :
+theorem lexBytes_error {version : Version} (bytes : List UInt8) :
     ∀ {st : St} {location : Span.Location} {ls : List Lexeme},
       lexBytes version st location bytes = .error ls →
       ∃ before c after st' location' ls', bytes = before ++ c :: after ∧
@@ -454,7 +454,7 @@ theorem lexBytes_error {version : Token.Version} (bytes : List UInt8) :
           (List.append_assoc _ _ _).symm⟩
         simp [feedBytes, hb, hf]
 
-theorem lexBytes_of_feedBytes {version : Token.Version} {st st' : St}
+theorem lexBytes_of_feedBytes {version : Version} {st st' : St}
     {location location' : Span.Location}
     {bytes : List UInt8} {ls : List Lexeme}
     (h : feedBytes version st location bytes = some (st', location', ls)) :

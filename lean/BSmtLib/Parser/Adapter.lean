@@ -14,7 +14,7 @@ every input, before anything else, it tells the handler the producer's version; 
 parser parse the producer's tokens, with the handler and the resources the parsers share.
 -/
 
-open BSmtLib.Traits
+open BSmtLib.Handler
 
 namespace BSmtLib.Parser.Adapter
 

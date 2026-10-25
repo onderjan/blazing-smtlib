@@ -4,9 +4,10 @@ public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 import all BSmtLib.Token
+import all BSmtLib.Version
 import all BSmtLib.Lexer
 import all BSmtLib.Lexer.Internal.WRustPort
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -22,11 +23,13 @@ correspond and with lexers that correspond again, and so the adapter makes the s
 -/
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Calls
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Handed
 open BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Instance
+
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.ChainX1
 
@@ -39,42 +42,42 @@ theorem toContent_congr {s s' : ByteSlice} (h : s.toByteArray = s'.toByteArray) 
 
 /-- The kind of reserved word a token is reads only the bytes of its content. -/
 theorem reservedKind_congr (category : Token.TokenCategory) {s s' : ByteSlice}
-    (h : s.toByteArray = s'.toByteArray) (version : Token.Version) :
-    toReservedKind (Token.SyntaxToken.Internal.fromParts category s version) =
-      toReservedKind (Token.SyntaxToken.Internal.fromParts category s' version) := by
+    (h : s.toByteArray = s'.toByteArray) (version : Version) :
+    toReservedKind (Token.Internal.fromParts category s version) =
+      toReservedKind (Token.Internal.fromParts category s' version) := by
   have hr : Token.Reserved.fromBytes? s version = Token.Reserved.fromBytes? s' version := by
     rw [← VNaiveWRustPort.Bytes.fromBytes_toByteArray s,
       ← VNaiveWRustPort.Bytes.fromBytes_toByteArray s', h]
-  cases category <;> simp only [Token.SyntaxToken.Internal.fromParts, hr, toReservedKind] <;>
+  cases category <;> simp only [Token.Internal.fromParts, hr, toReservedKind] <;>
     cases Token.Reserved.fromBytes? s' version <;> rfl
 
 /-- A token below the length of the batches is recorded alike. -/
-theorem toHanded_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
-    {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
+theorem toHanded_eq {c : LexerCursor g} {d : LexerCursor g'} (h : CursorAgree c d)
+    {t : LexerToken g} {t' : LexerToken g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : toHanded c t = toHanded d t'
     := by
-  unfold toHanded Token.BatchCursor.«syntax» Token.SyntaxToken.fromToken
+  unfold toHanded Lexer.Cursor.LexerCursor.«syntax» Token.fromLexerToken
   rw [h.category et ht, h.span et ht, h.version, reservedKind_congr _ (h.content et ht),
     toContent_congr (h.content et ht)]
 
 /-- A piece of layout below the length of the batches is recorded alike. -/
-theorem toLayout_eq {c : Token.BatchCursor g} {d : Token.BatchCursor g'} (h : CursorAgree c d)
-    {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
+theorem toLayout_eq {c : LexerCursor g} {d : LexerCursor g'} (h : CursorAgree c d)
+    {t : LexerToken g} {t' : LexerToken g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) : toLayout c t = toLayout d t'
     := by
   unfold toLayout
   rw [h.category et ht, h.span et ht, toContent_congr (h.content et ht)]
 
 /-- An entry below the length of the batches is taken alike. -/
-theorem entry_eq (consumer : BSmtLibSpec.Lexer.Consumer) {c : Token.BatchCursor g}
-    {d : Token.BatchCursor g'}
-    (h : CursorAgree c d) {t : Token g} {t' : Token g'} (et : tokenIndex t = tokenIndex t')
+theorem entry_eq (consumer : BSmtLibSpec.Lexer.Consumer) {c : LexerCursor g}
+    {d : LexerCursor g'}
+    (h : CursorAgree c d) {t : LexerToken g} {t' : LexerToken g'} (et : tokenIndex t = tokenIndex t')
     (ht : tokenIndex t < (BSmtLib.Lexer.Internal.intoBatch c).len) :
     Answering.entry consumer c t = Answering.entry consumer d t' := by
   unfold Answering.entry
   rw [toHanded_eq h et ht, toLayout_eq h et ht]
 
-theorem CursorAgree.discardRest {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.discardRest {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d) : CursorAgree c.discardRest d.discardRest := by
   have hle := cNext_le_cStop c
   cases c
@@ -84,9 +87,9 @@ theorem CursorAgree.discardRest {c : Token.BatchCursor g} {d : Token.BatchCursor
   subst hf hs hn
   exact ⟨hv, hb, rfl, rfl, rfl, hr, rfl, Nat.le_trans hle hbd⟩
 
-theorem CursorAgree.setVersion {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
-    (h : CursorAgree c d) (version : Token.Version) {c' : Token.BatchCursor g}
-    {d' : Token.BatchCursor g'}
+theorem CursorAgree.setVersion {c : LexerCursor g} {d : LexerCursor g'}
+    (h : CursorAgree c d) (version : Version) {c' : LexerCursor g}
+    {d' : LexerCursor g'}
     (hc : c.setVersion version = .ok c') (hd : d.setVersion version = .ok d') :
     CursorAgree c' d' := by
   have hle := cNext_le_cStop c
@@ -96,7 +99,7 @@ theorem CursorAgree.setVersion {c : Token.BatchCursor g} {d : Token.BatchCursor 
   obtain ⟨hv, hb, hf, hs, hn, hr, hdc, hbd⟩ := h
   simp only [cFirst, cStop, cNext] at hf hs hn hbd hle
   subst hf hs hn
-  simp only [Token.BatchCursor.setVersion, Except.ok.injEq] at hc hd
+  simp only [Lexer.Cursor.LexerCursor.setVersion, Except.ok.injEq] at hc hd
   subst hc hd
   simp only at hv0
   rw [hv0]
@@ -104,7 +107,7 @@ theorem CursorAgree.setVersion {c : Token.BatchCursor g} {d : Token.BatchCursor 
   · exact ⟨rfl, hb, rfl, rfl, rfl, rfl, hdc, Nat.le_trans hle hbd⟩
   · exact ⟨rfl, hb, rfl, rfl, rfl, hr, hdc, hbd⟩
 
-theorem CursorAgree.switched {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.switched {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d)
     (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List BSmtLibSpec.Lexer.Handed) :
     CursorAgree (Answering.switched consumer taken c).val
@@ -117,10 +120,10 @@ theorem CursorAgree.switched {c : Token.BatchCursor g} {d : Token.BatchCursor g'
       split
       · rename_i nd hd
         exact (setVersion h) _ hc hd
-      · rename_i hd; simp [Token.BatchCursor.setVersion] at hd
-    · rename_i hc; simp [Token.BatchCursor.setVersion] at hc
+      · rename_i hd; simp [Lexer.Cursor.LexerCursor.setVersion] at hd
+    · rename_i hc; simp [Lexer.Cursor.LexerCursor.setVersion] at hc
 
-theorem CursorAgree.requests {c : Token.BatchCursor g} {d : Token.BatchCursor g'}
+theorem CursorAgree.requests {c : LexerCursor g} {d : LexerCursor g'}
     (h : CursorAgree c d)
     (consumer : BSmtLibSpec.Lexer.Consumer) (taken : List BSmtLibSpec.Lexer.Handed) :
     CursorAgree (Answering.requests consumer taken c).val
@@ -140,7 +143,7 @@ variable {g g' : Token.BatchTag}
 /-- The adapter's consumer for a consumer of the spec reads the cursors only below the length of
 their batches: on cursors that agree it takes the same tokens and gives cursors that agree. -/
 theorem answering_consume_agree (consumer : BSmtLibSpec.Lexer.Consumer) : ∀ (n : Nat)
-    (c : Token.BatchCursor g) (d : Token.BatchCursor g') (hc : c.HasNext) (hd : d.HasNext),
+    (c : LexerCursor g) (d : LexerCursor g') (hc : c.HasNext) (hd : d.HasNext),
     (remaining c) = n → CursorAgree c d → ∀ taken : List BSmtLibSpec.Lexer.Handed,
     ((Answering.consume consumer c hc).run taken).1.1 =
         ((Answering.consume consumer d hd).run taken).1.1 ∧
@@ -209,8 +212,8 @@ theorem slice_alike (consumer : BSmtLibSpec.Lexer.Consumer) (slice : ByteSlice) 
   have hc := run_lexSliceStep_sim (H := Answering consumer) (m := AnswerM)
     (R := consumer.Result) (E := Option consumer.Error) (recovery := Lexer.Recovery.FailFast)
     (opsSim_rust_x1BatchInCore (answering_consumesAlike consumer))
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice a b h
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice a b h
   obtain ⟨hr, ht⟩ := mcouple_answerM hc taken
   exact ⟨hr.1, hr.2, ht⟩
 
@@ -221,8 +224,8 @@ theorem eof_alike (consumer : BSmtLibSpec.Lexer.Consumer) :
   have hc := run_lexEofStep_sim (H := Answering consumer) (m := AnswerM)
     (R := consumer.Result) (E := Option consumer.Error) (recovery := Lexer.Recovery.FailFast)
     (opsSim_rust_x1BatchInCore (answering_consumesAlike consumer))
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) a b h
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) a b h
   obtain ⟨hr, ht⟩ := mcouple_answerM hc taken
   exact ⟨hr.1, hr.2, ht⟩
 

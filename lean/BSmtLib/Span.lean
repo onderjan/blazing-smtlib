@@ -38,10 +38,10 @@ structure Location where
 The line and column cannot be at the offset: every line before
 and every column on the line take at least one byte.
 -/
-structure InvalidLocation where
+structure InvalidLocationError where
   deriving BEq, Hashable, Repr, Inhabited
 
-@[no_expose] instance : ToString InvalidLocation := ⟨fun _ => "invalid location"⟩
+@[no_expose] instance : ToString InvalidLocationError := ⟨fun _ => "invalid location"⟩
 
 namespace Location
 
@@ -54,7 +54,7 @@ def Internal.new (offset line column : Nat) : Location :=
 The location at the offset, the line and the column; an error if the line and the column cannot
 be at the offset, as every line before and every column on the line take at least one byte.
 -/
-def new (offset line column : Nat) : Except InvalidLocation Location :=
+def new (offset line column : Nat) : Except InvalidLocationError Location :=
   -- each line before ends with a line feed, each column is a byte
   if line + column ≤ offset then .ok (Internal.new offset line column) else .error {}
 
@@ -191,10 +191,10 @@ structure _root_.BSmtLib.Span where
   deriving BEq, Hashable, Inhabited, Ord
 
 /-- The end location is not at or after the start location. -/
-structure InvalidSpan where
+structure InvalidSpanError where
   deriving BEq, Hashable, Repr, Inhabited
 
-@[no_expose] instance : ToString InvalidSpan := ⟨fun _ => "invalid span"⟩
+@[no_expose] instance : ToString InvalidSpanError := ⟨fun _ => "invalid span"⟩
 
 @[inline]
 def start (self : Span) : Location :=
@@ -219,7 +219,7 @@ private def isAllowed (start «end» : Location) : Bool :=
 
 /-- The span from the start to the end; an error if the end is not at or after the start, by the
 offsets and by the lines and columns. -/
-def new (start «end» : Location) : Except InvalidSpan Span :=
+def new (start «end» : Location) : Except InvalidSpanError Span :=
   if isAllowed start «end» then .ok (Internal.newUnchecked start «end») else .error {}
 
 /--

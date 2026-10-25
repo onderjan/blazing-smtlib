@@ -26,22 +26,22 @@ open BSmtLib.Facts.Proofs.Lexer.Consumers.VSteps BSmtLib.Facts.Proofs.Lexer.VNai
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Model BSmtLib.Lexer.Error
 open BSmtLib.Lexer.Internal.VNaive
 
-theorem start_legacy {v1 v2 : Token.Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
+theorem start_legacy {v1 v2 : Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
     start v1 = start v2 := by
   funext ws loc c
   simp only [start, hv]
 
-theorem startStepW_legacy {v1 v2 : Token.Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
+theorem startStepW_legacy {v1 v2 : Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
     startStepW v1 = startStepW v2 := by
   funext ws loc c
   simp only [startStepW, start_legacy hv]
 
-theorem byteStepW_legacy {v1 v2 : Token.Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
+theorem byteStepW_legacy {v1 v2 : Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
     byteStepW v1 = byteStepW v2 := by
   funext ws st loc c
   cases st <;> simp only [byteStepW, startStepW_legacy hv]
 
-theorem lexBytesW_legacy {v1 v2 : Token.Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
+theorem lexBytesW_legacy {v1 v2 : Version} (hv : (v1 == .v2_0) = (v2 == .v2_0)) :
     lexBytesW v1 = lexBytesW v2 := by
   funext ws st loc bs
   induction bs generalizing st loc with
@@ -52,7 +52,7 @@ variable (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- The lexer state `c'` is the naive lexer's state at the end of a run that went on: the
 activity, the version, holding and the version it was created with. -/
-structure VEnd' (core c' : Core) (act : Activity) (ver : Token.Version) (hold : Bool) : Prop where
+structure VEnd' (core c' : Core) (act : Activity) (ver : Version) (hold : Bool) : Prop where
   activity : c'.activity = act
   version : c'.version = ver
   holding : c'.holding = hold
@@ -62,7 +62,7 @@ structure VEnd' (core c' : Core) (act : Activity) (ver : Token.Version) (hold : 
 again after the lexeme `l` in the state `c''`, holding `held'`, with the tokens `taken'`: the
 bytes after `l` are those after the first `k`. -/
 def Restarts (core : Core) (held : Option (Span.Located C.Result)) (bs : List UInt8)
-    (taken : List Handed) (l : Lexeme) (ver : Token.Version) (hold : Bool)
+    (taken : List Handed) (l : Lexeme) (ver : Version) (hold : Bool)
     (held' : Option (Span.Located C.Result)) (taken' : List Handed) : Prop :=
   ∃ k c'', l.end = advanceLoc core.location (bs.take k) ∧ c''.activity = .idle ∧
     c''.location = l.end ∧ c''.version = ver ∧ c''.holding = hold ∧

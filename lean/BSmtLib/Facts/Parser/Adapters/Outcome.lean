@@ -93,7 +93,7 @@ any tokens, all read in the version, the parser makes the effects of the handler
 finishes with its result right after the tokens, as the parser `back`; it fails where the program
 fails.
 -/
-def Finishes (version : Token.Version) (parser : P) (tokens : List Parser.Internal.Input)
+def Finishes (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) R) (back : P) : Prop :=
   HandlerOnly program ∧
   ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor next : Z)
@@ -108,7 +108,7 @@ read in the version, the parser makes the effects of the handler-only program an
 tokens, as the parser that `after` gives with the program's result; it fails where the program
 fails.
 -/
-def Waits {α : Type} (version : Token.Version) (parser : P) (tokens : List Parser.Internal.Input)
+def Waits {α : Type} (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) α) (after : α → P) : Prop :=
   HandlerOnly program ∧
   ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor last : Z),
@@ -122,7 +122,7 @@ any tokens, all read in the version, the parser makes the effects of the handler
 and then fails with a syntax error of the kind, having taken exactly the tokens; it fails where
 the program fails.
 -/
-def Rejects (version : Token.Version) (parser : P) (tokens : List Parser.Internal.Input)
+def Rejects (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) Unit) (kind : SyntaxErrorKind) : Prop :=
   HandlerOnly program ∧
   ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor next : Z)

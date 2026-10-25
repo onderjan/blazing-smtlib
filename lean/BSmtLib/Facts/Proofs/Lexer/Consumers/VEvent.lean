@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Ready
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Span
 import all BSmtLib.Lexer.Error
 
@@ -37,7 +39,7 @@ variable (consumer : BSmtLibSpec.Lexer.Consumer) (sv : BSmtLibSpec.Lexicon.Versi
 (if `holding`), after the entries `taken`: before the end of the input, it stands discarding;
 at the end, it returns the held result, or else hands the end-of-file token over, located at
 `s`, at which a consumer that fails leaves the version it switches to. -/
-def discardSession (version : Token.Version) (s : Span.Location) (holding : Bool)
+def discardSession (version : Version) (s : Span.Location) (holding : Bool)
     (held : Option (Span.Located consumer.Result)) (taken : List Handed) :
     BSmtLibSpec.Lexer.Session consumer.Result consumer.Error :=
   if ended then
@@ -64,7 +66,7 @@ def discardSession (version : Token.Version) (s : Span.Location) (holding : Bool
       | none => .running, fromVersion version, some (toLocation s)⟩
 
 /-- A lexer that discards from its location has the session `discardSession`. -/
-theorem discard_session {s : Span.Location} {version : Token.Version} {holding : Bool} (D : Core)
+theorem discard_session {s : Span.Location} {version : Version} {holding : Bool} (D : Core)
     (bytes : List UInt8) (held : Option (Span.Located consumer.Result)) (taken : List Handed)
     (ha : D.activity = .discarding s) (hv : D.version = version)
     (hl : D.location = s) (hh : D.holding = holding)
@@ -123,14 +125,14 @@ theorem toLocation_take_offset {input : List UInt8} {o : Nat} (h : o ≤ input.l
     (toLocation (locAfter (input.take o))).offset = o := by
   simp [toLocation, locAfter_offset', h]
 
-theorem fromVersion_getD (s : Option BSmtLibSpec.Lexicon.Version) (version : Token.Version) :
+theorem fromVersion_getD (s : Option BSmtLibSpec.Lexicon.Version) (version : Version) :
     fromVersion ((s.map toVersion).getD version) = s.getD (fromVersion version) := by
   cases s <;> simp [fromVersion_toVersion]
 
 /-- The naive lexer at the boundary `o`, holding no result, does with the consumer what `Runs`
 states, from the entries ready from `o` on. -/
 def BoundaryRuns (o : Nat) : Prop :=
-  ∀ (version : Token.Version) (core : Core) (taken : List Handed),
+  ∀ (version : Version) (core : Core) (taken : List Handed),
     core.version = version → core.activity = .idle → core.location = locAfter (input.take o) →
     core.holding = false → core.initialVersion = toVersion sv →
     BSmtLibSpec.Lexer.Runs fedRun consumer sv input ended (fromVersion version)
@@ -140,7 +142,7 @@ def BoundaryRuns (o : Nat) : Prop :=
           (fromVersion version) input ended o).failed
       taken (vSession consumer core none (input.drop o) ended taken)
 
-theorem streamFrom_false_taken (version : Token.Version) (ended : Bool) (location : Span.Location)
+theorem streamFrom_false_taken (version : Version) (ended : Bool) (location : Span.Location)
     (bytes : List UInt8) : ∀ l ∈ (streamFrom version false ended location bytes).1, (Taken l) := by
   have ht := lexBytes_taken (version := version) (location := location) bytes (st := .idle) trivial
   unfold streamFrom
@@ -176,7 +178,7 @@ theorem settle_finished {α ε : Type} (start : BSmtLibSpec.Lexicon.Version) (ta
       ⟨taken, .finished result location, start, none⟩ := by
   simp [BSmtLibSpec.Lexer.settle, BSmtLibSpec.Lexer.Outcome.isFinished]
 
-theorem lexemeEntry_some {concrete : Bool} {version : Token.Version} {l : Lexeme} {hd : Handed}
+theorem lexemeEntry_some {concrete : Bool} {version : Version} {l : Lexeme} {hd : Handed}
     (h : lexemeEntry concrete version l = some hd) :
     hd.start = toLocation l.start ∧ hd.end = toLocation l.end ∧
       (hd.type = .endOfFile ↔ (l.category == .endOfFile) = true) := by
@@ -209,7 +211,7 @@ theorem lexemeEntry_some {concrete : Bool} {version : Token.Version} {l : Lexeme
         simp
 
 /-- Every lexeme of the run from a boundary is an entry the consumer takes. -/
-theorem stream_entry (version : Token.Version) (o : Nat) :
+theorem stream_entry (version : Version) (o : Nat) :
     ∀ l ∈ (stream version consumer.concrete input ended o).1,
       ∃ hd, lexemeEntry consumer.concrete version l = some hd := by
   intro l hl
@@ -225,7 +227,7 @@ theorem stream_entry (version : Token.Version) (o : Nat) :
 
 /-- What follows a break, as `AfterBreak` states it, is what the naive lexer does while it holds
 the result (`holdSession`). -/
-theorem afterBreak_hold (version : Token.Version) (o : Nat) (ho : o ≤ input.length)
+theorem afterBreak_hold (version : Version) (o : Nat) (ho : o ≤ input.length)
     (taken : List Handed) (x : Span.Located consumer.Result)
     (hx : x.location = locAfter (input.take o)) :
     ∃ outcome, BSmtLibSpec.Lexer.AfterBreak x.value (toLocation (locAfter (input.take o)))
@@ -268,7 +270,7 @@ theorem afterBreak_hold (version : Token.Version) (o : Nat) (ho : o ≤ input.le
 
 /-- What the consumer does at an entry that the naive lexer hands over at a boundary, holding no
 result, is what `Runs` states, given what the lexer does after it in each case. -/
-theorem event (hb : consumer.BreaksAtEnd) {version : Token.Version} {l : Lexeme} {hd : Handed}
+theorem event (hb : consumer.BreaksAtEnd) {version : Version} {l : Lexeme} {hd : Handed}
     {o : Nat} {taken : List Handed} (hl : lexemeEntry consumer.concrete version l = some hd)
     (hne : (l.category == .endOfFile) = false)
     (hend : l.end = locAfter (input.take o)) (ho : o ≤ input.length)

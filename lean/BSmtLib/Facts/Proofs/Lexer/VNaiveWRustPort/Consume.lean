@@ -2,6 +2,8 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Cursor
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -15,10 +17,12 @@ switched to a version with the same lexical rules), waits after a break, or stop
 cursor and the answer it gives back say which.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Consume
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Simulation.Batch
-open BSmtLib.Token.BatchCursor.Internal (discardRequested relexRequested)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested relexRequested)
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Batch
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
@@ -29,8 +33,8 @@ variable {g : Token.BatchTag} (C : BSmtLibSpec.Lexer.Consumer)
 
 /-- What one call of the consumer on the cursor `c` gives, with the lexemes `xs` it took: the
 answer, the cursor after it, and the tokens taken, as `pending` says from `p`. -/
-def ConsumeSpec (c : Token.BatchCursor g) (p : Prog) (xs : List Lexeme)
-    (answer : Except (Option C.Error) (ControlFlow C.Result)) (c' : Token.BatchCursor g)
+def ConsumeSpec (c : LexerCursor g) (p : Prog) (xs : List Lexeme)
+    (answer : Except (Option C.Error) (ControlFlow C.Result)) (c' : LexerCursor g)
     (taken : List Handed) : Prop :=
   match pending C false p.ver p.taken xs with
   | .cont p' =>
@@ -56,7 +60,7 @@ def ConsumeSpec (c : Token.BatchCursor g) (p : Prog) (xs : List Lexeme)
           (discardRequested c') = discardRequested c
       | _ => False
 
-theorem requests_eq (taken : List Handed) (c : Token.BatchCursor g) :
+theorem requests_eq (taken : List Handed) (c : LexerCursor g) :
     (Answering.requests C taken c).val =
       if C.discards taken then (Answering.switched C taken c).val.discardRest
       else (Answering.switched C taken c).val := by
@@ -89,7 +93,7 @@ theorem take_drop_single {α : Type} (ls : List α) {i : Nat} (hi : i < ls.lengt
 
 /-- One call of the consumer on a cursor over a batch that holds the lexemes takes at least one
 token, and does what `pending` says with the lexemes it took. -/
-theorem consume_spec : ∀ (n : Nat) (c : Token.BatchCursor g) (h : c.HasNext) (ls : List Lexeme),
+theorem consume_spec : ∀ (n : Nat) (c : LexerCursor g) (h : c.HasNext) (ls : List Lexeme),
     cStop c - cNext c = n → Holds (BSmtLib.Lexer.Internal.intoBatch c) ls → cStop c ≤ ls.length →
     ∀ (p : Prog), p.ver = c.version →
       cNext c < cNext ((Answering.consume C c h).run p.taken).1.2.val ∧

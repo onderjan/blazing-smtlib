@@ -23,7 +23,7 @@ namespace BSmtLib.Facts.Proofs.Reader.Handler.Final
 open BSmtLib.Lexer
 open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)

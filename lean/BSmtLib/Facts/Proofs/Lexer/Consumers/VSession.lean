@@ -169,7 +169,7 @@ theorem lexSliceStep_vBytes (core : Core) (hp : (Core.Plain core)) (bytes : List
       match vBytes consumer core none bytes taken with
       | ((.ok held, core'), taken') => ((.ok held, core'), taken')
       | ((.error f, core'), taken') =>
-        ((.error (Lexer.Error.LexError.Internal.new f.cause f.span none), core'), taken') := by
+        ((.error (Lexer.Error.LexerError.Internal.new f.cause f.span none), core'), taken') := by
   have hf := lexFrom_vBytes consumer bytes _ 0 rfl core none taken
   simp only [List.drop_zero] at hf
   unfold Core.Plain at hp
@@ -252,7 +252,7 @@ def vSession (core : Core) (held : Option (Span.Located consumer.Result)) (bytes
   match vBytes consumer core held bytes taken with
   | ((.error f, core'), taken') =>
     sessionOf consumer taken'
-      (.failed (failureOf (Lexer.Error.LexError.Internal.new f.cause f.span none))) core'
+      (.failed (failureOf (Lexer.Error.LexerError.Internal.new f.cause f.span none))) core'
   | ((.ok held', core'), taken') =>
     if ended then
       match vEnd consumer core' taken' with
@@ -273,12 +273,12 @@ theorem recovers_failFast :
     Lexer.Recovery.Recovers.recovers Lexer.Recovery.FailFast = false := (rfl)
 
 theorem abandon_failFast :
-    (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast : Span.Location → StateT
+    (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast : Span.Location → StateT
     (Answering consumer) AnswerM Unit) =
       fun _ => pure () := rfl
 
 theorem recover_failFast :
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast : Span.Location → StateT
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast : Span.Location → StateT
     (Answering consumer) AnswerM Unit) =
       fun _ => pure () := rfl
 
@@ -357,7 +357,7 @@ theorem runInput_vSession (ended : Bool) (slices : List BSmtLibSpec.Regex.Chars)
       exact this
 
 
-theorem initial_plain (version : Token.Version) : (Core.Plain (Core.initial version)) := trivial
+theorem initial_plain (version : Version) : (Core.Plain (Core.initial version)) := trivial
 
 /-- What the adapter makes of the naive lexer with the consumer, on its first input. -/
 theorem lexing_vNaive (version : BSmtLibSpec.Lexicon.Version)

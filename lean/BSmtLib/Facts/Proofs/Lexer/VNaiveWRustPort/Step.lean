@@ -31,8 +31,8 @@ open BSmtLib.Lexer.Internal.VNaive
 
 /-- The lexer state at the index `start` of the slice is the naive lexer's pure state `st` at
 `location`, and its batch holds the lexemes `held`, with their contents in the slice. -/
-structure StepPre (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool)
-    (iv : Token.Version)
+structure StepPre (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool)
+    (iv : Version)
     (input : ByteSlice) (st : St) (location : Span.Location) (held : List Lexeme) (start : Nat)
     (c : WP.WCore) : Prop where
   fixed : Fixed v hd iv c
@@ -51,7 +51,7 @@ def intrFailure {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (e : WP.In
     LexFailure where
   kind := match e.result with
     | .error (.lexical kind) => kind
-    | _ => .unexpectedCharacter
+    | _ => .unexpectedByte
   span := e.span
   location := e.location
 
@@ -103,8 +103,8 @@ macro "failure_eq" h:term : tactic => `(tactic| (
 /-- The lexer state at the index `next` and the tokens taken are, after a step from the naive
 lexer's pure state `st` at `location` at the index `start`, under the version `ver`, with the
 tokens taken `coll` and the lexemes `held`, as the naive lexer's run from there leaves them. -/
-def StepPost (C : BSmtLibSpec.Lexer.Consumer) (v : Token.Version) (hd : Bool) (iv : Token.Version)
-    (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat) (ver : Token.Version)
+def StepPost (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
+    (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat) (ver : Version)
     (coll : List Handed) (held : List Lexeme) (next : Nat) (c : WP.WCore) (coll' : List Handed) :
     Prop :=
   ∃ st' location' held', Fixed v hd iv c ∧ c.base ≤ next ∧ StAgrees v C.concrete st' c ∧
@@ -119,9 +119,9 @@ the version `ver`, with the tokens taken `coll` and the lexemes `held`, interrup
 the lexer state `c` and the tokens taken `coll'`: the naive lexer's run fails with a lexical
 error, and what is left to do is to hand over the lexemes of the batch of the lexer state; or the
 consumer stopped, at the stop `e` is, which leaves the lexer discarding if it makes it discard. -/
-def StepFails (C : BSmtLibSpec.Lexer.Consumer) {floor : Option Nat} (v : Token.Version) (hd : Bool)
-    (iv : Token.Version) (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat)
-    (ver : Token.Version) (coll : List Handed) (held : List Lexeme) (e : WP.Intr C floor)
+def StepFails (C : BSmtLibSpec.Lexer.Consumer) {floor : Option Nat} (v : Version) (hd : Bool)
+    (iv : Version) (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat)
+    (ver : Version) (coll : List Handed) (held : List Lexeme) (e : WP.Intr C floor)
     (c : WP.WCore)
     (coll' : List Handed) : Prop :=
   (IsLexical e ∧ ∃ held', Holds c.batch held' ∧ Fixed v hd iv c ∧
@@ -139,7 +139,7 @@ section
 variable {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat}
 
 /-- What the consumer does after a stop on lexemes, whatever follows. -/
-theorem outcome_of_stops {hd : Bool} {ver : Token.Version} {coll : List Handed} {ls : List Lexeme}
+theorem outcome_of_stops {hd : Bool} {ver : Version} {coll : List Handed} {ls : List Lexeme}
     {e : WP.Intr C floor} {p : Prog} {d : Option Span.Location} (h : Stops C hd ver coll ls e p d)
     (rest : Consumers.Pure.RunF) :
     ∃ stop, outcome C hd (pending C hd ver coll ls) rest = .stopped stop p ∧ Matches stop e ∧
@@ -173,12 +173,12 @@ theorem outcome_of_stops {hd : Bool} {ver : Token.Version} {coll : List Handed} 
         refine ⟨.brk r l (some l2), ?_, hm' _, rfl⟩
         simp only [outcome, handAll_cons, hand1, handAll_stop, Model.finish]
 
-variable {v : Token.Version} {hd : Bool} {iv : Token.Version} {input : ByteSlice} {st : St}
-  {location : Span.Location} {start : Nat} {ver : Token.Version} {coll : List Handed}
+variable {v : Version} {hd : Bool} {iv : Version} {input : ByteSlice} {st : St}
+  {location : Span.Location} {start : Nat} {ver : Version} {coll : List Handed}
       {held : List Lexeme}
 
 /-- A step interrupted where the consumer stopped. -/
-theorem stepFails_of_stops {ver1 : Token.Version} {coll1 : List Handed} {held1 : List Lexeme}
+theorem stepFails_of_stops {ver1 : Version} {coll1 : List Handed} {held1 : List Lexeme}
     {rest : Consumers.Pure.RunF}
     (h : outcome C hd (pending C hd ver coll held) (feedFrom v C.concrete input st location start) =
       outcome C hd (pending C hd ver1 coll1 held1) rest)
@@ -206,7 +206,7 @@ theorem stepFails_here {e : WP.Intr C floor}
   rw [h, hv]
 
 /-- A step's postcondition from a later state, whose outcome is that of the earlier one. -/
-theorem StepPost.trans {st1 : St} {location1 : Span.Location} {start1 : Nat} {ver1 : Token.Version}
+theorem StepPost.trans {st1 : St} {location1 : Span.Location} {start1 : Nat} {ver1 : Version}
     {coll1 : List Handed} {held1 : List Lexeme} {next : Nat} {c : WP.WCore} {coll' : List Handed}
     (h1 : outcome C hd (pending C hd ver coll held)
         (feedFrom v C.concrete input st location start) =
@@ -218,7 +218,7 @@ theorem StepPost.trans {st1 : St} {location1 : Span.Location} {start1 : Nat} {ve
   exact ⟨st', location', held', h3, h4, h5, h6, h7, h8, h1.trans h9⟩
 
 /-- A step's failure from a later state, whose outcome is that of the earlier one. -/
-theorem StepFails.trans {st1 : St} {location1 : Span.Location} {start1 : Nat} {ver1 : Token.Version}
+theorem StepFails.trans {st1 : St} {location1 : Span.Location} {start1 : Nat} {ver1 : Version}
     {coll1 : List Handed} {held1 : List Lexeme}
     (h1 : outcome C hd (pending C hd ver coll held)
         (feedFrom v C.concrete input st location start) =

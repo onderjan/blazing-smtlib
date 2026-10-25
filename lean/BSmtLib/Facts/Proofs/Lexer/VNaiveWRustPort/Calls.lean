@@ -91,8 +91,8 @@ theorem lexOps_lexSliceStepW (core : WP.WCore) (held : Option (Span.Located C.Re
   unfold runIA
   generalize (((Lexer.Internal.WRustPort.lexSliceStep (H := Answering C) (m := AnswerM)
       (R := C.Result)
-    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast) slice).run core).run
+    (E := Option C.Error) (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) slice).run core).run
     {}).run taken = r
   obtain ⟨⟨⟨res, core'⟩, h⟩, taken'⟩ := r
   rw [answering_eq' h {}]
@@ -109,8 +109,8 @@ theorem lexOps_lexEofStepW (core : WP.WCore) (held : Option (Span.Located C.Resu
   unfold runIA
   generalize (((Lexer.Internal.WRustPort.lexEofStep (H := Answering C) (m := AnswerM)
       (R := C.Result)
-    (E := Option C.Error) (Lexer.Recovery.LexRecovery.abandon Lexer.Recovery.FailFast)
-    (Lexer.Recovery.LexRecovery.recover Lexer.Recovery.FailFast)).run core).run {}).run taken = r
+    (E := Option C.Error) (Lexer.Recovery.LexerRecovery.abandon Lexer.Recovery.FailFast)
+    (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast)).run core).run {}).run taken = r
   obtain ⟨⟨⟨res, core'⟩, h⟩, taken'⟩ := r
   rw [answering_eq' h {}]
   rfl
@@ -138,7 +138,7 @@ theorem inner_loop (c : WP.WCore) (n : Core) (st : St) (bytes : List UInt8) (tak
 
 /-- The span of a consumer's error of the Rust port is that of the last token taken. -/
 def SpanAlike {C : BSmtLibSpec.Lexer.Consumer} {β : Type}
-    (x : Except (LexError (Option C.Error)) β) (t : List Handed) : Prop :=
+    (x : Except (LexerError (Option C.Error)) β) (t : List Handed) : Prop :=
   ∀ e, x = .error e → ∀ c, e.cause = .consumer (some c) → e.span = Cursor.handedSpan t
 
 /-- What a call of the Rust port and one of the naive lexer give alike: an error of the Rust port
@@ -146,8 +146,8 @@ does not go on, the results are alike as `preciseOf` says, the same tokens are t
 states correspond again when the call does not fail, and the version and discarding are the same
 always. -/
 def CallAlike (C : BSmtLibSpec.Lexer.Consumer) {β : Type}
-    (rW : (Except (LexError (Option C.Error)) β × WP.WCore) × List Handed)
-    (rV : VRes (Except (LexError (Option C.Error)) β)) : Prop :=
+    (rW : (Except (LexerError (Option C.Error)) β × WP.WCore) × List Handed)
+    (rV : VRes (Except (LexerError (Option C.Error)) β)) : Prop :=
   (∀ e, rW.1.1 = .error e → e.continuesFrom = none) ∧
     rW.1.1.mapError preciseOf = rV.1.1.mapError preciseOf ∧ rW.2 = rV.2 ∧
     (rW.1.1.isOk = true → CR C rW.1.2 rV.1.2) ∧ rW.1.2.version = rV.1.2.version ∧
@@ -465,7 +465,7 @@ def WVWeak (C : BSmtLibSpec.Lexer.Consumer) (w : WRustPort.lexOps.Lexer C)
     (n : VNaive.lexOps.Lexer C) : Prop :=
   w.core.version = n.core.version ∧ w.core.discardedFrom = discardedOf n.core
 
-theorem wvRel_new (C : BSmtLibSpec.Lexer.Consumer) (version : Token.Version) :
+theorem wvRel_new (C : BSmtLibSpec.Lexer.Consumer) (version : Version) :
     WVRel C (WRustPort.lexOps.new C {} version) (VNaive.lexOps.new C {} version) :=
   ⟨rfl, ⟨rfl, rfl, rfl, rfl, rfl, ⟨rfl, rfl, rfl⟩, .inl ⟨.idle, rfl, rfl, rfl⟩⟩⟩
 
@@ -562,7 +562,7 @@ with an error that does not go on. -/
 theorem wv_slice_none (C : BSmtLibSpec.Lexer.Consumer) (slice : BSmtLibSpec.Regex.Chars)
     (a : WRustPort.lexOps.Lexer C) (b : VNaive.lexOps.Lexer C)
     (taken : List BSmtLibSpec.Lexer.Handed)
-    (h : WVRel C a b) (e : LexError (Option C.Error))
+    (h : WVRel C a b) (e : LexerError (Option C.Error))
     (he : ((WRustPort.lexOps.lexSliceStep a slice.toByteArray.toByteSlice).run taken).1.1 =
       .error e) :
     e.continuesFrom = none := by
@@ -583,7 +583,7 @@ lexer's, fails with an error that does not go on. -/
 theorem wv_eof_none (C : BSmtLibSpec.Lexer.Consumer)
     (a : WRustPort.lexOps.Lexer C) (b : VNaive.lexOps.Lexer C)
     (taken : List BSmtLibSpec.Lexer.Handed)
-    (h : WVRel C a b) (e : LexError (Option C.Error))
+    (h : WVRel C a b) (e : LexerError (Option C.Error))
     (he : ((WRustPort.lexOps.lexEofStep a).run taken).1.1 = .error e) :
     e.continuesFrom = none := by
   obtain ⟨hh, hcr⟩ := h

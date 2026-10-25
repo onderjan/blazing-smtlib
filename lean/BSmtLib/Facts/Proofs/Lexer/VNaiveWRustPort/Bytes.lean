@@ -4,6 +4,8 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaive
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Pure
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Token.Reserved
 import all BSmtLib.Lexer
 import all BSmtLib.Span
@@ -27,10 +29,12 @@ another is compared with the naive lexer's pure run by an equation between the r
 index and the run from the second, with the lexemes finished between them before it (`Prep`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
-open BSmtLib.Token.BatchCursor.Internal (discardRequested relexRequested)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested relexRequested)
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Facts BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Run BSmtLib.Lexer.Internal.VNaive
 
@@ -297,7 +301,7 @@ theorem symbol_facts_bool (c : UInt8) :
     c != 41 && c != 59 && c != 35 && c != 34 && c != 58 && c != 124)) = true)
     (by decide +kernel) c
 
-theorem start_symbol (version : Token.Version) (ws : Bool) (location : Span.Location) (c : UInt8)
+theorem start_symbol (version : Version) (ws : Bool) (location : Span.Location) (c : UInt8)
     (hs : isSymbolByte c = true) (hd : isDigit c = false) :
     start version ws location c = .pending ⟨.simpleSymbol, location, ByteArray.empty.push c⟩ := by
   have := symbol_facts_bool c
@@ -306,14 +310,14 @@ theorem start_symbol (version : Token.Version) (ws : Bool) (location : Span.Loca
   obtain ⟨⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, h7⟩, h8⟩ := this
   simp [start, h1, h2, h3, h4, h5, h6, h7, h8, hs, hd]
 
-theorem start_space (version : Token.Version) (ws : Bool) (location : Span.Location) (c : UInt8)
+theorem start_space (version : Version) (ws : Bool) (location : Span.Location) (c : UInt8)
     (hs : isWhitespaceRun c = true) :
     start version ws location c =
       if ws then .pending ⟨.whitespace, location, ByteArray.empty.push c⟩ else .idle := by
   have : isWhitespace c = true := by simp_all [isWhitespaceRun]
   simp [start, this]
 
-theorem start_quoted (version : Token.Version) (ws : Bool) (location : Span.Location) :
+theorem start_quoted (version : Version) (ws : Bool) (location : Span.Location) :
     start version ws location 124 = .pending ⟨.quotedSymbol, location, .empty⟩ := (rfl)
 
 /-! ## Cursors -/
@@ -322,16 +326,16 @@ section
 
 variable {g : Token.BatchTag}
 
-theorem intoBatch_next (c : Token.BatchCursor g) (h : c.HasNext) :
+theorem intoBatch_next (c : LexerCursor g) (h : c.HasNext) :
     BSmtLib.Lexer.Internal.intoBatch (c.next h).2.1 = BSmtLib.Lexer.Internal.intoBatch c := (rfl)
 
-theorem version_next (c : Token.BatchCursor g) (h : c.HasNext) :
+theorem version_next (c : LexerCursor g) (h : c.HasNext) :
     (c.next h).2.1.version = c.version := (rfl)
 
-theorem discard_next (c : Token.BatchCursor g) (h : c.HasNext) :
+theorem discard_next (c : LexerCursor g) (h : c.HasNext) :
     (discardRequested (c.next h).2.1) = discardRequested c := (rfl)
 
-theorem relex_next (c : Token.BatchCursor g) (h : c.HasNext) :
+theorem relex_next (c : LexerCursor g) (h : c.HasNext) :
     (relexRequested (c.next h).2.1) = relexRequested c := (rfl)
 
 end
@@ -359,7 +363,7 @@ theorem slotOf_toByteArray (s : ByteSlice) : slotOf s.toByteArray.toByteSlice = 
     simp only [h, h', dite_false]
 
 /-- The lookup of reserved words reads only the bytes of the slice. -/
-theorem fromBytes_toByteArray (s : ByteSlice) (v : Token.Version) :
+theorem fromBytes_toByteArray (s : ByteSlice) (v : Version) :
     Token.Reserved.fromBytes? s.toByteArray.toByteSlice v = Token.Reserved.fromBytes? s v := by
   by_cases h0 : s.size = 0
   · have h0' : s.toByteArray.toByteSlice.size = 0 := by rw [size_toByteArray_toByteSlice]; exact h0

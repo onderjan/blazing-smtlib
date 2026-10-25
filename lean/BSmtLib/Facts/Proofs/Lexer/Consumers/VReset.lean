@@ -170,8 +170,8 @@ theorem vEnd_inv (core : Core) (taken : List Handed) (hp : (Plain core)) :
       match (match r with
           | .ok none => ((.ok .continue, core2.reset), taken2)
           | .ok (some located) => ((.ok (.break located), core2.reset), taken2)
-          | .error f => ((.error (LexError.Internal.new f.cause f.span none), core2), taken2) :
-          VRes (Except (LexError (Option consumer.Error))
+          | .error f => ((.error (LexerError.Internal.new f.cause f.span none), core2), taken2) :
+          VRes (Except (LexerError (Option consumer.Error))
               (ControlFlow (Span.Located consumer.Result))))
         with
       | ((.ok _, core'), _) => core' = Core.initial core.initialVersion
@@ -308,7 +308,7 @@ theorem vLexer_eta {consumer : BSmtLibSpec.Lexer.Consumer} (L : VNaive.lexOps.Le
 
 /-- The earlier inputs keep the lexer lexing or discarding, under the version it was constructed
 with. -/
-theorem foldl_inputs_inv {consumer : BSmtLibSpec.Lexer.Consumer} (version : Token.Version)
+theorem foldl_inputs_inv {consumer : BSmtLibSpec.Lexer.Consumer} (version : Version)
     (inputs : List (List BSmtLibSpec.Regex.Chars)) :
     ∀ (L : VNaive.lexOps.Lexer consumer), (Plain L.core) → L.core.initialVersion = version →
       (Plain (inputs.foldl (VNaive.lexOps.next consumer version) L).core) ∧

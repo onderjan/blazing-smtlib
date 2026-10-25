@@ -31,8 +31,8 @@ open BSmtLibSpec.Parser.Traversal
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {points : Points (StateT H m)} {version : Version}
 
 
 /-- The arguments of a constructor pattern, appended to those found so far. -/
@@ -40,8 +40,8 @@ theorem patternArguments_runs : (arguments : List Tree.SymbolOrWildcard) →
     (∀ argument ∈ arguments, argument.Valid (Bridge.version version)) →
     ∀ {tokens : List Parser.Internal.Input},
         Stands tokens (arguments.map Tree.SymbolOrWildcard.token) →
-    ∀ (constructor : Plain.Symbol) (found : Array Nodes.SimplePattern),
-    ∃ parsed : Array Nodes.SimplePattern,
+    ∀ (constructor : Lexicon.Value.Symbol) (found : Array Grammar.Nodes.SimplePattern),
+    ∃ parsed : Array Grammar.Nodes.SimplePattern,
       parsed.toList.map Bridge.symbolOrWildcard = arguments ∧
       RunsS points (PatternState.step (H := H) version) (.arguments constructor found) tokens
         (ticks points tokens) fun _ => pure (.more (.arguments constructor (found ++ parsed)))
@@ -67,7 +67,7 @@ theorem patternArguments_runs : (arguments : List Tree.SymbolOrWildcard) →
 /-- From its start, the pattern parser reads a pattern and ends with it. -/
 theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input} (hs : Stands tokens pattern.tokens) :
-    ∃ parsed : Nodes.Pattern, Bridge.pattern parsed = pattern ∧
+    ∃ parsed : Grammar.Nodes.Pattern, Bridge.pattern parsed = pattern ∧
       RunsS points (PatternState.step (H := H) version) .start tokens (ticks points tokens)
         fun _ => pure (.done parsed) := by
   cases pattern with
@@ -89,7 +89,7 @@ theorem pattern_runs {pattern : Tree.Pattern} (hvalid : pattern.Valid (Bridge.ve
       cases parsed using Array.recOn with
       | mk list => cases list <;> simp_all [Tree.Pattern.Valid]
     have hpos : 0 < (#[] ++ parsed).size :=
-      Nodes.PatternApplication.Internal.size_pos (by simp [hparsed])
+      Grammar.Nodes.PatternApplication.Internal.size_pos (by simp [hparsed])
     refine ⟨.application ⟨symbol, #[] ++ parsed, hpos⟩, by simp [Bridge.pattern, hmap], ?_⟩
     have hclose : RunsS points (PatternState.step (H := H) version)
         (.arguments symbol (#[] ++ parsed)) [.parenClose] (do tick points .parenClose; pure ())

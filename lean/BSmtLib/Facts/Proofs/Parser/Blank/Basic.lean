@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Parser
-public import BSmtLib.Traits.CommandHandler
+public import BSmtLib.Handler.CommandHandler
 public import BSmtLib.Facts.Proofs.Parser.Blank.Attr
 import all BSmtLib.Parser
 
@@ -25,8 +25,9 @@ cursors, the same failures, and states that are the same up to the values.
 
 namespace BSmtLib.Facts.Proofs.Parser.Blank.Basic
 
-open BSmtLib.Multiple (FunctionSignature)
-open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Grammar (Multiple)
+open BSmtLib.Grammar.Multiple (FunctionSignature)
+open BSmtLib.Parser BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Parser.Internal (PM)
 
 /-! ## The blank handler -/
@@ -37,7 +38,7 @@ structure Shell where
 instance : Inhabited Shell := ⟨{}⟩
 
 /-- Every call of the blank handler gives `()` and leaves it as it is. -/
-instance shellTerms : Traits.Handler Shell Id where
+instance shellTerms : Handler Shell Id where
   Error := Unit
   SExpr := Unit
   Attribute := Unit
@@ -63,7 +64,7 @@ instance shellTerms : Traits.Handler Shell Id where
 
 /-- Every command call of the blank handler gives `()`; a command that is no standard one fails
 with `()`. -/
-instance shellCommands : Traits.CommandHandler Shell Id where
+instance shellCommands : Handler.CommandHandler Shell Id where
   NonstandardParser := Empty
   nonstandardCommand _ := throw ()
   commandAssert _ := pure ()
@@ -144,15 +145,15 @@ end
 instance {α β : Type} [Blanks α β] : Blanks (Multiple α) (Multiple β) :=
   ⟨fun m => .new (blank m.asSlice)⟩
 
-instance {V V' : Type} [Blanks V V'] : Blanks (Multiple.Named V) (Multiple.Named V') :=
-  ⟨fun v => Multiple.Named.Internal.new (blank v.toArray)⟩
+instance {V V' : Type} [Blanks V V'] : Blanks (Grammar.Multiple.NamedValues V) (Grammar.Multiple.NamedValues V') :=
+  ⟨fun v => Grammar.Multiple.NamedValues.Internal.new (blank v.toArray)⟩
 
-instance {T T' : Type} [Blanks T T'] : Blanks (Multiple.MatchCases T) (Multiple.MatchCases T') :=
-  ⟨fun v => Multiple.MatchCases.Internal.new (blank v.toArray)⟩
+instance {T T' : Type} [Blanks T T'] : Blanks (Grammar.Multiple.MatchCases T) (Grammar.Multiple.MatchCases T') :=
+  ⟨fun v => Grammar.Multiple.MatchCases.Internal.new (blank v.toArray)⟩
 
 instance {S S' : Type} [Blanks S S'] :
-    Blanks (Multiple.Constructors S) (Multiple.Constructors S') :=
-  ⟨fun v => Multiple.Constructors.Internal.new (blank v.toArray)⟩
+    Blanks (Grammar.Multiple.Constructors S) (Grammar.Multiple.Constructors S') :=
+  ⟨fun v => Grammar.Multiple.Constructors.Internal.new (blank v.toArray)⟩
 
 def blankQualifiedIdent {S S' : Type} [Blanks S S'] : QualifiedIdent S → QualifiedIdent S'
   | ⟨identifier, sort⟩ => ⟨identifier, blank sort⟩
@@ -161,26 +162,26 @@ instance {S S' : Type} [Blanks S S'] : Blanks (QualifiedIdent S) (QualifiedIdent
   ⟨blankQualifiedIdent⟩
 
 def blankTermNode {S S' T T' : Type} [Blanks S S'] [Blanks T T'] :
-    Nodes.Term S T → Nodes.Term S' T'
+    Grammar.Nodes.Term S T → Grammar.Nodes.Term S' T'
   | .specialConstant c => .specialConstant c
   | .qualifiedIdent i s => .qualifiedIdent i (blank s)
   | .application i s args h => .application i (blank s) (blank args) (by
-    rw [show blank args = Multiple.new (args.asSlice.map blank) from rfl, Multiple.len_new,
-      Array.size_map, Multiple.size_asSlice]
+    rw [show blank args = Grammar.Multiple.new (args.asSlice.map blank) from rfl, Grammar.Multiple.len_new,
+      Array.size_map, Grammar.Multiple.size_asSlice]
     exact h)
 
 instance {S S' T T' : Type} [Blanks S S'] [Blanks T T'] :
-    Blanks (Nodes.Term S T) (Nodes.Term S' T') :=
+    Blanks (Grammar.Nodes.Term S T) (Grammar.Nodes.Term S' T') :=
   ⟨blankTermNode⟩
 
-def blankSExprNode {X X' : Type} [Blanks X X'] : Nodes.SExpr X → Nodes.SExpr X'
+def blankSExprNode {X X' : Type} [Blanks X X'] : Grammar.Nodes.SExpr X → Grammar.Nodes.SExpr X'
   | .specialConstant c => .specialConstant c
   | .symbol s => .symbol s
   | .reserved w => .reserved w
   | .keyword k => .keyword k
   | .sExprs items => .sExprs (blank items)
 
-instance {X X' : Type} [Blanks X X'] : Blanks (Nodes.SExpr X) (Nodes.SExpr X') := ⟨blankSExprNode⟩
+instance {X X' : Type} [Blanks X X'] : Blanks (Grammar.Nodes.SExpr X) (Grammar.Nodes.SExpr X') := ⟨blankSExprNode⟩
 
 def blankAttributeValueNode {X X' : Type} [Blanks X X'] :
     AttributeValue X → AttributeValue X'
@@ -199,8 +200,8 @@ instance {S S' : Type} [Blanks S S'] : Blanks (FunctionSignature S) (FunctionSig
   ⟨blankSignature⟩
 
 instance {S S' : Type} [Blanks S S'] :
-    Blanks (Multiple.FunctionSignatures S) (Multiple.FunctionSignatures S') :=
-  ⟨fun v => Multiple.FunctionSignatures.Internal.new (blank v.toArray)⟩
+    Blanks (Grammar.Multiple.FunctionSignatures S) (Grammar.Multiple.FunctionSignatures S') :=
+  ⟨fun v => Grammar.Multiple.FunctionSignatures.Internal.new (blank v.toArray)⟩
 
 def blankStep {σ σ' ρ ρ' : Type} [Blanks σ σ'] [Blanks ρ ρ'] :
     Internal.Step σ ρ → Internal.Step σ' ρ'
@@ -338,7 +339,7 @@ theorem BSim.callNone {α β γ δ : Type} [Blanks γ δ]
 
 section
 
-open Traits.Handler Traits.CommandHandler
+open Handler Handler.CommandHandler
 
 variable (H : Type) [CommandHandler H Id]
 

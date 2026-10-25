@@ -36,9 +36,9 @@ open BSmtLibSpec.Facts.Proofs.Parser.Equations (attributeThen_some)
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 theorem outcomeOf_setInfo_other {keyword : BSmtLibSpec.Regex.Chars}
     (hkeyword : keyword ≠ BSmtLibSpec.Regex.chars "smt-lib-version")
@@ -66,10 +66,10 @@ theorem setOption_payload (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tr
       (outerArrival := Parser.Command.Internal.Standard.payloadArrive) Payload.setOption
     (fun attributes => do
       let some option := attributes[0]? | Parser.Internal.syntaxError (.expected #[.attribute])
-      Parser.Internal.call (Traits.CommandHandler.commandSetOption option)
+      Parser.Internal.call (Handler.CommandHandler.commandSetOption option)
       return .done .command)
     (by payload_step) hruns).congr rfl
-    (next' := fun r => Parser.Internal.call (Traits.CommandHandler.commandSetOption r) >>=
+    (next' := fun r => Parser.Internal.call (Handler.CommandHandler.commandSetOption r) >>=
       fun _ => pure (.done .command))
     (by funext; simp [Parser.Internal.Step.wrap]))).congr ?_ rfl
   simp [hA.commandSetOption]
@@ -107,7 +107,7 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
     (Payload.setInfo .other)
     (fun attributes => do
       let some info := attributes[0]? | Parser.Internal.syntaxError (.expected #[.attribute])
-      Parser.Internal.call (Traits.CommandHandler.commandSetInfo info)
+      Parser.Internal.call (Handler.CommandHandler.commandSetInfo info)
       return .done .command)
     (by
       intro state token
@@ -119,7 +119,7 @@ theorem setInfo_payload_other (keyword : BSmtLibSpec.Regex.Chars)
       | done r =>
         simp only [Parser.Internal.Step.wrap, Declaration.next]
         cases r[0]? <;> rfl) hruns).congr rfl
-    (next' := fun r => Parser.Internal.call (Traits.CommandHandler.commandSetInfo r) >>=
+    (next' := fun r => Parser.Internal.call (Handler.CommandHandler.commandSetInfo r) >>=
       fun _ => pure (.done .command))
     (by funext; simp [Parser.Internal.Step.wrap]))
   refine (Runs.first (state' := Payload.setInfo .other .init)
@@ -147,7 +147,7 @@ theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars)
   have hversionKeyword : Parser.Command.Internal.Standard.isVersionKeyword keyword = true := by
     rw [isVersionKeyword_eq, hkeyword]
     exact decide_eq_true rfl
-  have hversion : Token.Version.fromDecimal? text.asSlice = some (Bridge.libVersion declared) := by
+  have hversion : Version.fromDecimal? text = some (Bridge.libVersion declared) := by
     rw [fromDecimal_eq, htext, hdeclared]
     rfl
   rw [show [Parser.Internal.Input.keyword keyword,
@@ -161,11 +161,11 @@ theorem setInfo_payload_declaration (decimal : BSmtLibSpec.Regex.Chars)
     Runs.append (middle := fun handled => Payload.setInfo
         (.value (some (Bridge.libVersion declared))) { mode := .start, attributes := #[handled] })
       (Runs.tokenA (arrival := Parser.Command.Internal.Standard.payloadArrive)
-      (program := Parser.Internal.call (Traits.Handler.handleAttribute keyword
+      (program := Parser.Internal.call (Handler.handleAttribute keyword
         (some (.specialConstant (.decimal text))))) (by
         simp [payloadStep, Declaration.next, hversion, attributeStep])) fun handled =>
       Runs.tokenA (arrival := Parser.Command.Internal.Standard.payloadArrive)
-          (program := Parser.Internal.call (Traits.CommandHandler.commandSetInfo handled))
+          (program := Parser.Internal.call (Handler.CommandHandler.commandSetInfo handled))
         (step := payloadStep version)
         (next := fun _ => pure (.done (.setVersion (Bridge.libVersion declared)))) (by
         simp [payloadStep, Declaration.next, attributeStep,

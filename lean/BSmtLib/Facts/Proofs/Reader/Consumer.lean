@@ -3,7 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Parser.Trace
 public import BSmtLib.Facts.Proofs.Parser.Rejection.Library
 public import BSmtLib.Facts.Reader.Adapters
-import all BSmtLib.Plain
+import all BSmtLib.Lexicon.Value
 
 @[expose] public section
 

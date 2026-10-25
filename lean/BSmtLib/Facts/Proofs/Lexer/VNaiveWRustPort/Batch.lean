@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.WP
 public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 

@@ -6,6 +6,8 @@ public import BSmtLib.Facts.Proofs.Lexer.Consumers.RunE
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Lexer.Error
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -33,7 +35,7 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.EofModel
 open BSmtLib.Lexer.Error BSmtLib.Lexer.Internal.VNaive
 
 /-- An error is a lexical one other than trailing input. -/
-def IsLexicalNT {ε : Type} (e : LexError ε) : Prop :=
+def IsLexicalNT {ε : Type} (e : LexerError ε) : Prop :=
   ∃ kind, e.cause = .lexical kind ∧ kind ≠ .unexpectedTrailingToken
 
 /-- The concrete collector goes on at a lexeme other than the end-of-file one, under the version
@@ -72,7 +74,7 @@ theorem hand1_cc_eof (p : Prog) (location : Span.Location) :
     show concreteCollector.switchTo (p.taken ++ [x]) = none from rfl, switchedTo, crosses,
     bne_self_eq_false]
 
-theorem lexemes_noEof (v : Token.Version) (st : St) (location : Span.Location) (bs : List UInt8) :
+theorem lexemes_noEof (v : Version) (st : St) (location : Span.Location) (bs : List UInt8) :
     match lexBytesF v true st location bs with
     | .ok (_, _, ls) => NoEof ls
     | .error (ls, _) => NoEof ls := by
@@ -105,7 +107,7 @@ theorem vBytes_cc (core : Core) (st : St) (hact : core.activity = st.activity)
     obtain ⟨c', hvb, ⟨a1, -, a3, -⟩, -⟩ := hV
     refine .inl ⟨by rw [hvb], by rw [hvb]; exact a3.trans hh, st', by rw [hvb]; exact a1⟩
 
-theorem lexicalKey_some {ε : Type} {e : LexError (Option ε)} {k : LexicalErrorKind} {s : Span}
+theorem lexicalKey_some {ε : Type} {e : LexerError (Option ε)} {k : LexicalErrorKind} {s : Span}
     (h : lexicalKey e.cause e.span = some (k, s)) : IsLexicalNT e := by
   unfold lexicalKey at h
   split at h
@@ -188,7 +190,7 @@ theorem vBytes_cc_exact (core : Core) (st : St) (hact : core.activity = st.activ
     rw [hvb]
     exact ⟨rfl, a3.trans hh, a1, a5, a2.trans hv⟩
 
-theorem lexicalKey_span {ε : Type} {c : LexErrorCause (Option ε)} {s s' : Span}
+theorem lexicalKey_span {ε : Type} {c : LexerErrorCause (Option ε)} {s s' : Span}
     {k : LexicalErrorKind} (h : lexicalKey c s = some (k, s')) : s' = s := by
   unfold lexicalKey at h
   split at h

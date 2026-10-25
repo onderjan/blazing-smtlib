@@ -32,10 +32,10 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 /-- `normalSpec_lt` at whitespace other than a line feed, on the fast path. -/
-theorem normalSpec_whitespace (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_whitespace (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)

@@ -27,7 +27,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Canon.Steps
 open Basic States Simp Bridge
 
 
-open BSmtLib.Parser BSmtLib.Nodes BSmtLib.Traits
+open BSmtLib.Parser BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Ident BSmtLib.Parser.Category.Pattern
 open BSmtLib.Parser.Category.QualifiedIdent BSmtLib.Parser.Category.SExpr
@@ -72,7 +72,7 @@ theorem expectString_canon {token : Internal.Input} (ht : token' = canon token) 
     CSim (expectString (H := List Event) token) (expectString token') := by
   subst ht; unfold expectString; canon_step []
 
-theorem IdentState_step_canon {version : Token.Version} {state : IdentState}
+theorem IdentState_step_canon {version : Version} {state : IdentState}
     {token : Internal.Input} {state' : IdentState} (hs : state' = canon state)
     (ht : token' = canon token) :
     CSim (IdentState.step (H := List Event) version state token)
@@ -87,20 +87,20 @@ theorem sortComplete_canon {levels : List (SortLevel RSort)} {head : Ident}
       (sortComplete levels' head' arguments') := by
   subst hl hh ha; unfold sortComplete; canon_step []
 
-theorem sortStep_canon {version : Token.Version} {state : SortState RSort}
+theorem sortStep_canon {version : Version} {state : SortState RSort}
     {token : Internal.Input} {state' : SortState RSort} (hs : state' = canon state)
     (ht : token' = canon token) :
     CSim (sortStep (H := List Event) version state token) (sortStep version state' token') := by
   subst hs ht; unfold sortStep; canon_step []
 
-theorem sExprStep_canon {version : Token.Version} {state : SExprState RSExpr}
+theorem sExprStep_canon {version : Version} {state : SExprState RSExpr}
     {token : Internal.Input} {state' : SExprState RSExpr} (hs : state' = canon state)
     (ht : token' = canon token) :
     CSim (sExprStep (H := List Event) version state token) (sExprStep version state' token') := by
   subst hs ht; unfold sExprStep; canon_step []
 
 set_option maxHeartbeats 4000000 in
-theorem attributeStep_canon {single : Bool} {version : Token.Version}
+theorem attributeStep_canon {single : Bool} {version : Version}
     {state : AttributeState RSExpr RAttribute} {token : Internal.Input}
     {state' : AttributeState RSExpr RAttribute}
     (hs : state' = canon state) (ht : token' = canon token) :
@@ -109,21 +109,21 @@ theorem attributeStep_canon {single : Bool} {version : Token.Version}
   subst hs ht; unfold attributeStep; canon_step []
 
 set_option maxHeartbeats 4000000 in
-theorem PatternState_step_canon {version : Token.Version} {state : PatternState}
+theorem PatternState_step_canon {version : Version} {state : PatternState}
     {token : Internal.Input} {state' : PatternState} (hs : state' = canon state)
     (ht : token' = canon token) :
     CSim (PatternState.step (H := List Event) version state token)
       (PatternState.step version state' token') := by
   subst hs ht; unfold PatternState.step; canon_step []
 
-theorem qualIdentStep_canon {version : Token.Version} {state : QualIdentState RSort}
+theorem qualIdentStep_canon {version : Version} {state : QualIdentState RSort}
     {token : Internal.Input} {state' : QualIdentState RSort} (hs : state' = canon state)
     (ht : token' = canon token) :
     CSim (qualIdentStep (H := List Event) version state token)
       (qualIdentStep version state' token') := by
   subst hs ht; unfold qualIdentStep; canon_step []
 
-theorem sortedVarStep_canon {version : Token.Version} {state : SortedVarState RSort}
+theorem sortedVarStep_canon {version : Version} {state : SortedVarState RSort}
     {token : Internal.Input} {state' : SortedVarState RSort} (hs : state' = canon state)
     (ht : token' = canon token) :
     CSim (sortedVarStep (H := List Event) version state token)
@@ -151,7 +151,7 @@ theorem termComplete_canon {levels levels' : List (TermLevel RSort RTerm RScope)
   subst hl; unfold termComplete; canon_step []
 
 theorem startBinder_canon {binder : SortedBinder}
-    {variables variables' : Array (Plain.Symbol × RSort)}
+    {variables variables' : Array (Lexicon.Value.Symbol × RSort)}
     (hv : variables' = canon variables) :
     CSim (startBinder (H := List Event) binder variables) (startBinder binder variables') := by
   subst hv; unfold startBinder; canon_step []
@@ -166,7 +166,7 @@ theorem termOpened_canon {state state' : TermStateOf (List Event)} {token : Inte
   subst hs ht; unfold termOpened; canon_step []
 
 set_option maxHeartbeats 8000000 in
-theorem termStep_canon {version : Token.Version} {state state' : TermStateOf (List Event)}
+theorem termStep_canon {version : Version} {state state' : TermStateOf (List Event)}
     {token : Internal.Input} (hs : state' = canon state) (ht : token' = canon token) :
     CSim (termStep (H := List Event) version state token) (termStep version state' token') := by
   subst hs ht; unfold termStep; canon_step [sortedVarStep_canon]

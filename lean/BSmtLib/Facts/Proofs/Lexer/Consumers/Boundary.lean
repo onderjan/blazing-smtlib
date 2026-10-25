@@ -3,6 +3,8 @@ module
 public import BSmtLib.Facts.Proofs.Lexer.Consumers.Stream
 import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -31,7 +33,7 @@ def wsLexeme (p : Pending) (location : Span.Location) : Lexeme :=
   { category := .whitespace, content := p.content, start := p.start, «end» := location }
 
 /-- Whitespace in progress goes on over whitespace, which it takes into its content. -/
-theorem lexBytesW_whitespace (version : Token.Version) (bytes : List UInt8)
+theorem lexBytesW_whitespace (version : Version) (bytes : List UInt8)
     (hbytes : ∀ b ∈ bytes, isWhitespace b = true) :
     ∀ {p : Pending} {location : Span.Location}, p.mode = .whitespace →
       ∃ p', p'.mode = .whitespace ∧ p'.start = p.start ∧
@@ -53,7 +55,7 @@ theorem lexBytesW_whitespace (version : Token.Version) (bytes : List UInt8)
 
 /-- Whitespace in progress ends before a byte that is not whitespace, which is lexed again with
 nothing in progress. -/
-theorem byteStepW_whitespace_end (version : Token.Version) {p : Pending} {location : Span.Location}
+theorem byteStepW_whitespace_end (version : Version) {p : Pending} {location : Span.Location}
     {c : UInt8} (hp : p.mode = .whitespace) (hc : isWhitespace c = false) :
     byteStepW version true (.token p) location c =
         (startStepW version true location c).map (fun (st, ls) => (st, wsLexeme p location :: ls)) ∧
@@ -63,7 +65,7 @@ theorem byteStepW_whitespace_end (version : Token.Version) {p : Pending} {locati
 
 /-- A comment in progress goes on over bytes that are not line breaks, which it takes into its
 content. -/
-theorem lexBytesW_comment (version : Token.Version) (bytes : List UInt8)
+theorem lexBytesW_comment (version : Version) (bytes : List UInt8)
     (hbytes : ∀ b ∈ bytes, ((b == 10) || (b == 13)) = false) :
     ∀ {p : Pending} {location : Span.Location}, p.mode = .comment →
       ∃ p', p'.mode = .comment ∧ p'.start = p.start ∧
@@ -85,7 +87,7 @@ theorem lexBytesW_comment (version : Token.Version) (bytes : List UInt8)
     rfl
 
 /-- A line break ends the comment in progress, with the line break. -/
-theorem byteStepW_comment_end (version : Token.Version) {p : Pending} {location : Span.Location}
+theorem byteStepW_comment_end (version : Version) {p : Pending} {location : Span.Location}
     {c : UInt8} (hp : p.mode = .comment) (hc : ((c == 10) || (c == 13)) = true) :
     byteStepW version true (.token p) location c = some (.idle, [commentLexeme p location c]) := by
   have hc' : (c == byte! '\n' || c == byte! '\r') = true := hc
@@ -107,7 +109,7 @@ def St.NonLayout : St → Prop
 
 /-- From a token in progress that is neither whitespace nor a comment, the first lexeme the run
 finishes, if any, is one that a consumer that does not take whitespace and comments takes. -/
-theorem lexBytesW_head_taken (version : Token.Version) (bytes : List UInt8) :
+theorem lexBytesW_head_taken (version : Version) (bytes : List UInt8) :
     ∀ {st : St} {location : Span.Location}, (St.NonLayout st) →
       match lexBytesW version true st location bytes with
       | .ok (st', _, ls) => (ls = [] → (St.NonLayout st')) ∧ ∀ l ∈ ls.head?, (Taken l)
@@ -159,7 +161,7 @@ theorem list_split_first (p : UInt8 → Bool) (l : List UInt8) :
 
 theorem chars_semicolon : chars ";" = [59] := rfl
 
-theorem start_not_comment {version : Token.Version} {location : Span.Location} {c : UInt8}
+theorem start_not_comment {version : Version} {location : Span.Location} {c : UInt8}
     {p : Pending}
     (h : start version false location c = .pending p) (hc : c ≠ 59) : p.mode ≠ .comment := by
   simp only [start] at h
@@ -183,7 +185,7 @@ theorem headIs_withBefore_nil {l : Lexeme}
     HeadIs l (withBefore [] r) := by
   rw [withBefore_nil]; exact h
 
-theorem streamFrom_head {version : Token.Version} {ws ended : Bool} {location : Span.Location}
+theorem streamFrom_head {version : Version} {ws ended : Bool} {location : Span.Location}
     {bytes : List UInt8} {l : Lexeme} (h : HeadIs l (lexBytesW version ws .idle location bytes)) :
     ∃ rest, (streamFrom version ws ended location bytes).1 = l :: rest := by
   unfold streamFrom
@@ -204,7 +206,7 @@ theorem streamFrom_head {version : Token.Version} {ws ended : Bool} {location : 
 
 /-- The lexeme ends before the byte `d`, which ends the whitespace in progress: the run over
 `d` and the bytes after it begins with the whitespace. -/
-theorem headIs_whitespace_end (version : Token.Version) {p : Pending} {location : Span.Location}
+theorem headIs_whitespace_end (version : Version) {p : Pending} {location : Span.Location}
     {d : UInt8} (t : List UInt8) (hp : p.mode = .whitespace) (hd : isWhitespace d = false) :
     HeadIs (wsLexeme p location) (lexBytesW version true (.token p) location (d :: t)) := by
   obtain ⟨h1, h2⟩ := byteStepW_whitespace_end version (location := location) hp hd
@@ -386,7 +388,7 @@ the spec gives there: either the spec gives none, and the first lexeme of the ru
 token; or the first lexeme is whitespace or a comment, the first piece the spec gives, after
 which the spec goes on from its end; or the layout there is not complete yet, and the run has
 finished nothing and not failed. -/
-theorem stream_layout (version : Token.Version) (input : List UInt8) (ended : Bool) (o : Nat) :
+theorem stream_layout (version : Version) (input : List UInt8) (ended : Bool) (o : Nat) :
     (BSmtLibSpec.Lexer.layoutFrom input ended o = [] ∧
       ∀ l ∈ (stream version true input ended o).1.head?, (Taken l)) ∨
     (∃ l rest, (stream version true input ended o).1 = l :: rest ∧ ¬ (Taken l) ∧

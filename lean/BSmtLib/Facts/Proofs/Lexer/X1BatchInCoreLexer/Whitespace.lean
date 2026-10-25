@@ -10,6 +10,8 @@ import all BSmtLib.Lexer.Internal.WRustPort
 # The whitespace run of the normal state, in both lexers
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Whitespace
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -21,7 +23,7 @@ open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Positions
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
 /-- The position after the run and the batch, for those after its index. -/
@@ -135,7 +137,7 @@ theorem startWhitespaceFrom_sim (slice : ByteSlice) (h : slice.stop < USize.size
         (inputOf slice h).stop batch _ _ rfl hst ⟨hb, by omega⟩ _ _ _ _ _ _ _ _) fun _ =>
           SimP.pure (fun _ hs => ⟨fun h => by simp at h, fun _ => hs⟩) rfl
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- `startToken`, with the indices of the second lexer given by equations. -/
 theorem startToken_sim' (start : Nat) (offset : Nat) (base position : USize) (base' position' : Nat)
     (eb : ix start base = base') (ep : ix start position = position')

@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Token.SyntaxTokenBuf
+public import BSmtLib.Token.TokenBuf
 public import BSmtLib.Token.TokensBuf
 public import BSmtLib.Token.TokensCursor
 
@@ -9,7 +9,7 @@ public section
 /- LEAN: in Rust, `SmtAppendTokens` is in `token` with the cursor it fills; here it has a module
 of its own next to the cursor's, which the root module `BSmtLib` imports. -/
 
-open BSmtLib.Plain
+open BSmtLib.Lexicon.Value
 
 namespace BSmtLib.Token.AppendTokens
 
@@ -20,9 +20,9 @@ class _root_.BSmtLib.Token.AppendTokens (α : Type) where
   /-- Puts the tokens of the value after those in the cursor. -/
   appendTokens : α → TokensCursor → TokensCursor
 
-@[no_expose] instance : AppendTokens SyntaxToken := ⟨fun self tokens => tokens.push self⟩
+@[no_expose] instance : AppendTokens Token := ⟨fun self tokens => tokens.push self⟩
 
-@[no_expose] instance : AppendTokens SyntaxTokenBuf := ⟨fun self tokens => tokens.push self.view⟩
+@[no_expose] instance : AppendTokens TokenBuf := ⟨fun self tokens => tokens.push self.view⟩
 
 @[no_expose] instance : AppendTokens TokensBuf where
   appendTokens self tokens := Id.run do
@@ -31,9 +31,15 @@ class _root_.BSmtLib.Token.AppendTokens (α : Type) where
       tokens := tokens.push token
     return tokens
 
-/- LEAN: Rust's implementation for the slice `[T]`; here for the array. -/
+/- LEAN: Rust's implementations for the slice `[T]` and the vector `Vec<T>`; here for the array,
+which is both. -/
 @[no_expose] instance {α : Type} [AppendTokens α] : AppendTokens (Array α) where
   appendTokens self tokens := self.foldl (fun tokens value => appendTokens value tokens) tokens
+
+/- LEAN: Rust's implementation for the array `[T; N]`; here for the vector of `n` values, an array
+of the size in its type, by its array. -/
+@[no_expose] instance {α : Type} {n : Nat} [AppendTokens α] : AppendTokens (Vector α n) where
+  appendTokens self tokens := appendTokens self.toArray tokens
 
 @[no_expose] instance : AppendTokens Reserved := ⟨fun self tokens => tokens.push (.reserved self)⟩
 
@@ -41,7 +47,7 @@ class _root_.BSmtLib.Token.AppendTokens (α : Type) where
 viewed or owned, as the token of its variant. -/
 set_option hygiene false in
 local macro "plain_append_tokens " view:ident buf:ident variant:ident : command => do
-  let constructor := Lean.mkIdent (`BSmtLib.Token.SyntaxToken ++ variant.getId)
+  let constructor := Lean.mkIdent (`BSmtLib.Token ++ variant.getId)
   `(@[no_expose] instance : AppendTokens $view :=
       ⟨fun self tokens => tokens.push ($constructor self)⟩
 

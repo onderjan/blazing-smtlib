@@ -17,9 +17,11 @@ of the lexer proofs do, and carried over to the parse adapter by `Param.Split`, 
 the lexer's handovers to the two are the same.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Stop
 
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Parser.Internal (After Consuming ParseByToken)
@@ -105,16 +107,16 @@ variable {H P R E : Type} [Handler H Id] [ParseByToken P H Id E R] [Parse P H Id
 
 /-- The handler told the version of the cursor, unless it was told the version of the input
 already. -/
-def told (adapter : ParseAdapter H P) (cursor : Token.BatchCursor b) : H :=
+def told (adapter : ParseAdapter H P) (cursor : LexerCursor b) : H :=
   ((show StateT H Id Unit from if (ParseAdapter.Internal.versionSet adapter) then pure ()
     else Handler.setVersion (Token.Cursor.version cursor)).run adapter.handler).2
 
 /-- What a call of the consumer gives after its first token: the answer and the cursor, and the
 adapter with the handler, the parser and the resources. -/
-def finish (cursor : Token.BatchCursor b) (parseState : ParseState H) :
-    (After P R E × { z : Token.BatchCursor b // z.Consumed cursor }) × H →
+def finish (cursor : LexerCursor b) (parseState : ParseState H) :
+    (After P R E × { z : LexerCursor b // z.Consumed cursor }) × H →
       (Except (ParseError E) (ControlFlow R) ×
-        { next : Token.BatchCursor b // next.Consumed cursor }) × ParseAdapter H P
+        { next : LexerCursor b // next.Consumed cursor }) × ParseAdapter H P
   | ((.stop answer parser, z), handler) =>
     ((answer, z),
       ParseAdapter.Internal.mk handler parser (ParseAdapter.Internal.versionSetAfter answer)
@@ -129,17 +131,17 @@ result is read off its definition. -/
 /-- A call of the consumer: the handler told the version first, unless it was told the version
 of the input already; then the parser takes the tokens of the cursor until there are none or
 the handover stops. -/
-def consume (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
+def consume (cursor : LexerCursor b) (h : cursor.HasNext) :
     StateT (ParseAdapter H P) Id
       (Except (ParseError E) (ControlFlow R) ×
-        { next : Token.BatchCursor b // next.Consumed cursor }) := fun adapter =>
+        { next : LexerCursor b // next.Consumed cursor }) := fun adapter =>
   finish cursor (ParseAdapter.Internal.parseState adapter)
     ((takeOne adapter.parser cursor (cursor.next h).1 (cursor.next h).2.val
       (cursor.next h).2.property).run (told adapter cursor))
 
 omit [Parse P H Id E R] in
 /-- After a call, the handler is to be told the version again only if the parser broke. -/
-theorem versionSet_consume (cursor : Token.BatchCursor b) (h : cursor.HasNext)
+theorem versionSet_consume (cursor : LexerCursor b) (h : cursor.HasNext)
     (adapter : ParseAdapter H P) :
     ParseAdapter.Internal.versionSet ((consume (H := H) (P := P) cursor h).run adapter).2 =
       ParseAdapter.Internal.versionSetAfter
@@ -155,7 +157,7 @@ theorem versionSet_consume (cursor : Token.BatchCursor b) (h : cursor.HasNext)
 
 /-- The consumer that stops after an action on its cursor, on the parse adapter's type. -/
 @[reducible]
-def consumeFrom : Token.ConsumeFrom (ParseAdapter H P) (Token.BatchCursor b) Id where
+def consumeFrom : Token.ConsumeFrom (ParseAdapter H P) (LexerCursor b) Id where
   consume := consume
 
 end BSmtLib.Facts.Proofs.Reader.Param.Stop

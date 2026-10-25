@@ -5,6 +5,8 @@ public import BSmtLib.Facts.Proofs.Reader.Consumer
 public import BSmtLib.Facts.Proofs.Reader.Param.Stop
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Parser
 
 @[expose] public section
@@ -20,10 +22,12 @@ that are not calls left out (`Erasing`), its parser goes on in the same state, a
 cursor as the recording log says the run asked its producer to (`takeOne_rec`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Adapter
 
 open BSmtLibSpec.Parser
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Parser
@@ -36,9 +40,9 @@ open BSmtLib.Parser.Adapter BSmtLib.Parser.Script
 attribute [local instance high] Stop.consumeFrom
 
 /-- The cursor after the requests: the switch of the version, then discarding. -/
-def applyRequests {b : Token.BatchTag} (cursor : Token.BatchCursor b)
+def applyRequests {b : Token.BatchTag} (cursor : LexerCursor b)
     (switch : Option BSmtLibSpec.Lexicon.Version)
-    (discard : Bool) : Token.BatchCursor b :=
+    (discard : Bool) : LexerCursor b :=
   let switched := match switch with
     | none => cursor
     | some version =>
@@ -51,11 +55,11 @@ def applyRequests {b : Token.BatchTag} (cursor : Token.BatchCursor b)
 finishes, or goes on, acting on the cursor as the run asked its producer after the token's
 processing, a failed parser going on from its reset; the log is the run's with the events that
 are not calls left out. -/
-def paOf {b : Token.BatchTag} (parser : ScriptParser (List Event)) (next : Token.BatchCursor b) :
-    Except (ParseErrorCause Unit) ((Token.Version × ScriptParser (List Event)) ⊕ Unit) × List Event
+def paOf {b : Token.BatchTag} (parser : ScriptParser (List Event)) (next : LexerCursor b) :
+    Except (ParseErrorCause Unit) ((Version × ScriptParser (List Event)) ⊕ Unit) × List Event
         →
       (Parser.Internal.After (ScriptParser
-          (List Event)) Unit Unit × Token.BatchCursor b) × List Event
+          (List Event)) Unit Unit × LexerCursor b) × List Event
   | (.error e, log) =>
     ((.stop (.error (Parser.ParseError.Internal.new e))
         (Parser.Internal.ParseByToken.reset parser),
@@ -101,7 +105,7 @@ theorem calls_arrivalCalls (parser : ScriptParser (List Event)) (item : Parser.I
       · simp at he
     · simp at he
 
-theorem toVersion_version (version : Token.Version) : toVersion
+theorem toVersion_version (version : Version) : toVersion
     (Bridge.version version) = version := by
   cases version <;> rfl
 
@@ -136,7 +140,7 @@ theorem any_calls {f : Event → Bool} (hf : ∀ e, e.isCall = true → f e = fa
 
 /-- The recording run's processing of a token, from the log before it: its arrival, the calls
 due at it and its processing written. -/
-theorem recAfter_eq (version : Token.Version) (parser : ScriptParser
+theorem recAfter_eq (version : Version) (parser : ScriptParser
     (List Event)) {item : Parser.Internal.Input}
     {received : Received} (hr : Bridge.received item = some received) (events : List Event) :
     (recAfter version parser item).run.run events =
@@ -230,7 +234,7 @@ theorem run_bind_error {α β : Type} {x : Parser.Quiet.RPM α} {f : α → Pars
   rfl
 
 theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
-    (cursor next : Token.BatchCursor b) (token : Token b) (consumed : next.Consumed cursor)
+    (cursor next : LexerCursor b) (token : LexerToken b) (consumed : next.Consumed cursor)
     (events : List Event) {received : Received}
     (hr : Bridge.received (Parser.Internal.Input.ofSyntax (next.syntax token)) = some received) :
     let r := (Stop.takeOne (H := List Event) (m := Id) (P := ScriptParser (List Event))
@@ -323,7 +327,7 @@ theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
       try dsimp only
       split
       · rename_i heq
-        simp [Token.Cursor.setVersion, Token.BatchCursor.setVersion] at heq
+        simp [Token.Cursor.setVersion, Lexer.Cursor.LexerCursor.setVersion] at heq
       · rename_i switched heq
         have heq' : next.setVersion declared = .ok switched := heq
         have happly : applyRequests next (some (Bridge.version declared)) false = switched := by
@@ -394,10 +398,10 @@ theorem takeOne_rec {b : Token.BatchTag} (parser : ScriptParser (List Event))
 
 /-- The version the recording run goes on in after a token: the one it asked its producer to
 switch to after the token's processing, if it did, else the one it was in. -/
-theorem recAfter_version (version : Token.Version) (parser : ScriptParser (List Event))
+theorem recAfter_version (version : Version) (parser : ScriptParser (List Event))
     {item : Parser.Internal.Input}
     {received : Received} (hr : Bridge.received item = some received) (events : List Event)
-    {version' : Token.Version} {parser' : ScriptParser (List Event)} {log : List Event}
+    {version' : Version} {parser' : ScriptParser (List Event)} {log : List Event}
     (h : (recAfter version parser item).run.run events = (.ok (.inl (version', parser')), log)) :
     version' = match Parser.Adapters.Run.switchOf log.reverse with
       | some switched => toVersion switched
@@ -493,10 +497,10 @@ theorem recAfter_version (version : Token.Version) (parser : ScriptParser (List 
 /-- The parse adapter's loop over the tokens of a cursor, from the parser: each token taken in
 turn, until the cursor has none or the handover stops. -/
 def paLoop {b : Token.BatchTag} (parser : ScriptParser (List Event))
-    (cursor : Token.BatchCursor b) :
+    (cursor : LexerCursor b) :
     StateT (List Event) Id
       (Except (ParseError Unit) (ControlFlow Unit) × ScriptParser (List Event) ×
-        Token.BatchCursor b) :=
+        LexerCursor b) :=
   if h : cursor.HasNext then
     match cursor.next h with
     | (token, ⟨next, consumed⟩) => do
@@ -506,23 +510,23 @@ def paLoop {b : Token.BatchTag} (parser : ScriptParser (List Event))
       | (.stop answer parser', ⟨later, _⟩) => return (answer, parser', later)
   else return (.ok .continue, parser, cursor)
 termination_by remaining cursor
-decreasing_by exact Token.BatchCursor.Consumed.remaining_lt _taken
+decreasing_by exact Lexer.Cursor.LexerCursor.Consumed.remaining_lt _taken
 
-theorem next?_hasNext {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
+theorem next?_hasNext {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) :
     Token.Cursor.next? cursor = some (cursor.next h) := by
-  show Token.BatchCursor.next? cursor = _
-  unfold Token.BatchCursor.next?
+  show Lexer.Cursor.LexerCursor.next? cursor = _
+  unfold Lexer.Cursor.LexerCursor.next?
   rw [dite_eq_left_of_eq_true (eq_true h)]
 
-theorem next?_not {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : ¬ cursor.HasNext) :
+theorem next?_not {b : Token.BatchTag} (cursor : LexerCursor b) (h : ¬ cursor.HasNext) :
     Token.Cursor.next? cursor = none := by
-  show Token.BatchCursor.next? cursor = _
-  unfold Token.BatchCursor.next?
+  show Lexer.Cursor.LexerCursor.next? cursor = _
+  unfold Lexer.Cursor.LexerCursor.next?
   rw [dite_eq_right_of_eq_false (eq_false h)]
 
 /-- The adapter's loop over the rest of its producer is `paLoop`. -/
-theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
-    ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : Token.BatchCursor b)
+theorem rest_eq {b : Token.BatchTag} (origin : LexerCursor b) :
+    ∀ (n : Nat) (parser : ScriptParser (List Event)) (cursor : LexerCursor b)
       (consumed : Token.Cursor.Consumed cursor origin)
           (handler : List Event), remaining cursor < n →
       let r := (Stop.rest (H := List Event) (m := Id) origin parser cursor consumed).run
@@ -542,13 +546,13 @@ theorem rest_eq {b : Token.BatchTag} (origin : Token.BatchCursor b) :
       cases after with
       | goOn parser' =>
         exact rest_eq origin n parser' later _ handler'
-          (Nat.lt_of_lt_of_le (Token.BatchCursor.Consumed.remaining_lt taken)
+          (Nat.lt_of_lt_of_le (Lexer.Cursor.LexerCursor.Consumed.remaining_lt taken)
               (Nat.le_of_lt_succ hn))
       | stop answer parser' => rfl
     · rw [next?_not cursor h, dite_eq_right_of_eq_false (eq_false h)]
       rfl
 
-theorem first_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext) :
+theorem first_eq {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) :
     Stop.first cursor h = cursor.next h := by
   unfold Stop.first
   split
@@ -561,14 +565,14 @@ theorem first_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor
 
 /-- The log the adapter's handler holds when its loop over a cursor in the version begins: the
 switch to the version first, unless the handler was told the version of the input already. -/
-def startLog (adapter : RecAdapter) (version : Token.Version) : List Event :=
+def startLog (adapter : RecAdapter) (version : Version) : List Event :=
   if (ParseAdapter.Internal.versionSet adapter) then adapter.handler
   else .handlerSwitch (Bridge.version version) :: adapter.handler
 
 /-- A call of the adapter is its loop over the cursor, from its parser and its handler's log with
 the switch to the cursor's version first, unless the handler was told the version already;
 afterwards the handler is told the version again only after the parser broke. -/
-theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : cursor.HasNext)
+theorem consume_eq {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext)
     (adapter : RecAdapter) :
     let q := (Token.ConsumeFrom.consume (m := Id) cursor h : StateT RecAdapter Id _).run adapter
     let r := (paLoop adapter.parser cursor).run (startLog adapter cursor.version)
@@ -597,7 +601,7 @@ theorem consume_eq {b : Token.BatchTag} (cursor : Token.BatchCursor b) (h : curs
     have := rest_eq cursor (remaining later + 1) parser' later taken handler' (Nat.lt_succ_self _)
     simp only at this
     exact congrArg (fun x : (Except (ParseError Unit) (ControlFlow Unit) ×
-      ScriptParser (List Event) × Token.BatchCursor b) × List Event =>
+      ScriptParser (List Event) × LexerCursor b) × List Event =>
         (x.1.1, x.1.2.2, (ParseAdapter.Internal.mk x.2 x.1.2.1
           (ParseAdapter.Internal.versionSetAfter x.1.1) .new : RecAdapter))) this
 

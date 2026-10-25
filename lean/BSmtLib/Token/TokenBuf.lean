@@ -1,18 +1,18 @@
 module
 
-public import BSmtLib.Token.SyntaxToken
+public import BSmtLib.Token
 
 public section
 
-/- LEAN: in Rust, `SmtSyntaxTokenBuf` is in `token` with the token it is viewed as; here it has
-a module of its own next to `SyntaxToken`'s, which the root module `BSmtLib` imports. -/
+/- LEAN: in Rust, `SmtTokenBuf` is in `token` with the token it is viewed as; here it has
+a module of its own next to `Token`'s, which the root module `BSmtLib` imports. -/
 
-open BSmtLib.Plain
+open BSmtLib.Lexicon.Value
 
-namespace BSmtLib.Token.SyntaxTokenBuf
+namespace BSmtLib.Token.TokenBuf
 
-/-- An owned token, from which `SyntaxToken` is viewed. -/
-inductive _root_.BSmtLib.Token.SyntaxTokenBuf where
+/-- An owned token, from which `Token` is viewed. -/
+inductive _root_.BSmtLib.Token.TokenBuf where
   | parenOpen
   | parenClose
   | numeral (value : NumeralBuf)
@@ -28,7 +28,7 @@ inductive _root_.BSmtLib.Token.SyntaxTokenBuf where
   | endOfFile
   deriving Repr
 
-def view : SyntaxTokenBuf → SyntaxToken
+def view : TokenBuf → Token
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
   | .numeral value => .numeral value.view
@@ -43,11 +43,11 @@ def view : SyntaxTokenBuf → SyntaxToken
   | .comment value => .comment value.view
   | .endOfFile => .endOfFile
 
-end BSmtLib.Token.SyntaxTokenBuf
+end BSmtLib.Token.TokenBuf
 
-namespace BSmtLib.Token.SyntaxToken
+namespace BSmtLib.Token
 
-def intoOwned : SyntaxToken → SyntaxTokenBuf
+def intoOwned : Token → TokenBuf
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
   | .numeral value => .numeral value.intoOwned
@@ -62,4 +62,4 @@ def intoOwned : SyntaxToken → SyntaxTokenBuf
   | .comment value => .comment value.intoOwned
   | .endOfFile => .endOfFile
 
-end BSmtLib.Token.SyntaxToken
+end BSmtLib.Token

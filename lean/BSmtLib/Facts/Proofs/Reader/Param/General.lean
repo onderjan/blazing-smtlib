@@ -6,7 +6,8 @@ public import BSmtLib.Facts.Proofs.Reader.Param.Relate
 public import BSmtLib.Facts.Proofs.Reader.Param.KeepsPosture
 import all BSmtLib.Parser.Adapter
 import all BSmtLib.Token
-import all BSmtLib.Token.SyntaxToken
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 import all BSmtLib.Parser.Script
 
 @[expose] public section
@@ -25,10 +26,12 @@ tokens taken leaves the parser (`AdapterAtG`), also where both fail. The parse a
 one that stops after an action on its cursor (`Param.Stop`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.General
 
 open BSmtLibSpec
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
@@ -48,7 +51,7 @@ attribute [local instance high] Stop.consumeFrom
 told the version exactly where it took an item, and also after the recording run failed: its
 handler holds the run's log with the events that are not calls left out, and where the run
 finished, the adapter is reset and not told the version. -/
-def AdapterAtG (version : Lexicon.Version) (items : List LibItem) (v : Token.Version)
+def AdapterAtG (version : Lexicon.Version) (items : List LibItem) (v : Version)
     (adapter : RecAdapter) : Prop :=
   match recRun version items with
   | (.ok (.inl (v', parser)), log) =>
@@ -66,7 +69,7 @@ theorem map_libItem (taken : List Handed) :
 
 /-- The recording run over one more item, read as the parser's run over the items. -/
 theorem parse_snoc (version : Lexicon.Version) (items : List LibItem) (item : LibItem)
-    {v : Token.Version} {parser : ScriptParser (List Event)} {log : List Event}
+    {v : Version} {parser : ScriptParser (List Event)} {log : List Event}
     (hrun : recRun version items = (.ok (.inl (v, parser)), log)) :
     libraryParser.parse version (items ++ [item]) =
       (((recAfter v parser item.val).run.run log).2.reverse,
@@ -105,7 +108,7 @@ theorem answerOf_error (atEnd : Bool) (e : Parser.ParseErrorCause Unit) :
 
 /-- The adapter's loop over a cursor whose next token is whitespace or a comment, from any parser:
 it fails at that token, the cursor after it. -/
-theorem paLoop_layout {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : cursor.HasNext)
+theorem paLoop_layout {b : Token.BatchTag} {cursor : LexerCursor b} (h : cursor.HasNext)
     (parser : ScriptParser (List Event)) (handler : List Event)
     (hl : Parser.Internal.Input.ofSyntax (cursor.syntax (cursor.next h).1) = .layout) :
     ∃ e, ((paLoop parser cursor).run handler).1.1 = .error e ∧
@@ -121,7 +124,7 @@ theorem paLoop_layout {b : Token.BatchTag} {cursor : Token.BatchCursor b} (h : c
 consumer was not handed whitespace or a comment, the adapter where the recording run leaves the
 parser. -/
 theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
-    ∀ (n : Nat) (cursor : Token.BatchCursor b) (taken : List Handed) (items : List LibItem)
+    ∀ (n : Nat) (cursor : LexerCursor b) (taken : List Handed) (items : List LibItem)
       (parser : ScriptParser (List Event)) (log : List Event), remaining cursor < n →
       items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf) →
       recRun version items = (.ok (.inl (cursor.version, parser)), log) →
@@ -174,7 +177,7 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
         rw [← hitemdef] at htake
         change _ = paOf parser (cursor.next h).2.val
           ((recAfter cursor.version parser item.val).run.run log) at htake
-        have hver : ∀ {v' : Token.Version} {p' : ScriptParser (List Event)} {log' : List Event},
+        have hver : ∀ {v' : Version} {p' : ScriptParser (List Event)} {log' : List Event},
             (recAfter cursor.version parser item.val).run.run log = (.ok (.inl (v', p')), log') →
             v' = match Parser.Adapters.Run.switchOf log'.reverse with
               | some switched => toVersion switched

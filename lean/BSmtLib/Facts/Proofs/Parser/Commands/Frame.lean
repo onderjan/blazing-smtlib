@@ -30,9 +30,9 @@ open BSmtLibSpec.Parser.Traversal
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 omit [LawfulMonad m] in
 /-- The command parser in a payload mode steps as the payload parser. -/
@@ -115,7 +115,7 @@ theorem command_of_payload (command : Tree.Command) {name : Token.Reserved.Comma
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     {payloadSyntax : List BSmtLibSpec.Grammar.SyntaxToken}
     (htokens : command.tokens = commandTokens s payloadSyntax)
-    {rest : Run (StateT H m) (Traits.Handler.Error H) Unit}
+    {rest : Run (StateT H m) (Handler.Error H) Unit}
     (hcommand : Traversal.command points h command = (do opening points s; rest))
     (hpayload : ∀ {payload : List Parser.Internal.Input}, Stands payload payloadSyntax →
       PayloadRuns points version (Payload.init name version) (payload ++ [.parenClose])

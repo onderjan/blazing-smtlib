@@ -371,7 +371,7 @@ theorem startRem_term {version : BSmtLibSpec.Lexicon.Version}
 
 /-! ## Reserved words a lexer hands over -/
 
-theorem lambda_lexical {version : Token.Version}
+theorem lambda_lexical {version : Version}
     (h : (Received.token (.reserved (Bridge.reserved (.general .lambda)))).OfVersion
       (Bridge.version version)) :
     versionAtLeast (Bridge.version version) .v2_7 := by
@@ -380,7 +380,7 @@ theorem lambda_lexical {version : Token.Version}
   revert h
   cases version <;> decide
 
-theorem match_lexical {version : Token.Version}
+theorem match_lexical {version : Version}
     (h : (Received.token (.reserved (Bridge.reserved (.general .match)))).OfVersion
       (Bridge.version version)) :
     versionAtLeast (Bridge.version version) .v2_6 := by
@@ -486,7 +486,7 @@ theorem termComplete_advances {version : BSmtLibSpec.Lexicon.Version}
 /-! ## The steps of the term parser -/
 
 theorem startBinder_sound {Q : Parser.ParseErrorCause Unit → Prop} (binder : SortedBinder)
-    (variables : Array (Plain.Symbol × Nat)) :
+    (variables : Array (Lexicon.Value.Symbol × Nat)) :
     Sound (fun _ => True) Q (startBinder (H := List Event) binder variables) := by
   cases binder <;> exact Sound.ofCall fun _ => ⟨_, _, rfl⟩
 
@@ -497,7 +497,7 @@ theorem endBinder_sound {Q : Parser.ParseErrorCause Unit → Prop} (kind : Binde
 
 section
 
-variable (version : Token.Version) (levels : List
+variable (version : Version) (levels : List
     (TermLevel Nat Nat Nat)) {token : Parser.Internal.Input}
   {item : Received} (hitem : Bridge.received token = some item)
   (hlex : item.OfVersion (Bridge.version version))
@@ -678,7 +678,7 @@ theorem termStep_letBindingsOpen :
   exact cat_left (fun _ h => cat_tok h) hu
 
 include hitem in
-theorem termStep_letBindingOpen (bindings : Array (Plain.Symbol × Nat)) :
+theorem termStep_letBindingOpen (bindings : Array (Lexicon.Value.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingOpen bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingOpen bindings, levels⟩ token) := by
   cases token <;> simp only [termStep] <;> try fail_step
@@ -700,7 +700,7 @@ theorem termStep_letBindingOpen (bindings : Array (Plain.Symbol × Nat)) :
         rfl) rfl) hr (by simp)
 
 include hitem in
-theorem termStep_letBindingSymbol (bindings : Array (Plain.Symbol × Nat)) :
+theorem termStep_letBindingSymbol (bindings : Array (Lexicon.Value.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingSymbol bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingSymbol bindings, levels⟩ token) := by
   cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectSymbol,
@@ -714,7 +714,7 @@ theorem termStep_letBindingSymbol (bindings : Array (Plain.Symbol × Nat)) :
     (by simp)
 
 include hitem in
-theorem termStep_letBindingClose (bindings : Array (Plain.Symbol × Nat)) :
+theorem termStep_letBindingClose (bindings : Array (Lexicon.Value.Symbol × Nat)) :
     TermAdvance version ⟨.letBindingClose bindings, levels⟩ item
       (termStep (H := List Event) version ⟨.letBindingClose bindings, levels⟩ token) := by
   cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectClose,
@@ -727,7 +727,7 @@ theorem termStep_letBindingClose (bindings : Array (Plain.Symbol × Nat)) :
 include hitem hlex in
 theorem termStep_sortedVars (binder : SortedBinder)
     (state : ListState (Parser.Category.SortedVar.Internal.SortedVarState Nat)
-    (Plain.Symbol × Nat)) :
+    (Lexicon.Value.Symbol × Nat)) :
     TermAdvance version ⟨.sortedVars binder state, levels⟩ item
       (termStep (H := List Event) version ⟨.sortedVars binder state, levels⟩ token) := by
   simp only [termStep]
@@ -784,7 +784,7 @@ theorem termStep_matchCasesOpen (scrutinee : Nat) :
   exact cat_left (fun _ h => cat_tok h) hu
 
 include hitem in
-theorem termStep_matchCaseOpen (scrutinee : Nat) (cases : Array (Nodes.Pattern × Nat)) :
+theorem termStep_matchCaseOpen (scrutinee : Nat) (cases : Array (Grammar.Nodes.Pattern × Nat)) :
     TermAdvance version ⟨.matchCaseOpen scrutinee cases, levels⟩ item
       (termStep (H := List Event) version ⟨.matchCaseOpen scrutinee cases, levels⟩ token) := by
   cases token <;> simp only [termStep] <;> try fail_step
@@ -805,7 +805,7 @@ theorem termStep_matchCaseOpen (scrutinee : Nat) (cases : Array (Nodes.Pattern �
         (by simp)
 
 include hitem hlex in
-theorem termStep_matchPattern (scrutinee : Nat) (cases : Array (Nodes.Pattern × Nat))
+theorem termStep_matchPattern (scrutinee : Nat) (cases : Array (Grammar.Nodes.Pattern × Nat))
     (state : Parser.Category.Pattern.Internal.PatternState) :
     TermAdvance version ⟨.matchPattern scrutinee cases state, levels⟩ item
       (termStep (H := List Event) version ⟨.matchPattern scrutinee cases state, levels⟩ token) := by
@@ -823,8 +823,8 @@ theorem termStep_matchPattern (scrutinee : Nat) (cases : Array (Nodes.Pattern ×
     exact cat_intro' (cat_intro' hr (cat_intro ht ha) rfl) hr' (by simp)
 
 include hitem in
-theorem termStep_matchCaseClose (scrutinee : Nat) (cases : Array (Nodes.Pattern × Nat))
-    (pattern : Nodes.Pattern) (scope body : Nat) :
+theorem termStep_matchCaseClose (scrutinee : Nat) (cases : Array (Grammar.Nodes.Pattern × Nat))
+    (pattern : Grammar.Nodes.Pattern) (scope body : Nat) :
     TermAdvance version ⟨.matchCaseClose scrutinee cases pattern scope body, levels⟩ item
       (termStep (H := List Event) version
         ⟨.matchCaseClose scrutinee cases pattern scope body, levels⟩ token) := by
@@ -837,7 +837,7 @@ theorem termStep_matchCaseClose (scrutinee : Nat) (cases : Array (Nodes.Pattern 
   exact cat_left (fun _ h => cat_tok (cat_mono (fun _ h => star_of_rep h) (fun _ h => h) h)) hu
 
 include hitem in
-theorem termStep_matchClose (scrutinee : Nat) (cases : Array (Nodes.Pattern × Nat)) :
+theorem termStep_matchClose (scrutinee : Nat) (cases : Array (Grammar.Nodes.Pattern × Nat)) :
     TermAdvance version ⟨.matchClose scrutinee cases, levels⟩ item
       (termStep (H := List Event) version ⟨.matchClose scrutinee cases, levels⟩ token) := by
   cases token <;> simp only [termStep, Parser.Category.Token.Internal.expectClose,
@@ -875,7 +875,7 @@ theorem termStep_annotating (term : Nat) (state : AttributeState Nat Nat) :
 end
 
 /-- Every step of the term parser advances. -/
-theorem termStep_advances (version : Token.Version) :
+theorem termStep_advances (version : Version) :
     StepsAdvance version (termStep (H := List Event) version)
       (termRem (Bridge.version version)) fun state _ => termRem (Bridge.version version) state := by
   intro ⟨mode, levels⟩ token item hitem hlex

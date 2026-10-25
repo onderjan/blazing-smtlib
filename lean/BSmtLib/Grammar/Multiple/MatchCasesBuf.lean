@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Multiple.MatchCases
+public import BSmtLib.Grammar.Multiple.MatchCases
 
 public section
 
@@ -11,11 +11,11 @@ The owned buffer from which a user builds the match cases that the end of a `mat
 -/
 
 /- LEAN: a part of Rust's `multiple.rs`, in a module of its own beside
-`BSmtLib.Multiple.MatchCases`, as each module declares what it is named after. -/
+`BSmtLib.Grammar.Multiple.MatchCases`, as each module declares what it is named after. -/
 
-namespace BSmtLib.Multiple
+namespace BSmtLib.Grammar.Multiple
 
-open BSmtLib.Nodes (Pattern)
+open BSmtLib.Grammar.Nodes (Pattern)
 
 /-- Owned match cases, from which `MatchCases` is viewed. -/
 /- LEAN: parameterised by the handled terms, as `MatchCases` is. Each pattern is a view of a copy
@@ -32,7 +32,7 @@ def new : MatchCasesBuf HandledTerm := ⟨#[]⟩
 
 def push (self : MatchCasesBuf HandledTerm) (pattern : Pattern) (term : HandledTerm) :
     MatchCasesBuf HandledTerm :=
-  ⟨self.entries.push (Nodes.Pattern.Internal.copy pattern, term)⟩
+  ⟨self.entries.push (Grammar.Nodes.Pattern.Internal.copy pattern, term)⟩
 
 def clear (_ : MatchCasesBuf HandledTerm) : MatchCasesBuf HandledTerm := new
 
@@ -45,6 +45,9 @@ def isEmpty (self : MatchCasesBuf HandledTerm) : Bool := self.entries.isEmpty
 
 @[no_expose] instance : Inhabited (MatchCasesBuf HandledTerm) := ⟨new⟩
 
+@[no_expose] instance [Repr HandledTerm] : Repr (MatchCasesBuf HandledTerm) :=
+  ⟨fun self p => reprPrec self.viewMut p⟩
+
 end MatchCasesBuf
 
-end BSmtLib.Multiple
+end BSmtLib.Grammar.Multiple

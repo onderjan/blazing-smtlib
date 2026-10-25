@@ -20,14 +20,17 @@ resolves elsewhere than it did, or a public name of the library with neither a R
 nor a `LEAN:` reason fails the build.
 -/
 
-/-! The naming rule, with its exceptions: the views of the cursor's tokens as syntax tokens,
-declared where `SyntaxToken` is, which `Token.lean` cannot import, and the error of writing a
-token, declared there as it names `Reserved`, whose module imports `Token.lean`; and the
-functions of the symbol that name the version and `Reserved`, declared in
-`BSmtLib.Plain.Versioned`, as the modules of both import `Plain.lean`. -/
+/-! The naming rule, with its exceptions: the view of the cursor's token as a token,
+`Token.fromLexerToken`, declared in `BSmtLib.Lexer.Cursor`, and the token's `intoOwned`, declared
+in `BSmtLib.Token.TokenBuf`, as both modules import `Token.lean`; the constructor of the error of
+writing a token, declared in `Token.lean`, as the token's `writeSmt` returns the error and
+`Writer.lean` imports `Token.lean`; the stand-in of Rust's `BufReader`, declared in
+`BSmtLib.Reader.BufRead`, which the lexer imports, as the reader's module imports the lexer's;
+and the functions of the symbol that name the version and `Reserved`, declared in
+`BSmtLib.Lexicon.Value.Versioned`, as the modules of both import `Lexicon.Value.lean`. -/
 
 /--
-info: 8285 declarations in 457 modules; 86 add to a sibling's type:
+info: 8298 declarations in 459 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -66,8 +69,9 @@ BSmtLib.Facts.Proofs.Reader.Param.Walk:
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.modifyThe
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.pure_eq
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.run_rel
-BSmtLib.Token.SyntaxTokenBuf:
-  BSmtLib.Token.SyntaxToken.intoOwned
+BSmtLib.Token:
+  BSmtLib.Writer.WriteError
+  BSmtLib.Writer.WriteErrorCause
 BSmtLibSpec.Grammar.File:
   BSmtLibSpec.Grammar.Tree.Command.declaredVersion
   BSmtLibSpec.Grammar.Tree.Command.modeAfter
@@ -129,109 +133,140 @@ BSmtLibSpec.Lexer:
 BSmtLibSpec.Reader:
   BSmtLibSpec.Lexer.Handed.received
 12 exceptions:
-  BSmtLib.Plain.Symbol.intoVersioned in BSmtLib.Plain.Versioned
-  BSmtLib.Plain.Symbol.isAllowedIn in BSmtLib.Plain.Versioned
-  BSmtLib.Plain.Symbol.new in BSmtLib.Plain.Versioned
-  BSmtLib.Plain.SymbolBuf.intoVersioned in BSmtLib.Plain.Versioned
-  BSmtLib.Plain.SymbolBuf.isAllowedIn in BSmtLib.Plain.Versioned
-  BSmtLib.Plain.SymbolBuf.isUnquotedAllowedIn in BSmtLib.Plain.Versioned
-  BSmtLib.Plain.SymbolBuf.new in BSmtLib.Plain.Versioned
-  BSmtLib.Token.BatchCursor.TokenWindow.syntax in BSmtLib.Token.SyntaxToken
-  BSmtLib.Token.BatchCursor.syntax in BSmtLib.Token.SyntaxToken
-  BSmtLib.Token.WriteError in BSmtLib.Token.SyntaxToken
-  BSmtLib.Token.WriteError.Internal.new in BSmtLib.Token.SyntaxToken
-  BSmtLib.Token.WriteErrorCause in BSmtLib.Token.SyntaxToken
+  BSmtLib.Lexicon.Value.Symbol.intoVersioned in BSmtLib.Lexicon.Value.Versioned
+  BSmtLib.Lexicon.Value.Symbol.isSymbolIn in BSmtLib.Lexicon.Value.Versioned
+  BSmtLib.Lexicon.Value.Symbol.newIn in BSmtLib.Lexicon.Value.Versioned
+  BSmtLib.Lexicon.Value.SymbolBuf.intoVersioned in BSmtLib.Lexicon.Value.Versioned
+  BSmtLib.Lexicon.Value.SymbolBuf.isSimpleIn in BSmtLib.Lexicon.Value.Versioned
+  BSmtLib.Lexicon.Value.SymbolBuf.isSymbolIn in BSmtLib.Lexicon.Value.Versioned
+  BSmtLib.Lexicon.Value.SymbolBuf.newIn in BSmtLib.Lexicon.Value.Versioned
+  BSmtLib.Reader.BufReader in BSmtLib.Reader.BufRead
+  BSmtLib.Reader.BufReader.new in BSmtLib.Reader.BufRead
+  BSmtLib.Token.fromLexerToken in BSmtLib.Lexer.Cursor
+  BSmtLib.Token.intoOwned in BSmtLib.Token.TokenBuf
+  BSmtLib.Writer.WriteError.Internal.new in BSmtLib.Token
 -/
 #guard_msgs in
-#naming except BSmtLib.Token.BatchCursor.syntax BSmtLib.Token.BatchCursor.TokenWindow.syntax
-  BSmtLib.Token.WriteError BSmtLib.Token.WriteErrorCause BSmtLib.Token.WriteError.Internal.new
-  BSmtLib.Plain.Symbol.new BSmtLib.Plain.Symbol.isAllowedIn BSmtLib.Plain.Symbol.intoVersioned
-  BSmtLib.Plain.SymbolBuf.new BSmtLib.Plain.SymbolBuf.isUnquotedAllowedIn
-  BSmtLib.Plain.SymbolBuf.isAllowedIn BSmtLib.Plain.SymbolBuf.intoVersioned
+#naming except BSmtLib.Token.fromLexerToken BSmtLib.Token.intoOwned
+  BSmtLib.Writer.WriteError.Internal.new BSmtLib.Reader.BufReader BSmtLib.Reader.BufReader.new
+  BSmtLib.Lexicon.Value.Symbol.newIn BSmtLib.Lexicon.Value.Symbol.isSymbolIn
+  BSmtLib.Lexicon.Value.Symbol.intoVersioned BSmtLib.Lexicon.Value.SymbolBuf.newIn
+  BSmtLib.Lexicon.Value.SymbolBuf.isSimpleIn BSmtLib.Lexicon.Value.SymbolBuf.isSymbolIn
+  BSmtLib.Lexicon.Value.SymbolBuf.intoVersioned
 
 /-! The re-exports, for the `pub use` lines of the Rust crate: the generated module
 `BSmtLib.Reexports` is what `BSmtLib.Facts.Reexports.render` makes now, and every second name
 resolves. -/
 
-/-- info: 150 items re-exported, with 786 members -/
+/-- info: 155 items re-exported, with 832 members -/
 #guard_msgs in
 #reexports
 
 /-! The names that users of the Rust crate write, without the prefix `Smt`, for the items that
-have a counterpart, and what they resolve to. The items without one: `SmtMultiple`, which is
-`BSmtLib.Multiple` itself, and the iterators of `multiple.rs` (`SmtMultipleIntoIter` and the
-others), whose counterparts are `ForIn` instances; `lexer::SmtFailFast` and `lexer::SmtRecovering`,
-whose counterparts are the constructors of `BSmtLib.Lexer.Recovery`; `parser::SmtCommandRule`,
-`parser::SmtCommandPayloadParser` and `parser::SmtParseState`. -/
+have a counterpart, and what they resolve to: first the items named like their modules, which
+are the modules' own names (`SmtHandler`, `SmtReader`, `SmtVersion`, `SmtWriter`,
+`grammar::SmtMultiple`, `lexicon::SmtBytes`, `token::SmtToken`, `token::SmtReserved`), then the
+items of the `pub use` lines. The items without one: the iterators of `grammar/multiple.rs`
+(`SmtMultipleIntoIter` and the others), whose counterparts are `ForIn` instances. -/
 
 /--
-info: BSmtLib.Bytes ↦ BSmtLib.Bytes
-BSmtLib.BindingsBuf ↦ BSmtLib.Multiple.BindingsBuf
-BSmtLib.Bindings ↦ BSmtLib.Multiple.Bindings
-BSmtLib.ConstructorsBuf ↦ BSmtLib.Multiple.ConstructorsBuf
-BSmtLib.Constructors ↦ BSmtLib.Multiple.Constructors
-BSmtLib.FunctionSignaturesBuf ↦ BSmtLib.Multiple.FunctionSignaturesBuf
-BSmtLib.FunctionSignatures ↦ BSmtLib.Multiple.FunctionSignatures
-BSmtLib.MatchCases ↦ BSmtLib.Multiple.MatchCases
-BSmtLib.NamedBuf ↦ BSmtLib.Multiple.NamedBuf
-BSmtLib.Named ↦ BSmtLib.Multiple.Named
-BSmtLib.SortAritiesBuf ↦ BSmtLib.Multiple.SortAritiesBuf
-BSmtLib.SortArities ↦ BSmtLib.Multiple.SortArities
-BSmtLib.SortedVarsBuf ↦ BSmtLib.Multiple.SortedVarsBuf
-BSmtLib.SortedVars ↦ BSmtLib.Multiple.SortedVars
-BSmtLib.SymbolsBuf ↦ BSmtLib.Multiple.SymbolsBuf
-BSmtLib.Symbols ↦ BSmtLib.Multiple.Symbols
-BSmtLib.AttributeValue ↦ BSmtLib.Nodes.AttributeValue
-BSmtLib.Attributes ↦ BSmtLib.Nodes.Attributes
-BSmtLib.Ident ↦ BSmtLib.Nodes.Ident
-BSmtLib.IdentBuf ↦ BSmtLib.Nodes.IdentBuf
-BSmtLib.Index ↦ BSmtLib.Nodes.Index
-BSmtLib.IndexBuf ↦ BSmtLib.Nodes.IndexBuf
-BSmtLib.Pattern ↦ BSmtLib.Nodes.Pattern
-BSmtLib.PatternBuf ↦ BSmtLib.Nodes.PatternBuf
-BSmtLib.QualifiedIdent ↦ BSmtLib.Nodes.QualifiedIdent
-BSmtLib.QualifiedIdentBuf ↦ BSmtLib.Nodes.QualifiedIdentBuf
-BSmtLib.QuantifierKind ↦ BSmtLib.Nodes.QuantifierKind
-BSmtLib.SExpr ↦ BSmtLib.Nodes.SExpr
-BSmtLib.SExprs ↦ BSmtLib.Nodes.SExprs
-BSmtLib.FunctionSignature ↦ BSmtLib.Multiple.FunctionSignature
-BSmtLib.Sorts ↦ BSmtLib.Nodes.Sorts
-BSmtLib.SpecialConstant ↦ BSmtLib.Nodes.SpecialConstant
-BSmtLib.SpecialConstantBuf ↦ BSmtLib.Nodes.SpecialConstantBuf
-BSmtLib.SimplePattern ↦ BSmtLib.Nodes.SimplePattern
-BSmtLib.SimplePatternBuf ↦ BSmtLib.Nodes.SimplePatternBuf
-BSmtLib.Term ↦ BSmtLib.Nodes.Term
-BSmtLib.Terms ↦ BSmtLib.Nodes.Terms
-BSmtLib.BinDigitsBuf ↦ BSmtLib.Plain.BinDigitsBuf
-BSmtLib.BinDigits ↦ BSmtLib.Plain.BinDigits
-BSmtLib.CommentBuf ↦ BSmtLib.Plain.CommentBuf
-BSmtLib.Comment ↦ BSmtLib.Plain.Comment
-BSmtLib.DecimalBuf ↦ BSmtLib.Plain.DecimalBuf
-BSmtLib.Decimal ↦ BSmtLib.Plain.Decimal
-BSmtLib.DisallowedByteVecError ↦ BSmtLib.Plain.DisallowedByteVecError
-BSmtLib.HexDigitsBuf ↦ BSmtLib.Plain.HexDigitsBuf
-BSmtLib.HexDigits ↦ BSmtLib.Plain.HexDigits
-BSmtLib.KeywordBuf ↦ BSmtLib.Plain.KeywordBuf
-BSmtLib.Keyword ↦ BSmtLib.Plain.Keyword
-BSmtLib.NumeralBuf ↦ BSmtLib.Plain.NumeralBuf
-BSmtLib.Numeral ↦ BSmtLib.Plain.Numeral
-BSmtLib.StringContentBuf ↦ BSmtLib.Plain.StringContentBuf
-BSmtLib.StringContent ↦ BSmtLib.Plain.StringContent
-BSmtLib.SymbolBuf ↦ BSmtLib.Plain.SymbolBuf
-BSmtLib.Symbol ↦ BSmtLib.Plain.Symbol
-BSmtLib.WhitespaceBuf ↦ BSmtLib.Plain.WhitespaceBuf
-BSmtLib.Whitespace ↦ BSmtLib.Plain.Whitespace
-BSmtLib.Located ↦ BSmtLib.Span.Located
-BSmtLib.Location ↦ BSmtLib.Span.Location
-BSmtLib.CommandHandler ↦ BSmtLib.Traits.CommandHandler
-BSmtLib.Handler ↦ BSmtLib.Traits.Handler
+info: BSmtLib.Handler ↦ BSmtLib.Handler
+BSmtLib.Reader ↦ BSmtLib.Reader
+BSmtLib.Version ↦ BSmtLib.Version
+BSmtLib.Writer ↦ BSmtLib.Writer
+BSmtLib.Grammar.Multiple ↦ BSmtLib.Grammar.Multiple
+BSmtLib.Lexicon.Bytes ↦ BSmtLib.Lexicon.Bytes
+BSmtLib.Token ↦ BSmtLib.Token
 BSmtLib.Token.Reserved ↦ BSmtLib.Token.Reserved
+BSmtLib.CommandHandler ↦ BSmtLib.Handler.CommandHandler
+BSmtLib.NonstandardCommandError ↦ BSmtLib.Handler.NonstandardCommandError
+BSmtLib.PartialCommandError ↦ BSmtLib.Handler.PartialCommandError
+BSmtLib.PartialCommandHandler ↦ BSmtLib.Handler.PartialCommandHandler
+BSmtLib.SyntaxChecker ↦ BSmtLib.Handler.SyntaxChecker
+BSmtLib.readSmt ↦ BSmtLib.Reader.readSmt
+BSmtLib.readSmtFile ↦ BSmtLib.Reader.readSmtFile
+BSmtLib.ReadError ↦ BSmtLib.Reader.ReadError
+BSmtLib.ReadErrorCause ↦ BSmtLib.Reader.ReadErrorCause
+BSmtLib.ReadFailure ↦ BSmtLib.Reader.ReadFailure
+BSmtLib.VersionPosture ↦ BSmtLib.Version.VersionPosture
+BSmtLib.VersionPostureBuilder ↦ BSmtLib.Version.VersionPostureBuilder
+BSmtLib.WriteError ↦ BSmtLib.Writer.WriteError
+BSmtLib.WriteErrorCause ↦ BSmtLib.Writer.WriteErrorCause
+BSmtLib.WriteStyle ↦ BSmtLib.Writer.WriteStyle
+BSmtLib.WriterConfig ↦ BSmtLib.Writer.WriterConfig
+BSmtLib.Grammar.Bindings ↦ BSmtLib.Grammar.Multiple.Bindings
+BSmtLib.Grammar.Constructors ↦ BSmtLib.Grammar.Multiple.Constructors
+BSmtLib.Grammar.ConstructorsBuf ↦ BSmtLib.Grammar.Multiple.ConstructorsBuf
+BSmtLib.Grammar.FunctionSignature ↦ BSmtLib.Grammar.Multiple.FunctionSignature
+BSmtLib.Grammar.FunctionSignatures ↦ BSmtLib.Grammar.Multiple.FunctionSignatures
+BSmtLib.Grammar.FunctionSignaturesBuf ↦ BSmtLib.Grammar.Multiple.FunctionSignaturesBuf
+BSmtLib.Grammar.MatchCases ↦ BSmtLib.Grammar.Multiple.MatchCases
+BSmtLib.Grammar.MatchCasesBuf ↦ BSmtLib.Grammar.Multiple.MatchCasesBuf
+BSmtLib.Grammar.NamedValues ↦ BSmtLib.Grammar.Multiple.NamedValues
+BSmtLib.Grammar.NamedValuesBuf ↦ BSmtLib.Grammar.Multiple.NamedValuesBuf
+BSmtLib.Grammar.SortArities ↦ BSmtLib.Grammar.Multiple.SortArities
+BSmtLib.Grammar.SortAritiesBuf ↦ BSmtLib.Grammar.Multiple.SortAritiesBuf
+BSmtLib.Grammar.SortedVars ↦ BSmtLib.Grammar.Multiple.SortedVars
+BSmtLib.Grammar.Symbols ↦ BSmtLib.Grammar.Multiple.Symbols
+BSmtLib.Grammar.SymbolsBuf ↦ BSmtLib.Grammar.Multiple.SymbolsBuf
+BSmtLib.Grammar.AttributeValue ↦ BSmtLib.Grammar.Nodes.AttributeValue
+BSmtLib.Grammar.EmptyArgumentsError ↦ BSmtLib.Grammar.Nodes.EmptyArgumentsError
+BSmtLib.Grammar.Ident ↦ BSmtLib.Grammar.Nodes.Ident
+BSmtLib.Grammar.IdentBuf ↦ BSmtLib.Grammar.Nodes.IdentBuf
+BSmtLib.Grammar.Index ↦ BSmtLib.Grammar.Nodes.Index
+BSmtLib.Grammar.IndexBuf ↦ BSmtLib.Grammar.Nodes.IndexBuf
+BSmtLib.Grammar.IndicesBuf ↦ BSmtLib.Grammar.Nodes.IndicesBuf
+BSmtLib.Grammar.Pattern ↦ BSmtLib.Grammar.Nodes.Pattern
+BSmtLib.Grammar.PatternApplication ↦ BSmtLib.Grammar.Nodes.PatternApplication
+BSmtLib.Grammar.PatternApplicationBuf ↦ BSmtLib.Grammar.Nodes.PatternApplicationBuf
+BSmtLib.Grammar.PatternBuf ↦ BSmtLib.Grammar.Nodes.PatternBuf
+BSmtLib.Grammar.QualifiedIdent ↦ BSmtLib.Grammar.Nodes.QualifiedIdent
+BSmtLib.Grammar.QualifiedIdentBuf ↦ BSmtLib.Grammar.Nodes.QualifiedIdentBuf
+BSmtLib.Grammar.QuantifierKind ↦ BSmtLib.Grammar.Nodes.QuantifierKind
+BSmtLib.Grammar.SExpr ↦ BSmtLib.Grammar.Nodes.SExpr
+BSmtLib.Grammar.SimplePattern ↦ BSmtLib.Grammar.Nodes.SimplePattern
+BSmtLib.Grammar.SimplePatternBuf ↦ BSmtLib.Grammar.Nodes.SimplePatternBuf
+BSmtLib.Grammar.SimplePatternsBuf ↦ BSmtLib.Grammar.Nodes.SimplePatternsBuf
+BSmtLib.Grammar.SpecialConstant ↦ BSmtLib.Grammar.Nodes.SpecialConstant
+BSmtLib.Grammar.SpecialConstantBuf ↦ BSmtLib.Grammar.Nodes.SpecialConstantBuf
+BSmtLib.Grammar.Term ↦ BSmtLib.Grammar.Nodes.Term
+BSmtLib.Lexicon.BytesBuf ↦ BSmtLib.Lexicon.Bytes.BytesBuf
+BSmtLib.Lexicon.BinDigits ↦ BSmtLib.Lexicon.Value.BinDigits
+BSmtLib.Lexicon.BinDigitsBuf ↦ BSmtLib.Lexicon.Value.BinDigitsBuf
+BSmtLib.Lexicon.Comment ↦ BSmtLib.Lexicon.Value.Comment
+BSmtLib.Lexicon.CommentBuf ↦ BSmtLib.Lexicon.Value.CommentBuf
+BSmtLib.Lexicon.Decimal ↦ BSmtLib.Lexicon.Value.Decimal
+BSmtLib.Lexicon.DecimalBuf ↦ BSmtLib.Lexicon.Value.DecimalBuf
+BSmtLib.Lexicon.DisallowedByteVecError ↦ BSmtLib.Lexicon.Value.DisallowedByteVecError
+BSmtLib.Lexicon.DisallowedBytesError ↦ BSmtLib.Lexicon.Value.DisallowedBytesError
+BSmtLib.Lexicon.HexDigits ↦ BSmtLib.Lexicon.Value.HexDigits
+BSmtLib.Lexicon.HexDigitsBuf ↦ BSmtLib.Lexicon.Value.HexDigitsBuf
+BSmtLib.Lexicon.Keyword ↦ BSmtLib.Lexicon.Value.Keyword
+BSmtLib.Lexicon.KeywordBuf ↦ BSmtLib.Lexicon.Value.KeywordBuf
+BSmtLib.Lexicon.Numeral ↦ BSmtLib.Lexicon.Value.Numeral
+BSmtLib.Lexicon.NumeralBuf ↦ BSmtLib.Lexicon.Value.NumeralBuf
+BSmtLib.Lexicon.NumericOverflowError ↦ BSmtLib.Lexicon.Value.NumericOverflowError
+BSmtLib.Lexicon.StringContent ↦ BSmtLib.Lexicon.Value.StringContent
+BSmtLib.Lexicon.StringContentBuf ↦ BSmtLib.Lexicon.Value.StringContentBuf
+BSmtLib.Lexicon.Symbol ↦ BSmtLib.Lexicon.Value.Symbol
+BSmtLib.Lexicon.SymbolBuf ↦ BSmtLib.Lexicon.Value.SymbolBuf
+BSmtLib.Lexicon.Whitespace ↦ BSmtLib.Lexicon.Value.Whitespace
+BSmtLib.Lexicon.WhitespaceBuf ↦ BSmtLib.Lexicon.Value.WhitespaceBuf
+BSmtLib.Lexer.LexerCursor ↦ BSmtLib.Lexer.Cursor.LexerCursor
+BSmtLib.Lexer.LexerToken ↦ BSmtLib.Lexer.Cursor.LexerToken
+BSmtLib.Lexer.LexerWindow ↦ BSmtLib.Lexer.Cursor.LexerWindow
+BSmtLib.Lexer.LexerError ↦ BSmtLib.Lexer.Error.LexerError
+BSmtLib.Lexer.LexerErrorCause ↦ BSmtLib.Lexer.Error.LexerErrorCause
+BSmtLib.Lexer.LexerReadError ↦ BSmtLib.Lexer.Error.LexerReadError
+BSmtLib.Lexer.LexerReadErrorCause ↦ BSmtLib.Lexer.Error.LexerReadErrorCause
+BSmtLib.Lexer.LexicalErrorKind ↦ BSmtLib.Lexer.Error.LexicalErrorKind
+BSmtLib.Lexer.LexicalExpected ↦ BSmtLib.Lexer.Error.LexicalExpected
+BSmtLib.Lexer.FailFast ↦ BSmtLib.Lexer.Recovery.FailFast
+BSmtLib.Lexer.LexerRecovery ↦ BSmtLib.Lexer.Recovery.LexerRecovery
+BSmtLib.Lexer.Recover ↦ BSmtLib.Lexer.Recovery.Recover
+BSmtLib.Lexer.Recovering ↦ BSmtLib.Lexer.Recovery.Recovering
 BSmtLib.Token.CommandNameReserved ↦ BSmtLib.Token.Reserved.CommandNameReserved
 BSmtLib.Token.GeneralReserved ↦ BSmtLib.Token.Reserved.GeneralReserved
-BSmtLib.Lexer.LexError ↦ BSmtLib.Lexer.Error.LexError
-BSmtLib.Lexer.LexErrorCause ↦ BSmtLib.Lexer.Error.LexErrorCause
-BSmtLib.Lexer.LexicalErrorKind ↦ BSmtLib.Lexer.Error.LexicalErrorKind
-BSmtLib.Lexer.LexRecovery ↦ BSmtLib.Lexer.Recovery.LexRecovery
 BSmtLib.Parser.Category.ClosedAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedAttributeParser
 BSmtLib.Parser.Category.ClosedMultipleAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser
 BSmtLib.Parser.Category.ClosedMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ClosedMaximumParser
@@ -242,8 +277,15 @@ BSmtLib.Parser.Category.PairParser ↦ BSmtLib.Parser.Category.Combinator.PairPa
 BSmtLib.Parser.Category.ParenMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ParenMaximumParser
 BSmtLib.Parser.Category.ParenMultipleParser ↦ BSmtLib.Parser.Category.Combinator.ParenMultipleParser
 BSmtLib.Parser.Category.ParenParser ↦ BSmtLib.Parser.Category.Combinator.ParenParser
+BSmtLib.Parser.Category.Tuple3Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple3Parser
+BSmtLib.Parser.Category.Tuple4Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple4Parser
+BSmtLib.Parser.Category.Tuple5Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple5Parser
+BSmtLib.Parser.Category.Tuple6Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple6Parser
+BSmtLib.Parser.Category.Tuple7Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple7Parser
+BSmtLib.Parser.Category.Tuple8Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple8Parser
 BSmtLib.Parser.Category.IdentParser ↦ BSmtLib.Parser.Category.Ident.IdentParser
 BSmtLib.Parser.Category.PatternParser ↦ BSmtLib.Parser.Category.Pattern.PatternParser
+BSmtLib.Parser.Category.SimplePatternParser ↦ BSmtLib.Parser.Category.Pattern.SimplePatternParser
 BSmtLib.Parser.Category.QualifiedIdentParser ↦ BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser
 BSmtLib.Parser.Category.SExprParser ↦ BSmtLib.Parser.Category.SExpr.SExprParser
 BSmtLib.Parser.Category.SortParser ↦ BSmtLib.Parser.Category.Sort.SortParser
@@ -266,14 +308,20 @@ BSmtLib.Parser.PairParser ↦ BSmtLib.Parser.Category.Combinator.PairParser
 BSmtLib.Parser.ParenMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ParenMaximumParser
 BSmtLib.Parser.ParenMultipleParser ↦ BSmtLib.Parser.Category.Combinator.ParenMultipleParser
 BSmtLib.Parser.ParenParser ↦ BSmtLib.Parser.Category.Combinator.ParenParser
+BSmtLib.Parser.Tuple3Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple3Parser
+BSmtLib.Parser.Tuple4Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple4Parser
+BSmtLib.Parser.Tuple5Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple5Parser
+BSmtLib.Parser.Tuple6Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple6Parser
+BSmtLib.Parser.Tuple7Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple7Parser
+BSmtLib.Parser.Tuple8Parser ↦ BSmtLib.Parser.Category.Combinator.Tuple8Parser
 BSmtLib.Parser.IdentParser ↦ BSmtLib.Parser.Category.Ident.IdentParser
 BSmtLib.Parser.PatternParser ↦ BSmtLib.Parser.Category.Pattern.PatternParser
+BSmtLib.Parser.SimplePatternParser ↦ BSmtLib.Parser.Category.Pattern.SimplePatternParser
 BSmtLib.Parser.QualifiedIdentParser ↦ BSmtLib.Parser.Category.QualifiedIdent.QualifiedIdentParser
 BSmtLib.Parser.SExprParser ↦ BSmtLib.Parser.Category.SExpr.SExprParser
 BSmtLib.Parser.SortParser ↦ BSmtLib.Parser.Category.Sort.SortParser
 BSmtLib.Parser.SortedVarParser ↦ BSmtLib.Parser.Category.SortedVar.SortedVarParser
 BSmtLib.Parser.TermParser ↦ BSmtLib.Parser.Category.Term.TermParser
-BSmtLib.Parser.ParenSortedVarsParser ↦ BSmtLib.Parser.Category.ParenSortedVarsParser
 BSmtLib.Parser.CloseParenParser ↦ BSmtLib.Parser.Category.Token.CloseParenParser
 BSmtLib.Parser.KeywordParser ↦ BSmtLib.Parser.Category.Token.KeywordParser
 BSmtLib.Parser.NumeralParser ↦ BSmtLib.Parser.Category.Token.NumeralParser
@@ -281,78 +329,110 @@ BSmtLib.Parser.OpenParenParser ↦ BSmtLib.Parser.Category.Token.OpenParenParser
 BSmtLib.Parser.StringParser ↦ BSmtLib.Parser.Category.Token.StringParser
 BSmtLib.Parser.SymbolParser ↦ BSmtLib.Parser.Category.Token.SymbolParser
 BSmtLib.Parser.CommandParser ↦ BSmtLib.Parser.Command.CommandParser
+BSmtLib.Parser.CommandRule ↦ BSmtLib.Parser.Command.CommandRule
+BSmtLib.Parser.CommandPayloadParser ↦ BSmtLib.Parser.Command.CommandPayloadParser
 BSmtLib.Parser.CommandOutcome ↦ BSmtLib.Parser.Command.CommandOutcome
 BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
 -/
 #guard_msgs in
 #resolves
-  BSmtLib.Bytes
-  BSmtLib.BindingsBuf
-  BSmtLib.Bindings
-  BSmtLib.ConstructorsBuf
-  BSmtLib.Constructors
-  BSmtLib.FunctionSignaturesBuf
-  BSmtLib.FunctionSignatures
-  BSmtLib.MatchCases
-  BSmtLib.NamedBuf
-  BSmtLib.Named
-  BSmtLib.SortAritiesBuf
-  BSmtLib.SortArities
-  BSmtLib.SortedVarsBuf
-  BSmtLib.SortedVars
-  BSmtLib.SymbolsBuf
-  BSmtLib.Symbols
-  BSmtLib.AttributeValue
-  BSmtLib.Attributes
-  BSmtLib.Ident
-  BSmtLib.IdentBuf
-  BSmtLib.Index
-  BSmtLib.IndexBuf
-  BSmtLib.Pattern
-  BSmtLib.PatternBuf
-  BSmtLib.QualifiedIdent
-  BSmtLib.QualifiedIdentBuf
-  BSmtLib.QuantifierKind
-  BSmtLib.SExpr
-  BSmtLib.SExprs
-  BSmtLib.FunctionSignature
-  BSmtLib.Sorts
-  BSmtLib.SpecialConstant
-  BSmtLib.SpecialConstantBuf
-  BSmtLib.SimplePattern
-  BSmtLib.SimplePatternBuf
-  BSmtLib.Term
-  BSmtLib.Terms
-  BSmtLib.BinDigitsBuf
-  BSmtLib.BinDigits
-  BSmtLib.CommentBuf
-  BSmtLib.Comment
-  BSmtLib.DecimalBuf
-  BSmtLib.Decimal
-  BSmtLib.DisallowedByteVecError
-  BSmtLib.HexDigitsBuf
-  BSmtLib.HexDigits
-  BSmtLib.KeywordBuf
-  BSmtLib.Keyword
-  BSmtLib.NumeralBuf
-  BSmtLib.Numeral
-  BSmtLib.StringContentBuf
-  BSmtLib.StringContent
-  BSmtLib.SymbolBuf
-  BSmtLib.Symbol
-  BSmtLib.WhitespaceBuf
-  BSmtLib.Whitespace
-  BSmtLib.Located
-  BSmtLib.Location
-  BSmtLib.CommandHandler
   BSmtLib.Handler
+  BSmtLib.Reader
+  BSmtLib.Version
+  BSmtLib.Writer
+  BSmtLib.Grammar.Multiple
+  BSmtLib.Lexicon.Bytes
+  BSmtLib.Token
   BSmtLib.Token.Reserved
+  BSmtLib.CommandHandler
+  BSmtLib.NonstandardCommandError
+  BSmtLib.PartialCommandError
+  BSmtLib.PartialCommandHandler
+  BSmtLib.SyntaxChecker
+  BSmtLib.readSmt
+  BSmtLib.readSmtFile
+  BSmtLib.ReadError
+  BSmtLib.ReadErrorCause
+  BSmtLib.ReadFailure
+  BSmtLib.VersionPosture
+  BSmtLib.VersionPostureBuilder
+  BSmtLib.WriteError
+  BSmtLib.WriteErrorCause
+  BSmtLib.WriteStyle
+  BSmtLib.WriterConfig
+  BSmtLib.Grammar.Bindings
+  BSmtLib.Grammar.Constructors
+  BSmtLib.Grammar.ConstructorsBuf
+  BSmtLib.Grammar.FunctionSignature
+  BSmtLib.Grammar.FunctionSignatures
+  BSmtLib.Grammar.FunctionSignaturesBuf
+  BSmtLib.Grammar.MatchCases
+  BSmtLib.Grammar.MatchCasesBuf
+  BSmtLib.Grammar.NamedValues
+  BSmtLib.Grammar.NamedValuesBuf
+  BSmtLib.Grammar.SortArities
+  BSmtLib.Grammar.SortAritiesBuf
+  BSmtLib.Grammar.SortedVars
+  BSmtLib.Grammar.Symbols
+  BSmtLib.Grammar.SymbolsBuf
+  BSmtLib.Grammar.AttributeValue
+  BSmtLib.Grammar.EmptyArgumentsError
+  BSmtLib.Grammar.Ident
+  BSmtLib.Grammar.IdentBuf
+  BSmtLib.Grammar.Index
+  BSmtLib.Grammar.IndexBuf
+  BSmtLib.Grammar.IndicesBuf
+  BSmtLib.Grammar.Pattern
+  BSmtLib.Grammar.PatternApplication
+  BSmtLib.Grammar.PatternApplicationBuf
+  BSmtLib.Grammar.PatternBuf
+  BSmtLib.Grammar.QualifiedIdent
+  BSmtLib.Grammar.QualifiedIdentBuf
+  BSmtLib.Grammar.QuantifierKind
+  BSmtLib.Grammar.SExpr
+  BSmtLib.Grammar.SimplePattern
+  BSmtLib.Grammar.SimplePatternBuf
+  BSmtLib.Grammar.SimplePatternsBuf
+  BSmtLib.Grammar.SpecialConstant
+  BSmtLib.Grammar.SpecialConstantBuf
+  BSmtLib.Grammar.Term
+  BSmtLib.Lexicon.BytesBuf
+  BSmtLib.Lexicon.BinDigits
+  BSmtLib.Lexicon.BinDigitsBuf
+  BSmtLib.Lexicon.Comment
+  BSmtLib.Lexicon.CommentBuf
+  BSmtLib.Lexicon.Decimal
+  BSmtLib.Lexicon.DecimalBuf
+  BSmtLib.Lexicon.DisallowedByteVecError
+  BSmtLib.Lexicon.DisallowedBytesError
+  BSmtLib.Lexicon.HexDigits
+  BSmtLib.Lexicon.HexDigitsBuf
+  BSmtLib.Lexicon.Keyword
+  BSmtLib.Lexicon.KeywordBuf
+  BSmtLib.Lexicon.Numeral
+  BSmtLib.Lexicon.NumeralBuf
+  BSmtLib.Lexicon.NumericOverflowError
+  BSmtLib.Lexicon.StringContent
+  BSmtLib.Lexicon.StringContentBuf
+  BSmtLib.Lexicon.Symbol
+  BSmtLib.Lexicon.SymbolBuf
+  BSmtLib.Lexicon.Whitespace
+  BSmtLib.Lexicon.WhitespaceBuf
+  BSmtLib.Lexer.LexerCursor
+  BSmtLib.Lexer.LexerToken
+  BSmtLib.Lexer.LexerWindow
+  BSmtLib.Lexer.LexerError
+  BSmtLib.Lexer.LexerErrorCause
+  BSmtLib.Lexer.LexerReadError
+  BSmtLib.Lexer.LexerReadErrorCause
+  BSmtLib.Lexer.LexicalErrorKind
+  BSmtLib.Lexer.LexicalExpected
+  BSmtLib.Lexer.FailFast
+  BSmtLib.Lexer.LexerRecovery
+  BSmtLib.Lexer.Recover
+  BSmtLib.Lexer.Recovering
   BSmtLib.Token.CommandNameReserved
   BSmtLib.Token.GeneralReserved
-  BSmtLib.Lexer.LexError
-  BSmtLib.Lexer.LexErrorCause
-  BSmtLib.Lexer.LexicalErrorKind
-  BSmtLib.Lexer.LexRecovery
   BSmtLib.Parser.Category.ClosedAttributeParser
   BSmtLib.Parser.Category.ClosedMultipleAttributeParser
   BSmtLib.Parser.Category.ClosedMaximumParser
@@ -363,8 +443,15 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Parser.Category.ParenMaximumParser
   BSmtLib.Parser.Category.ParenMultipleParser
   BSmtLib.Parser.Category.ParenParser
+  BSmtLib.Parser.Category.Tuple3Parser
+  BSmtLib.Parser.Category.Tuple4Parser
+  BSmtLib.Parser.Category.Tuple5Parser
+  BSmtLib.Parser.Category.Tuple6Parser
+  BSmtLib.Parser.Category.Tuple7Parser
+  BSmtLib.Parser.Category.Tuple8Parser
   BSmtLib.Parser.Category.IdentParser
   BSmtLib.Parser.Category.PatternParser
+  BSmtLib.Parser.Category.SimplePatternParser
   BSmtLib.Parser.Category.QualifiedIdentParser
   BSmtLib.Parser.Category.SExprParser
   BSmtLib.Parser.Category.SortParser
@@ -387,14 +474,20 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Parser.ParenMaximumParser
   BSmtLib.Parser.ParenMultipleParser
   BSmtLib.Parser.ParenParser
+  BSmtLib.Parser.Tuple3Parser
+  BSmtLib.Parser.Tuple4Parser
+  BSmtLib.Parser.Tuple5Parser
+  BSmtLib.Parser.Tuple6Parser
+  BSmtLib.Parser.Tuple7Parser
+  BSmtLib.Parser.Tuple8Parser
   BSmtLib.Parser.IdentParser
   BSmtLib.Parser.PatternParser
+  BSmtLib.Parser.SimplePatternParser
   BSmtLib.Parser.QualifiedIdentParser
   BSmtLib.Parser.SExprParser
   BSmtLib.Parser.SortParser
   BSmtLib.Parser.SortedVarParser
   BSmtLib.Parser.TermParser
-  BSmtLib.Parser.ParenSortedVarsParser
   BSmtLib.Parser.CloseParenParser
   BSmtLib.Parser.KeywordParser
   BSmtLib.Parser.NumeralParser
@@ -402,6 +495,8 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Parser.StringParser
   BSmtLib.Parser.SymbolParser
   BSmtLib.Parser.CommandParser
+  BSmtLib.Parser.CommandRule
+  BSmtLib.Parser.CommandPayloadParser
   BSmtLib.Parser.CommandOutcome
   BSmtLib.Parser.ScriptParser
 
@@ -412,108 +507,141 @@ of the Rust crate, trait implementation and structure with private fields has it
 counterpart, or a reason in `BSmtLib.Facts.RustOnly`; the items with a reason are listed. -/
 
 /--
-info: 547 public names with a Rust counterpart; 93 with a `LEAN:` reason instead:
-  BSmtLib.Bytes.BytesBuf.eqSlice
-  BSmtLib.Bytes.BytesBuf.eqView
-  BSmtLib.Bytes.eqOwned
-  BSmtLib.Bytes.eqSlice
+info: 551 public names with a Rust counterpart; 88 with a `LEAN:` reason instead:
   BSmtLib.ControlFlow
+  BSmtLib.Grammar.Nodes.Term.newApplication
   BSmtLib.Lexer.AfterEof
   BSmtLib.Lexer.AfterEofError
   BSmtLib.Lexer.AfterError
+  BSmtLib.Lexer.Cursor.LexerCursor.Consumed
+  BSmtLib.Lexer.Cursor.LexerCursor.HasNext
+  BSmtLib.Lexer.Cursor.LexerCursor.category
+  BSmtLib.Lexer.Cursor.LexerCursor.content
+  BSmtLib.Lexer.Cursor.LexerCursor.span
+  BSmtLib.Lexer.Cursor.LexerWindow.Consumed
+  BSmtLib.Lexer.Cursor.LexerWindow.category
+  BSmtLib.Lexer.Cursor.LexerWindow.content
+  BSmtLib.Lexer.Cursor.LexerWindow.span
+  BSmtLib.Lexer.Error.LexerReadError.ofLex
   BSmtLib.Lexer.PendingEof
   BSmtLib.Lexer.PendingEof.lexEof
   BSmtLib.Lexer.Recovery.Recovers
-  BSmtLib.Nodes.Term.newApplication
-  BSmtLib.Parser.Category.Combinator.ParenMultipleParser.new
-  BSmtLib.Parser.Category.Combinator.ParenParser.new
-  BSmtLib.Parser.Category.ParenSortedVarsParser.new
+  BSmtLib.Lexicon.Bytes.BytesBuf.eqSlice
+  BSmtLib.Lexicon.Bytes.BytesBuf.eqView
+  BSmtLib.Lexicon.Bytes.eqOwned
+  BSmtLib.Lexicon.Bytes.eqSlice
+  BSmtLib.Lexicon.Value.BinDigits.eqOwned
+  BSmtLib.Lexicon.Value.BinDigits.eqSlice
+  BSmtLib.Lexicon.Value.BinDigits.eqString
+  BSmtLib.Lexicon.Value.BinDigits.toNat
+  BSmtLib.Lexicon.Value.BinDigitsBuf.eqSlice
+  BSmtLib.Lexicon.Value.BinDigitsBuf.eqString
+  BSmtLib.Lexicon.Value.BinDigitsBuf.eqView
+  BSmtLib.Lexicon.Value.BinDigitsBuf.toNat
+  BSmtLib.Lexicon.Value.Comment.eqOwned
+  BSmtLib.Lexicon.Value.Comment.eqSlice
+  BSmtLib.Lexicon.Value.Comment.eqString
+  BSmtLib.Lexicon.Value.CommentBuf.eqSlice
+  BSmtLib.Lexicon.Value.CommentBuf.eqString
+  BSmtLib.Lexicon.Value.CommentBuf.eqView
+  BSmtLib.Lexicon.Value.Decimal.eqOwned
+  BSmtLib.Lexicon.Value.Decimal.eqSlice
+  BSmtLib.Lexicon.Value.Decimal.eqString
+  BSmtLib.Lexicon.Value.DecimalBuf.eqSlice
+  BSmtLib.Lexicon.Value.DecimalBuf.eqString
+  BSmtLib.Lexicon.Value.DecimalBuf.eqView
+  BSmtLib.Lexicon.Value.HexDigits.eqOwned
+  BSmtLib.Lexicon.Value.HexDigits.eqSlice
+  BSmtLib.Lexicon.Value.HexDigits.eqString
+  BSmtLib.Lexicon.Value.HexDigits.toNat
+  BSmtLib.Lexicon.Value.HexDigitsBuf.eqSlice
+  BSmtLib.Lexicon.Value.HexDigitsBuf.eqString
+  BSmtLib.Lexicon.Value.HexDigitsBuf.eqView
+  BSmtLib.Lexicon.Value.HexDigitsBuf.toNat
+  BSmtLib.Lexicon.Value.Keyword.eqOwned
+  BSmtLib.Lexicon.Value.Keyword.eqSlice
+  BSmtLib.Lexicon.Value.Keyword.eqString
+  BSmtLib.Lexicon.Value.KeywordBuf.eqSlice
+  BSmtLib.Lexicon.Value.KeywordBuf.eqString
+  BSmtLib.Lexicon.Value.KeywordBuf.eqView
+  BSmtLib.Lexicon.Value.Numeral.eqOwned
+  BSmtLib.Lexicon.Value.Numeral.eqSlice
+  BSmtLib.Lexicon.Value.Numeral.eqString
+  BSmtLib.Lexicon.Value.Numeral.toNat
+  BSmtLib.Lexicon.Value.NumeralBuf.eqSlice
+  BSmtLib.Lexicon.Value.NumeralBuf.eqString
+  BSmtLib.Lexicon.Value.NumeralBuf.eqView
+  BSmtLib.Lexicon.Value.NumeralBuf.fromNat
+  BSmtLib.Lexicon.Value.NumeralBuf.toNat
+  BSmtLib.Lexicon.Value.StringContent.eqOwned
+  BSmtLib.Lexicon.Value.StringContent.eqSlice
+  BSmtLib.Lexicon.Value.StringContent.eqString
+  BSmtLib.Lexicon.Value.StringContentBuf.eqSlice
+  BSmtLib.Lexicon.Value.StringContentBuf.eqString
+  BSmtLib.Lexicon.Value.StringContentBuf.eqView
+  BSmtLib.Lexicon.Value.Whitespace.eqOwned
+  BSmtLib.Lexicon.Value.Whitespace.eqSlice
+  BSmtLib.Lexicon.Value.Whitespace.eqString
+  BSmtLib.Lexicon.Value.WhitespaceBuf.eqSlice
+  BSmtLib.Lexicon.Value.WhitespaceBuf.eqString
+  BSmtLib.Lexicon.Value.WhitespaceBuf.eqView
   BSmtLib.Parser.ParseState
   BSmtLib.Parser.ParseState.new
-  BSmtLib.Plain.BinDigits.eqOwned
-  BSmtLib.Plain.BinDigits.eqSlice
-  BSmtLib.Plain.BinDigits.eqString
-  BSmtLib.Plain.BinDigits.toNat
-  BSmtLib.Plain.BinDigitsBuf.eqSlice
-  BSmtLib.Plain.BinDigitsBuf.eqString
-  BSmtLib.Plain.BinDigitsBuf.eqView
-  BSmtLib.Plain.BinDigitsBuf.toNat
-  BSmtLib.Plain.Comment.eqOwned
-  BSmtLib.Plain.Comment.eqSlice
-  BSmtLib.Plain.Comment.eqString
-  BSmtLib.Plain.CommentBuf.eqSlice
-  BSmtLib.Plain.CommentBuf.eqString
-  BSmtLib.Plain.CommentBuf.eqView
-  BSmtLib.Plain.Decimal.eqOwned
-  BSmtLib.Plain.Decimal.eqSlice
-  BSmtLib.Plain.Decimal.eqString
-  BSmtLib.Plain.DecimalBuf.eqSlice
-  BSmtLib.Plain.DecimalBuf.eqString
-  BSmtLib.Plain.DecimalBuf.eqView
-  BSmtLib.Plain.HexDigits.eqOwned
-  BSmtLib.Plain.HexDigits.eqSlice
-  BSmtLib.Plain.HexDigits.eqString
-  BSmtLib.Plain.HexDigits.toNat
-  BSmtLib.Plain.HexDigitsBuf.eqSlice
-  BSmtLib.Plain.HexDigitsBuf.eqString
-  BSmtLib.Plain.HexDigitsBuf.eqView
-  BSmtLib.Plain.HexDigitsBuf.toNat
-  BSmtLib.Plain.Keyword.eqOwned
-  BSmtLib.Plain.Keyword.eqSlice
-  BSmtLib.Plain.Keyword.eqString
-  BSmtLib.Plain.KeywordBuf.eqSlice
-  BSmtLib.Plain.KeywordBuf.eqString
-  BSmtLib.Plain.KeywordBuf.eqView
-  BSmtLib.Plain.Numeral.eqOwned
-  BSmtLib.Plain.Numeral.eqSlice
-  BSmtLib.Plain.Numeral.eqString
-  BSmtLib.Plain.Numeral.toNat
-  BSmtLib.Plain.NumeralBuf.eqSlice
-  BSmtLib.Plain.NumeralBuf.eqString
-  BSmtLib.Plain.NumeralBuf.eqView
-  BSmtLib.Plain.NumeralBuf.fromNat
-  BSmtLib.Plain.NumeralBuf.toNat
-  BSmtLib.Plain.StringContent.eqOwned
-  BSmtLib.Plain.StringContent.eqSlice
-  BSmtLib.Plain.StringContent.eqString
-  BSmtLib.Plain.StringContentBuf.eqSlice
-  BSmtLib.Plain.StringContentBuf.eqString
-  BSmtLib.Plain.StringContentBuf.eqView
-  BSmtLib.Plain.Whitespace.eqOwned
-  BSmtLib.Plain.Whitespace.eqSlice
-  BSmtLib.Plain.Whitespace.eqString
-  BSmtLib.Plain.WhitespaceBuf.eqSlice
-  BSmtLib.Plain.WhitespaceBuf.eqString
-  BSmtLib.Plain.WhitespaceBuf.eqView
   BSmtLib.Reader.BufRead
   BSmtLib.Reader.BufReader
   BSmtLib.Reader.BufReader.new
   BSmtLib.Reader.ReadError.ofLex
   BSmtLib.Reader.ReadError.ofParse
   BSmtLib.Reader.ReadFailure
-  BSmtLib.Token.BatchCursor.Consumed
-  BSmtLib.Token.BatchCursor.HasNext
-  BSmtLib.Token.BatchCursor.TokenWindow
-  BSmtLib.Token.BatchCursor.TokenWindow.Consumed
-  BSmtLib.Token.BatchCursor.TokenWindow.category
-  BSmtLib.Token.BatchCursor.TokenWindow.content
-  BSmtLib.Token.BatchCursor.TokenWindow.next?
-  BSmtLib.Token.BatchCursor.TokenWindow.span
-  BSmtLib.Token.BatchCursor.TokenWindow.syntax
-  BSmtLib.Token.BatchCursor.category
-  BSmtLib.Token.BatchCursor.content
-  BSmtLib.Token.BatchCursor.span
   BSmtLib.Token.BatchTag
   BSmtLib.Token.Reserved.CommandNameReserved.all
   BSmtLib.Token.Reserved.GeneralReserved.all
 ---
-info: 784 Rust items, 352 trait implementations with a counterpart class and 94 structures with private fields; 111 without a counterpart, with a reason:
-  bytes::SmtBytes::iter
-  bytes::SmtBytesBuf::from_boxed_slice
-  bytes::SmtBytesBuf::into_boxed_slice
-  bytes::SmtBytesBuf::iter
-  fields of nodes::SmtPatternApplication
-  fields of nodes::SmtPatternApplicationBuf
+info: 789 Rust items, 421 trait implementations with a counterpart class and 104 structures with private fields; 153 without a counterpart, with a reason:
+  fields of grammar::nodes::SmtPatternApplication
+  fields of grammar::nodes::SmtPatternApplicationBuf
+  grammar::multiple::SmtConstructors::iter_mut
+  grammar::multiple::SmtConstructorsIter
+  grammar::multiple::SmtFunctionSignatures::iter
+  grammar::multiple::SmtFunctionSignaturesIter
+  grammar::multiple::SmtMatchCases::get_mut
+  grammar::multiple::SmtMatchCases::iter
+  grammar::multiple::SmtMatchCases::iter_mut
+  grammar::multiple::SmtMatchCasesIntoIter
+  grammar::multiple::SmtMultiple::as_mut_slice
+  grammar::multiple::SmtMultiple::get_mut
+  grammar::multiple::SmtMultiple::iter
+  grammar::multiple::SmtMultiple::iter_mut
+  grammar::multiple::SmtMultipleIntoIter
+  grammar::multiple::SmtNamedValues::get_mut
+  grammar::multiple::SmtNamedValues::iter
+  grammar::multiple::SmtNamedValues::iter_mut
+  grammar::multiple::SmtNamedValuesIntoIter
+  grammar::multiple::SmtSortArities::iter
+  grammar::multiple::SmtSortAritiesIter
+  grammar::multiple::SmtSymbols::iter
+  grammar::multiple::SmtSymbolsIter
+  grammar::nodes::SmtApplication
+  grammar::nodes::SmtApplication::args
+  grammar::nodes::SmtApplication::args_mut
+  grammar::nodes::SmtApplication::function
+  grammar::nodes::SmtApplication::function_mut
+  grammar::nodes::SmtApplication::into_parts
+  grammar::nodes::SmtApplication::new
+  grammar::nodes::SmtIndices
+  grammar::nodes::SmtIndices::empty
+  grammar::nodes::SmtIndices::get
+  grammar::nodes::SmtIndices::is_empty
+  grammar::nodes::SmtIndices::iter
+  grammar::nodes::SmtIndices::len
+  grammar::nodes::SmtIndicesBuf::iter
+  grammar::nodes::SmtSimplePatterns
+  grammar::nodes::SmtSimplePatterns::get
+  grammar::nodes::SmtSimplePatterns::is_empty
+  grammar::nodes::SmtSimplePatterns::iter
+  grammar::nodes::SmtSimplePatterns::len
+  grammar::nodes::SmtSimplePatternsBuf::iter
+  grammar::nodes::SmtSort
   impl core::default::Default for parser::category::combinator::SmtTuple3Parser
   impl core::default::Default for parser::category::combinator::SmtTuple4Parser
   impl core::default::Default for parser::category::combinator::SmtTuple5Parser
@@ -521,104 +649,108 @@ info: 784 Rust items, 352 trait implementations with a counterpart class and 94 
   impl core::default::Default for parser::category::combinator::SmtTuple7Parser
   impl core::default::Default for parser::category::combinator::SmtTuple8Parser
   impl core::default::Default for parser::state::SmtParseState
-  impl core::fmt::Debug for nodes::SmtApplication
-  impl core::fmt::Debug for nodes::SmtIndices
-  impl core::fmt::Debug for nodes::SmtSimplePatterns
-  impl core::fmt::Debug for nodes::SmtSort
-  impl core::fmt::Debug for token::SmtToken
-  impl core::fmt::Debug for token::writer::SmtCompactTokenWriter
-  impl core::fmt::Debug for token::writer::SmtLayoutTokenWriter
+  impl core::fmt::Debug for grammar::multiple::SmtConstructorsIter
+  impl core::fmt::Debug for grammar::multiple::SmtFunctionSignaturesIter
+  impl core::fmt::Debug for grammar::multiple::SmtMatchCasesIntoIter
+  impl core::fmt::Debug for grammar::multiple::SmtMultipleIntoIter
+  impl core::fmt::Debug for grammar::multiple::SmtNamedValuesIntoIter
+  impl core::fmt::Debug for grammar::multiple::SmtSortAritiesIter
+  impl core::fmt::Debug for grammar::multiple::SmtSymbolsIter
+  impl core::fmt::Debug for grammar::nodes::SmtApplication
+  impl core::fmt::Debug for grammar::nodes::SmtIndices
+  impl core::fmt::Debug for grammar::nodes::SmtSimplePatterns
+  impl core::fmt::Debug for grammar::nodes::SmtSort
+  impl core::fmt::Debug for lexer::SmtLexer
+  impl core::fmt::Debug for lexer::cursor::SmtLexerCursor
+  impl core::fmt::Debug for lexer::cursor::SmtLexerToken
+  impl core::fmt::Debug for lexer::cursor::SmtLexerWindow
+  impl core::fmt::Debug for parser::adapter::SmtParseAdapter
+  impl core::fmt::Debug for parser::category::attribute::SmtClosedAttributeParser
+  impl core::fmt::Debug for parser::category::attribute::SmtClosedMultipleAttributeParser
+  impl core::fmt::Debug for parser::category::combinator::SmtClosedMaximumParser
+  impl core::fmt::Debug for parser::category::combinator::SmtClosedMultipleParser
+  impl core::fmt::Debug for parser::category::combinator::SmtClosedParser
+  impl core::fmt::Debug for parser::category::combinator::SmtOpenedParser
+  impl core::fmt::Debug for parser::category::combinator::SmtPairParser
+  impl core::fmt::Debug for parser::category::combinator::SmtParenMaximumParser
+  impl core::fmt::Debug for parser::category::combinator::SmtParenMultipleParser
+  impl core::fmt::Debug for parser::category::combinator::SmtParenParser
+  impl core::fmt::Debug for parser::category::combinator::SmtTuple3Parser
+  impl core::fmt::Debug for parser::category::combinator::SmtTuple4Parser
+  impl core::fmt::Debug for parser::category::combinator::SmtTuple5Parser
+  impl core::fmt::Debug for parser::category::combinator::SmtTuple6Parser
+  impl core::fmt::Debug for parser::category::combinator::SmtTuple7Parser
+  impl core::fmt::Debug for parser::category::combinator::SmtTuple8Parser
+  impl core::fmt::Debug for parser::category::ident::SmtIdentParser
+  impl core::fmt::Debug for parser::category::pattern::SmtPatternParser
+  impl core::fmt::Debug for parser::category::pattern::SmtSimplePatternParser
+  impl core::fmt::Debug for parser::category::qualified_ident::SmtQualifiedIdentParser
+  impl core::fmt::Debug for parser::category::s_expr::SmtSExprParser
+  impl core::fmt::Debug for parser::category::sort::SmtSortParser
+  impl core::fmt::Debug for parser::category::sorted_var::SmtSortedVarParser
+  impl core::fmt::Debug for parser::category::term::SmtTermParser
+  impl core::fmt::Debug for parser::category::token::SmtCloseParenParser
+  impl core::fmt::Debug for parser::category::token::SmtKeywordParser
+  impl core::fmt::Debug for parser::category::token::SmtNumeralParser
+  impl core::fmt::Debug for parser::category::token::SmtOpenParenParser
+  impl core::fmt::Debug for parser::category::token::SmtStringParser
+  impl core::fmt::Debug for parser::category::token::SmtSymbolParser
+  impl core::fmt::Debug for parser::command::SmtCommandParser
+  impl core::fmt::Debug for parser::command::SmtCommandPayloadParser
+  impl core::fmt::Debug for parser::script::SmtScriptParser
+  impl core::fmt::Debug for parser::state::SmtParseState
+  impl core::fmt::Debug for reader::SmtReader
+  impl core::fmt::Debug for writer::SmtWriter
   impl parser::SmtParse for parser::category::combinator::SmtTuple3Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple4Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple5Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple6Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple7Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple8Parser
-  impl token::SmtAppendTokens for nodes::SmtApplication
-  impl token::SmtAppendTokens for nodes::SmtIndices
-  impl token::SmtAppendTokens for nodes::SmtSimplePatterns
-  impl token::SmtAppendTokens for nodes::SmtSort
-  impl token::SmtLookahead for token::SmtTokenWindow
-  multiple::SmtConstructors::iter_mut
-  multiple::SmtConstructorsIter
-  multiple::SmtFunctionSignatures::iter
-  multiple::SmtFunctionSignaturesIter
-  multiple::SmtMatchCases::get_mut
-  multiple::SmtMatchCases::iter
-  multiple::SmtMatchCases::iter_mut
-  multiple::SmtMatchCasesIntoIter
-  multiple::SmtMultiple::as_mut_slice
-  multiple::SmtMultiple::get_mut
-  multiple::SmtMultiple::iter
-  multiple::SmtMultiple::iter_mut
-  multiple::SmtMultipleIntoIter
-  multiple::SmtNamed::get_mut
-  multiple::SmtNamed::iter
-  multiple::SmtNamed::iter_mut
-  multiple::SmtNamedIntoIter
-  multiple::SmtSortArities::iter
-  multiple::SmtSortAritiesIter
-  multiple::SmtSymbols::iter
-  multiple::SmtSymbolsIter
-  nodes::SmtApplication
-  nodes::SmtApplication::args
-  nodes::SmtApplication::args_mut
-  nodes::SmtApplication::function
-  nodes::SmtApplication::function_mut
-  nodes::SmtApplication::into_parts
-  nodes::SmtApplication::new
-  nodes::SmtIndices
-  nodes::SmtIndices::empty
-  nodes::SmtIndices::get
-  nodes::SmtIndices::is_empty
-  nodes::SmtIndices::iter
-  nodes::SmtIndices::len
-  nodes::SmtIndicesBuf::iter
-  nodes::SmtSimplePatterns
-  nodes::SmtSimplePatterns::get
-  nodes::SmtSimplePatterns::is_empty
-  nodes::SmtSimplePatterns::iter
-  nodes::SmtSimplePatterns::len
-  nodes::SmtSimplePatternsBuf::iter
-  nodes::SmtSort
+  impl token::SmtAppendTokens for grammar::nodes::SmtApplication
+  impl token::SmtAppendTokens for grammar::nodes::SmtIndices
+  impl token::SmtAppendTokens for grammar::nodes::SmtSimplePatterns
+  impl token::SmtAppendTokens for grammar::nodes::SmtSort
+  lexer::cursor::SmtLexerToken::category
+  lexer::cursor::SmtLexerToken::content
+  lexer::cursor::SmtLexerToken::span
+  lexicon::bytes::SmtBytes::iter
+  lexicon::bytes::SmtBytesBuf::from_boxed_slice
+  lexicon::bytes::SmtBytesBuf::into_boxed_slice
+  lexicon::bytes::SmtBytesBuf::iter
+  lexicon::value::SmtBinDigits::iter
+  lexicon::value::SmtBinDigits::to_u128
+  lexicon::value::SmtBinDigitsBuf::iter
+  lexicon::value::SmtBinDigitsBuf::to_u128
+  lexicon::value::SmtComment::iter
+  lexicon::value::SmtCommentBuf::iter
+  lexicon::value::SmtDecimal::iter
+  lexicon::value::SmtDecimalBuf::iter
+  lexicon::value::SmtHexDigits::iter
+  lexicon::value::SmtHexDigits::to_u128
+  lexicon::value::SmtHexDigitsBuf::iter
+  lexicon::value::SmtHexDigitsBuf::to_u128
+  lexicon::value::SmtKeyword::iter
+  lexicon::value::SmtKeywordBuf::iter
+  lexicon::value::SmtNumeral::iter
+  lexicon::value::SmtNumeral::to_u128
+  lexicon::value::SmtNumeralBuf::from_u128
+  lexicon::value::SmtNumeralBuf::iter
+  lexicon::value::SmtNumeralBuf::to_u128
+  lexicon::value::SmtStringContent::iter
+  lexicon::value::SmtStringContentBuf::iter
+  lexicon::value::SmtSymbol::iter
+  lexicon::value::SmtSymbolBuf::iter
+  lexicon::value::SmtWhitespace::iter
+  lexicon::value::SmtWhitespaceBuf::iter
   parser::SmtParse::Result
   parser::state::SmtParseState
   parser::state::SmtParseState::new
-  plain::SmtBinDigits::iter
-  plain::SmtBinDigits::to_u128
-  plain::SmtBinDigitsBuf::iter
-  plain::SmtBinDigitsBuf::to_u128
-  plain::SmtComment::iter
-  plain::SmtCommentBuf::iter
-  plain::SmtDecimal::iter
-  plain::SmtDecimalBuf::iter
-  plain::SmtHexDigits::iter
-  plain::SmtHexDigits::to_u128
-  plain::SmtHexDigitsBuf::iter
-  plain::SmtHexDigitsBuf::to_u128
-  plain::SmtKeyword::iter
-  plain::SmtKeywordBuf::iter
-  plain::SmtNumeral::iter
-  plain::SmtNumeral::to_u128
-  plain::SmtNumeralBuf::from_u128
-  plain::SmtNumeralBuf::iter
-  plain::SmtNumeralBuf::to_u128
-  plain::SmtStringContent::iter
-  plain::SmtStringContentBuf::iter
-  plain::SmtSymbol::iter
-  plain::SmtSymbolBuf::iter
-  plain::SmtWhitespace::iter
-  plain::SmtWhitespaceBuf::iter
   token::SmtConsume::Error
   token::SmtConsume::IS_CONCRETE
   token::SmtConsume::Result
-  token::SmtToken::category
-  token::SmtToken::content
-  token::SmtToken::span
-  token::SmtTokenWindow
   token::SmtTokensBuf::iter
-  token::writer::SmtCompactTokenWriter::get_mut
-  token::writer::SmtLayoutTokenWriter::get_mut
+  writer::SmtWriter::get_mut
 -/
 #guard_msgs in
 #counterparts

@@ -127,7 +127,7 @@ theorem received_eq {token : Parser.Internal.Input} {item : Received}
   simp [h]
 
 /-- Every step of the identifier parser advances. -/
-theorem identStep_advances (version : Token.Version) :
+theorem identStep_advances (version : Version) :
     StepsAdvance version (IdentState.step (H := List Event) version)
       (identRem (Bridge.version version))
       fun state _ => identRem (Bridge.version version) state := by
@@ -271,7 +271,7 @@ end
 /-- The sort parser's step at the end of a sort: the sort is the result, or the next argument
 of the innermost open application. -/
 theorem sortComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : SortState Nat}
-    {item : Received} {levels : List (SortLevel Nat)} (head : Nodes.Ident)
+    {item : Received} {levels : List (SortLevel Nat)} (head : Grammar.Nodes.Ident)
     (arguments : Array Nat)
     {Q : Parser.ParseErrorCause Unit → Prop}
     (h : ∀ v, sortAfter version levels v → sortRem version state (item :: v)) :
@@ -322,7 +322,7 @@ theorem sortLang_of_opened {version : BSmtLibSpec.Lexicon.Version} {a : List Rec
     | cons first rest => simp [Tree.«Sort».tokens, paren, toks]
 
 /-- Every step of the sort parser advances. -/
-theorem sortStep_advances (version : Token.Version) :
+theorem sortStep_advances (version : Version) :
     StepsAdvance version (sortStep (H := List Event) version)
       (sortRem (Bridge.version version)) fun state _ => sortRem (Bridge.version version) state := by
   intro ⟨mode, levels⟩ token item hitem hlex

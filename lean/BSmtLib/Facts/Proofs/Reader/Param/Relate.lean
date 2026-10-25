@@ -19,10 +19,12 @@ stops after an action on its cursor (`Param.Stop`) on the same cursor is so rela
 consumer and the parse adapter (`link_consumers`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.Param.Relate
 
 open BSmtLibSpec BSmtLibSpec.Grammar
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Parser (Parse)
@@ -132,7 +134,7 @@ theorem recRun_inr_full {version : Lexicon.Version} {commands : List Tree.Comman
   simp [libEnding] at hend
 
 theorem flagged_run (consumer : BSmtLibSpec.Lexer.Consumer) {b : Token.BatchTag}
-    (cursor : Token.BatchCursor b)
+    (cursor : LexerCursor b)
     (h : cursor.HasNext) (flagged : Flagged consumer) (taken : List Handed) :
     ((Flagged.consume consumer cursor h).run flagged).run taken =
       ((((Answering.consume consumer cursor h).run taken).1,

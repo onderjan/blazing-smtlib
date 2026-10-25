@@ -12,6 +12,8 @@ The lemmas for the steps of the Rust port in the states of a token in progress, 
 `lexStep`, which dispatches on the state.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Reader.ParamW.Steps
 
 open BSmtLib.Lexer
@@ -25,8 +27,8 @@ section
 
 variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂] {R₁ R₂ E₁ E₂ : Type}
   [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂] [∀ b, Token.ConsumeFrom H₁
-      (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+      (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂]
   {L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂} {floor : Option Nat} {low : Nat}
 
 theorem lexFractionFrom_sim (hc : ConsumersW L) (input start tokenStart base h) :
@@ -46,8 +48,8 @@ theorem lexNumeralOrDecimal_sim (hc : ConsumersW L) (input start tokenStart base
   unfold lexNumeralOrDecimal; lsimW
 
 omit [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂]
-  [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂] in
+  [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂] in
 theorem lexBaseSelection_sim (input start hstart tokenStart h) :
     LSim L (· = ·)
       (lexBaseSelection (H := H₁) (m := m₁) (R := R₁) (E := E₁) (floor := floor) (low := low)

@@ -35,7 +35,7 @@ section
 
 variable {floor : Option Nat} {low : Nat}
 
-variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Token.Version}
+variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
 set_option hygiene false in
 /-- A string left in progress at the end of its run, in the proof of `normalSpec_lt`. -/
@@ -63,7 +63,7 @@ local macro "string_stay" : tactic => `(tactic| (
   · rw [hA]; rfl))
 
 /-- `normalSpec_lt` at the quote that starts a string literal. -/
-theorem normalSpec_string (v : Token.Version) (input : ByteSlice) (offset base : Nat)
+theorem normalSpec_string (v : Version) (input : ByteSlice) (offset base : Nat)
     (hframe : Frame floor low offset) (n index : Nat)
     (ih : ∀ index, input.size - index < n → NormalSpec C v hd iv input offset base hframe index)
     (hn : input.size - index < n + 1)

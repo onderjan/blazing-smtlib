@@ -27,7 +27,7 @@ open BSmtLib.Facts.Proofs.Lexer.VNaive.Facts BSmtLib.Facts.Proofs.Lexer.VNaive.P
 open BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix.Lexeme BSmtLib.Facts.Proofs.Lexer.VNaive.Run
 open BSmtLib.Lexer.Internal.VNaive
 
-theorem startStepW_cases {version : Token.Version} {ws : Bool} {location : Span.Location}
+theorem startStepW_cases {version : Version} {ws : Bool} {location : Span.Location}
     {c : UInt8}
     {st : St} {ls : List Lexeme} (h : startStepW version ws location c = some (st, ls)) :
     ls = [] ∨ ∃ l, ls = [l] ∧ st = .idle ∧ l.end = location.afterByte c := by
@@ -39,7 +39,7 @@ theorem startStepW_cases {version : Token.Version} {ws : Bool} {location : Span.
     exact .inr ⟨_, rfl, rfl, (start_token_span ‹_›).2⟩
   · cases h
 
-theorem byteStepW_cases {version : Token.Version} {ws : Bool} {st st' : St}
+theorem byteStepW_cases {version : Version} {ws : Bool} {st st' : St}
     {location : Span.Location}
     {c : UInt8} {ls : List Lexeme} (h : byteStepW version ws st location c = some (st', ls)) :
     ls = [] ∨ (∃ l, ls = [l] ∧ st' = .idle ∧ l.end = location.afterByte c) ∨
@@ -62,7 +62,7 @@ theorem byteStepW_cases {version : Token.Version} {ws : Bool} {st st' : St}
       exact .inr (.inr ⟨_, _, rfl, (advance_tokenBefore ‹_›).2, hs⟩)
     · cases h
 
-theorem failedBeforeW_cases {version : Token.Version} {ws : Bool} {st : St}
+theorem failedBeforeW_cases {version : Version} {ws : Bool} {st : St}
     {location : Span.Location}
     {c : UInt8} (h : byteStepW version ws st location c = none) :
     failedBeforeW ws st location c = [] ∨
@@ -80,7 +80,7 @@ theorem failedBeforeW_cases {version : Token.Version} {ws : Bool} {st : St}
 
 /-- After a lexeme other than the end of file, the run goes on as a run from nothing in progress
 at the end of the lexeme, over the bytes after it. -/
-theorem lexBytesW_restart (version : Token.Version) (ws : Bool) (bytes : List UInt8) :
+theorem lexBytesW_restart (version : Version) (ws : Bool) (bytes : List UInt8) :
     ∀ {st : St} {location : Span.Location} {pre post : List Lexeme} {l : Lexeme},
       (∀ {st' location'}, lexBytesW version ws st location bytes =
           .ok (st', location', pre ++ l :: post) →
@@ -198,7 +198,7 @@ theorem lexBytesW_restart (version : Token.Version) (ws : Bool) (bytes : List UI
               obtain ⟨k, hk, he, hrun⟩ := first hb hls1
               exact ⟨k, hk, he, by rw [hrun _ hr]; rfl⟩
 
-theorem lexBytesW_location {version : Token.Version} {ws : Bool} (bytes : List UInt8) :
+theorem lexBytesW_location {version : Version} {ws : Bool} (bytes : List UInt8) :
     ∀ {st st' : St} {location location' : Span.Location} {ls : List Lexeme},
       lexBytesW version ws st location bytes = .ok (st', location', ls) →
         location' = advanceLoc location bytes := by
@@ -224,7 +224,7 @@ theorem lexBytesW_location {version : Token.Version} {ws : Bool} (bytes : List U
 
 /-- The run from nothing in progress at the location over the bytes, and then, if the input has
 ended, the end of the input: the lexemes it finishes, and whether it fails. -/
-def streamFrom (version : Token.Version) (ws ended : Bool) (location : Span.Location)
+def streamFrom (version : Version) (ws ended : Bool) (location : Span.Location)
     (bytes : List UInt8) :
     List Lexeme × Bool :=
   match lexBytesW version ws .idle location bytes with
@@ -250,7 +250,7 @@ theorem endStepW_cases {ws : Bool} {st : St} {location : Span.Location} {ls : Li
 
 /-- After a lexeme other than the end of file, the run goes on as a run from nothing in progress
 at the end of the lexeme, over the bytes after it. -/
-theorem streamFrom_restart {version : Token.Version} {ws ended : Bool} {location : Span.Location}
+theorem streamFrom_restart {version : Version} {ws ended : Bool} {location : Span.Location}
     {bytes : List UInt8} {pre post : List Lexeme} {l : Lexeme}
     (h : (streamFrom version ws ended location bytes).1 = pre ++ l :: post)
     (hl : l.category ≠ .endOfFile) :
@@ -331,16 +331,16 @@ theorem streamFrom_restart {version : Token.Version} {ws ended : Bool} {location
 
 /-- The run from the boundary at the offset `o` of the input: from nothing in progress, over the
 input after `o`, and then, if the input has ended, the end of the input. -/
-def stream (version : Token.Version) (ws : Bool) (input : List UInt8) (ended : Bool) (o : Nat) :
+def stream (version : Version) (ws : Bool) (input : List UInt8) (ended : Bool) (o : Nat) :
     List Lexeme × Bool :=
   streamFrom version ws ended (locAfter (input.take o)) (input.drop o)
 
 /-- The tokens of the lexemes, as the consumer is handed them: whitespace and comments left
 out. -/
-def handedOf (version : Token.Version) (ls : List Lexeme) : List BSmtLibSpec.Lexer.Handed :=
+def handedOf (version : Version) (ls : List Lexeme) : List BSmtLibSpec.Lexer.Handed :=
   ls.filterMap (lexemeHanded version)
 
-theorem handedAll_eq_handedOf {version : Token.Version} {ls : List Lexeme}
+theorem handedAll_eq_handedOf {version : Version} {ls : List Lexeme}
     (h : ∀ l ∈ ls, (Taken l)) :
     handedAll version ls = some (handedOf version ls) := by
   induction ls with
@@ -356,7 +356,7 @@ theorem handedAll_eq_handedOf {version : Token.Version} {ls : List Lexeme}
     rw [handedAll_cons_some hx, ih fun l' hl' => h l' (by simp [hl'])]
     simp [handedOf, hx]
 
-theorem shiftRun_streamFrom (version : Token.Version) (ws ended : Bool)
+theorem shiftRun_streamFrom (version : Version) (ws ended : Bool)
     (base location : Span.Location)
     (bytes : List UInt8) :
     streamFrom version ws ended (locShift base location) bytes =
@@ -380,14 +380,14 @@ theorem shiftRun_streamFrom (version : Token.Version) (ws ended : Bool)
       | none => rfl
       | some ls' => simp [List.map_append]
 
-theorem lexemeHanded_shift (version : Token.Version) (before : List UInt8) (l : Lexeme) :
+theorem lexemeHanded_shift (version : Version) (before : List UInt8) (l : Lexeme) :
     lexemeHanded version ((shift (locAfter before) l)) =
       (lexemeHanded version l).map (BSmtLibSpec.Lexer.Handed.after before) := by
   unfold lexemeHanded Lexeme.shift
   cases toTokenType l.category <;>
     simp [toLocation_shift, BSmtLibSpec.Lexer.Handed.after]
 
-theorem handedOf_shift (version : Token.Version) (before : List UInt8) (ls : List Lexeme) :
+theorem handedOf_shift (version : Version) (before : List UInt8) (ls : List Lexeme) :
     handedOf version (ls.map (Lexeme.shift (locAfter before))) =
       (handedOf version ls).map (BSmtLibSpec.Lexer.Handed.after before) := by
   induction ls with
@@ -397,7 +397,7 @@ theorem handedOf_shift (version : Token.Version) (before : List UInt8) (ls : Lis
     cases lexemeHanded version l <;> simp [ih]
 
 /-- The run in the form of `fedOf` is its tokens. -/
-theorem fedOf_eq_streamFrom (version : Token.Version) (ended : Bool) (location : Span.Location)
+theorem fedOf_eq_streamFrom (version : Version) (ended : Bool) (location : Span.Location)
     (bytes : List UInt8) :
     fedOf version ended (lexBytes version .idle location bytes) =
       some (handedOf version (streamFrom version false ended location bytes).1,
@@ -429,7 +429,7 @@ theorem fedOf_eq_streamFrom (version : Token.Version) (ended : Bool) (location :
           · exact h' l hl)]
         rfl
 
-theorem toVersion_fromVersion (version : Token.Version) : toVersion
+theorem toVersion_fromVersion (version : Version) : toVersion
     (fromVersion version) = version := by
   cases version <;> rfl
 

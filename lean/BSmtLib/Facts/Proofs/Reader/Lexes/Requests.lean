@@ -162,7 +162,7 @@ theorem single_request {added added' : List Event} (h : ∀ e ∈ added, e.isCal
     split <;> simp
 
 /-- After an item, the recording run asks its producer for at most one thing. -/
-theorem recAfter_single (version : Token.Version) (parser : ScriptParser (List Event))
+theorem recAfter_single (version : Version) (parser : ScriptParser (List Event))
     {item : Parser.Internal.Input}
     {received : Received} (hr : Bridge.received item = some received) (events : List Event) :
     Single ((recAfter version parser item).run.run events).2 := by
@@ -245,7 +245,7 @@ theorem recAfter_single (version : Token.Version) (parser : ScriptParser (List E
 
 /-- The driver's run over items, from a log with at most one request after its last processing
 if there are no items: its log has at most one request after its last processing. -/
-theorem driveScript_single : ∀ (items : List LibItem) (version : Token.Version)
+theorem driveScript_single : ∀ (items : List LibItem) (version : Version)
     (parser : ScriptParser (List Event)) (events : List Event), (items = [] → Single events) →
     Single ((driveScript version parser (items.map Subtype.val)).run.run events).2
   | [], _, _, events, h => h rfl

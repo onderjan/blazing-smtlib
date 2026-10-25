@@ -529,16 +529,16 @@ the parser broke its contract by continuing on the end of the input.
 all
 ```
 
-`Reader.readAll` over a buffered reader that asks the Rust side for the
-bytes (see "Calls of the buffered reader"). The response is `done <result>`,
-or `none` as for `eof`.
+`Reader.readFrom` over a buffered reader that asks the Rust side for the
+bytes (see "Calls of the buffered reader"). The response is
+`done <result> <location>`, or `none`, as for `eof`.
 
 ```
 file <hex>
 ```
 
 `Reader.readFile` of the path, given as its bytes. The response is
-`done <result>` or `none`.
+`done <result> <location>` or `none`, as for `eof`.
 
 ```
 discarded

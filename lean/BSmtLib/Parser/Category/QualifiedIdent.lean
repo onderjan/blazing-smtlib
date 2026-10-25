@@ -13,12 +13,13 @@ The parser of a qualified identifier: an identifier, or one qualified by its sor
 
 namespace BSmtLib.Parser.Category.QualifiedIdent
 
-open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Ident
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Ident
     BSmtLib.Parser.Category.Sort
 open BSmtLib.Parser.Category.Ident.Internal
 open BSmtLib.Parser.Category.Sort.Internal
 open BSmtLib.Parser.Category.Token.Internal
-open BSmtLib.Token (Version)
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal

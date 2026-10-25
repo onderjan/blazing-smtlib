@@ -5,6 +5,8 @@ import all BSmtLib.Parser
 import all BSmtLib.Parser.Command
 import all BSmtLib.Parser.Script
 import all BSmtLib.Token
+import all BSmtLib.Version
+import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
 
@@ -33,7 +35,7 @@ open BSmtLib.Parser (Parse)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Command (CommandOutcome)
 open BSmtLib.Parser.Command.Internal (CommandState commandStep)
-open BSmtLib.Token (VersionPosture)
+open BSmtLib.Version (VersionPosture)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Command BSmtLib.Facts.Proofs.Parser.Drive
@@ -46,7 +48,7 @@ open BSmtLibSpec.Parser.Traversal
 
 /-! ## Versions -/
 
-theorem Bridge.version_injective {a b : Token.Version}
+theorem Bridge.version_injective {a b : Version}
     (h : Bridge.version a = Bridge.version b) : a = b := by
   cases a <;> cases b <;> first | rfl | cases h
 
@@ -56,16 +58,16 @@ theorem Bridge.version_libVersion (version : BSmtLibSpec.Lexicon.Version) :
   cases version <;> rfl
 
 @[simp]
-theorem Bridge.libVersion_version (version : Token.Version) :
+theorem Bridge.libVersion_version (version : Version) :
     Bridge.libVersion (Bridge.version version) = version := by
   cases version <;> rfl
 
 /- The library's version derives `BEq` only; its equality is the structural one. -/
-instance : LawfulBEq Token.Version where
+instance : LawfulBEq Version where
   eq_of_beq {a b} h := by cases a <;> cases b <;> first | rfl | cases h
   rfl {a} := by cases a <;> rfl
 
-theorem mem_policyOf (posture : VersionPosture) (version : Token.Version) :
+theorem mem_policyOf (posture : VersionPosture) (version : Version) :
     Bridge.version version ∈ (policyOf posture).allowed ↔ posture.allowed.contains version := by
   rw [Array.contains_iff_mem]
   simp only [policyOf, List.mem_map, Array.mem_toList_iff]
@@ -77,7 +79,7 @@ theorem mem_policyOf (posture : VersionPosture) (version : Token.Version) :
 
 /-- The posture's check is the policy's, with the policy's errors as the parser's. -/
 theorem check_policyOf (posture : VersionPosture) (declarations : Nat)
-    (version : Token.Version) :
+    (version : Version) :
     (check posture) declarations version =
       match (policyOf posture).check declarations (Bridge.version version) with
       | .ok () => none
@@ -99,7 +101,7 @@ theorem check_policyOf (posture : VersionPosture) (declarations : Nat)
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
 variable (points : Points (StateT H m)) (producer : Producer (StateT H m))
 variable (posture : VersionPosture)
 
@@ -113,7 +115,7 @@ What the script parser does after a command read in the version, over the tokens
 after a version declaration, the posture's check and the producer's and the handler's switches;
 after `exit`, the discarding and the end of the input.
 -/
-def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Parser.Internal.Input) :
+def scriptAfter (version : Version) (declarations : Nat) (rest : List Parser.Internal.Input) :
     CommandOutcome → PM H (Option (Unit × List Parser.Internal.Input))
   | .command =>
     driveParse points producer version
@@ -125,7 +127,7 @@ def scriptAfter (version : Token.Version) (declarations : Nat) (rest : List Pars
       match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
       | .error _ => throw (.version .unsupported)
       | .ok () => do
-        ExceptT.lift (Traits.Handler.setVersion (H := H) declared)
+        ExceptT.lift (Handler.setVersion (H := H) declared)
         driveParse points producer declared
           (scriptAt (H := H) posture .awaiting (declarations + 1)) rest
   | .exit => do
@@ -142,7 +144,7 @@ theorem arrive_scriptAt (command : Parser.Command.Internal.CommandStateOf H) (de
       Parser.Command.Internal.commandArrive command token := (rfl)
 
 omit [LawfulMonad m] in
-theorem step_commands (version : Token.Version) (command : Parser.Command.Internal.CommandStateOf H)
+theorem step_commands (version : Version) (command : Parser.Command.Internal.CommandStateOf H)
     (declarations : Nat) (token : Parser.Internal.Input) :
     Parser.Internal.ParseByToken.step version (scriptAt posture command declarations) token =
       ScriptParser.Internal.step version (scriptAt posture command declarations)
@@ -152,7 +154,7 @@ theorem step_commands (version : Token.Version) (command : Parser.Command.Intern
 The script parser runs as the command parser, with the command
 parser's calls due at a token's arrival, and goes on after the command as its outcome says.
 -/
-theorem script_embed (version : Token.Version) (command : Parser.Command.Internal.CommandStateOf H)
+theorem script_embed (version : Version) (command : Parser.Command.Internal.CommandStateOf H)
     (declarations : Nat) (tokens : List Parser.Internal.Input) :
     driveParse points producer version (scriptAt posture command declarations)
         tokens =
@@ -295,22 +297,22 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /--
 The posture's check of a version declaration, the producer's switch and the handler's, as the
 script parser makes them, are the spec's switch to the version under the policy of the posture.
 -/
 theorem switch_eq (hA : Agrees h) (producer : Producer (StateT H m)) (posture : VersionPosture)
-    (declarations : Nat) (declared : Token.Version) {β : Type} (k : PM H β) :
+    (declarations : Nat) (declared : Version) {β : Type} (k : PM H β) :
     (match (check posture) declarations declared with
       | some kind => Parser.Internal.versionError kind
       | none => do
         match ← ExceptT.lift (producer.setVersion (Bridge.version declared)).run with
         | .error _ => throw (.version .unsupported)
         | .ok () => do
-          ExceptT.lift (Traits.Handler.setVersion (H := H) declared)
+          ExceptT.lift (Handler.setVersion (H := H) declared)
           k) =
       (do
         adaptRun (switchVersion h producer (policyOf posture) declarations
@@ -335,11 +337,11 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.CommandHandler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler.CommandHandler H m]
 variable {points : Points (StateT H m)}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
-theorem step_endOfInput (posture : VersionPosture) (version : Token.Version)
+theorem step_endOfInput (posture : VersionPosture) (version : Version)
     (declarations : Nat) :
     Parser.Internal.ParseByToken.step version (scriptAt
         (H := H) posture .awaiting declarations) .endOfInput =
@@ -373,7 +375,7 @@ commands of a script and any rest: the spec's commands under the policy of the p
 theorem commands_runs (hA : Agrees h) (producer : Producer (StateT H m))
     (posture : VersionPosture) {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     (hscript : Script start commands) :
-    ∀ (version : Token.Version), Bridge.version version = start →
+    ∀ (version : Version), Bridge.version version = start →
     ∀ (declarations : Nat) {inputs : List Parser.Internal.Input},
     inputs.map Bridge.received = (received commands).map some → ∀ rest : List Parser.Internal.Input,
     driveParse points producer version
@@ -441,10 +443,10 @@ The script parser under a posture, from its start, over what a parser receives f
 from the version and any rest, with the handler told the version first as the parse adapter
 does, is the spec's script under the policy of the posture, and finishes before the rest.
 -/
-theorem script_correct [Traits.CommandHandler H m] [LawfulMonad m] {points : Points (StateT H m)}
-    {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)} (hA : Agrees h)
-    (producer : Producer (StateT H m)) (posture : Token.VersionPosture)
-    {version : Token.Version} {commands : List Tree.Command}
+theorem script_correct [Handler.CommandHandler H m] [LawfulMonad m] {points : Points (StateT H m)}
+    {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : Agrees h)
+    (producer : Producer (StateT H m)) (posture : Version.VersionPosture)
+    {version : Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
     (hs : inputs.map Bridge.received = (BSmtLibSpec.Parser.Properties.received commands).map some)
     (rest : List Parser.Internal.Input) :

@@ -148,7 +148,7 @@ theorem open_session_discard (lexing : BSmtLibSpec.Lexer.Lexing)
     final _ rfl (by simp) (by simp [doneTokens]) hg' (Nat.zero_le _) hfr htail hruns
 
 /-- A read through the end of the input fed the slices first. -/
-theorem feed_of_readThrough {H P E R : Type} [Parser.Parse P H Id E R] [Traits.Handler H Id]
+theorem feed_of_readThrough {H P E R : Type} [Parser.Parse P H Id E R] [Handler H Id]
     {reader : Reader H P} {slices : List ByteList} {result : Option (Span.Located R)}
     {before after : Reader H P}
     (h : readThrough reader slices = .ok (result, before, after)) :

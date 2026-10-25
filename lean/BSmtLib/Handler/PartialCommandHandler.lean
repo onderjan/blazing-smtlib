@@ -1,6 +1,6 @@
 module
 
-public import BSmtLib.Traits.CommandHandler
+public import BSmtLib.Handler.CommandHandler
 
 public section
 
@@ -8,9 +8,9 @@ public section
 names the non-standard parser's bound `SmtParse` as `SmtCommandHandler` does, so it has a
 module of its own here, next to that class's; the root module `BSmtLib` imports it. -/
 
-namespace BSmtLib.Traits
+namespace BSmtLib.Handler
 
-open BSmtLib.Nodes BSmtLib.Plain BSmtLib.Multiple
+open BSmtLib.Grammar.Nodes BSmtLib.Lexicon.Value BSmtLib.Grammar.Multiple
 
 /--
 A command handler that implements only the commands it supports.
@@ -42,7 +42,7 @@ class PartialCommandHandler (H : Type) (m : outParam (Type → Type)) [Monad m]
     error_eq ▸ throw (PartialCommandError.unsupported .assert)
   commandCheckSat : ExceptT Error (StateT H m) Unit :=
     error_eq ▸ throw (PartialCommandError.unsupported .checkSat)
-  commandCheckSatAssuming : Multiple Term → ExceptT Error (StateT H m) Unit := fun _ =>
+  commandCheckSatAssuming : Grammar.Multiple Term → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .checkSatAssuming)
   commandDeclareConst : Symbol → «Sort» → ExceptT Error (StateT H m) Unit := fun _ _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .declareConst)
@@ -58,7 +58,7 @@ class PartialCommandHandler (H : Type) (m : outParam (Type → Type)) [Monad m]
     error_eq ▸ throw (PartialCommandError.unsupported .declareDatatypes)
   endDeclareDatatypes : ExceptT Error (StateT H m) Unit :=
     error_eq ▸ throw (PartialCommandError.unsupported .declareDatatypes)
-  commandDeclareFun : Symbol → Multiple «Sort» → «Sort» → ExceptT Error (StateT H m) Unit :=
+  commandDeclareFun : Symbol → Grammar.Multiple «Sort» → «Sort» → ExceptT Error (StateT H m) Unit :=
     fun _ _ _ => error_eq ▸ throw (PartialCommandError.unsupported .declareFun)
   commandDeclareSort : Symbol → Numeral → ExceptT Error (StateT H m) Unit := fun _ _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .declareSort)
@@ -66,17 +66,19 @@ class PartialCommandHandler (H : Type) (m : outParam (Type → Type)) [Monad m]
     error_eq ▸ throw (PartialCommandError.unsupported .declareSortParameter)
   commandDefineConst : Symbol → «Sort» → Term → ExceptT Error (StateT H m) Unit := fun _ _ _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .defineConst)
-  startDefineFun : Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit := fun _ =>
+  startDefineFun :
+    Grammar.Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .defineFun)
   endDefineFun : Term → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .defineFun)
-  startDefineFunRec : Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit :=
+  startDefineFunRec : Grammar.Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit :=
     fun _ => error_eq ▸ throw (PartialCommandError.unsupported .defineFunRec)
   endDefineFunRec : Term → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .defineFunRec)
   startDefineFunsRec : FunctionSignatures «Sort» → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .defineFunsRec)
-  startRecursiveBody : Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit :=
+  startRecursiveBody :
+    Grammar.Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit :=
     fun _ => error_eq ▸ throw (PartialCommandError.unsupported .defineFunsRec)
   endRecursiveBody : Term → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .defineFunsRec)
@@ -106,7 +108,7 @@ class PartialCommandHandler (H : Type) (m : outParam (Type → Type)) [Monad m]
     error_eq ▸ throw (PartialCommandError.unsupported .getUnsatAssumptions)
   commandGetUnsatCore : ExceptT Error (StateT H m) Unit :=
     error_eq ▸ throw (PartialCommandError.unsupported .getUnsatCore)
-  commandGetValue : Multiple Term → ExceptT Error (StateT H m) Unit := fun _ =>
+  commandGetValue : Grammar.Multiple Term → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .getValue)
   commandPop : Numeral → ExceptT Error (StateT H m) Unit := fun _ =>
     error_eq ▸ throw (PartialCommandError.unsupported .pop)
@@ -175,4 +177,4 @@ instance {H : Type} {m : Type → Type} [Monad m] [PartialCommandHandler H m] :
   commandSetLogic := PartialCommandHandler.commandSetLogic
   commandSetOption := PartialCommandHandler.commandSetOption
 
-end BSmtLib.Traits
+end BSmtLib.Handler

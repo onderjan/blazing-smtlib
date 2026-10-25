@@ -52,13 +52,13 @@ theorem MPost.bind {α β : Type} {P : β → Prop} {x : RPM α} {k : α → RPM
   · exact hk a l b log' hr
 
 /-- A step of the parser that goes on, with the posture. -/
-def StepPost (q : Token.VersionPosture) : Internal.Step (ScriptParser (List Event)) Unit → Prop
+def StepPost (q : Version.VersionPosture) : Internal.Step (ScriptParser (List Event)) Unit → Prop
   | .more parser => (posture parser) = q
   | .done _ => True
 
 /-- What a step asks of its loop: every parser it goes on with, then or after the action on the
 cursor, has the posture. -/
-def FlowPost (q : Token.VersionPosture) :
+def FlowPost (q : Version.VersionPosture) :
     Internal.Flow RPM (ScriptParser (List Event)) Unit → Prop
   | .more parser => (posture parser) = q
   | .done _ => True
@@ -66,7 +66,7 @@ def FlowPost (q : Token.VersionPosture) :
   | .discardRest resume => MPost (StepPost q) resume
 
 /-- The script parser's step goes on with parsers of its posture. -/
-theorem step_posture (version : Token.Version) (parser : ScriptParser (List Event))
+theorem step_posture (version : Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
     MPost (FlowPost (posture parser)) (ScriptParser.Internal.step version parser token) := by
   unfold ScriptParser.Internal.step
@@ -95,7 +95,7 @@ theorem MPost.bind' {α β : Type} {Q : α → Prop} {P : β → Prop} {x : RPM 
 theorem MPost.any {α : Type} (x : RPM α) : MPost (fun _ => True) x := fun _ _ _ _ => trivial
 
 /-- What the driver does after an item's processing goes on with a parser of the posture. -/
-theorem afterProcessing_posture (version : Token.Version) (parser : ScriptParser (List Event))
+theorem afterProcessing_posture (version : Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
     MPost (fun r => ∀ v p, r = .inl (v, p) → (posture p) = (posture parser))
       (afterProcessing recordingProducer version parser token) := by
@@ -121,7 +121,7 @@ theorem afterProcessing_posture (version : Token.Version) (parser : ScriptParser
     | done => exact MPost.pure fun _ _ h => by cases h
 
 /-- The driver's run of one item goes on with a parser of the posture. -/
-theorem recAfter_posture (version : Token.Version) (parser : ScriptParser (List Event))
+theorem recAfter_posture (version : Version) (parser : ScriptParser (List Event))
     (token : Internal.Input) :
     MPost (fun r => ∀ v p, r = .inl (v, p) → (posture p) = (posture parser))
       (recAfter version parser token) := by
@@ -132,7 +132,7 @@ theorem recAfter_posture (version : Token.Version) (parser : ScriptParser (List 
 /-- A recording run that failed or finished does not go on after one more item. -/
 theorem recRun_snoc_stop (version : BSmtLibSpec.Lexicon.Version) (items : List LibItem)
     (item : LibItem) {r : Except (ParseErrorCause Unit)
-      ((Token.Version × ScriptParser (List Event)) ⊕ (Unit × List Internal.Input))}
+      ((Version × ScriptParser (List Event)) ⊕ (Unit × List Internal.Input))}
     {log : List Event} (h : recRun version items = (r, log)) (hr : ∀ x, r ≠ .ok (.inl x)) :
     ∀ x log', recRun version (items ++ [item]) ≠ (.ok (.inl x), log') := by
   intro x log' h'
@@ -146,7 +146,7 @@ theorem recRun_snoc_stop (version : BSmtLibSpec.Lexicon.Version) (items : List L
 
 /-- The recording run, where it goes on, goes on with a parser of the posture it starts with. -/
 theorem recRun_posture (version : BSmtLibSpec.Lexicon.Version) (items : List LibItem)
-    {v : Token.Version} {parser : ScriptParser (List Event)} {log : List Event}
+    {v : Version} {parser : ScriptParser (List Event)} {log : List Event}
     (h : recRun version items = (.ok (.inl (v, parser)), log)) :
     (posture parser) = unrestrictedPosture := by
   obtain ⟨rev, rfl⟩ : ∃ rev, items = rev.reverse := ⟨items.reverse, by simp⟩

@@ -5,12 +5,12 @@ public import BSmtLib.Parser
 public section
 
 /- LEAN: in Rust, `SmtCommandHandler` is in `traits.rs` with `SmtHandler`. Its associated type
-`NonstandardParser` is bounded by `SmtParse`, whose module imports `BSmtLib.Traits` for the
+`NonstandardParser` is bounded by `SmtParse`, whose module imports `BSmtLib.Handler` for the
 handler, so the class has a module of its own here; the root module `BSmtLib` imports it. -/
 
-namespace BSmtLib.Traits
+namespace BSmtLib.Handler
 
-open BSmtLib.Nodes BSmtLib.Plain BSmtLib.Multiple
+open BSmtLib.Grammar.Nodes BSmtLib.Lexicon.Value BSmtLib.Grammar.Multiple
 
 /--
 The handler of commands and scripts (`SmtCommandHandler`). Commands bring no scope values.
@@ -32,7 +32,7 @@ class CommandHandler (H : Type) (m : outParam (Type → Type)) extends Handler H
   nonstandardCommand : Symbol → ExceptT Error (StateT H m) NonstandardParser
   commandAssert : Term → ExceptT Error (StateT H m) Unit
   commandCheckSat : ExceptT Error (StateT H m) Unit
-  commandCheckSatAssuming : Multiple Term → ExceptT Error (StateT H m) Unit
+  commandCheckSatAssuming : Grammar.Multiple Term → ExceptT Error (StateT H m) Unit
   commandDeclareConst : Symbol → «Sort» → ExceptT Error (StateT H m) Unit
   /-- The start of `declare-datatype`, when its sort parameters are known. -/
   startDeclareDatatype : Symbol → Symbols → ExceptT Error (StateT H m) Unit
@@ -44,21 +44,21 @@ class CommandHandler (H : Type) (m : outParam (Type → Type)) extends Handler H
   startDatatypeDeclaration : Symbols → ExceptT Error (StateT H m) Unit
   endDatatypeDeclaration : Constructors «Sort» → ExceptT Error (StateT H m) Unit
   endDeclareDatatypes : ExceptT Error (StateT H m) Unit
-  commandDeclareFun : Symbol → Multiple «Sort» → «Sort» → ExceptT Error (StateT H m) Unit
+  commandDeclareFun : Symbol → Grammar.Multiple «Sort» → «Sort» → ExceptT Error (StateT H m) Unit
   commandDeclareSort : Symbol → Numeral → ExceptT Error (StateT H m) Unit
   commandDeclareSortParameter : Symbol → ExceptT Error (StateT H m) Unit
   commandDefineConst : Symbol → «Sort» → Term → ExceptT Error (StateT H m) Unit
   /-- The signature of `define-fun`, after its result sort, before the body. -/
-  startDefineFun : Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit
+  startDefineFun : Grammar.Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit
   endDefineFun : Term → ExceptT Error (StateT H m) Unit
   /-- The signature of `define-fun-rec`, after its result sort, before the body. -/
-  startDefineFunRec : Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit
+  startDefineFunRec : Grammar.Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit
   endDefineFunRec : Term → ExceptT Error (StateT H m) Unit
   /-- The signatures of `define-funs-rec`, at the `)` after them. -/
   startDefineFunsRec : FunctionSignatures «Sort» → ExceptT Error (StateT H m) Unit
   /-- The start of a body of `define-funs-rec`, with the signature of its function: when the
   body's first token arrives. -/
-  startRecursiveBody : Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit
+  startRecursiveBody : Grammar.Multiple.FunctionSignature «Sort» → ExceptT Error (StateT H m) Unit
   /-- The end of a body of `define-funs-rec`, at the body's last token. -/
   endRecursiveBody : Term → ExceptT Error (StateT H m) Unit
   endDefineFunsRec : ExceptT Error (StateT H m) Unit
@@ -75,7 +75,7 @@ class CommandHandler (H : Type) (m : outParam (Type → Type)) extends Handler H
   commandGetProof : ExceptT Error (StateT H m) Unit
   commandGetUnsatAssumptions : ExceptT Error (StateT H m) Unit
   commandGetUnsatCore : ExceptT Error (StateT H m) Unit
-  commandGetValue : Multiple Term → ExceptT Error (StateT H m) Unit
+  commandGetValue : Grammar.Multiple Term → ExceptT Error (StateT H m) Unit
   commandPop : Numeral → ExceptT Error (StateT H m) Unit
   commandPush : Numeral → ExceptT Error (StateT H m) Unit
   commandReset : ExceptT Error (StateT H m) Unit
@@ -87,4 +87,4 @@ class CommandHandler (H : Type) (m : outParam (Type → Type)) extends Handler H
 /- The non-standard parser's `Parse` instance, found from the handler's. -/
 attribute [instance_reducible, instance] CommandHandler.parseNonstandard
 
-end BSmtLib.Traits
+end BSmtLib.Handler

@@ -169,7 +169,7 @@ BSmtLib.Facts.Lexer.Adapters:
   BSmtLib.Facts.Lexer.Adapters.failureOf
   BSmtLib.Facts.Lexer.Adapters.fromVersion
   BSmtLib.Facts.Lexer.Adapters.instConsumeAnsweringResultOptionError
-  BSmtLib.Facts.Lexer.Adapters.instConsumeFromAnsweringBatchCursorAnswerMResultOptionError
+  BSmtLib.Facts.Lexer.Adapters.instConsumeFromAnsweringLexerCursorAnswerMResultOptionError
   BSmtLib.Facts.Lexer.Adapters.lexing
   BSmtLib.Facts.Lexer.Adapters.toContent
   BSmtLib.Facts.Lexer.Adapters.toHanded

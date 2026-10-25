@@ -27,8 +27,8 @@ meta def splitType (ty : Expr) : MetaM Bool := do
   if (← isClass? ty).isSome then return false
   let ty ← whnf ty
   let some n := ty.getAppFn.constName? | return false
-  if (`BSmtLib.Plain).isPrefixOf n || n == ``Array || n == ``Nat || n == ``Std.Slice ||
-      n == ``String || n == ``ByteArray || n == ``BSmtLib.Token.Version then
+  if (`BSmtLib.Lexicon.Value).isPrefixOf n || n == ``Array || n == ``Nat || n == ``Std.Slice ||
+      n == ``String || n == ``ByteArray || n == ``BSmtLib.Version then
     return false
   match (← getEnv).find? n with
   | some (.inductInfo _) => return true

@@ -22,14 +22,16 @@ command's term, the port's script step is its term step (`portStep_withTerm`).
 
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Adapter
 
-open BSmtLib.Traits
+open BSmtLib.Handler
 open BSmtLib.Parser (Parse ParseError ParseErrorCause)
 open BSmtLib.Parser.Internal (PM call versionError)
 open BSmtLib.Parser.Category.Term.Internal (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
 open BSmtLib.Parser.Script (ScriptParser)
-open BSmtLib.Token (BatchTag BatchCursor Cursor VersionPosture)
+open BSmtLib.Token (BatchTag Cursor)
+open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
+open BSmtLib.Version (VersionPosture)
 open BSmtLib.Facts.Proofs.Parser.Fused.Loop
 open BSmtLib.Facts.Proofs.Parser.Fused.Run
 
@@ -40,7 +42,7 @@ attribute [local simp] ScriptParser.Internal.mk ScriptParser.Internal.command
 variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [CommandHandler H m]
 
 theorem takeOne_eq_portStep (parser : ScriptParser H) {batch : BatchTag}
-    {origin next : BatchCursor batch} (h : H) (token : Token batch)
+    {origin next : LexerCursor batch} (h : H) (token : LexerToken batch)
     (consumed : next.Consumed origin) {β : Type} (k : PortOut H origin → m β) :
     ((Parser.Internal.takeOne parser origin token next consumed).run h >>= k) =
       portStep (ScriptParser.Internal.posture parser) h (ScriptParser.Internal.declarations parser)
@@ -97,8 +99,8 @@ theorem takeOne_eq_portStep (parser : ScriptParser H) {batch : BatchTag}
                 | ok st => cases st <;> simp [toPort, Parser.Internal.resumed]
 
 theorem portStep_withTerm (posture : VersionPosture) {batch : BatchTag}
-    {origin next : BatchCursor batch} (h : H) (declarations : Nat)
-    (context : TermContext (Handler.«Sort» H)) (term : TermStateOf H) (token : Token batch)
+    {origin next : LexerCursor batch} (h : H) (declarations : Nat)
+    (context : TermContext (Handler.«Sort» H)) (term : TermStateOf H) (token : LexerToken batch)
     (consumed : next.Consumed origin) {β : Type} (k : PortOut H origin → m β) :
     portStep posture h declarations (withTerm context term) token next
         (fun out => k (toPort posture consumed out)) =

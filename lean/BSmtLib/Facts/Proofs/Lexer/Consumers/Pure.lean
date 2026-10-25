@@ -31,7 +31,7 @@ open BSmtLib.Lexer.Error BSmtLib.Lexer.Internal.VNaive
 
 /-- The byte `c` at `location` with no token in progress, for a consumer that takes whitespace
 and comments if `ws`: the state after it and the lexemes it finishes, or none on an error. -/
-def startStepW (version : Token.Version) (ws : Bool) (location : Span.Location) (c : UInt8) :
+def startStepW (version : Version) (ws : Bool) (location : Span.Location) (c : UInt8) :
     Option (St × List Lexeme) :=
   match start version ws location c with
   | .idle => some (.idle, [])
@@ -42,7 +42,7 @@ def startStepW (version : Token.Version) (ws : Bool) (location : Span.Location) 
 /-- The byte `c` at `location` in the state, for a consumer that takes whitespace and comments
 if `ws`: the state after it and the lexemes it finishes, or none on an error. A byte that
 delimits a token is lexed again with no token in progress. -/
-def byteStepW (version : Token.Version) (ws : Bool) : St → Span.Location → UInt8 → Option
+def byteStepW (version : Version) (ws : Bool) : St → Span.Location → UInt8 → Option
     (St × List Lexeme)
   | .idle, location, c => startStepW version ws location c
   | .token p, location, c =>
@@ -64,7 +64,7 @@ def failedBeforeW (ws : Bool) : St → Span.Location → UInt8 → List Lexeme
 
 /-- The bytes from the state at `location`: the state and the location after them and the
 lexemes they finish, or on an error, the lexemes finished before it. -/
-def lexBytesW (version : Token.Version) (ws : Bool) : St → Span.Location → List UInt8 →
+def lexBytesW (version : Version) (ws : Bool) : St → Span.Location → List UInt8 →
     Except (List Lexeme) (St × Span.Location × List Lexeme)
   | st, location, [] => .ok (st, location, [])
   | st, location, c :: cs =>
@@ -82,10 +82,10 @@ def endStepW (ws : Bool) : St → Span.Location → Option (List Lexeme)
     | .token l => some [l, eofLexeme location]
     | .error _ => none
 
-theorem startStepW_false (version : Token.Version) : startStepW version false = startStep version
+theorem startStepW_false (version : Version) : startStepW version false = startStep version
     := rfl
 
-theorem byteStepW_false (version : Token.Version) : byteStepW version false = byteStep version := by
+theorem byteStepW_false (version : Version) : byteStepW version false = byteStep version := by
   funext st location c
   cases st <;> rfl
 
@@ -93,7 +93,7 @@ theorem failedBeforeW_false : failedBeforeW false = failedBefore := by
   funext st location c
   cases st <;> rfl
 
-theorem lexBytesW_false (version : Token.Version) : lexBytesW version false = lexBytes version := by
+theorem lexBytesW_false (version : Version) : lexBytesW version false = lexBytes version := by
   funext st location bytes
   induction bytes generalizing st location with
   | nil => rfl
@@ -114,16 +114,16 @@ the failure the naive lexer raises there (`failW`): what `start` or `advance` fa
 byte. -/
 
 /-- The failure of `start` at the byte, if it fails; another failure otherwise. -/
-def startFail (version : Token.Version) (ws : Bool) (location : Span.Location) (c : UInt8) :
+def startFail (version : Version) (ws : Bool) (location : Span.Location) (c : UInt8) :
     LexFailure :=
   match start version ws location c with
   | .error f => f
-  | _ => failAtByte .unexpectedCharacter location location
+  | _ => failAtByte .unexpectedByte location location
 
 /-- The failure of the pure step at the byte in the state, where it fails: that of `advance` on
 the token in progress, or that of `start` when the byte, having delimited the token, starts
 none. -/
-def failW (version : Token.Version) (ws : Bool) : St → Span.Location → UInt8 → LexFailure
+def failW (version : Version) (ws : Bool) : St → Span.Location → UInt8 → LexFailure
   | .idle, location, c => startFail version ws location c
   | .token p, location, c =>
     match advance ws p location c with
@@ -160,14 +160,14 @@ theorem plain_withBeforeF (ls : List Lexeme) (e : RunF) :
   | error r => obtain ⟨ls', f⟩ := r; rfl
 
 /-- The bytes from the state at `location`, as `lexBytesW`, with the failure on an error. -/
-def lexBytesF (version : Token.Version) (ws : Bool) : St → Span.Location → List UInt8 → RunF
+def lexBytesF (version : Version) (ws : Bool) : St → Span.Location → List UInt8 → RunF
   | st, location, [] => .ok (st, location, [])
   | st, location, c :: cs =>
     match byteStepW version ws st location c with
     | none => .error (failedBeforeW ws st location c, failW version ws st location c)
     | some (st', ls) => withBeforeF ls (lexBytesF version ws st' (location.afterByte c) cs)
 
-theorem plain_lexBytesF (version : Token.Version) (ws : Bool) :
+theorem plain_lexBytesF (version : Version) (ws : Bool) :
     ∀ (bytes : List UInt8) (st : St) (location : Span.Location),
       (lexBytesF version ws st location bytes).plain = lexBytesW version ws st location bytes
   | [], _, _ => rfl
@@ -180,7 +180,7 @@ theorem plain_lexBytesF (version : Token.Version) (ws : Bool) :
       simp only
       rw [plain_withBeforeF, plain_lexBytesF version ws cs]
 
-theorem lexBytesW_append (version : Token.Version) (ws : Bool) (st : St) (location : Span.Location)
+theorem lexBytesW_append (version : Version) (ws : Bool) (st : St) (location : Span.Location)
     (a b : List UInt8) :
     lexBytesW version ws st location (a ++ b) =
       match lexBytesW version ws st location a with
@@ -315,7 +315,7 @@ theorem failAtEnd_shift (kind : LexicalErrorKind) (base start location : Span.Lo
   simp only [failAtEnd, LexFailure.shift]
   rfl
 
-theorem start_shift (version : Token.Version) (ws : Bool) (base location : Span.Location)
+theorem start_shift (version : Version) (ws : Bool) (base location : Span.Location)
     (c : UInt8) :
     start version ws (locShift base location) c = (Started.shift base
         (start version ws location c)) := by
@@ -373,7 +373,7 @@ theorem finish_shift (ws : Bool) (base : Span.Location) (p : Pending) (location 
 def shiftStep (base : Span.Location) : Option (St × List Lexeme) → Option (St × List Lexeme) :=
   Option.map fun (st, ls) => ((St.shift base st), ls.map (Lexeme.shift base))
 
-theorem startStepW_shift (version : Token.Version) (ws : Bool) (base location : Span.Location)
+theorem startStepW_shift (version : Version) (ws : Bool) (base location : Span.Location)
     (c : UInt8) :
     startStepW version ws (locShift base location) c =
       shiftStep base (startStepW version ws location c) := by
@@ -381,7 +381,7 @@ theorem startStepW_shift (version : Token.Version) (ws : Bool) (base location : 
   rw [start_shift]
   cases start version ws location c <;> rfl
 
-theorem byteStepW_shift (version : Token.Version) (ws : Bool) (base : Span.Location) (st : St)
+theorem byteStepW_shift (version : Version) (ws : Bool) (base : Span.Location) (st : St)
     (location : Span.Location) (c : UInt8) :
     byteStepW version ws ((St.shift base st)) (locShift base location) c =
       shiftStep base (byteStepW version ws st location c) := by
@@ -423,7 +423,7 @@ theorem shiftRun_withBefore (base : Span.Location) (ls : List Lexeme)
   | ok r => obtain ⟨st, location, ls'⟩ := r; simp [withBefore, shiftRun]
   | error ls' => simp [withBefore, shiftRun]
 
-theorem lexBytesW_shift (version : Token.Version) (ws : Bool) (base : Span.Location)
+theorem lexBytesW_shift (version : Version) (ws : Bool) (base : Span.Location)
     (bytes : List UInt8) :
     ∀ (st : St) (location : Span.Location),
       lexBytesW version ws ((St.shift base st)) (locShift base location) bytes =

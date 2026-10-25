@@ -1,11 +1,11 @@
 module
 
-public import BSmtLib.Bytes
+public import BSmtLib.Lexicon.Bytes
 public import BSmtLib.Lexer.Internal.CharClass
 
 public section
 
-namespace BSmtLib.Plain
+namespace BSmtLib.Lexicon.Value
 
 open BSmtLib.Lexer.Internal (CharClass)
 
@@ -435,7 +435,7 @@ def len (self : SymbolBuf) : Nat := self.value.len
 def isEmpty (self : SymbolBuf) : Bool := self.value.isEmpty
 
 /- LEAN: not in Rust, whose functions on the symbol set its fields. The functions of
-`BSmtLib.Plain.Versioned` build a symbol through this; the caller ensures that the bytes are
+`BSmtLib.Lexicon.Value.Versioned` build a symbol through this; the caller ensures that the bytes are
 allowed in the symbol. -/
 @[inline]
 def Internal.newUnchecked (isQuoted : Bool) (value : Bytes.BytesBuf) : SymbolBuf :=
@@ -508,15 +508,15 @@ plain_newtype_eq CommentBuf Comment
 
 /- LEAN: Rust's `to_u32`, `to_u64` and `to_usize` of the numeral, the hexadecimal and the binary
 digits are the functions with `?`; its `TryFrom` implementations for these types, whose error is
-`NumericOverflow`, have no counterpart, as Lean has no class for a fallible conversion. Lean has
-no 128-bit unsigned type: `toNat` and `NumeralBuf.fromNat` stand for Rust's `to_u128` and
+`NumericOverflowError`, have no counterpart, as Lean has no class for a fallible conversion. Lean
+has no 128-bit unsigned type: `toNat` and `NumeralBuf.fromNat` stand for Rust's `to_u128` and
 `from_u128`, and take every value. -/
 
 /-- The numeric value does not fit into the integer type it is converted to. -/
-structure NumericOverflow where
+structure NumericOverflowError where
   deriving BEq, Hashable, Repr
 
-@[no_expose] instance : ToString NumericOverflow :=
+@[no_expose] instance : ToString NumericOverflowError :=
   ⟨fun _ => "value does not fit into integer type"⟩
 
 namespace Numeral
@@ -698,4 +698,4 @@ def fraction (self : DecimalBuf) : ByteSlice := self.view.fraction
 
 end DecimalBuf
 
-end BSmtLib.Plain
+end BSmtLib.Lexicon.Value

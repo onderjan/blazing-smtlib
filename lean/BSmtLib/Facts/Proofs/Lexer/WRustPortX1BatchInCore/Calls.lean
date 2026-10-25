@@ -16,6 +16,8 @@ are the projections of one computation of the same results with lexers that corr
 (`MCouple`), whether the call succeeds or fails: `run_lexSliceStep_sim` and `run_lexEofStep_sim`.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Calls
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
@@ -69,11 +71,11 @@ end
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {recovery : Type} {o₁ o₂ : Ops H m R E}
   {LRel : Ops.Locals H m R E (self := o₁) → Ops.Locals H m R E (self := o₂) → Nat → Nat → Prop}
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- Over operations that simulate each other, the step of a call on a slice, run on lexers that
 correspond, gives the same result with lexers that correspond again, also where it fails. -/
 theorem run_lexSliceStep_sim (ho : OpsSim o₁ o₂ LRel)
@@ -85,7 +87,7 @@ theorem run_lexSliceStep_sim (ho : OpsSim o₁ o₂ LRel)
       (self'.run (Lexer.Internal.WRustPort.lexSliceStep (ops := o₂) abandon recover slice)) :=
   run_couple_top (lexSliceStep_sim ho abandon recover slice) self self' h
 
-omit [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- Over operations that simulate each other, the step of a call at the end of the input, run on
 lexers that correspond, gives the same result with lexers that correspond again, also where it
 fails. -/

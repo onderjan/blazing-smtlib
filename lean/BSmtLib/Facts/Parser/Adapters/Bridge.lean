@@ -23,7 +23,7 @@ These definitions are adapters: the root theorems of `BSmtLib.Facts.Parser` and
 `BSmtLib.Facts.Reader` are stated with them, so they are trusted, and are to be read with the spec.
 -/
 
-open BSmtLib.Plain
+open BSmtLib.Lexicon.Value
 
 namespace BSmtLib.Facts.Parser.Adapters.Bridge
 
@@ -41,16 +41,16 @@ def chars (bytes : ByteSlice) : Chars := bytes.toByteArray.toList
 def symbol (s : Symbol) : Tree.Symbol := ⟨chars s.asSlice, s.isQuoted⟩
 
 /-- The spec's index for an index of the parser. -/
-def index : Nodes.Index → Tree.Index
+def index : Grammar.Nodes.Index → Tree.Index
   | .numeral digits => .numeral (chars digits.asSlice)
   | .symbol s => .symbol (symbol s)
 
 /-- The spec's identifier for an identifier of the parser: its symbol and its indices. -/
-def identifier (i : Nodes.Ident) : Tree.Identifier :=
+def identifier (i : Grammar.Nodes.Ident) : Tree.Identifier :=
   ⟨symbol i.name, i.indices.toList.map index⟩
 
 /-- The spec's constant for a constant of the parser, of the same kind and characters. -/
-def constant : Nodes.SpecialConstant → Tree.SpecConstant
+def constant : Grammar.Nodes.SpecialConstant → Tree.SpecConstant
   | .numeral d => .numeral (chars d.asSlice)
   | .decimal d => .decimal (chars d.asSlice)
   | .hexadecimal d => .hexadecimal (chars d.asSlice)
@@ -64,22 +64,22 @@ def keyword (k : Keyword) : Chars := chars k.asSlice
 def reserved (w : Token.Reserved) : Chars := BSmtLibSpec.Regex.chars w.asStr
 
 /-- The spec's symbol or wildcard for the parser's. -/
-def symbolOrWildcard : Nodes.SimplePattern → Tree.SymbolOrWildcard
+def symbolOrWildcard : Grammar.Nodes.SimplePattern → Tree.SymbolOrWildcard
   | .symbol s => .symbol (symbol s)
   | .wildcard => .wildcard
 
 /-- The spec's pattern for a pattern of the parser. -/
-def pattern : Nodes.Pattern → Tree.Pattern
+def pattern : Grammar.Nodes.Pattern → Tree.Pattern
   | .simple s => .single (symbolOrWildcard s)
   | .application ⟨c, args, _⟩ => .constructor (symbol c) (args.toList.map symbolOrWildcard)
 
 /-- The spec's quantifier for a quantifier of the parser. -/
-def quantifier : Nodes.QuantifierKind → Tree.Quantifier
+def quantifier : Grammar.Nodes.QuantifierKind → Tree.Quantifier
   | .forall => .forall
   | .exists => .exists
 
 /-- The spec's version for a version of the library. -/
-def version : Token.Version → BSmtLibSpec.Lexicon.Version
+def version : Version → BSmtLibSpec.Lexicon.Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
@@ -110,24 +110,24 @@ def Stands (inputs : List Parser.Internal.Input)
 
 section
 
-variable {H : Type} {m : Type → Type} [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Handler H m]
 
 /-- The values of the spec's traversal that a library handler's types make. -/
-abbrev valuesOf (H : Type) {m : Type → Type} [Traits.Handler H m] : Values :=
-  ⟨Traits.Handler.SExpr H, Traits.Handler.Attribute H, Traits.Handler.«Sort» H,
-    Traits.Handler.Term H, Traits.Handler.Scope H⟩
+abbrev valuesOf (H : Type) {m : Type → Type} [Handler H m] : Values :=
+  ⟨Handler.SExpr H, Handler.Attribute H, Handler.«Sort» H,
+    Handler.Term H, Handler.Scope H⟩
 
 namespace Bridge
 
 /-- The spec's term node for a term node of the parser, with the handler's values. -/
-def termNode : Nodes.Term (Traits.Handler.«Sort» H) (Traits.Handler.Term H) →
+def termNode : Grammar.Nodes.Term (Handler.«Sort» H) (Handler.Term H) →
     TermNode (valuesOf H)
   | .specialConstant c => .constant (constant c)
   | .qualifiedIdent i s => .identifier (identifier i) s
   | .application i s args _ => .application (identifier i) s args.asSlice.toList
 
 /-- The spec's S-expression node for one of the parser, with the handler's values. -/
-def sExprNode : Nodes.SExpr (Traits.Handler.SExpr H) → SExprNode (valuesOf H)
+def sExprNode : Grammar.Nodes.SExpr (Handler.SExpr H) → SExprNode (valuesOf H)
   | .specialConstant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
   | .reserved w => .reserved (reserved w)
@@ -135,19 +135,19 @@ def sExprNode : Nodes.SExpr (Traits.Handler.SExpr H) → SExprNode (valuesOf H)
   | .sExprs items => .list items.asSlice.toList
 
 /-- The spec's attribute value node for one of the parser, with the handler's values. -/
-def attributeValue : Nodes.AttributeValue (Traits.Handler.SExpr H) →
+def attributeValue : Grammar.Nodes.AttributeValue (Handler.SExpr H) →
     AttributeValueNode (valuesOf H)
   | .specialConstant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
   | .sExprs items => .list items.asSlice.toList
 
 /-- The spec's signature for a signature of the parser, with the handler's sorts. -/
-def signature (sig : Multiple.FunctionSignature (Traits.Handler.«Sort» H)) :
+def signature (sig : Grammar.Multiple.FunctionSignature (Handler.«Sort» H)) :
     Signature (valuesOf H) :=
   ⟨symbol sig.name, pairs sig.params, sig.resultSort⟩
 
 /-- The spec's constructor for a constructor of the parser, with the handler's sorts. -/
-def constructor (c : Plain.Symbol × Multiple.SortedVars (Traits.Handler.«Sort» H)) :
+def constructor (c : Lexicon.Value.Symbol × Grammar.Multiple.SortedVars (Handler.«Sort» H)) :
     Constructor (valuesOf H) :=
   ⟨symbol c.1, pairs c.2.toArray⟩
 
@@ -155,39 +155,39 @@ def constructor (c : Plain.Symbol × Multiple.SortedVars (Traits.Handler.«Sort�
 /-! The spec handler's answers, with the types of the library handler's values. -/
 
 /-- The answer of the spec's handler `h` to a call that returns a sort. -/
-def callSort (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
+def callSort (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .sort) :
-    ExceptT (Traits.Handler.Error H) (StateT H m) (Traits.Handler.«Sort» H) :=
+    ExceptT (Handler.Error H) (StateT H m) (Handler.«Sort» H) :=
   h.call request
 
 /-- The answer of the spec's handler `h` to a call that returns an S-expression. -/
-def callSExpr (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
+def callSExpr (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .sExpr) :
-    ExceptT (Traits.Handler.Error H) (StateT H m) (Traits.Handler.SExpr H) :=
+    ExceptT (Handler.Error H) (StateT H m) (Handler.SExpr H) :=
   h.call request
 
 /-- The answer of the spec's handler `h` to a call that returns an attribute. -/
-def callAttribute (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
+def callAttribute (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .attribute) :
-    ExceptT (Traits.Handler.Error H) (StateT H m) (Traits.Handler.Attribute H) :=
+    ExceptT (Handler.Error H) (StateT H m) (Handler.Attribute H) :=
   h.call request
 
 /-- The answer of the spec's handler `h` to a call that returns a term. -/
-def callTerm (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
+def callTerm (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .term) :
-    ExceptT (Traits.Handler.Error H) (StateT H m) (Traits.Handler.Term H) :=
+    ExceptT (Handler.Error H) (StateT H m) (Handler.Term H) :=
   h.call request
 
 /-- The answer of the spec's handler `h` to a call that returns a scope. -/
-def callScope (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
+def callScope (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .scope) :
-    ExceptT (Traits.Handler.Error H) (StateT H m) (Traits.Handler.Scope H) :=
+    ExceptT (Handler.Error H) (StateT H m) (Handler.Scope H) :=
   h.call request
 
 /-- The answer of the spec's handler `h` to a call that returns nothing. -/
-def callUnit (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H))
+def callUnit (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .nothing) :
-    ExceptT (Traits.Handler.Error H) (StateT H m) Unit :=
+    ExceptT (Handler.Error H) (StateT H m) Unit :=
   h.call request
 
 end Bridge
@@ -196,133 +196,134 @@ end Bridge
 The library handler answers each call of terms as the spec's handler `h` answers the call with
 the values turned into the spec's.
 -/
-structure TermAgrees (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)) : Prop where
-  handleSort : ∀ i args, Traits.Handler.handleSort (H := H) i args =
+structure TermAgrees (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)) :
+    Prop where
+  handleSort : ∀ i args, Handler.handleSort (H := H) i args =
     Bridge.callSort h (.handleSort (Bridge.identifier i) args.asSlice.toList)
-  handleTerm : ∀ node, Traits.Handler.handleTerm (H := H) node =
+  handleTerm : ∀ node, Handler.handleTerm (H := H) node =
     Bridge.callTerm h (.handleTerm (Bridge.termNode node))
-  handleSExpr : ∀ node, Traits.Handler.handleSExpr (H := H) node =
+  handleSExpr : ∀ node, Handler.handleSExpr (H := H) node =
     Bridge.callSExpr h (.handleSExpr (Bridge.sExprNode node))
-  handleAttribute : ∀ k v, Traits.Handler.handleAttribute (H := H) k v =
+  handleAttribute : ∀ k v, Handler.handleAttribute (H := H) k v =
     Bridge.callAttribute h (.handleAttribute (Bridge.keyword k) (v.map Bridge.attributeValue))
-  annotateTerm : ∀ t attrs, Traits.Handler.annotateTerm (H := H) t attrs =
+  annotateTerm : ∀ t attrs, Handler.annotateTerm (H := H) t attrs =
     Bridge.callTerm h (.annotateTerm t attrs.asSlice.toList)
-  startLet : ∀ bs, Traits.Handler.startLet (H := H) bs =
+  startLet : ∀ bs, Handler.startLet (H := H) bs =
     Bridge.callScope h (.startLet (Bridge.pairs bs.toArray))
-  endLet : ∀ s t, Traits.Handler.endLet (H := H) s t = Bridge.callTerm h (.endLet s t)
-  startQuantifier : ∀ q vs, Traits.Handler.startQuantifier (H := H) q vs =
+  endLet : ∀ s t, Handler.endLet (H := H) s t = Bridge.callTerm h (.endLet s t)
+  startQuantifier : ∀ q vs, Handler.startQuantifier (H := H) q vs =
     Bridge.callScope h (.startQuantifier (Bridge.quantifier q) (Bridge.pairs vs.toArray))
-  endQuantifier : ∀ q s t, Traits.Handler.endQuantifier (H := H) q s t =
+  endQuantifier : ∀ q s t, Handler.endQuantifier (H := H) q s t =
     Bridge.callTerm h (.endQuantifier (Bridge.quantifier q) s t)
-  startLambda : ∀ vs, Traits.Handler.startLambda (H := H) vs =
+  startLambda : ∀ vs, Handler.startLambda (H := H) vs =
     Bridge.callScope h (.startLambda (Bridge.pairs vs.toArray))
-  endLambda : ∀ s t, Traits.Handler.endLambda (H := H) s t = Bridge.callTerm h (.endLambda s t)
-  startMatch : ∀ t, Traits.Handler.startMatch (H := H) t = Bridge.callUnit h (.startMatch t)
-  startMatchCase : ∀ t p, Traits.Handler.startMatchCase (H := H) t p =
+  endLambda : ∀ s t, Handler.endLambda (H := H) s t = Bridge.callTerm h (.endLambda s t)
+  startMatch : ∀ t, Handler.startMatch (H := H) t = Bridge.callUnit h (.startMatch t)
+  startMatchCase : ∀ t p, Handler.startMatchCase (H := H) t p =
     Bridge.callScope h (.startMatchCase t (Bridge.pattern p))
-  endMatchCase : ∀ s t b, Traits.Handler.endMatchCase (H := H) s t b =
+  endMatchCase : ∀ s t b, Handler.endMatchCase (H := H) s t b =
     Bridge.callTerm h (.endMatchCase s t b)
-  endMatch : ∀ t cs, Traits.Handler.endMatch (H := H) t cs =
+  endMatch : ∀ t cs, Handler.endMatch (H := H) t cs =
     Bridge.callTerm h (.endMatch t (cs.toArray.toList.map fun (p, b) => (Bridge.pattern p, b)))
-  setVersion : ∀ v, Traits.Handler.setVersion (H := H) v = h.setVersion (Bridge.version v)
+  setVersion : ∀ v, Handler.setVersion (H := H) v = h.setVersion (Bridge.version v)
 
 end
 
 section
 
-variable {H : Type} {m : Type → Type} [Traits.CommandHandler H m]
+variable {H : Type} {m : Type → Type} [Handler.CommandHandler H m]
 
 /--
 The library handler answers each call as the spec's handler `h` answers the call with the
 values turned into the spec's.
 -/
-structure Agrees (h : Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)) : Prop
+structure Agrees (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)) : Prop
     extends TermAgrees h where
-  commandAssert : ∀ t, Traits.CommandHandler.commandAssert (H := H) t =
+  commandAssert : ∀ t, Handler.CommandHandler.commandAssert (H := H) t =
     Bridge.callUnit h (.commandAssert t)
-  commandCheckSat : Traits.CommandHandler.commandCheckSat (H := H) =
+  commandCheckSat : Handler.CommandHandler.commandCheckSat (H := H) =
     Bridge.callUnit h .commandCheckSat
-  commandCheckSatAssuming : ∀ ts, Traits.CommandHandler.commandCheckSatAssuming (H := H) ts =
+  commandCheckSatAssuming : ∀ ts, Handler.CommandHandler.commandCheckSatAssuming (H := H) ts =
     Bridge.callUnit h (.commandCheckSatAssuming ts.asSlice.toList)
-  commandDeclareConst : ∀ s t, Traits.CommandHandler.commandDeclareConst (H := H) s t =
+  commandDeclareConst : ∀ s t, Handler.CommandHandler.commandDeclareConst (H := H) s t =
     Bridge.callUnit h (.commandDeclareConst (Bridge.symbol s) t)
-  startDeclareDatatype : ∀ s ps, Traits.CommandHandler.startDeclareDatatype (H := H) s ps =
+  startDeclareDatatype : ∀ s ps, Handler.CommandHandler.startDeclareDatatype (H := H) s ps =
     Bridge.callUnit h
       (.startDeclareDatatype (Bridge.symbol s) (ps.toArray.toList.map Bridge.symbol))
-  endDeclareDatatype : ∀ cs, Traits.CommandHandler.endDeclareDatatype (H := H) cs =
+  endDeclareDatatype : ∀ cs, Handler.CommandHandler.endDeclareDatatype (H := H) cs =
     Bridge.callUnit h (.endDeclareDatatype (cs.toArray.toList.map Bridge.constructor))
-  startDeclareDatatypes : ∀ ss, Traits.CommandHandler.startDeclareDatatypes (H := H) ss =
+  startDeclareDatatypes : ∀ ss, Handler.CommandHandler.startDeclareDatatypes (H := H) ss =
     Bridge.callUnit h (.startDeclareDatatypes
       (ss.toArray.toList.map fun (s, n) => (Bridge.symbol s, Bridge.chars n.asSlice)))
   startDatatypeDeclaration : ∀ ps,
-    Traits.CommandHandler.startDatatypeDeclaration (H := H) ps =
+    Handler.CommandHandler.startDatatypeDeclaration (H := H) ps =
       Bridge.callUnit h (.startDatatypeDeclaration (ps.toArray.toList.map Bridge.symbol))
-  endDatatypeDeclaration : ∀ cs, Traits.CommandHandler.endDatatypeDeclaration (H := H) cs =
+  endDatatypeDeclaration : ∀ cs, Handler.CommandHandler.endDatatypeDeclaration (H := H) cs =
     Bridge.callUnit h (.endDatatypeDeclaration (cs.toArray.toList.map Bridge.constructor))
-  endDeclareDatatypes : Traits.CommandHandler.endDeclareDatatypes (H := H) =
+  endDeclareDatatypes : Handler.CommandHandler.endDeclareDatatypes (H := H) =
     Bridge.callUnit h .endDeclareDatatypes
-  commandDeclareFun : ∀ s ps r, Traits.CommandHandler.commandDeclareFun (H := H) s ps r =
+  commandDeclareFun : ∀ s ps r, Handler.CommandHandler.commandDeclareFun (H := H) s ps r =
     Bridge.callUnit h (.commandDeclareFun (Bridge.symbol s) ps.asSlice.toList r)
-  commandDeclareSort : ∀ s n, Traits.CommandHandler.commandDeclareSort (H := H) s n =
+  commandDeclareSort : ∀ s n, Handler.CommandHandler.commandDeclareSort (H := H) s n =
     Bridge.callUnit h (.commandDeclareSort (Bridge.symbol s) (Bridge.chars n.asSlice))
   commandDeclareSortParameter : ∀ s,
-    Traits.CommandHandler.commandDeclareSortParameter (H := H) s =
+    Handler.CommandHandler.commandDeclareSortParameter (H := H) s =
       Bridge.callUnit h (.commandDeclareSortParameter (Bridge.symbol s))
-  commandDefineConst : ∀ s t b, Traits.CommandHandler.commandDefineConst (H := H) s t b =
+  commandDefineConst : ∀ s t b, Handler.CommandHandler.commandDefineConst (H := H) s t b =
     Bridge.callUnit h (.commandDefineConst (Bridge.symbol s) t b)
-  startDefineFun : ∀ sig, Traits.CommandHandler.startDefineFun (H := H) sig =
+  startDefineFun : ∀ sig, Handler.CommandHandler.startDefineFun (H := H) sig =
     Bridge.callUnit h (.startDefineFun (Bridge.signature sig))
-  endDefineFun : ∀ b, Traits.CommandHandler.endDefineFun (H := H) b =
+  endDefineFun : ∀ b, Handler.CommandHandler.endDefineFun (H := H) b =
     Bridge.callUnit h (.endDefineFun b)
-  startDefineFunRec : ∀ sig, Traits.CommandHandler.startDefineFunRec (H := H) sig =
+  startDefineFunRec : ∀ sig, Handler.CommandHandler.startDefineFunRec (H := H) sig =
     Bridge.callUnit h (.startDefineFunRec (Bridge.signature sig))
-  endDefineFunRec : ∀ b, Traits.CommandHandler.endDefineFunRec (H := H) b =
+  endDefineFunRec : ∀ b, Handler.CommandHandler.endDefineFunRec (H := H) b =
     Bridge.callUnit h (.endDefineFunRec b)
-  startDefineFunsRec : ∀ sigs, Traits.CommandHandler.startDefineFunsRec (H := H) sigs =
+  startDefineFunsRec : ∀ sigs, Handler.CommandHandler.startDefineFunsRec (H := H) sigs =
     Bridge.callUnit h (.startDefineFunsRec (sigs.toArray.toList.map Bridge.signature))
-  startRecursiveBody : ∀ sig, Traits.CommandHandler.startRecursiveBody (H := H) sig =
+  startRecursiveBody : ∀ sig, Handler.CommandHandler.startRecursiveBody (H := H) sig =
     Bridge.callUnit h (.startRecursiveBody (Bridge.signature sig))
-  endRecursiveBody : ∀ b, Traits.CommandHandler.endRecursiveBody (H := H) b =
+  endRecursiveBody : ∀ b, Handler.CommandHandler.endRecursiveBody (H := H) b =
     Bridge.callUnit h (.endRecursiveBody b)
-  endDefineFunsRec : Traits.CommandHandler.endDefineFunsRec (H := H) =
+  endDefineFunsRec : Handler.CommandHandler.endDefineFunsRec (H := H) =
     Bridge.callUnit h .endDefineFunsRec
-  startDefineSort : ∀ s ps, Traits.CommandHandler.startDefineSort (H := H) s ps =
+  startDefineSort : ∀ s ps, Handler.CommandHandler.startDefineSort (H := H) s ps =
     Bridge.callUnit h (.startDefineSort (Bridge.symbol s) (ps.toArray.toList.map Bridge.symbol))
-  endDefineSort : ∀ t, Traits.CommandHandler.endDefineSort (H := H) t =
+  endDefineSort : ∀ t, Handler.CommandHandler.endDefineSort (H := H) t =
     Bridge.callUnit h (.endDefineSort t)
-  commandEcho : ∀ c, Traits.CommandHandler.commandEcho (H := H) c =
+  commandEcho : ∀ c, Handler.CommandHandler.commandEcho (H := H) c =
     Bridge.callUnit h (.commandEcho (Bridge.chars c.asSlice))
-  commandExit : Traits.CommandHandler.commandExit (H := H) = Bridge.callUnit h .commandExit
-  commandGetAssertions : Traits.CommandHandler.commandGetAssertions (H := H) =
+  commandExit : Handler.CommandHandler.commandExit (H := H) = Bridge.callUnit h .commandExit
+  commandGetAssertions : Handler.CommandHandler.commandGetAssertions (H := H) =
     Bridge.callUnit h .commandGetAssertions
-  commandGetAssignment : Traits.CommandHandler.commandGetAssignment (H := H) =
+  commandGetAssignment : Handler.CommandHandler.commandGetAssignment (H := H) =
     Bridge.callUnit h .commandGetAssignment
-  commandGetInfo : ∀ k, Traits.CommandHandler.commandGetInfo (H := H) k =
+  commandGetInfo : ∀ k, Handler.CommandHandler.commandGetInfo (H := H) k =
     Bridge.callUnit h (.commandGetInfo (Bridge.keyword k))
-  commandGetModel : Traits.CommandHandler.commandGetModel (H := H) =
+  commandGetModel : Handler.CommandHandler.commandGetModel (H := H) =
     Bridge.callUnit h .commandGetModel
-  commandGetOption : ∀ k, Traits.CommandHandler.commandGetOption (H := H) k =
+  commandGetOption : ∀ k, Handler.CommandHandler.commandGetOption (H := H) k =
     Bridge.callUnit h (.commandGetOption (Bridge.keyword k))
-  commandGetProof : Traits.CommandHandler.commandGetProof (H := H) =
+  commandGetProof : Handler.CommandHandler.commandGetProof (H := H) =
     Bridge.callUnit h .commandGetProof
-  commandGetUnsatAssumptions : Traits.CommandHandler.commandGetUnsatAssumptions (H := H) =
+  commandGetUnsatAssumptions : Handler.CommandHandler.commandGetUnsatAssumptions (H := H) =
     Bridge.callUnit h .commandGetUnsatAssumptions
-  commandGetUnsatCore : Traits.CommandHandler.commandGetUnsatCore (H := H) =
+  commandGetUnsatCore : Handler.CommandHandler.commandGetUnsatCore (H := H) =
     Bridge.callUnit h .commandGetUnsatCore
-  commandGetValue : ∀ ts, Traits.CommandHandler.commandGetValue (H := H) ts =
+  commandGetValue : ∀ ts, Handler.CommandHandler.commandGetValue (H := H) ts =
     Bridge.callUnit h (.commandGetValue ts.asSlice.toList)
-  commandPop : ∀ n, Traits.CommandHandler.commandPop (H := H) n =
+  commandPop : ∀ n, Handler.CommandHandler.commandPop (H := H) n =
     Bridge.callUnit h (.commandPop (Bridge.chars n.asSlice))
-  commandPush : ∀ n, Traits.CommandHandler.commandPush (H := H) n =
+  commandPush : ∀ n, Handler.CommandHandler.commandPush (H := H) n =
     Bridge.callUnit h (.commandPush (Bridge.chars n.asSlice))
-  commandReset : Traits.CommandHandler.commandReset (H := H) = Bridge.callUnit h .commandReset
-  commandResetAssertions : Traits.CommandHandler.commandResetAssertions (H := H) =
+  commandReset : Handler.CommandHandler.commandReset (H := H) = Bridge.callUnit h .commandReset
+  commandResetAssertions : Handler.CommandHandler.commandResetAssertions (H := H) =
     Bridge.callUnit h .commandResetAssertions
-  commandSetInfo : ∀ a, Traits.CommandHandler.commandSetInfo (H := H) a =
+  commandSetInfo : ∀ a, Handler.CommandHandler.commandSetInfo (H := H) a =
     Bridge.callUnit h (.commandSetInfo a)
-  commandSetLogic : ∀ s, Traits.CommandHandler.commandSetLogic (H := H) s =
+  commandSetLogic : ∀ s, Handler.CommandHandler.commandSetLogic (H := H) s =
     Bridge.callUnit h (.commandSetLogic (Bridge.symbol s))
-  commandSetOption : ∀ a, Traits.CommandHandler.commandSetOption (H := H) a =
+  commandSetOption : ∀ a, Handler.CommandHandler.commandSetOption (H := H) a =
     Bridge.callUnit h (.commandSetOption a)
 
 end
@@ -340,7 +341,7 @@ def causeOf {ε : Type} : Cause ε → Parser.ParseErrorCause ε
 namespace Bridge
 
 /-- The library's version for a version of the spec. -/
-def libVersion : BSmtLibSpec.Lexicon.Version → Token.Version
+def libVersion : BSmtLibSpec.Lexicon.Version → Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
@@ -349,7 +350,7 @@ def libVersion : BSmtLibSpec.Lexicon.Version → Token.Version
 end Bridge
 
 /-- The spec's policy that a posture of the parser stands for. -/
-def policyOf (posture : Token.VersionPosture) : VersionPolicy :=
+def policyOf (posture : Version.VersionPosture) : VersionPolicy :=
   { allowed := posture.allowed.toList.map Bridge.version,
     maxDeclarations := posture.maxDeclarations }
 

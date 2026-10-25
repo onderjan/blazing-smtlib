@@ -13,11 +13,12 @@ The parser of a sorted variable `(` ⟨symbol⟩ ⟨sort⟩ `)`.
 
 namespace BSmtLib.Parser.Category.SortedVar
 
-open BSmtLib.Plain (SymbolBuf Symbol)
-open BSmtLib.Nodes BSmtLib.Traits BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Sort
+open BSmtLib.Lexicon.Value (SymbolBuf Symbol)
+open BSmtLib.Grammar.Nodes BSmtLib.Handler
+open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Sort
 open BSmtLib.Parser.Category.Sort.Internal
 open BSmtLib.Parser.Category.Token.Internal
-open BSmtLib.Token (Version)
+open BSmtLib (Version)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal

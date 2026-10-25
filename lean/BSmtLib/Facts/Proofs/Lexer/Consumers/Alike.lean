@@ -104,7 +104,7 @@ theorem lexing_def (ops : LexOps) (consumer : BSmtLibSpec.Lexer.Consumer)
 related where lexers related give the same outcome on an input and its cut, and related lexers
 when they do not fail, and the constructed lexers are related. -/
 theorem foldl_next_rel (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
-    (Rel : ops₁.Lexer consumer → ops₂.Lexer consumer → Prop) (version : Token.Version)
+    (Rel : ops₁.Lexer consumer → ops₂.Lexer consumer → Prop) (version : Version)
     (cut : List BSmtLibSpec.Regex.Chars → List BSmtLibSpec.Regex.Chars)
     (hnew : Rel (ops₁.new consumer {} version) (ops₂.new consumer {} version))
     (hrun : ∀ input a b, Rel a b →

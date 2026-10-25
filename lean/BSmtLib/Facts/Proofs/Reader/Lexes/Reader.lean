@@ -3,7 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Reader.Lexes.NoLayout
 import all BSmtLib.Lexer
 import all BSmtLib.Parser.Adapter
-import all BSmtLib.Plain
+import all BSmtLib.Lexicon.Value
 
 @[expose] public section
 

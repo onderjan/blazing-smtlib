@@ -15,7 +15,7 @@ the specification.
 namespace BSmtLib.Facts.PublicApi.Adapters.Builder
 
 /-- The library's version for a version of the specification: the same release. -/
-def libVersion : BSmtLibSpec.Lexicon.Version → Token.Version
+def libVersion : BSmtLibSpec.Lexicon.Version → Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6

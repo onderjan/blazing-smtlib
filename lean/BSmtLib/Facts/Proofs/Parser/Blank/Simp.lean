@@ -22,7 +22,8 @@ namespace BSmtLib.Facts.Proofs.Parser.Blank.Simp
 
 open Basic States
 
-open BSmtLib.Parser BSmtLib.Nodes
+open BSmtLib.Grammar (Multiple)
+open BSmtLib.Parser BSmtLib.Grammar.Nodes
 open BSmtLib.Parser.Category.Attribute BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Attribute.Internal
 open BSmtLib.Parser.Category.Combinator.Internal
@@ -74,10 +75,10 @@ attribute [blank_simps]
   blankPayload.eq_17 blankPayload.eq_18 blankPayload.eq_19 blankPayload.eq_20 blankPayload.eq_21
   blankPayload.eq_22 blankPayload.eq_23 blankPayload.eq_24 blankPayload.eq_25 blankPayload.eq_26
   blankPayload.eq_27 blankCommandState.eq_1 blankCommandState.eq_2 blankCommandState.eq_3
-  blankCommandState.eq_4 Multiple.asSlice_new Multiple.Named.Internal.toArray_new
-  Multiple.Constructors.Internal.toArray_new Multiple.MatchCases.Internal.toArray_new
-  Multiple.FunctionSignatures.Internal.toArray_new Multiple.FunctionSignature.Internal.name_new
-  Multiple.FunctionSignature.Internal.params_new Multiple.FunctionSignature.Internal.resultSort_new
+  blankCommandState.eq_4 Grammar.Multiple.asSlice_new Grammar.Multiple.NamedValues.Internal.toArray_new
+  Grammar.Multiple.Constructors.Internal.toArray_new Grammar.Multiple.MatchCases.Internal.toArray_new
+  Grammar.Multiple.FunctionSignatures.Internal.toArray_new Grammar.Multiple.FunctionSignature.Internal.name_new
+  Grammar.Multiple.FunctionSignature.Internal.params_new Grammar.Multiple.FunctionSignature.Internal.resultSort_new
   blankScriptParser Script.ScriptParser.Internal.posture_mk Script.ScriptParser.Internal.command_mk
   Script.ScriptParser.Internal.declarations_mk
   Array.map_push Array.map_empty List.map_cons List.map_nil Option.map_some Option.map_none
@@ -126,11 +127,11 @@ variable {SE SE' A A' S S' T T' Sc Sc' : Type} [Blanks SE SE'] [Blanks A A'] [Bl
 @[blank_simps] theorem levels_blankTermState (s : TermState SE A S T Sc) :
     (blankTermState (SE' := SE') (A' := A') (S' := S') (T' := T') (Sc' := Sc') s).levels =
       blank s.levels := by cases s; rfl
-@[blank_simps] theorem name_blankSignature (s : Multiple.FunctionSignature S) :
+@[blank_simps] theorem name_blankSignature (s : Grammar.Multiple.FunctionSignature S) :
     (blankSignature (S' := S') s).name = s.name := by simp [blankSignature]
-@[blank_simps] theorem params_blankSignature (s : Multiple.FunctionSignature S) :
+@[blank_simps] theorem params_blankSignature (s : Grammar.Multiple.FunctionSignature S) :
     (blankSignature (S' := S') s).params = blank s.params := by simp [blankSignature]
-@[blank_simps] theorem resultSort_blankSignature (s : Multiple.FunctionSignature S) :
+@[blank_simps] theorem resultSort_blankSignature (s : Grammar.Multiple.FunctionSignature S) :
     (blankSignature (S' := S') s).resultSort = blank s.resultSort := by simp [blankSignature]
 @[blank_simps] theorem shape_blankLiteralState (s : LiteralState SE A S T Sc) :
     (blankLiteralState (SE' := SE') (A' := A') (S' := S') (T' := T') (Sc' := Sc') s).shape =
@@ -163,7 +164,7 @@ variable {SE SE' A A' S S' T T' Sc Sc' : Type} [Blanks SE SE'] [Blanks A A'] [Bl
       .closed (blank init) := by
   simp only [ListState.closed, blankListState, Blanks.blank, Array.map_empty]
 @[blank_simps] theorem blank_payload_init (name : Token.Reserved.CommandNameReserved)
-    (version : Token.Version) :
+    (version : Version) :
     blankPayload (SE' := SE') (A' := A') (S' := S') (T' := T') (Sc' := Sc')
       (Payload.init name version : Payload SE A S T Sc) = .init name version := by
   cases name <;> simp only [Payload.init] <;> (try split) <;>
@@ -217,27 +218,27 @@ variable {SE SE' A A' S S' T T' Sc Sc' : Type} [Blanks SE SE'] [Blanks A A'] [Bl
 @[blank_simps] theorem fun_blankQualifiedIdent :
     (blank : QualifiedIdent S → QualifiedIdent S') = blankQualifiedIdent := (rfl)
 @[blank_simps] theorem fun_blankTermNode :
-    (blank : Nodes.Term S T → Nodes.Term S' T') = blankTermNode := (rfl)
+    (blank : Grammar.Nodes.Term S T → Grammar.Nodes.Term S' T') = blankTermNode := (rfl)
 @[blank_simps] theorem fun_blankSExprNode :
-    (blank : Nodes.SExpr SE → Nodes.SExpr SE') = blankSExprNode := (rfl)
+    (blank : Grammar.Nodes.SExpr SE → Grammar.Nodes.SExpr SE') = blankSExprNode := (rfl)
 @[blank_simps] theorem fun_blankAttributeValueNode :
     (blank : AttributeValue SE → AttributeValue SE') = blankAttributeValueNode := (rfl)
 @[blank_simps] theorem fun_blankSignature :
-    (blank : Multiple.FunctionSignature S → Multiple.FunctionSignature S') = blankSignature := (rfl)
+    (blank : Grammar.Multiple.FunctionSignature S → Grammar.Multiple.FunctionSignature S') = blankSignature := (rfl)
 @[blank_simps] theorem fun_blank_multiple {α β : Type} [Blanks α β] :
-    (blank : Multiple α → Multiple β) = fun m => Multiple.new (blank m.asSlice) := (rfl)
+    (blank : Multiple α → Multiple β) = fun m => Grammar.Multiple.new (blank m.asSlice) := (rfl)
 @[blank_simps] theorem fun_blank_namedView {V V' : Type} [Blanks V V'] :
-    (blank : Multiple.Named V → Multiple.Named V') =
-      fun v => Multiple.Named.Internal.new (blank v.toArray) := (rfl)
+    (blank : Grammar.Multiple.NamedValues V → Grammar.Multiple.NamedValues V') =
+      fun v => Grammar.Multiple.NamedValues.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blank_matchCases {T T' : Type} [Blanks T T'] :
-    (blank : Multiple.MatchCases T → Multiple.MatchCases T') =
-      fun v => Multiple.MatchCases.Internal.new (blank v.toArray) := (rfl)
+    (blank : Grammar.Multiple.MatchCases T → Grammar.Multiple.MatchCases T') =
+      fun v => Grammar.Multiple.MatchCases.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blank_constructorsView {S S' : Type} [Blanks S S'] :
-    (blank : Multiple.Constructors S → Multiple.Constructors S') =
-      fun v => Multiple.Constructors.Internal.new (blank v.toArray) := (rfl)
+    (blank : Grammar.Multiple.Constructors S → Grammar.Multiple.Constructors S') =
+      fun v => Grammar.Multiple.Constructors.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blank_functionSignaturesView {S S' : Type} [Blanks S S'] :
-    (blank : Multiple.FunctionSignatures S → Multiple.FunctionSignatures S') =
-      fun v => Multiple.FunctionSignatures.Internal.new (blank v.toArray) := (rfl)
+    (blank : Grammar.Multiple.FunctionSignatures S → Grammar.Multiple.FunctionSignatures S') =
+      fun v => Grammar.Multiple.FunctionSignatures.Internal.new (blank v.toArray) := (rfl)
 @[blank_simps] theorem fun_blankStep {σ σ' ρ ρ' : Type} [Blanks σ σ'] [Blanks ρ ρ'] :
     (blank : Internal.Step σ ρ → Internal.Step σ' ρ') = blankStep := (rfl)
 @[blank_simps] theorem fun_blank_prod {α α' β β' : Type} [Blanks α α'] [Blanks β β'] :
@@ -276,7 +277,7 @@ end
 
 section
 
-variable {H : Type} [Traits.CommandHandler H Id]
+variable {H : Type} [Handler.CommandHandler H Id]
 
 @[blank_simps] theorem posture_blankScriptParser (p : ScriptParser H) :
     ScriptParser.Internal.posture (blankScriptParser p) = ScriptParser.Internal.posture p :=
@@ -292,21 +293,21 @@ variable {H : Type} [Traits.CommandHandler H Id]
 @[blank_simps] theorem fun_blankScriptParser :
     (blank : ScriptParser H → ScriptParser Shell) = blankScriptParser := (rfl)
 
-@[blank_simps] theorem blank_sExpr (x : Traits.Handler.SExpr H) : blank x = () := (rfl)
-@[blank_simps] theorem blank_attribute (x : Traits.Handler.Attribute H) : blank x = () := (rfl)
-@[blank_simps] theorem blank_sort (x : Traits.Handler.«Sort» H) : blank x = () := (rfl)
-@[blank_simps] theorem blank_term (x : Traits.Handler.Term H) : blank x = () := (rfl)
-@[blank_simps] theorem blank_scope (x : Traits.Handler.Scope H) : blank x = () := (rfl)
-@[blank_simps] theorem blank_sExpr' (x : Traits.Handler.SExpr H) :
-    (blank x : Traits.Handler.SExpr Shell) = () := (rfl)
-@[blank_simps] theorem blank_attribute' (x : Traits.Handler.Attribute H) :
-    (blank x : Traits.Handler.Attribute Shell) = () := (rfl)
-@[blank_simps] theorem blank_sort' (x : Traits.Handler.«Sort» H) :
-    (blank x : Traits.Handler.«Sort» Shell) = () := (rfl)
-@[blank_simps] theorem blank_term' (x : Traits.Handler.Term H) :
-    (blank x : Traits.Handler.Term Shell) = () := (rfl)
-@[blank_simps] theorem blank_scope' (x : Traits.Handler.Scope H) :
-    (blank x : Traits.Handler.Scope Shell) = () := (rfl)
+@[blank_simps] theorem blank_sExpr (x : Handler.SExpr H) : blank x = () := (rfl)
+@[blank_simps] theorem blank_attribute (x : Handler.Attribute H) : blank x = () := (rfl)
+@[blank_simps] theorem blank_sort (x : Handler.«Sort» H) : blank x = () := (rfl)
+@[blank_simps] theorem blank_term (x : Handler.Term H) : blank x = () := (rfl)
+@[blank_simps] theorem blank_scope (x : Handler.Scope H) : blank x = () := (rfl)
+@[blank_simps] theorem blank_sExpr' (x : Handler.SExpr H) :
+    (blank x : Handler.SExpr Shell) = () := (rfl)
+@[blank_simps] theorem blank_attribute' (x : Handler.Attribute H) :
+    (blank x : Handler.Attribute Shell) = () := (rfl)
+@[blank_simps] theorem blank_sort' (x : Handler.«Sort» H) :
+    (blank x : Handler.«Sort» Shell) = () := (rfl)
+@[blank_simps] theorem blank_term' (x : Handler.Term H) :
+    (blank x : Handler.Term Shell) = () := (rfl)
+@[blank_simps] theorem blank_scope' (x : Handler.Scope H) :
+    (blank x : Handler.Scope Shell) = () := (rfl)
 
 end
 

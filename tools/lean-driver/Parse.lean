@@ -23,9 +23,10 @@ public import Protocol
 public section
 
 open BSmtLib
-open BSmtLib.Token (Version VersionPosture VersionPostureBuilder Consume ConsumeFrom Cursor
-  SyntaxToken BatchCursor)
-open BSmtLib.Lexer (LexError)
+open BSmtLib.Token (Consume ConsumeFrom Cursor)
+open BSmtLib.Version (VersionPosture VersionPostureBuilder)
+open BSmtLib.Lexer.Cursor (LexerCursor)
+open BSmtLib.Lexer (LexerError)
 open BSmtLib.Parser (Parse ParseState ParseAdapter ParseError SyntaxErrorKind SyntaxExpected
   NonEmptyList VersionErrorKind ScriptParser
   CommandParser SortParser TermParser SExprParser CommandOutcome SymbolParser KeywordParser
@@ -33,6 +34,8 @@ open BSmtLib.Parser (Parse ParseState ParseAdapter ParseError SyntaxErrorKind Sy
   ClosedAttributeParser ClosedMultipleAttributeParser PatternParser SortedVarParser PairParser
   ClosedParser ParenParser ClosedMultipleParser ParenMultipleParser)
 open BSmtLib.Reader (ReadError ReadFailure BufRead BufReader readSmt readSmtFile)
+open BSmtLib.Grammar
+open BSmtLib.Span (Location Located)
 
 namespace ParseRequests
 
@@ -96,7 +99,7 @@ def callUnit (call : String) : HandlerM Unit := do
 
 /-! ## The fields of the calls -/
 
-def symbolField (symbol : Plain.Symbol) : String :=
+def symbolField (symbol : Lexicon.Value.Symbol) : String :=
   (if symbol.isQuoted then "q" else "u") ++ hex symbol.asSlice
 
 def constantField : SpecialConstant → String
@@ -128,10 +131,10 @@ def idsField (ids : Array Nat) : String :=
   listField toString ids
 
 /-- Symbols, each with the number of a value. -/
-def boundField (pairs : Array (Plain.Symbol × Nat)) : String :=
+def boundField (pairs : Array (Lexicon.Value.Symbol × Nat)) : String :=
   listField (fun (symbol, id) => s!"{symbolField symbol} {id}") pairs
 
-def symbolsField (symbols : Array Plain.Symbol) : String :=
+def symbolsField (symbols : Array Lexicon.Value.Symbol) : String :=
   listField symbolField symbols
 
 def sowField : SimplePattern → String
@@ -145,17 +148,17 @@ def patternField : Pattern → String
 
 /-! The owned values that the category parsers give, written as their views are. -/
 
-def symbolBufField (symbol : Plain.SymbolBuf) : String :=
+def symbolBufField (symbol : Lexicon.Value.SymbolBuf) : String :=
   symbolField symbol.view
 
-def identBufField (identifier : Nodes.IdentBuf) : String :=
+def identBufField (identifier : Grammar.Nodes.IdentBuf) : String :=
   identField identifier.view
 
-def sowBufField : Nodes.SimplePatternBuf → String
+def sowBufField : Grammar.Nodes.SimplePatternBuf → String
   | .symbol symbol => symbolBufField symbol
   | .wildcard => "_"
 
-def patternBufField : Nodes.PatternBuf → String
+def patternBufField : Grammar.Nodes.PatternBuf → String
   | .simple symbol => s!"p {sowBufField symbol}"
   | .application application =>
     s!"c {symbolBufField application.constructor} {listField sowField application.args.view}"
@@ -164,7 +167,7 @@ def quantifierField : QuantifierKind → String
   | .«forall» => "forall"
   | .«exists» => "exists"
 
-def signatureField (signature : Multiple.FunctionSignature Nat) : String :=
+def signatureField (signature : Grammar.Multiple.FunctionSignature Nat) : String :=
   s!"{symbolField signature.name} {boundField signature.params} {signature.resultSort}"
 
 def constructorsField (constructors : Constructors Nat) : String :=
@@ -348,7 +351,7 @@ instance : CommandHandler Remote IO where
 
 /- LEAN: `BufRead.consume` is pure, so it only counts. The count is reported at the next fill and
 at the end of the request; what has been reported is kept in a reference, as the reader may give
-back an earlier copy of the buffered reader (`Reader.readAll` after a failed fill), whose count
+back an earlier copy of the buffered reader (`Reader.readFrom` after a failed fill), whose count
 has been reported already. -/
 /-- The buffered reader whose bytes are on the Rust side. -/
 structure RemoteBuf where
@@ -470,8 +473,8 @@ def nonEmptyListName : NonEmptyList → String
   | .termApplication => "TermApplication"
   | .letBindings => "LetBindings"
   | .annotation => "Annotation"
-  | .quantifierBindings => "QuantifierVars"
-  | .lambdaBindings => "LambdaVars"
+  | .quantifierVars => "QuantifierVars"
+  | .lambdaVars => "LambdaVars"
   | .functionSignatures => "FunctionSignatures"
   | .datatypeIntroductions => "DatatypeIntroductions"
   | .datatypeParameters => "DatatypeParameters"
@@ -515,15 +518,15 @@ def commandResult : CommandOutcome → String
 structure LexOps (C : Type) {R E : Type} [Consume C R E] where
   Lexer : Type
   new : C → Version → Lexer
-  lexSlice : Lexer → ByteSlice → IO (Except (LexError E) Lexer)
-  lexEof : Lexer → IO (Except (LexError E) (Option (Located R) × Lexer))
+  lexSlice : Lexer → ByteSlice → IO (Except (LexerError E) Lexer)
+  lexEof : Lexer → IO (Except (LexerError E) (Option (Located R) × Lexer))
   currentLocation : Lexer → Location
   version : Lexer → Version
   discardedFrom : Lexer → Option Location
 
 /-- The operations of the chosen lexer over the consumer. -/
 def lexOps (choice : LexerChoice) (C : Type) {R E : Type} [Consume C R E]
-    [∀ batch, ConsumeFrom C (BatchCursor batch) IO] : LexOps C :=
+    [∀ batch, ConsumeFrom C (LexerCursor batch) IO] : LexOps C :=
   match choice with
   | .z =>
     { Lexer := BSmtLib.Lexer C
@@ -571,8 +574,10 @@ their fields. A call that returns an error gives no reader back. -/
 structure ReaderOps (S : Type) where
   readSlice : S → ByteSlice → IO (Except (ReadError RemoteError) S)
   readEof : S → IO (Except (ReadError RemoteError) (Option (Located String) × S))
-  readAll : S → RemoteBuf → IO (Except (ReadError RemoteError) (Option String × S) × RemoteBuf)
-  readFile : S → System.FilePath → IO (Except (ReadError RemoteError) (Option String × S))
+  readAll : S → RemoteBuf →
+    IO (Except (ReadError RemoteError) (Option (Located String) × S) × RemoteBuf)
+  readFile : S → System.FilePath →
+    IO (Except (ReadError RemoteError) (Option (Located String) × S))
   discardedFrom : S → Option Location
   version : S → Version
 
@@ -589,12 +594,12 @@ def ReaderOps.library {P R : Type} [Parse P Remote IO RemoteError R] (render : R
     return ((← reader.readEof).mapError (·.error)).map fun (result, reader) =>
       (result.map (renderLocated render), reader)
   readAll reader buf := do
-    let (result, buf) ← reader.readAll buf
-    return ((result.mapError (·.error)).map fun (result, reader) => (result.map render, reader),
-      buf)
+    let (result, buf) ← reader.readFrom buf
+    return ((result.mapError (·.error)).map fun (result, reader) =>
+      (result.map (renderLocated render), reader), buf)
   readFile reader path := do
     return ((← reader.readFile path).mapError (·.error)).map fun (result, reader) =>
-      (result.map render, reader)
+      (result.map (renderLocated render), reader)
   discardedFrom := Reader.discardedFrom
   version := Reader.version
 
@@ -614,14 +619,12 @@ def readEof (lexer : ops.Lexer) :
     IO (Except (ReadError E) (Option (Located R) × ops.Lexer)) := do
   return (← ops.lexEof lexer).mapError ReadError.ofLex
 
-/-- `Reader.readAll`: `partial`, as a buffered reader may give bytes without end. -/
-partial def readAll {B : Type} [BufRead B IO] (lexer : ops.Lexer) (buf : B) :
-    IO (Except (ReadError E) (Option R × ops.Lexer) × B) := do
-  let readRest (lexer : ops.Lexer) : IO (Except (ReadError E) (Option R × ops.Lexer)) := do
-    return (← readEof ops lexer).map fun (result, lexer) => (result.map (·.value), lexer)
+/-- `Reader.readFrom`: `partial`, as a buffered reader may give bytes without end. -/
+partial def readFrom {B : Type} [BufRead B IO] (lexer : ops.Lexer) (buf : B) :
+    IO (Except (ReadError E) (Option (Located R) × ops.Lexer) × B) := do
   if (ops.discardedFrom lexer).isSome then
     -- the lexer does not care about any subsequent bytes
-    return (← readRest lexer, buf)
+    return (← readEof ops lexer, buf)
   match ← BufRead.fillBuf buf with
   | .error err =>
     -- an empty span at the current location
@@ -630,23 +633,23 @@ partial def readAll {B : Type} [BufRead B IO] (lexer : ops.Lexer) (buf : B) :
   | .ok (buffer, buf) =>
     if buffer.size == 0 then
       -- the end of the input
-      return (← readRest lexer, buf)
+      return (← readEof ops lexer, buf)
     let startOffset := (ops.currentLocation lexer).offset
     match ← readSlice ops lexer buffer with
     | .error err => return (.error err, buf)
     | .ok lexer =>
       -- consume what the lexer took, which is less than the buffer when it discards
       let len := (ops.currentLocation lexer).offset - startOffset
-      readAll lexer (BufRead.consume (n := IO) buf len)
+      readFrom lexer (BufRead.consume (n := IO) buf len)
 
 /-- `Reader.readFile`. -/
 def readFile (lexer : ops.Lexer) (path : System.FilePath) :
-    IO (Except (ReadError E) (Option R × ops.Lexer)) := do
+    IO (Except (ReadError E) (Option (Located R) × ops.Lexer)) := do
   match ← (IO.FS.Handle.mk path .read).toBaseIO with
   | .error err => return .error (ReadError.Internal.new (.io err) Span.Internal.newZero)
   | .ok file =>
     let buf := BufReader.new (IO.FS.Stream.ofHandle file) Reader.Internal.BUF_READER_CAPACITY
-    let (result, _) ← readAll ops lexer buf
+    let (result, _) ← readFrom ops lexer buf
     return result
 
 end Emulated
@@ -659,11 +662,11 @@ def ReaderOps.emulated {P R : Type} [Parse P Remote IO RemoteError R]
     return (← Emulated.readEof ops lexer).map fun (result, lexer) =>
       (result.map (renderLocated render), lexer)
   readAll lexer buf := do
-    let (result, buf) ← Emulated.readAll ops lexer buf
-    return (result.map fun (result, lexer) => (result.map render, lexer), buf)
+    let (result, buf) ← Emulated.readFrom ops lexer buf
+    return (result.map fun (result, lexer) => (result.map (renderLocated render), lexer), buf)
   readFile lexer path := do
     return (← Emulated.readFile ops lexer path).map fun (result, lexer) =>
-      (result.map render, lexer)
+      (result.map (renderLocated render), lexer)
   discardedFrom := ops.discardedFrom
   version := ops.version
 
@@ -674,8 +677,8 @@ of its reference for every call and put back only when it is given back. -/
 structure Session where
   readSlice : ByteSlice → IO (Except (ReadError RemoteError) Unit)
   readEof : IO (Except (ReadError RemoteError) (Option (Located String)))
-  readAll : RemoteBuf → IO (Except (ReadError RemoteError) (Option String) × RemoteBuf)
-  readFile : System.FilePath → IO (Except (ReadError RemoteError) (Option String))
+  readAll : RemoteBuf → IO (Except (ReadError RemoteError) (Option (Located String)) × RemoteBuf)
+  readFile : System.FilePath → IO (Except (ReadError RemoteError) (Option (Located String)))
   discardedFrom : IO (Option Location)
   version : IO Version
 
@@ -850,7 +853,7 @@ instance {P R E Z : Type} [Parse P Remote IO E R] [Cursor Z] : ConsumeFrom (Driv
 
 /-- Applies the feeds to the lexer, as `lex` does, up to the first error, which it returns. -/
 def applyFeeds {C R E : Type} [Consume C R E] (ops : LexOps C) :
-    List (Option ByteArray) → ops.Lexer → IO (Option (LexError E))
+    List (Option ByteArray) → ops.Lexer → IO (Option (LexerError E))
   | [], _ => return none
   | some slice :: feeds, lexer => do
     match ← ops.lexSlice lexer slice.toByteSlice with
@@ -938,10 +941,10 @@ def Driven.with (k : WithParser) : Driven → IO Unit
     inner.with fun parser render =>
       match name with
       | "closed" => k (ClosedParser.new (H := Remote) parser) render
-      | "paren" => k (ParenParser.new (ClosedParser.new (H := Remote) parser)) render
+      | "paren" => k (ParenParser.new (H := Remote) parser) render
       | "closed-multiple" => k (ClosedMultipleParser.new (H := Remote) parser) (listField render)
       | "paren-multiple" =>
-        k (ParenMultipleParser.new (ClosedMultipleParser.new (H := Remote) parser))
+        k (ParenMultipleParser.new (H := Remote) parser)
           (listField render)
       | name => failRequest s!"unsupported parser {name}"
 
@@ -1079,13 +1082,15 @@ def answer (choice : LexerChoice) (remote : Remote) (session : Option Session)
     let (result, buf) ← reader.readAll (← RemoteBuf.new remote)
     buf.report
     match result with
-    | .ok (some result) => remote.write s!"done {result}"
+    | .ok (some result) =>
+      remote.write s!"done {result.value} {location result.location}"
     | .ok none => remote.write "none"
     | .error err => remote.write (errorLine err)
   | ["file", digits] =>
     let path ← orFail (readPath digits)
     match ← (← present session).readFile path with
-    | .ok (some result) => remote.write s!"done {result}"
+    | .ok (some result) =>
+      remote.write s!"done {result.value} {location result.location}"
     | .ok none => remote.write "none"
     | .error err => remote.write (errorLine err)
   | ["discarded"] =>

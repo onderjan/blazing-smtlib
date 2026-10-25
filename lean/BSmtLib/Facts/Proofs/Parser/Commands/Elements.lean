@@ -32,7 +32,7 @@ open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Proofs.Parser.Drive BSmtLib.Facts.Proofs.Parser.List
 open BSmtLib.Facts.Proofs.Parser.«Sort» BSmtLib.Facts.Proofs.Parser.Term
-open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Plain
+open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Lexicon.Value
 
 /-! ## First tokens -/
 
@@ -79,7 +79,7 @@ theorem Stands.first_of {tokens : List Parser.Internal.Input}
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {points : Points (StateT H m)} {σ ρ X Y : Type}
 
 /-! ## Programs whose values have a known length -/
@@ -252,11 +252,11 @@ end
 
 section
 
-variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Traits.Handler H m]
-variable {points : Points (StateT H m)} {version : Token.Version}
-variable {h : Traversal.Handler (StateT H m) (Traits.Handler.Error H) (valuesOf H)}
+variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
+variable {points : Points (StateT H m)} {version : Version}
+variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
-theorem adaptRun_mapM {X Y : Type} (f : X → Run (StateT H m) (Traits.Handler.Error H) Y)
+theorem adaptRun_mapM {X Y : Type} (f : X → Run (StateT H m) (Handler.Error H) Y)
     (items : List X) : adaptRun (items.mapM f) = items.mapM fun item => adaptRun (f item) := by
   induction items with
   | nil => simp
@@ -326,7 +326,7 @@ theorem term_element (hA : TermAgrees h) :
 /-- The parser of a sort declaration reads one: its symbol's and its numeral's views. -/
 theorem sortDec_runs (sortDec : Tree.SortDec) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens sortDec.tokens) :
-    ∃ (symbol : Plain.Symbol) (arity : Numeral) (rest : List Parser.Internal.Input),
+    ∃ (symbol : Lexicon.Value.Symbol) (arity : Numeral) (rest : List Parser.Internal.Input),
       tokens = .parenOpen :: rest ∧
       (Bridge.symbol symbol, Bridge.chars arity.asSlice) = (sortDec.symbol, sortDec.arity) ∧
       Runs (H := H) points Parser.Command.Internal.Datatype.SortDecState.step .start tokens

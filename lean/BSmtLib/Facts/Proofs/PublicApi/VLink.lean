@@ -18,6 +18,8 @@ consumers whose calls on such cursors are related, as a `Link` relates them, giv
 results with the same lexer state (`lexSliceStep_sim`, `lexEofStep_sim`).
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.PublicApi.VLink
 
 open BSmtLib.Lexer BSmtLib.Lexer.Error
@@ -28,20 +30,20 @@ section
 
 variable {H₁ H₂ : Type} {m₁ m₂ : Type → Type} [Monad m₁] [Monad m₂] {R₁ R₂ E₁ E₂ : Type}
   [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂]
-  [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂]
+  [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂]
   (L : Link H₁ m₁ R₁ E₁ H₂ m₂ R₂ E₂)
 
 /-- What the two consumers' calls on the cursor of a lexeme alone give alike: answers related
 as the link says, and the same cursor back. -/
 structure VConsumers : Prop where
   concrete : Token.Consume.isConcrete (H := H₁) = Token.Consume.isConcrete (H := H₂)
-  consume : ∀ (version : Token.Version) (l : Lexeme) (h : l.Valid),
+  consume : ∀ (version : Version) (l : Lexeme) (h : l.Valid),
     L.rc.rel (fun a b => ERel L.re (FlowRel L.rr) a.1 b.1 ∧ a.2.val = b.2.val)
       (Token.ConsumeFrom.consume (H := H₁) (m := m₁)
-        (Token.BatchCursor.Internal.new version (l.batch h)) (l.hasNext h version))
+        (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)) (l.hasNext h version))
       (Token.ConsumeFrom.consume (H := H₂) (m := m₂)
-        (Token.BatchCursor.Internal.new version (l.batch h)) (l.hasNext h version))
+        (Lexer.Cursor.LexerCursor.Internal.new version (l.batch h)) (l.hasNext h version))
 
 /-- Results related as the link says, with the same lexer state. -/
 def SameRes {α₁ α₂ : Type} (Q : α₁ → α₂ → Prop) (a : α₁ × Core) (b : α₂ × Core) : Prop :=
@@ -60,8 +62,8 @@ abbrev StepRes : Except (BSmtLib.Lexer.Internal.VNaive.Failure E₁) (Option (Sp
 variable {L}
 
 omit [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂]
-  [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂] in
+  [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂] in
 theorem rel_pure {α β : Type} {Q : α → β → Prop} {a : α} {b : β} (h : Q a b) :
     L.rc.rel Q (Pure.pure a : StateT H₁ m₁ α) (Pure.pure b : StateT H₂ m₂ β) :=
   L.rc.pure h
@@ -180,18 +182,19 @@ theorem lexFrom_sim (hc : VConsumers L) (recover₁ : Span.Location → StateT H
       (held₁ : Option (Span.Located R₁)) (held₂ : Option (Span.Located R₂)),
       ORel (LocRel L.rr) held₁ held₂ →
       L.rc.rel (SameRes (StepRes L))
-        (lexFrom recover₁ slice index core held₁) (lexFrom recover₂ slice index core held₂) := by
+        (Internal.VNaive.lexFrom recover₁ slice index core held₁)
+        (Internal.VNaive.lexFrom recover₂ slice index core held₂) := by
   intro n
   induction n with
   | zero =>
     intro index hn core held₁ held₂ hh
-    rw [lexFrom, lexFrom]
+    rw [Internal.VNaive.lexFrom, Internal.VNaive.lexFrom]
     split
     · omega
     · exact rel_pure ⟨hh, rfl⟩
   | succ n ih =>
   intro index hn core held₁ held₂ hh
-  rw [lexFrom, lexFrom]
+  rw [Internal.VNaive.lexFrom, Internal.VNaive.lexFrom]
   split
   · refine L.rc.bind (lexByte_sim hc recover₁ recover₂ hrec core _) ?_
     rintro ⟨r1, c1⟩ ⟨r2, c2⟩ ⟨hres, hcore⟩
@@ -204,8 +207,8 @@ theorem lexFrom_sim (hc : VConsumers L) (recover₁ : Span.Location → StateT H
   · exact rel_pure ⟨hh, rfl⟩
 
 omit [Token.Consume H₁ R₁ E₁] [Token.Consume H₂ R₂ E₂]
-  [∀ b, Token.ConsumeFrom H₁ (Token.BatchCursor b) m₁]
-  [∀ b, Token.ConsumeFrom H₂ (Token.BatchCursor b) m₂] in
+  [∀ b, Token.ConsumeFrom H₁ (LexerCursor b) m₁]
+  [∀ b, Token.ConsumeFrom H₂ (LexerCursor b) m₂] in
 theorem failCall_sim (abandon₁ : Span.Location → StateT H₁ m₁ Unit)
     (abandon₂ : Span.Location → StateT H₂ m₂ Unit)
     (f₁ : BSmtLib.Lexer.Internal.VNaive.Failure E₁)

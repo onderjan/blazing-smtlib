@@ -15,19 +15,21 @@ base, which they keep. `X1BatchInCore` hands over by its operations (`X1BatchInC
 are those of the library's lexer.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.HandOver
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
-open BSmtLib.Token.BatchCursor.Internal (remaining)
+open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Core
 
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (start : Nat) (b : USize)
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- Reading the state, under the base. -/
 theorem getCore_simB :
     SimP (BaseIs b) (fun c s => BaseIs b s ∧ c = s.val) (boundMap start (floor := floor)
@@ -36,7 +38,7 @@ theorem getCore_simB :
       (Lexer.Internal.WRustPort.getCore) :=
   getCore_sim start _
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- A step that keeps the base, after reading the state. -/
 theorem getCore_bind {α β : Type} {ψ : α → β}
     {k : ZCore → BSmtLib.Lexer.Internal.LexM H m R E floor low α}
@@ -48,7 +50,7 @@ theorem getCore_bind {α β : Type} {ψ : α → β}
   intro s hs h
   exact hk c (by rw [hs.2]; exact hs.1) s hs.1 h
 
-theorem callConsumer_sim {g : Token.BatchTag} (cursor : Token.BatchCursor g) (h : cursor.HasNext) :
+theorem callConsumer_sim {g : Token.BatchTag} (cursor : LexerCursor g) (h : cursor.HasNext) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.callConsumer (H := H) (m := m) (R := R) (E := E) cursor h)
       (Lexer.Internal.WRustPort.callConsumer cursor h) := by
@@ -56,7 +58,7 @@ theorem callConsumer_sim {g : Token.BatchTag} (cursor : Token.BatchCursor g) (h 
   exact SimP.lift (fun _ => by simp) fun _ _ h => h
 
 theorem flushCursor_sim {g : Token.BatchTag} :
-    ∀ n (cursor : Token.BatchCursor g), (remaining cursor)
+    ∀ n (cursor : LexerCursor g), (remaining cursor)
     = n →
     ∀ hfloor hfloor',
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
@@ -79,7 +81,7 @@ theorem flushCursor_sim {g : Token.BatchTag} :
     cases flow with
     | «continue» =>
       refine SimP.ite Iff.rfl (fun _ => SimP.pure (fun _ h => h) rfl) fun _ => ?_
-      exact ih _ (by rw [← hn, Token.BatchCursor.remaining_resetConsumed]; exact
+      exact ih _ (by rw [← hn, Lexer.Cursor.LexerCursor.remaining_resetConsumed]; exact
           consumed.remaining_lt)
         _ rfl _ _
     | «break» r =>
@@ -91,7 +93,7 @@ theorem flushCursor_sim {g : Token.BatchTag} :
       SimP.pure (fun _ h => h) rfl
 
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem storeSpent_sim (spent : Token.Internal.TokenBatch) :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.storeSpent (H := H) (m := m) (R := R) (E := E) spent)
@@ -122,7 +124,7 @@ theorem handOver_sim (batch : Token.Internal.TokenBatch) (bytesAfter : ByteArray
   obtain ⟨stop, cursor⟩ := x
   cases stop <;> dsimp only [id] <;> sim_auto
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 theorem takeBatch_sim :
     SimP (BaseIs b) (fun _ => BaseIs b) (boundMap start (floor := floor) (low := low)) id
       (BSmtLib.Lexer.Internal.takeBatch (H := H) (m := m) (R := R) (E := E))

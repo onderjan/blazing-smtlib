@@ -29,6 +29,8 @@ the first lexer's code comes first in the goal and would be split first,
 `lexNormal_sim` is the entry to the loop from the lexer's base.
 -/
 
+open BSmtLib.Lexer.Cursor (LexerCursor)
+
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Normal
 
 open BSmtLib.Facts.Proofs.Lexer.Simulation.Steps
@@ -272,10 +274,10 @@ theorem tokenEnd_facts {slice : ByteSlice} (h : slice.stop < USize.size) (index 
 section
 
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
-  [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m]
+  [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {floor : Option Nat} {low : Nat} (b : USize)
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- `fail_bind_sim`, with the token end of the second lexer given by an equation. -/
 theorem fail_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (kind : LexicalErrorKind)
     (te : Lexer.Internal.Helpers.TokenEnd) (te' : Lexer.Internal.WRustPort.Slice.TokenEnd)
@@ -290,7 +292,7 @@ theorem fail_bind_sim' {α β γ δ : Type} (start : Nat) (ψ : γ → δ) (kind
   subst e
   exact fail_bind_sim start ψ b kind te hb hp hno Q k k'
 
-omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (Token.BatchCursor batch) m] in
+omit [Token.Consume H R E] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] in
 /-- `storeUnfinishedSymbolRun`, with the indices of the second lexer given by equations. -/
 theorem storeUnfinishedSymbolRun_sim' (slice : ByteSlice) (h : slice.stop < USize.size)
     (entry : UInt8) (offset : Nat) (base index after runEndAt : USize)

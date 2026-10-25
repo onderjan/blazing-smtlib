@@ -26,7 +26,7 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure BSmtLib.Lexer.Internal.VNai
 /-- The bytes of the slice from `i` on, from the state at `location`, for a consumer that takes
 whitespace and comments if `ws`: the state and the location after them and the lexemes they
 finish, or on an error, the lexemes finished before it. -/
-def feedFrom (version : Token.Version) (ws : Bool) (s : ByteSlice) (st : St)
+def feedFrom (version : Version) (ws : Bool) (s : ByteSlice) (st : St)
     (location : Span.Location)
     (i : Nat) : Consumers.Pure.RunF :=
   if h : i < s.size then
@@ -37,7 +37,7 @@ def feedFrom (version : Token.Version) (ws : Bool) (s : ByteSlice) (st : St)
     .ok (st, location, [])
 termination_by s.size - i
 
-theorem feedFrom_lt {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : Nat} (h : i < s.size)
+theorem feedFrom_lt {version : Version} {ws : Bool} {s : ByteSlice} {i : Nat} (h : i < s.size)
     (st : St) (location : Span.Location) :
     feedFrom version ws s st location i =
       match byteStepW version ws st location s[i] with
@@ -47,7 +47,7 @@ theorem feedFrom_lt {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : N
   rw [feedFrom]
   simp only [h, dite_true]
 
-theorem feedFrom_ge {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : Nat}
+theorem feedFrom_ge {version : Version} {ws : Bool} {s : ByteSlice} {i : Nat}
     (h : ¬ i < s.size)
     (st : St) (location : Span.Location) : feedFrom version ws s st location i = .ok
         (st, location, []) := by
@@ -55,7 +55,7 @@ theorem feedFrom_ge {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : N
   simp only [h, dite_false]
 
 /-- A byte that the pure step takes with the lexemes `ls`. -/
-theorem feedFrom_step {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : Nat}
+theorem feedFrom_step {version : Version} {ws : Bool} {s : ByteSlice} {i : Nat}
     (h : i < s.size)
     {st st' : St} {location : Span.Location} {ls : List Lexeme}
     (hstep : byteStepW version ws st location s[i] = some (st', ls)) :
@@ -64,7 +64,7 @@ theorem feedFrom_step {version : Token.Version} {ws : Bool} {s : ByteSlice} {i :
   rw [feedFrom_lt h, hstep]
 
 /-- A byte that the pure step fails at. -/
-theorem feedFrom_fail {version : Token.Version} {ws : Bool} {s : ByteSlice} {i : Nat}
+theorem feedFrom_fail {version : Version} {ws : Bool} {s : ByteSlice} {i : Nat}
     (h : i < s.size)
     {st : St} {location : Span.Location} (hstep : byteStepW version ws st location s[i] = none) :
     feedFrom version ws s st location i =
@@ -72,7 +72,7 @@ theorem feedFrom_fail {version : Token.Version} {ws : Bool} {s : ByteSlice} {i :
   rw [feedFrom_lt h, hstep]
 
 /-- The run over a slice of the bytes of a list is the run over the list from the index on. -/
-theorem feedFrom_toByteSlice (version : Token.Version) (ws : Bool) (bytes : List UInt8) :
+theorem feedFrom_toByteSlice (version : Version) (ws : Bool) (bytes : List UInt8) :
     ∀ (n i : Nat), bytes.length - i = n → ∀ (st : St) (location : Span.Location),
       feedFrom version ws bytes.toByteArray.toByteSlice st location i =
         lexBytesF version ws st location (bytes.drop i) := by
@@ -98,7 +98,7 @@ theorem feedFrom_toByteSlice (version : Token.Version) (ws : Bool) (bytes : List
 
 section
 
-variable (v : Token.Version) (ws : Bool) (s : ByteSlice)
+variable (v : Version) (ws : Bool) (s : ByteSlice)
 
 /-- The naive lexer takes each byte of a run as a part of the token in progress. -/
 theorem feedFrom_tokenRun (P : UInt8 → Bool) (hP10 : ∀ c, P c = true → c ≠ 10) (mode : Mode)
@@ -194,7 +194,7 @@ end
 
 section
 
-variable (v : Token.Version) (ws : Bool) (s : ByteSlice)
+variable (v : Version) (ws : Bool) (s : ByteSlice)
 
 theorem byteStep_token_pending {q q' : Pending} {location : Span.Location} {c : UInt8}
     (h : advance ws q location c = .pending q') :
@@ -415,7 +415,7 @@ theorem advance_end_legacyQuote (hm : q.mode = .legacyQuote) :
 
 end
 
-theorem start_digit (v : Token.Version) (ws : Bool) (location : Span.Location) {c : UInt8}
+theorem start_digit (v : Version) (ws : Bool) (location : Span.Location) {c : UInt8}
     (hd : isDigit c = true) :
     start v ws location c = .pending ⟨.numeral (c == 48), location, ByteArray.empty.push c⟩ := by
   have := digit_facts c
