@@ -564,9 +564,10 @@ impl<'a, Z: SmtCursor> SmtCursor for SingleTokenCursor<'a, Z> {
 
 /// A cursor over a dynamic array of tokens.
 ///
-/// The cursor is consumed under a given version and refuses
-/// version switch requests. If the consumer requests discarding,
-/// currently present tokens are discarded up to before the first EOF.
+/// The cursor is consumed under a given version: it accepts a request
+/// for that version and refuses a switch to any other. If the consumer
+/// requests discarding, currently present tokens are discarded up to
+/// before the first EOF.
 /// If no EOF is currently present, the cursor switches to a discarding mode
 /// and no new tokens are pushed until a pushed EOF token resets
 /// the discarding mode. EOF tokens are never discarded themselves.
@@ -649,9 +650,14 @@ impl<'a> SmtCursor for SmtTokensCursor<'a> {
         self.version
     }
 
-    fn set_version(&mut self, _version: SmtVersion) -> Result<(), SmtVersionRefused> {
-        // the tokens were put in already classified, so they cannot be read anew
-        Err(SmtVersionRefused)
+    fn set_version(&mut self, version: SmtVersion) -> Result<(), SmtVersionRefused> {
+        // the tokens were put in already classified under the cursor's
+        // version, so they cannot be read under any other
+        if version == self.version {
+            Ok(())
+        } else {
+            Err(SmtVersionRefused)
+        }
     }
 
     fn discard_rest(&mut self) {

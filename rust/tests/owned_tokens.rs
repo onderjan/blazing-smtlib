@@ -153,18 +153,16 @@ fn a_tokens_cursor_hands_over_the_pushed_tokens_in_order() {
 }
 
 #[test]
-fn a_tokens_cursor_refuses_version_switches_and_keeps_its_tokens() {
+fn a_tokens_cursor_keeps_its_own_version_refuses_others_and_keeps_its_tokens() {
     let (expected, tokens) = keep(b"(echo \"a\"\"b\") x");
     let mut cursor = SmtTokensCursor::new(SmtVersion::V2_6);
     for token in tokens.iter() {
         cursor.push(token);
     }
-    for version in [
-        SmtVersion::V2_0,
-        SmtVersion::V2_5,
-        SmtVersion::V2_6,
-        SmtVersion::V2_7,
-    ] {
+    // the tokens were classified under the cursor's version
+    assert_eq!(cursor.set_version(SmtVersion::V2_6), Ok(()));
+    assert_eq!(cursor.version(), SmtVersion::V2_6);
+    for version in [SmtVersion::V2_0, SmtVersion::V2_5, SmtVersion::V2_7] {
         assert!(cursor.set_version(version).is_err(), "{version:?}");
         assert_eq!(cursor.version(), SmtVersion::V2_6);
     }
