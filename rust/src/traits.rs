@@ -1,9 +1,11 @@
 use std::{convert::Infallible, error::Error, fmt, fmt::Debug};
 
 use crate::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
-    SmtFunctionSignatures, SmtMatchCases, SmtMultiple, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
+    grammar::{
+        SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
+        SmtFunctionSignatures, SmtMatchCases, SmtMultiple, SmtPattern, SmtQuantifierKind, SmtSExpr,
+        SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
+    },
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol, SmtSymbolBuf},
     parser::SmtParse,
     token::SmtCommandNameReserved,

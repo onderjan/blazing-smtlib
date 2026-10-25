@@ -8,9 +8,12 @@
 use std::collections::HashSet;
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtFunctionSignature, SmtFunctionSignatures,
-    SmtHandler, SmtMatchCases, SmtPartialCommandError, SmtPartialCommandHandler, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
+    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler,
+    grammar::{
+        SmtAttributeValue, SmtAttributes, SmtBindings, SmtFunctionSignature, SmtFunctionSignatures,
+        SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities,
+        SmtSortedVars, SmtSymbols, SmtTerm,
+    },
     lexicon::{SmtKeyword, SmtSymbol},
     reader::{SmtReadError, SmtReadErrorCause, read_smt},
     token::SmtCommandNameReserved,
@@ -218,7 +221,7 @@ macro_rules! inner_ends {
         }
         fn end_datatype_declaration(
             &mut self,
-            _constructors: blazing_smtlib::SmtConstructors<'_, ()>,
+            _constructors: blazing_smtlib::grammar::SmtConstructors<'_, ()>,
         ) -> Result<(), Error> {
             self.log.push("end_datatype_declaration");
             Ok(())

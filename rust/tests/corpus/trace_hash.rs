@@ -17,11 +17,13 @@
 use std::convert::Infallible;
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
-    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtMatchCases,
-    SmtMultiple, SmtNonstandardCommandError, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtSymbols,
-    SmtTerm,
+    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError,
+    grammar::{
+        SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
+        SmtFunctionSignatures, SmtIdent, SmtIndex, SmtMatchCases, SmtMultiple, SmtPattern,
+        SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
+        SmtSpecialConstant, SmtSymbols, SmtTerm,
+    },
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     version::SmtVersion,
 };

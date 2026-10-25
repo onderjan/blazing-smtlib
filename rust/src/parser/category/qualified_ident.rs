@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtQualifiedIdentBuf,
+    SmtHandler,
+    grammar::SmtQualifiedIdentBuf,
     lexicon::SmtSymbol,
     parser::{
         Arena, IdentHandle, IdentSlot, QualifiedIdentHandle, SmtCloseParenParser, SmtParse,

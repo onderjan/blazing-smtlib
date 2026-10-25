@@ -12,7 +12,7 @@
 //! sorts of a function signature), this interface lends it too.
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind, SmtSpecialConstantBuf,
+    grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind, SmtSpecialConstantBuf},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     token::SmtReserved,
     version::SmtVersion,

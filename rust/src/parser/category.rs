@@ -1,4 +1,4 @@
-use crate::{SmtSpecialConstant, token::SmtSyntaxToken};
+use crate::{grammar::SmtSpecialConstant, token::SmtSyntaxToken};
 
 mod attribute;
 mod combinator;

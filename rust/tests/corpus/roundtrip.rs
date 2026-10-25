@@ -19,11 +19,13 @@ use std::{
 };
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
-    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtMatchCases,
-    SmtMultiple, SmtNonstandardCommandError, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtSymbols,
-    SmtTerm,
+    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError,
+    grammar::{
+        SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
+        SmtFunctionSignatures, SmtIdent, SmtIndex, SmtMatchCases, SmtMultiple, SmtPattern,
+        SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
+        SmtSpecialConstant, SmtSymbols, SmtTerm,
+    },
     lexer::SmtLexer,
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     reader::{SmtReadError, read_smt_file},
@@ -482,7 +484,7 @@ impl SmtHandler for Reprint {
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Res<Text> {
         let mut out = Vec::new();
         let qualified =
-            |out: &mut Vec<u8>, function: &blazing_smtlib::SmtQualifiedIdent<'_, Self>| {
+            |out: &mut Vec<u8>, function: &blazing_smtlib::grammar::SmtQualifiedIdent<'_, Self>| {
                 match &function.sort {
                     None => ident(out, function.ident),
                     Some(sort) => {

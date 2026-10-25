@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtSExpr,
+    SmtHandler,
+    grammar::SmtSExpr,
     parser::{
         Arena, SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected,
         category::parse_special_constant, handle_err, parse_by_token,

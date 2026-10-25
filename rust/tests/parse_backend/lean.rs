@@ -9,8 +9,10 @@ use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtIndexBuf, SmtIndicesBuf, SmtPatternApplicationBuf, SmtPatternBuf,
-    SmtQuantifierKind, SmtSimplePatternBuf, SmtSimplePatternsBuf, SmtSpecialConstantBuf,
+    grammar::{
+        SmtIdentBuf, SmtIndexBuf, SmtIndicesBuf, SmtPatternApplicationBuf, SmtPatternBuf,
+        SmtQuantifierKind, SmtSimplePatternBuf, SmtSimplePatternsBuf, SmtSpecialConstantBuf,
+    },
     lexer::{SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
         SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,

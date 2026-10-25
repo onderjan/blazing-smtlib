@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtHandler, SmtMultiple,
+    SmtHandler,
+    grammar::SmtMultiple,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigits, SmtHexDigitsBuf,
         SmtKeyword, SmtNumeral, SmtNumeralBuf, SmtStringContent, SmtStringContentBuf, SmtSymbol,

@@ -9,9 +9,12 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtBindingsBuf, SmtHandler, SmtIndicesBuf,
-    SmtMatchCases, SmtPartialCommandError, SmtPartialCommandHandler, SmtPattern, SmtQuantifierKind,
-    SmtSExpr, SmtSimplePatternsBuf, SmtSort, SmtSortedVars, SmtSortedVarsBuf, SmtTerm,
+    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler,
+    grammar::{
+        SmtAttributeValue, SmtAttributes, SmtBindings, SmtBindingsBuf, SmtIndicesBuf,
+        SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort,
+        SmtSortedVars, SmtSortedVarsBuf, SmtTerm,
+    },
     lexer::SmtLexer,
     lexicon::{SmtKeyword, SmtSymbol},
     reader::read_smt,

@@ -18,7 +18,8 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    SmtHandler, SmtNonstandardCommandError, SmtPatternBuf, SmtQuantifierKind, SmtSpan,
+    SmtHandler, SmtNonstandardCommandError, SmtSpan,
+    grammar::{SmtPatternBuf, SmtQuantifierKind},
     lexer::SmtLexer,
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{

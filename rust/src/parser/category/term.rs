@@ -1,8 +1,11 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSimplePattern,
-    SmtSortedVars, SmtTerm,
+    SmtHandler,
+    grammar::{
+        SmtApplication, SmtQualifiedIdent, SmtQuantifierKind, SmtSimplePattern, SmtSortedVars,
+        SmtTerm,
+    },
     lexicon::SmtSymbol,
     parser::{
         Arena, MatchCasesStarts, PatternHandle, PatternHandleBuf, QualifiedIdentHandle,

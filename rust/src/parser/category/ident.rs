@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtIdentBuf,
+    SmtHandler,
+    grammar::SmtIdentBuf,
     lexicon::SmtSymbol,
     parser::{
         Arena, IdentHandle, IndexHandle, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
@@ -237,7 +238,7 @@ impl IdentSlot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SmtIndex, SmtSyntaxChecker, parser::category::tests::parse_all_with};
+    use crate::{SmtSyntaxChecker, grammar::SmtIndex, parser::category::tests::parse_all_with};
 
     fn index_texts(ident: &SmtIdentBuf) -> Vec<String> {
         ident
