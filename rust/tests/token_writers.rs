@@ -10,14 +10,13 @@ use std::io::{self, Write};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtCompactTokenWriter, SmtLayoutTokenWriter, SmtWriteErrorCause,
+    SmtCompactTokenWriter, SmtLayoutTokenWriter, SmtVersion, SmtWriteErrorCause,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtCommentBuf, SmtNumeralBuf, SmtSymbol},
     token::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
         SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,
     },
-    version::SmtVersion,
 };
 
 /// Inputs that every version from 2.5 on lexes alike, with every kind of

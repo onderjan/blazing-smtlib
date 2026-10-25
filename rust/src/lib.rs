@@ -2,6 +2,7 @@
 
 mod reader;
 mod traits;
+mod version;
 mod writer;
 
 pub mod grammar;
@@ -10,8 +11,8 @@ pub mod lexicon;
 pub mod parser;
 pub mod span;
 pub mod token;
-pub mod version;
 
 pub use crate::reader::*;
 pub use crate::traits::*;
+pub use crate::version::*;
 pub use crate::writer::*;

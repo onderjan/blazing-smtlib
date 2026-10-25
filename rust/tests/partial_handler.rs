@@ -9,6 +9,7 @@ use std::collections::HashSet;
 
 use blazing_smtlib::{
     SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
+    SmtVersion,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtFunctionSignature, SmtFunctionSignatures,
         SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities,
@@ -17,7 +18,6 @@ use blazing_smtlib::{
     lexicon::{SmtKeyword, SmtSymbol},
     read_smt,
     token::SmtCommandNameReserved,
-    version::SmtVersion,
 };
 
 /// The error of the handler's own.

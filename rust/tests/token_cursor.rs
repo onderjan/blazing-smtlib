@@ -11,11 +11,10 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtSyntaxChecker,
+    SmtSyntaxChecker, SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor, SmtLexerToken},
     parser::{SmtParse, SmtParseState, SmtSortParser, SmtTermParser},
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtTokenCategory},
-    version::SmtVersion,
 };
 
 /// A check run on a hand-over of the lexer.

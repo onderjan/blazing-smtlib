@@ -25,9 +25,9 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor, SmtLexerToken},
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory},
-    version::SmtVersion,
 };
 
 /// Global allocator that counts allocations and tracks the live heap.

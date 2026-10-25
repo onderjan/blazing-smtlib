@@ -9,6 +9,7 @@ use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{
         SmtLexErrorCause, SmtLexRecovery, SmtLexer, SmtLexerCursor, SmtLexerToken, SmtRecover,
     },
@@ -17,7 +18,6 @@ use blazing_smtlib::{
         SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtReserved, SmtSyntaxToken,
         SmtTokenCategory,
     },
-    version::SmtVersion,
 };
 
 /// What the consumer of a request does with one hand-over, by its plan.

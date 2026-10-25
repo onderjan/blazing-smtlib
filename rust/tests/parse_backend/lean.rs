@@ -9,6 +9,7 @@ use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
+    SmtVersion,
     grammar::{
         SmtIdentBuf, SmtIndexBuf, SmtIndicesBuf, SmtPatternApplicationBuf, SmtPatternBuf,
         SmtQuantifierKind, SmtSimplePatternBuf, SmtSimplePatternsBuf, SmtSpecialConstantBuf,
@@ -23,7 +24,6 @@ use blazing_smtlib::{
         SmtVersionErrorKind,
     },
     token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
-    version::SmtVersion,
 };
 
 use super::nodes::{

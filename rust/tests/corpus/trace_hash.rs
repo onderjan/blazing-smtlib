@@ -17,7 +17,7 @@
 use std::convert::Infallible;
 
 use blazing_smtlib::{
-    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError,
+    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
         SmtFunctionSignatures, SmtIdent, SmtIndex, SmtMatchCases, SmtMultiple, SmtPattern,
@@ -25,7 +25,6 @@ use blazing_smtlib::{
         SmtSpecialConstant, SmtSymbols, SmtTerm,
     },
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
-    version::SmtVersion,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;

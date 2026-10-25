@@ -11,7 +11,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
-    SmtReader,
+    SmtReader, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtMatchCases, SmtPattern,
         SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars, SmtTerm,
@@ -23,7 +23,6 @@ use blazing_smtlib::{
     },
     read_smt,
     token::{SmtCursor, SmtSyntaxToken},
-    version::SmtVersion,
 };
 
 /// The error of the handlers' own.

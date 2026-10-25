@@ -19,9 +19,9 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{SmtLexer, SmtRecovering},
     token::SmtTokenCategory,
-    version::SmtVersion,
 };
 
 use lex_backend::{

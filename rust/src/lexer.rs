@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 use std::ops::ControlFlow;
 
 use crate::{
+    SmtVersion,
     lexer::{
         char_class::{
             RUN_COMMENT_PLAIN, RUN_DIGIT, RUN_NON_LF_WHITESPACE, RUN_QUOTED_PLAIN,
@@ -28,7 +29,6 @@ use crate::{
     },
     span::{SmtLocated, SmtLocation, SmtSpan},
     token::{SmtConsume, SmtConsumeFrom, SmtCursor},
-    version::SmtVersion,
 };
 
 /// SMT-LIB lexer.

@@ -19,7 +19,7 @@ use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use blazing_smtlib::{
-    SmtHandler, SmtSyntaxChecker,
+    SmtHandler, SmtSyntaxChecker, SmtVersion, SmtVersionPosture,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{
         SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
@@ -38,7 +38,6 @@ use blazing_smtlib::{
     token::{
         SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtVersionRefused,
     },
-    version::{SmtVersion, SmtVersionPosture},
 };
 
 // --- Tokens as owned values ---

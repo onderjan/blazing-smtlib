@@ -37,13 +37,13 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
+    SmtVersion,
     grammar::{
         SmtIdentBuf, SmtIndex, SmtPatternBuf, SmtQuantifierKind, SmtSimplePattern,
         SmtSpecialConstantBuf,
     },
     lexicon::{SmtKeywordBuf, SmtSymbol, SmtSymbolBuf},
     parser::SmtSyntaxErrorKind,
-    version::SmtVersion,
 };
 
 // --- Test handler rendering everything it receives back into text ---

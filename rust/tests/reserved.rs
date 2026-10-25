@@ -17,10 +17,7 @@ use common::{assert_error_span, assert_parser_error, parse};
 use parse_backend::{ReadError, Reader, SyntaxChecker};
 use reserved_words::{COMMAND_NAMES, reserved_words};
 
-use blazing_smtlib::{
-    SmtNonstandardCommandError,
-    version::{SmtVersion, SmtVersionPosture},
-};
+use blazing_smtlib::{SmtNonstandardCommandError, SmtVersion, SmtVersionPosture};
 
 /// A command with one place where a name is expected, marked `NAME`.
 struct NameSite {

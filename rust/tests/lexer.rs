@@ -8,12 +8,12 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind},
     span::SmtSpan,
     token::{
         SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved, SmtTokenCategory,
     },
-    version::SmtVersion,
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, Loc, loc};

@@ -18,7 +18,8 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    SmtHandler, SmtNonstandardCommandError, SmtReader,
+    SmtHandler, SmtNonstandardCommandError, SmtReader, SmtVersion, SmtVersionPosture,
+    SmtVersionPostureBuilder,
     grammar::{SmtPatternBuf, SmtQuantifierKind},
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
@@ -30,7 +31,6 @@ use blazing_smtlib::{
     token::{
         SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
     },
-    version::{SmtVersion, SmtVersionPosture, SmtVersionPostureBuilder},
 };
 
 #[test]

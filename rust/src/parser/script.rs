@@ -1,13 +1,12 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler,
+    SmtCommandHandler, SmtVersionPosture,
     parser::{
         SmtCommandOutcome, SmtCommandParser, SmtParse, SmtParseError, SmtParseState,
         SmtVersionErrorKind,
     },
     token::{SmtCursor, SmtVersionRefused},
-    version::SmtVersionPosture,
 };
 
 /// Parses an SMT-LIB script: a sequence of commands, each delivered to the

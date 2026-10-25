@@ -12,8 +12,7 @@ mod parse_backend;
 
 use blazing_smtlib::{
     SmtNonstandardCommandError, SmtReadError, SmtReadErrorCause, SmtReader, SmtSyntaxChecker,
-    read_smt,
-    version::{SmtVersion, SmtVersionPosture},
+    SmtVersion, SmtVersionPosture, read_smt,
 };
 use parse_backend::{Adapt, SyntaxChecker};
 

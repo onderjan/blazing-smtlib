@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler,
+    SmtHandler, SmtVersion,
     grammar::SmtIdentBuf,
     lexicon::SmtSymbol,
     parser::{
@@ -9,7 +9,6 @@ use crate::{
         SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected, parse_by_token,
     },
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
-    version::SmtVersion,
 };
 
 /// A parser that reads an SMT-LIB identifier.

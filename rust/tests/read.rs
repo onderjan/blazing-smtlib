@@ -14,10 +14,9 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    SmtNonstandardCommandError,
+    SmtNonstandardCommandError, SmtVersion, SmtVersionPosture,
     lexer::SmtLexicalErrorKind,
     parser::{SmtCommandOutcome, SmtSyntaxErrorKind},
-    version::{SmtVersion, SmtVersionPosture},
 };
 
 /// Expected location as `(offset, line, column)`.

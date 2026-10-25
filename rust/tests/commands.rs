@@ -19,6 +19,7 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
+    SmtVersion,
     grammar::{
         SmtIdentBuf, SmtIndex, SmtPatternBuf, SmtQuantifierKind, SmtSimplePattern,
         SmtSimplePatternBuf, SmtSpecialConstantBuf,
@@ -27,7 +28,6 @@ use blazing_smtlib::{
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::SmtSyntaxErrorKind,
     token::SmtTokenCategory,
-    version::SmtVersion,
 };
 
 /// Handler that resolves body identifiers against the parameters of the

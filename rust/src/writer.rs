@@ -6,11 +6,11 @@ use std::{
 };
 
 use crate::{
+    SmtVersion,
     token::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken,
         SmtTokensCursor,
     },
-    version::SmtVersion,
 };
 
 /// Determines why writing a token has failed.

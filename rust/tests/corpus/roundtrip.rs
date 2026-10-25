@@ -19,7 +19,7 @@ use std::{
 };
 
 use blazing_smtlib::{
-    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtReadError,
+    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtReadError, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
         SmtFunctionSignatures, SmtIdent, SmtIndex, SmtMatchCases, SmtMultiple, SmtPattern,
@@ -30,7 +30,6 @@ use blazing_smtlib::{
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     read_smt_file,
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
-    version::SmtVersion,
 };
 
 /// Printed text is lexed in pieces of about this size, cut between commands.

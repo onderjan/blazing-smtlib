@@ -16,7 +16,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtNonstandardCommandError, SmtPartialCommandError, SmtReadError, SmtReadErrorCause,
-    SmtSyntaxChecker, SmtWriteError, SmtWriteErrorCause,
+    SmtSyntaxChecker, SmtVersion, SmtWriteError, SmtWriteErrorCause,
     grammar::SmtEmptyArgumentsError,
     lexer::{SmtLexError, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
@@ -32,7 +32,6 @@ use blazing_smtlib::{
         SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
         SmtReserved, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused,
     },
-    version::SmtVersion,
 };
 
 /// The error of a consumer or handler of the tests' own, with a source of its own.

@@ -4,7 +4,7 @@
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtCommandHandler, SmtHandler,
+    SmtCommandHandler, SmtHandler, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
         SmtFunctionSignatures, SmtIdent, SmtMatchCases, SmtMultiple, SmtPattern, SmtQualifiedIdent,
@@ -16,7 +16,6 @@ use blazing_smtlib::{
         SmtParseError, SmtParseState, SmtTermParser, SmtVersionErrorKind,
     },
     token::{SmtCursor, SmtVersionRefused},
-    version::SmtVersion,
 };
 
 use super::nodes::{

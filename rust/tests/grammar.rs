@@ -4,7 +4,7 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 use blazing_smtlib::{
-    SmtHandler,
+    SmtHandler, SmtVersion,
     grammar::{
         SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors,
         SmtEmptyArgumentsError, SmtFunctionSignature, SmtFunctionSignatures, SmtIdent, SmtIdentBuf,
@@ -18,7 +18,6 @@ use blazing_smtlib::{
         SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeyword, SmtNumeralBuf,
         SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
     },
-    version::SmtVersion,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,

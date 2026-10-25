@@ -1,7 +1,7 @@
 use crate::{
+    SmtVersion,
     span::SmtSpan,
     token::{SmtCursor, SmtLookahead, SmtSyntaxToken, SmtTokenCategory, SmtVersionRefused},
-    version::SmtVersion,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

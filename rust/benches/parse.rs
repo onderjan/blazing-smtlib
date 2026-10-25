@@ -43,9 +43,9 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor},
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
-    version::SmtVersion,
 };
 
 /// Default timed runs per file and mode; an additional first (warm-up) run

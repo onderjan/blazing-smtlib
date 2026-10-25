@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler,
+    SmtHandler, SmtVersion,
     grammar::{SmtPatternBuf, SmtSimplePattern, SmtSimplePatternBuf},
     parser::{
         Arena, PatternHandle, SimplePatternHandle, SmtNonEmptyList, SmtParse, SmtParseError,
@@ -9,7 +9,6 @@ use crate::{
         parse_by_token,
     },
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtSyntaxToken},
-    version::SmtVersion,
 };
 
 pub struct SmtSimplePatternParser;

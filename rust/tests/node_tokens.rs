@@ -9,7 +9,7 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler,
+    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtBindingsBuf, SmtIndicesBuf,
         SmtMatchCases, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort,
@@ -22,7 +22,6 @@ use blazing_smtlib::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
         SmtSyntaxToken, SmtTokensBuf, SmtTokensCursor,
     },
-    version::SmtVersion,
 };
 
 /// A consumer that keeps the abstract tokens before the end of the input.

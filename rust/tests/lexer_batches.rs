@@ -34,12 +34,12 @@ use std::ops::ControlFlow;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{
         SmtLexError, SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexerToken, SmtLexicalErrorKind,
     },
     span::{SmtLocated, SmtLocation},
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtTokenCategory},
-    version::SmtVersion,
 };
 
 use lex_backend::{Feed, Line, Loc, Options, driver};

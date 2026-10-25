@@ -31,10 +31,7 @@ use crate::{
     },
     span::{SmtLocated, SmtSpan},
 };
-use crate::{
-    span::SmtLocation,
-    version::{SmtVersion, SmtVersionPosture},
-};
+use crate::{SmtVersion, SmtVersionPosture, span::SmtLocation};
 
 /// Determines why reading has failed.
 #[derive(Debug)]

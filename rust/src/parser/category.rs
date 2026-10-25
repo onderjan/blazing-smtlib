@@ -63,11 +63,10 @@ pub(crate) mod tests {
     use std::ops::ControlFlow;
 
     use crate::{
-        SmtNonstandardCommandError, SmtSyntaxChecker,
+        SmtNonstandardCommandError, SmtSyntaxChecker, SmtVersion,
         lexer::SmtLexer,
         parser::{SmtParse, SmtParseError, SmtParseState},
         token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
-        version::SmtVersion,
     };
 
     /// Drives `parser` over `parse_state` through the whole input with the

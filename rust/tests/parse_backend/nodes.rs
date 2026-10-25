@@ -12,10 +12,10 @@
 //! sorts of a function signature), this interface lends it too.
 
 use blazing_smtlib::{
+    SmtVersion,
     grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind, SmtSpecialConstantBuf},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     token::SmtReserved,
-    version::SmtVersion,
 };
 
 /// A qualified identifier, with the sort it is qualified with by `as`.

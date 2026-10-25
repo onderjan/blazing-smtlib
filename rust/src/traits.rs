@@ -1,6 +1,7 @@
 use std::{convert::Infallible, error::Error, fmt, fmt::Debug};
 
 use crate::{
+    SmtVersion,
     grammar::{
         SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
         SmtFunctionSignatures, SmtMatchCases, SmtMultiple, SmtPattern, SmtQuantifierKind, SmtSExpr,
@@ -9,7 +10,6 @@ use crate::{
     lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol, SmtSymbolBuf},
     parser::SmtParse,
     token::SmtCommandNameReserved,
-    version::SmtVersion,
 };
 
 pub trait SmtHandler {

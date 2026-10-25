@@ -8,7 +8,7 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtSyntaxChecker,
+    SmtSyntaxChecker, SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{
         SmtBinDigits, SmtComment, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral,
@@ -19,7 +19,6 @@ use blazing_smtlib::{
         SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
         SmtSyntaxToken, SmtSyntaxTokenBuf, SmtTokensBuf, SmtTokensCursor,
     },
-    version::SmtVersion,
 };
 
 /// An input with every kind of token, empty ones included, with whitespace

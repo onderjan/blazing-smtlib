@@ -32,10 +32,10 @@ use std::ops::ControlFlow;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexerCursor, SmtLexicalErrorKind, SmtLexicalExpected},
     span::SmtLocation,
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtSyntaxToken, SmtTokenCategory},
-    version::SmtVersion,
 };
 
 /// A location as `(offset, line, column)`, all zero-based.

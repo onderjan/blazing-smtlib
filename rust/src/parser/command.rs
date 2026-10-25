@@ -1,14 +1,13 @@
 use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
-    SmtCommandHandler,
+    SmtCommandHandler, SmtVersion,
     lexicon::SmtSymbol,
     parser::{
         SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, expected,
         handle_err,
     },
     token::{SmtCursor, SmtReserved, SmtSyntaxToken},
-    version::SmtVersion,
 };
 
 mod datatype;

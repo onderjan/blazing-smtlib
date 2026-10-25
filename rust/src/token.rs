@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, error::Error, fmt, io::Write, ops::ControlFlow};
 
 use crate::{
-    SmtWriteError, SmtWriteErrorCause,
+    SmtVersion, SmtWriteError, SmtWriteErrorCause,
     lexer::SmtLexerToken,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
@@ -9,7 +9,6 @@ use crate::{
         SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace,
         SmtWhitespaceBuf,
     },
-    version::SmtVersion,
 };
 
 mod reserved;

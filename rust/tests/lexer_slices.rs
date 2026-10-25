@@ -14,10 +14,10 @@ use blazing_smtlib::lexer::SmtLexicalExpected;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
+    SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor, SmtLexicalErrorKind},
     span::SmtLocation,
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
-    version::SmtVersion,
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, loc};
