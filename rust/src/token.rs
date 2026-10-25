@@ -754,8 +754,7 @@ pub trait SmtConsume {
     /// to the whitespace and comments. The caller must hand
     /// over the whitespace and comment tokens present between
     /// true syntactic tokens (unless the consumer specifically
-    /// allows them to be omitted, as e.g. [`SmtLayoutTokenWriter`](crate::SmtLayoutTokenWriter)
-    /// and [`SmtCompactTokenWriter`](crate::SmtCompactTokenWriter) do).
+    /// allows them to be omitted, as e.g. [`SmtWriter`](crate::SmtWriter) does).
     ///
     /// If false, the consumer operates over abstract tokens:
     /// it is not interested in whitespace and comments,

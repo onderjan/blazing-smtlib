@@ -1,7 +1,9 @@
-//! Public-API tests of the token writers: the compact writer, which writes
-//! the compact form, and the canonical form when handed no comments; and
-//! the layout writer, which writes tokens in the layout they are handed over
-//! in. The writers are fed by the lexer, through a cursor and by `write`.
+//! Public-API tests of the writer in its three styles: the line style, which
+//! writes tokens on one line as far as comments allow; the compact style,
+//! which writes the compact form, and the canonical form when handed no
+//! comments; and the layout style, which writes tokens in the layout they
+//! are handed over in. The writer is fed by the lexer, through a cursor and
+//! by `write`.
 //!
 //! They check the Rust interface itself and call the library directly.
 
@@ -10,7 +12,7 @@ use std::io::{self, Write};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtCompactTokenWriter, SmtLayoutTokenWriter, SmtVersion, SmtWriteErrorCause,
+    SmtVersion, SmtWriteErrorCause, SmtWriteStyle, SmtWriter, SmtWriterConfig,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtCommentBuf, SmtNumeralBuf, SmtSymbol},
     token::{
@@ -88,42 +90,60 @@ fn debugged(tokens: &SmtTokensBuf) -> Vec<String> {
     tokens.iter().map(|token| format!("{token:?}")).collect()
 }
 
-/// What the compact writer writes for the value, in 2.7.
-fn compact(value: &SmtTokensBuf) -> String {
-    let mut writer = SmtCompactTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+/// The configuration of writing in the style, in the version.
+fn styled(version: SmtVersion, style: SmtWriteStyle) -> SmtWriterConfig {
+    SmtWriterConfig::new(version).with_style(style)
+}
+
+/// The configuration of writing in the compact style, in the version.
+fn compact_config(version: SmtVersion) -> SmtWriterConfig {
+    styled(version, SmtWriteStyle::Compact)
+}
+
+/// The configuration of writing in the layout style, in the version.
+fn layout_config(version: SmtVersion) -> SmtWriterConfig {
+    styled(version, SmtWriteStyle::Layout)
+}
+
+/// What a writer in the style writes for the value, in 2.7.
+fn written<V: SmtAppendTokens + ?Sized>(value: &V, style: SmtWriteStyle) -> String {
+    let mut writer = SmtWriter::new(Vec::new(), styled(SmtVersion::V2_7, style));
     writer.write(value).expect("writing into a vector succeeds");
     String::from_utf8(writer.into_inner()).expect("the test text is UTF-8")
 }
 
+/// What the compact writer writes for the value, in 2.7.
+fn compact(value: &SmtTokensBuf) -> String {
+    written(value, SmtWriteStyle::Compact)
+}
+
 /// What the layout writer writes for the value, in 2.7.
 fn layout(value: &SmtTokensBuf) -> String {
-    let mut writer = SmtLayoutTokenWriter::new(Vec::new(), SmtVersion::V2_7);
-    writer.write(value).expect("writing into a vector succeeds");
-    String::from_utf8(writer.into_inner()).expect("the test text is UTF-8")
+    written(value, SmtWriteStyle::Layout)
+}
+
+/// What a writer in the style writes for the inputs lexed one after another
+/// into it, in the version.
+fn written_lexed(inputs: &[&[u8]], version: SmtVersion, style: SmtWriteStyle) -> Vec<u8> {
+    let mut writer = SmtWriter::new(Vec::new(), styled(version, style));
+    let mut lexer = SmtLexer::new(&mut writer, version);
+    for input in inputs {
+        lexer.lex_all(input).expect("the test input should lex");
+    }
+    drop(lexer);
+    writer.into_inner()
 }
 
 /// What the compact writer writes for the inputs lexed one after another
 /// into it, in the version.
 fn compact_lexed(inputs: &[&[u8]], version: SmtVersion) -> Vec<u8> {
-    let mut writer = SmtCompactTokenWriter::new(Vec::new(), version);
-    let mut lexer = SmtLexer::new(&mut writer, version);
-    for input in inputs {
-        lexer.lex_all(input).expect("the test input should lex");
-    }
-    drop(lexer);
-    writer.into_inner()
+    written_lexed(inputs, version, SmtWriteStyle::Compact)
 }
 
 /// What the layout writer writes for the inputs lexed one after another
 /// into it, in the version.
 fn layout_lexed(inputs: &[&[u8]], version: SmtVersion) -> Vec<u8> {
-    let mut writer = SmtLayoutTokenWriter::new(Vec::new(), version);
-    let mut lexer = SmtLexer::new(&mut writer, version);
-    for input in inputs {
-        lexer.lex_all(input).expect("the test input should lex");
-    }
-    drop(lexer);
-    writer.into_inner()
+    written_lexed(inputs, version, SmtWriteStyle::Layout)
 }
 
 #[test]
@@ -173,46 +193,48 @@ fn the_compact_writer_writes_each_comment_on_a_line_of_its_own() {
 }
 
 #[test]
-fn the_compact_form_reads_back_as_the_tokens_and_is_written_alike_again() {
-    for version in [SmtVersion::V2_5, SmtVersion::V2_6, SmtVersion::V2_7] {
-        for input in INPUTS {
-            let written = compact_lexed(&[input], version);
-            // the abstract tokens are kept
-            assert_eq!(
-                debugged(&lexed(&written, version, false)),
-                debugged(&lexed(input, version, false)),
-                "{:?} in {version:?}",
-                input.escape_ascii()
-            );
-            // and the comments too, each with a line feed for an ending
-            let comments = |tokens: &SmtTokensBuf| -> Vec<Vec<u8>> {
-                // a comment ends in a single carriage return or line feed
-                tokens
-                    .iter()
-                    .filter_map(|token| match token {
-                        SmtSyntaxToken::Comment(comment) => {
-                            let content = comment.as_slice();
-                            let content = content
-                                .strip_suffix(b"\n")
-                                .or_else(|| content.strip_suffix(b"\r"))
-                                .unwrap_or(content);
-                            Some(content.to_vec())
-                        }
-                        _ => None,
-                    })
-                    .collect()
-            };
-            assert_eq!(
-                comments(&lexed(&written, version, true)),
-                comments(&lexed(input, version, true))
-            );
-            // the compact form is a fixed point
-            assert_eq!(
-                compact_lexed(&[&written], version),
-                written,
-                "{:?} in {version:?}",
-                input.escape_ascii()
-            );
+fn the_compact_and_line_forms_read_back_as_the_tokens_and_are_written_alike_again() {
+    for style in [SmtWriteStyle::Compact, SmtWriteStyle::Line] {
+        for version in [SmtVersion::V2_5, SmtVersion::V2_6, SmtVersion::V2_7] {
+            for input in INPUTS {
+                let written = written_lexed(&[input], version, style);
+                // the abstract tokens are kept
+                assert_eq!(
+                    debugged(&lexed(&written, version, false)),
+                    debugged(&lexed(input, version, false)),
+                    "{:?} in {version:?}, {style:?}",
+                    input.escape_ascii()
+                );
+                // and the comments too, each with a line feed for an ending
+                let comments = |tokens: &SmtTokensBuf| -> Vec<Vec<u8>> {
+                    // a comment ends in a single carriage return or line feed
+                    tokens
+                        .iter()
+                        .filter_map(|token| match token {
+                            SmtSyntaxToken::Comment(comment) => {
+                                let content = comment.as_slice();
+                                let content = content
+                                    .strip_suffix(b"\n")
+                                    .or_else(|| content.strip_suffix(b"\r"))
+                                    .unwrap_or(content);
+                                Some(content.to_vec())
+                            }
+                            _ => None,
+                        })
+                        .collect()
+                };
+                assert_eq!(
+                    comments(&lexed(&written, version, true)),
+                    comments(&lexed(input, version, true))
+                );
+                // the form is a fixed point
+                assert_eq!(
+                    written_lexed(&[&written], version, style),
+                    written,
+                    "{:?} in {version:?}, {style:?}",
+                    input.escape_ascii()
+                );
+            }
         }
     }
 }
@@ -228,6 +250,76 @@ fn the_compact_writer_ends_the_line_and_starts_anew_at_the_end_of_an_input() {
         tokens.push(token);
     }
     assert_eq!(compact(&tokens), "(a (b\n(c)\n");
+}
+
+#[test]
+fn the_line_writer_writes_abstract_tokens_on_one_line() {
+    // the lexed tokens end with the end of the input, which ends the line
+    let cases: [(&[u8], &str); 8] = [
+        (b"", ""),
+        (b"( )", "()\n"),
+        (
+            b"(set-logic QF_UF)\n  (assert   (= x  (f  y)))  x  42",
+            "(set-logic QF_UF) (assert (= x (f y))) x 42\n",
+        ),
+        (b"((a)(b) c)", "((a) (b) c)\n"),
+        (b"(f (g) h)", "(f (g) h)\n"),
+        (b"( ( ) )", "(())\n"),
+        (b"(! x :named |a b|)\"s\"", "(! x :named |a b|) \"s\"\n"),
+        (b") x (y", ") x (y\n"),
+    ];
+    for (input, expected) in cases {
+        let tokens = lexed(input, SmtVersion::V2_7, false);
+        assert_eq!(
+            written(&tokens, SmtWriteStyle::Line),
+            expected,
+            "{:?}",
+            input.escape_ascii()
+        );
+        let lexed_text = written_lexed(&[input], SmtVersion::V2_7, SmtWriteStyle::Line);
+        assert_eq!(String::from_utf8_lossy(&lexed_text), expected);
+    }
+}
+
+#[test]
+fn the_line_writer_ends_a_comment_with_a_line_feed_only_before_a_token() {
+    let cases: [(&[u8], &str); 6] = [
+        (b"; head\n(check-sat)", "; head\n(check-sat)\n"),
+        (b"(assert ; in\n x) ; tail\r\n", "(assert ; in\nx) ; tail\n"),
+        (b"(a;b\n)", "(a ;b\n)\n"),
+        (b"x;comment at the end", "x ;comment at the end\n"),
+        (b";\n;", ";\n;\n"),
+        (b"(f x ;c\r y)", "(f x ;c\ny)\n"),
+    ];
+    for (input, expected) in cases {
+        let tokens = lexed(input, SmtVersion::V2_7, true);
+        assert_eq!(
+            written(&tokens, SmtWriteStyle::Line),
+            expected,
+            "{:?}",
+            input.escape_ascii()
+        );
+        let lexed_text = written_lexed(&[input], SmtVersion::V2_7, SmtWriteStyle::Line);
+        assert_eq!(String::from_utf8_lossy(&lexed_text), expected);
+    }
+    // without an end of the input, a comment at the end is not ended
+    let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
+    let comment = SmtCommentBuf::new(b" c".to_vec()).expect("a comment");
+    let tokens = [
+        SmtSyntaxToken::Symbol(x),
+        SmtSyntaxToken::Comment(comment.view()),
+    ];
+    assert_eq!(written(tokens.as_slice(), SmtWriteStyle::Line), "x ; c");
+}
+
+#[test]
+fn the_line_writer_ends_the_line_at_the_end_of_an_input() {
+    let written = written_lexed(
+        &[b"(a (b", b"(c) d", b"e"],
+        SmtVersion::V2_7,
+        SmtWriteStyle::Line,
+    );
+    assert_eq!(String::from_utf8_lossy(&written), "(a (b\n(c) d\ne\n");
 }
 
 #[test]
@@ -329,14 +421,14 @@ fn both_writers_quote_a_symbol_that_spells_a_word_reserved_in_their_version() {
     assert_eq!(compact(&tokens), "(|lambda| x)\n");
     assert_eq!(layout(&tokens), "(|lambda| x)");
     // in their own version, the same tokens are written as they are
-    let mut writer = SmtCompactTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
     writer.set_version(SmtVersion::V2_6);
     assert_eq!(writer.version(), SmtVersion::V2_6);
     writer
         .write(&tokens)
         .expect("writing into a vector succeeds");
     assert_eq!(writer.get_ref().as_slice(), b"(lambda x)\n");
-    let mut writer = SmtLayoutTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+    let mut writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_7));
     writer.set_version(SmtVersion::V2_6);
     assert_eq!(writer.version(), SmtVersion::V2_6);
     writer
@@ -352,13 +444,13 @@ fn both_writers_fail_on_a_reserved_word_their_version_does_not_have() {
     let lambda = SmtReserved::General(SmtGeneralReserved::Lambda);
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
     let tokens = [SmtSyntaxToken::Reserved(lambda), SmtSyntaxToken::Symbol(x)];
-    let mut compact_writer = SmtCompactTokenWriter::new(Vec::new(), SmtVersion::V2_6);
+    let mut compact_writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_6));
     let err = compact_writer
         .write(tokens.as_slice())
         .expect_err("2.6 has no `lambda`");
     assert!(matches!(err.cause(), SmtWriteErrorCause::NotInVersion(word) if *word == lambda));
     assert!(compact_writer.get_ref().is_empty());
-    let mut layout_writer = SmtLayoutTokenWriter::new(Vec::new(), SmtVersion::V2_6);
+    let mut layout_writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_6));
     let err = layout_writer
         .write(tokens.as_slice())
         .expect_err("2.6 has no `lambda`");
@@ -381,16 +473,16 @@ impl Write for FailingWriter {
 #[test]
 fn a_failure_of_the_underlying_writer_is_an_io_error_of_both_writers() {
     let numeral = SmtNumeralBuf::new(b"12".to_vec()).expect("a numeral");
-    let err = SmtCompactTokenWriter::new(FailingWriter, SmtVersion::V2_7)
+    let err = SmtWriter::new(FailingWriter, compact_config(SmtVersion::V2_7))
         .write(&numeral)
         .expect_err("the writer fails");
     assert!(matches!(err.cause(), SmtWriteErrorCause::Io(_)));
-    let err = SmtLayoutTokenWriter::new(FailingWriter, SmtVersion::V2_7)
+    let err = SmtWriter::new(FailingWriter, layout_config(SmtVersion::V2_7))
         .write(&numeral)
         .expect_err("the writer fails");
     assert!(matches!(err.cause(), SmtWriteErrorCause::Io(_)));
     // a writer that failed in one write writes the next value
-    let mut writer = SmtCompactTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
     let lambda = SmtReserved::General(SmtGeneralReserved::Lambda);
     writer.set_version(SmtVersion::V2_6);
     // a failing write stops at the failing token
@@ -412,7 +504,7 @@ fn a_failure_of_the_underlying_writer_is_an_io_error_of_both_writers() {
 fn the_writers_write_each_value_handed_to_write_in_turn() {
     let numeral = SmtNumeralBuf::new(b"12".to_vec()).expect("a numeral");
     let x = SmtSymbol::new_unquoted(b"x").expect("a symbol");
-    let mut writer = SmtCompactTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
     writer
         .write(&numeral)
         .expect("writing into a vector succeeds");
@@ -423,7 +515,7 @@ fn the_writers_write_each_value_handed_to_write_in_turn() {
         .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
         .expect("writing into a vector succeeds");
     assert_eq!(writer.into_inner(), b"12\nx\nx\n(f x)\n");
-    let mut writer = SmtLayoutTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+    let mut writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_7));
     writer
         .write(&numeral)
         .expect("writing into a vector succeeds");
@@ -434,6 +526,19 @@ fn the_writers_write_each_value_handed_to_write_in_turn() {
         .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
         .expect("writing into a vector succeeds");
     assert_eq!(writer.into_inner(), b"12 x x(f\n x)");
+    let mut writer = SmtWriter::new(Vec::new(), styled(SmtVersion::V2_7, SmtWriteStyle::Line));
+    writer
+        .write(&numeral)
+        .expect("writing into a vector succeeds");
+    // a single value is written without a line feed
+    assert_eq!(writer.get_ref().as_slice(), b"12");
+    writer
+        .write([x, x].as_slice())
+        .expect("writing into a vector succeeds");
+    writer
+        .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
+        .expect("writing into a vector succeeds");
+    assert_eq!(writer.into_inner(), b"12 x x (f x)\n");
 }
 
 #[test]
@@ -441,7 +546,7 @@ fn the_writers_consume_a_tokens_cursor_and_break_at_its_end_of_the_input() {
     let tokens = lexed(b"(a b) c", SmtVersion::V2_7, false);
     let mut cursor = SmtTokensCursor::new(SmtVersion::V2_7);
     tokens.append_tokens(&mut cursor);
-    let mut writer = SmtCompactTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+    let mut writer = SmtWriter::new(Vec::new(), compact_config(SmtVersion::V2_7));
     let flow = writer
         .consume(&mut cursor)
         .expect("writing into a vector succeeds");
@@ -451,10 +556,32 @@ fn the_writers_consume_a_tokens_cursor_and_break_at_its_end_of_the_input() {
     // without an end of the input, the writer continues
     let mut cursor = SmtTokensCursor::new(SmtVersion::V2_7);
     cursor.push(SmtSyntaxToken::ParenOpen);
-    let mut writer = SmtLayoutTokenWriter::new(Vec::new(), SmtVersion::V2_7);
+    let mut writer = SmtWriter::new(Vec::new(), layout_config(SmtVersion::V2_7));
     let flow = writer
         .consume(&mut cursor)
         .expect("writing into a vector succeeds");
     assert!(matches!(flow, ControlFlow::Continue(())));
     assert_eq!(writer.into_inner(), b"(");
+}
+
+#[test]
+fn a_writer_keeps_its_configuration_and_writes_in_the_layout_style_by_default() {
+    let config = SmtWriterConfig::new(SmtVersion::V2_6);
+    assert_eq!(config.version(), SmtVersion::V2_6);
+    assert_eq!(config.style(), SmtWriteStyle::Layout);
+    let compact = config.with_style(SmtWriteStyle::Compact);
+    let line = config.with_style(SmtWriteStyle::Line);
+    assert_eq!(line.style(), SmtWriteStyle::Line);
+    assert_eq!(compact.version(), SmtVersion::V2_6);
+    assert_eq!(compact.style(), SmtWriteStyle::Compact);
+    for config in [config, compact, line] {
+        let mut writer = SmtWriter::new(Vec::new(), config);
+        assert_eq!(writer.config(), config);
+        // a changed version is a part of the configuration
+        writer.set_version(SmtVersion::V2_7);
+        assert_eq!(
+            writer.config(),
+            SmtWriterConfig::new(SmtVersion::V2_7).with_style(config.style())
+        );
+    }
 }
