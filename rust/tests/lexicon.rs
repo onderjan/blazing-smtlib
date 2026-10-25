@@ -183,7 +183,7 @@ fn a_symbol_built_for_a_version_is_simple_unless_it_would_not_read_back() {
         for word in [&b"x"[..], b"match", b"lambda", b"_"] {
             let simple = !reserved_in(word, version);
             assert_eq!(
-                SmtSymbolBuf::is_unquoted_allowed_in(word, version),
+                SmtSymbolBuf::is_simple_in(word, version),
                 simple,
                 "{word:?} in {version:?}"
             );
@@ -195,7 +195,7 @@ fn a_symbol_built_for_a_version_is_simple_unless_it_would_not_read_back() {
         }
         // allowed only quoted
         for word in [&b"1x"[..], b"a b", b""] {
-            assert!(!SmtSymbolBuf::is_unquoted_allowed_in(word, version));
+            assert!(!SmtSymbolBuf::is_simple_in(word, version));
             assert!(
                 SmtSymbol::new_in(word, version)
                     .expect("quotable")
@@ -224,27 +224,27 @@ fn a_versioned_symbol_is_quoted_exactly_where_it_would_not_read_back() {
             let simple = SmtSymbol::new_unquoted(word).expect("a simple symbol");
             let quoted = SmtSymbol::new_quoted(word).expect("a quoted symbol");
             assert_eq!(
-                simple.is_allowed_in(version),
+                simple.is_symbol_in(version),
                 !reserved,
                 "{word:?} in {version:?}"
             );
-            assert!(quoted.is_allowed_in(version), "{word:?} in {version:?}");
+            assert!(quoted.is_symbol_in(version), "{word:?} in {version:?}");
             assert_eq!(simple.into_versioned(version).is_quoted(), reserved);
             assert!(quoted.into_versioned(version).is_quoted());
-            assert!(simple.into_versioned(version).is_allowed_in(version));
+            assert!(simple.into_versioned(version).is_symbol_in(version));
             assert_eq!(simple.into_versioned(version).as_slice(), word);
 
             let simple = simple.into_owned();
             let quoted = quoted.into_owned();
             assert_eq!(
-                simple.is_allowed_in(version),
+                simple.is_symbol_in(version),
                 !reserved,
                 "{word:?} in {version:?}"
             );
-            assert!(quoted.is_allowed_in(version), "{word:?} in {version:?}");
+            assert!(quoted.is_symbol_in(version), "{word:?} in {version:?}");
             let versioned = simple.into_versioned(version);
             assert_eq!(versioned.is_quoted(), reserved, "{word:?} in {version:?}");
-            assert!(versioned.is_allowed_in(version) && versioned.as_slice() == word);
+            assert!(versioned.is_symbol_in(version) && versioned.as_slice() == word);
             assert!(quoted.into_versioned(version).is_quoted());
         }
     }

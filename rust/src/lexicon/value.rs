@@ -62,7 +62,7 @@ impl SmtSymbolBuf {
 
     /// Whether the bytes are allowed in a simple symbol and are not a reserved
     /// word of the given version.
-    pub fn is_unquoted_allowed_in(value: &[u8], version: SmtVersion) -> bool {
+    pub fn is_simple_in(value: &[u8], version: SmtVersion) -> bool {
         Self::is_unquoted_allowed(value) && SmtReserved::from_bytes(value, version).is_none()
     }
 
@@ -73,8 +73,8 @@ impl SmtSymbolBuf {
 
     /// Whether the symbol reads back as itself in the given version: it is
     /// quoted, or it is simple and not a reserved word of the version.
-    pub fn is_allowed_in(&self, version: SmtVersion) -> bool {
-        self.view().is_allowed_in(version)
+    pub fn is_symbol_in(&self, version: SmtVersion) -> bool {
+        self.view().is_symbol_in(version)
     }
 
     /// Quotes the symbol if it is simple and a reserved word of the given
@@ -116,7 +116,7 @@ impl SmtSymbolBuf {
     /// The symbol is simple if its bytes are allowed in a simple symbol and are
     /// not a reserved word of the version, and quoted otherwise.
     pub fn new_in(value: Vec<u8>, version: SmtVersion) -> Result<Self, SmtDisallowedByteVecError> {
-        if Self::is_unquoted_allowed_in(&value, version) {
+        if Self::is_simple_in(&value, version) {
             Self::new_unquoted(value)
         } else {
             Self::new_quoted(value)
@@ -227,7 +227,7 @@ impl<'a> SmtSymbol<'a> {
     /// The symbol is simple if its bytes are allowed in a simple symbol and are
     /// not a reserved word of the version, and quoted otherwise.
     pub fn new_in(value: &'a [u8], version: SmtVersion) -> Result<Self, SmtDisallowedBytesError> {
-        if SmtSymbolBuf::is_unquoted_allowed_in(value, version) {
+        if SmtSymbolBuf::is_simple_in(value, version) {
             Self::new_unquoted(value)
         } else {
             Self::new_quoted(value)
@@ -240,7 +240,7 @@ impl<'a> SmtSymbol<'a> {
 
     /// Whether the symbol reads back as itself in the given version: it is
     /// quoted, or it is simple and not a reserved word of the version.
-    pub fn is_allowed_in(&self, version: SmtVersion) -> bool {
+    pub fn is_symbol_in(&self, version: SmtVersion) -> bool {
         self.is_quoted || SmtReserved::from_bytes(self.as_slice(), version).is_none()
     }
 
