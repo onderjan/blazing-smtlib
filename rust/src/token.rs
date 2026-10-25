@@ -524,7 +524,7 @@ pub(crate) struct SingleTokenCursor<'a, Z: SmtCursor> {
 }
 
 impl<'a, Z: SmtCursor> SingleTokenCursor<'a, Z> {
-    pub fn new(cursor: &'a Z, token: Z::Token) -> Self {
+    pub(crate) fn new(cursor: &'a Z, token: Z::Token) -> Self {
         Self {
             cursor,
             token: Some(token),

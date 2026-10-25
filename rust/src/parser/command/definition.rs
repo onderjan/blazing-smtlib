@@ -42,7 +42,7 @@ pub(super) struct DefinitionParser<H: SmtCommandHandler, D: Definition<H>> {
 }
 
 impl<H: SmtCommandHandler, D: Definition<H>> DefinitionParser<H, D> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             state: DefinitionParserState::Signature,
             signature_parser: D::Signature::default(),

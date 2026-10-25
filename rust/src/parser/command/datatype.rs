@@ -324,7 +324,7 @@ pub(super) struct DeclareDatatypesParser<H: SmtCommandHandler> {
 }
 
 impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         // the number of maximum elements for datatypes parser will be
         // resized before each parse, it does not matter in the initial state
         Self {

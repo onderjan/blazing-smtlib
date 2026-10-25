@@ -80,7 +80,7 @@ macro_rules! standard_commands {
         impl StandardCommandKind {
             /// The command named by the reserved word under the version.
             #[inline]
-            pub fn from_reserved(name: SmtCommandNameReserved, version: SmtVersion) -> Self {
+            pub(crate) fn from_reserved(name: SmtCommandNameReserved, version: SmtVersion) -> Self {
                 match name {
                     $(SmtCommandNameReserved::$replaced if version < SmtVersion::$before => {
                         Self::$old_kind
@@ -99,13 +99,13 @@ macro_rules! standard_commands {
         }
 
         impl<H: SmtCommandHandler> StandardCommandParsers<H> {
-            pub fn new() -> Self {
+            pub(crate) fn new() -> Self {
                 Self {
                     $($field: SmtCommandPayloadParser::default(),)*
                     $($old_field: SmtCommandPayloadParser::default(),)*
                 }
             }
-            pub fn parse<Z: SmtCursor>(
+            pub(crate) fn parse<Z: SmtCursor>(
                 &mut self,
                 kind: StandardCommandKind,
                 handler: &mut H,

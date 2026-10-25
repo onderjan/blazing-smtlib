@@ -95,13 +95,13 @@ impl CharClass {
     }
 
     #[inline]
-    pub const fn is_printable_or_whitespace(self) -> bool {
+    pub(crate) const fn is_printable_or_whitespace(self) -> bool {
         // everything except other non-printable and DEL
         !matches!(self, CharClass::OtherNonPrintable | CharClass::Del)
     }
 
     #[inline]
-    pub const fn is_allowed_in_simple_symbol(self) -> bool {
+    pub(crate) const fn is_allowed_in_simple_symbol(self) -> bool {
         // letters, digits, special, dot
         matches!(
             self,

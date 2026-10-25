@@ -179,7 +179,7 @@ enum DefineFunsRecState {
 }
 
 impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         // the number of maximum elements for bodies parser will be
         // resized before each parse, it does not matter in the initial state
         Self {
