@@ -710,6 +710,18 @@ impl<T: SmtAppendTokens> SmtAppendTokens for [T] {
     }
 }
 
+impl<T: SmtAppendTokens, const N: usize> SmtAppendTokens for [T; N] {
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        self.as_slice().append_tokens(tokens);
+    }
+}
+
+impl<T: SmtAppendTokens> SmtAppendTokens for Vec<T> {
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        self.as_slice().append_tokens(tokens);
+    }
+}
+
 impl SmtAppendTokens for SmtReserved {
     #[inline]
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {

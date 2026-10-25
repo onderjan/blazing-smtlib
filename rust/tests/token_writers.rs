@@ -516,7 +516,7 @@ fn the_writers_write_each_value_handed_to_write_in_turn() {
         .write(&numeral)
         .expect("writing into a vector succeeds");
     writer
-        .write([x, x].as_slice())
+        .write(&[x, x])
         .expect("writing into a vector succeeds");
     writer
         .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
@@ -527,7 +527,7 @@ fn the_writers_write_each_value_handed_to_write_in_turn() {
         .write(&numeral)
         .expect("writing into a vector succeeds");
     writer
-        .write([x, x].as_slice())
+        .write(&[x, x])
         .expect("writing into a vector succeeds");
     writer
         .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))
@@ -540,7 +540,7 @@ fn the_writers_write_each_value_handed_to_write_in_turn() {
     // a single value is written without a line feed
     assert_eq!(writer.get_ref().as_slice(), b"12");
     writer
-        .write([x, x].as_slice())
+        .write(&[x, x])
         .expect("writing into a vector succeeds");
     writer
         .write(&lexed(b"(f\n x)", SmtVersion::V2_7, true))

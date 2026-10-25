@@ -387,6 +387,12 @@ fn a_token_appends_itself_and_a_list_appends_its_tokens_in_order() {
     assert_eq!(appended(lists.as_slice()), each);
     let none: &[SmtTokensBuf] = &[];
     assert!(appended(none).is_empty());
+    // an array and a vector append as their slice does
+    assert_eq!(appended(&owned), expected);
+    assert_eq!(appended(&lists), each);
+    let no_tokens: [SmtTokensBuf; 0] = [];
+    assert!(appended(&no_tokens).is_empty());
+    assert!(appended(&Vec::<SmtTokensBuf>::new()).is_empty());
 }
 
 #[test]
