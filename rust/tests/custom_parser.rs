@@ -10,9 +10,10 @@
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtKeyword, SmtMatchCases,
+    SmtAttributeValue, SmtAttributes, SmtBindings, SmtHandler, SmtMatchCases,
     SmtPartialCommandError, SmtPartialCommandHandler, SmtPattern, SmtQuantifierKind, SmtSExpr,
-    SmtSort, SmtSortedVars, SmtSymbol, SmtSymbolBuf, SmtTerm,
+    SmtSort, SmtSortedVars, SmtTerm,
+    lexicon::{SmtKeyword, SmtSymbol, SmtSymbolBuf},
     parser::{
         SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtParse, SmtParseError,
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SmtTermParser, SmtVersionErrorKind,

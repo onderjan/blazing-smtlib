@@ -1,7 +1,8 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtHandler, SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf,
+    SmtHandler,
+    lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected},
     token::{SmtCursor, SmtSyntaxToken, SmtTokenCategory},
 };

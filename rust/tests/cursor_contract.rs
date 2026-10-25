@@ -19,9 +19,12 @@ use std::ops::ControlFlow;
 use std::rc::Rc;
 
 use blazing_smtlib::{
-    SmtBinDigitsBuf, SmtDecimalBuf, SmtHandler, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
-    SmtStringContentBuf, SmtSymbolBuf, SmtSyntaxChecker,
+    SmtHandler, SmtSyntaxChecker,
     lexer::SmtLexer,
+    lexicon::{
+        SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
+        SmtStringContentBuf, SmtSymbolBuf,
+    },
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMaximumParser,
         SmtClosedMultipleAttributeParser, SmtClosedMultipleParser, SmtClosedParser,

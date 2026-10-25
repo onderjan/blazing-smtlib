@@ -2,9 +2,11 @@ use std::{convert::Infallible, error::Error, fmt, fmt::Debug};
 
 use crate::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors, SmtFunctionSignature,
-    SmtFunctionSignatures, SmtKeyword, SmtMatchCases, SmtMultiple, SmtNumeral, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtStringContent,
-    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, parser::SmtParse, token::SmtCommandNameReserved,
+    SmtFunctionSignatures, SmtMatchCases, SmtMultiple, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
+    lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol, SmtSymbolBuf},
+    parser::SmtParse,
+    token::SmtCommandNameReserved,
     version::SmtVersion,
 };
 

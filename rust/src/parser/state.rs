@@ -1,7 +1,8 @@
 use crate::{
-    SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtIndices, SmtKeyword, SmtMatchCases,
-    SmtMultiple, SmtNamed, SmtNumeral, SmtPattern, SmtPatternApplication, SmtQualifiedIdent,
-    SmtSimplePattern, SmtSimplePatterns, SmtSort, SmtSortedVars, SmtSymbol,
+    SmtBindings, SmtHandler, SmtIdent, SmtIndex, SmtIndices, SmtMatchCases, SmtMultiple, SmtNamed,
+    SmtPattern, SmtPatternApplication, SmtQualifiedIdent, SmtSimplePattern, SmtSimplePatterns,
+    SmtSort, SmtSortedVars,
+    lexicon::{SmtKeyword, SmtNumeral, SmtSymbol},
     parser::{
         AttributeSlot, IdentSlot, PatternSlot, QualifiedIdentSlot, SExprSlot, SortSlot,
         SortedVarSlot, TermSlot,

@@ -22,7 +22,7 @@
 //! The tests that run through this module are those of `tests/parser.rs`,
 //! `tests/commands.rs`, `tests/read.rs`, `tests/reserved.rs`,
 //! `tests/version.rs` and `tests/category`, except the few that check the
-//! Rust interface itself; those say so. `tests/nodes.rs`, `tests/plain.rs`,
+//! Rust interface itself; those say so. `tests/nodes.rs`, `tests/lexicon.rs`,
 //! `tests/syntax_checker.rs` (the library's `SmtSyntaxChecker`, for which
 //! `SyntaxChecker` below stands in) and the corpus sweeps test the Rust
 //! library whatever the variable says.
@@ -40,9 +40,10 @@ use std::ops::ControlFlow;
 use std::path::Path;
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtKeywordBuf, SmtLocation, SmtNonstandardCommandError, SmtNumeralBuf,
-    SmtPatternBuf, SmtQuantifierKind, SmtSpan, SmtStringContentBuf, SmtSymbolBuf,
+    SmtIdentBuf, SmtLocation, SmtNonstandardCommandError, SmtPatternBuf, SmtQuantifierKind,
+    SmtSpan,
     lexer::{SmtLexErrorCause, SmtLexer, SmtLexicalErrorKind},
+    lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
         SmtClosedMultipleParser, SmtClosedParser, SmtCommandOutcome, SmtCommandParser,

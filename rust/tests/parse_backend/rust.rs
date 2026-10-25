@@ -5,9 +5,10 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
-    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtKeyword, SmtMatchCases,
-    SmtMultiple, SmtNumeral, SmtPattern, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort,
-    SmtSortArities, SmtSortedVars, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
+    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtMatchCases, SmtMultiple,
+    SmtPattern, SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities,
+    SmtSortedVars, SmtSymbols, SmtTerm,
+    lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     parser::{
         SmtCloseParenParser, SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtParse,
         SmtParseError, SmtParseState, SmtTermParser, SmtVersionErrorKind,
@@ -50,13 +51,13 @@ fn signature<'a, S>(view: SmtFunctionSignature<'a, S>) -> Signature<'a, S> {
 
 fn constructors<S>(
     view: SmtConstructors<'_, S>,
-) -> Vec<(blazing_smtlib::SmtSymbolBuf, SortedVars<S>)> {
+) -> Vec<(blazing_smtlib::lexicon::SmtSymbolBuf, SortedVars<S>)> {
     view.into_iter()
         .map(|(name, selectors)| (name.into_owned(), sorted_vars(selectors)))
         .collect()
 }
 
-fn symbols(view: SmtSymbols<'_>) -> Vec<blazing_smtlib::SmtSymbolBuf> {
+fn symbols(view: SmtSymbols<'_>) -> Vec<blazing_smtlib::lexicon::SmtSymbolBuf> {
     view.iter().map(SmtSymbol::into_owned).collect()
 }
 

@@ -1,7 +1,8 @@
 use std::{convert::Infallible, ops::ControlFlow};
 
 use crate::{
-    SmtCommandHandler, SmtSymbol,
+    SmtCommandHandler,
+    lexicon::SmtSymbol,
     parser::{
         SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, expected,
         handle_err,

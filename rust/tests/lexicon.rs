@@ -1,10 +1,12 @@
 //! Public-API tests of the plain string-like value types.
 
 use blazing_smtlib::{
-    SmtBinDigits, SmtBinDigitsBuf, SmtBytesBuf, SmtComment, SmtCommentBuf, SmtDecimal,
-    SmtDecimalBuf, SmtDisallowedBytesError, SmtHexDigits, SmtHexDigitsBuf, SmtKeyword,
-    SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumericOverflow, SmtStringContent,
-    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace, SmtWhitespaceBuf,
+    lexicon::{
+        SmtBinDigits, SmtBinDigitsBuf, SmtBytesBuf, SmtComment, SmtCommentBuf, SmtDecimal,
+        SmtDecimalBuf, SmtDisallowedBytesError, SmtHexDigits, SmtHexDigitsBuf, SmtKeyword,
+        SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtNumericOverflow, SmtStringContent,
+        SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace, SmtWhitespaceBuf,
+    },
     version::SmtVersion,
 };
 

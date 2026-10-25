@@ -7,10 +7,14 @@ use std::{
 };
 
 use crate::{
-    SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
-    SmtHexDigits, SmtHexDigitsBuf, SmtKeyword, SmtKeywordBuf, SmtLocation, SmtNumeral,
-    SmtNumeralBuf, SmtSpan, SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
-    SmtWhitespace, SmtWhitespaceBuf, version::SmtVersion,
+    SmtLocation, SmtSpan,
+    lexicon::{
+        SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
+        SmtHexDigits, SmtHexDigitsBuf, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf,
+        SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace,
+        SmtWhitespaceBuf,
+    },
+    version::SmtVersion,
 };
 
 mod reserved;

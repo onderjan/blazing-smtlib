@@ -1,9 +1,12 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHandler, SmtHexDigits,
-    SmtHexDigitsBuf, SmtKeyword, SmtMultiple, SmtNumeral, SmtNumeralBuf, SmtStringContent,
-    SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
+    SmtHandler, SmtMultiple,
+    lexicon::{
+        SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigits, SmtHexDigitsBuf,
+        SmtKeyword, SmtNumeral, SmtNumeralBuf, SmtStringContent, SmtStringContentBuf, SmtSymbol,
+        SmtSymbolBuf,
+    },
     parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
     token::{SmtAppendTokens, SmtGeneralReserved, SmtReserved, SmtSyntaxToken, SmtTokensCursor},
 };

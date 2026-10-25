@@ -15,10 +15,12 @@ use std::io::{self, BufRead, Read};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtEmptyArgumentsError, SmtInvalidLocation,
-    SmtInvalidSpan, SmtLocation, SmtNonstandardCommandError, SmtNumericOverflow,
-    SmtPartialCommandError, SmtSymbolBuf, SmtSyntaxChecker,
+    SmtEmptyArgumentsError, SmtInvalidLocation, SmtInvalidSpan, SmtLocation,
+    SmtNonstandardCommandError, SmtPartialCommandError, SmtSyntaxChecker,
     lexer::{SmtLexError, SmtLexer, SmtLexicalErrorKind, SmtLexicalExpected},
+    lexicon::{
+        SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtNumericOverflow, SmtSymbolBuf,
+    },
     parser::{
         SmtMissingItem, SmtNonEmptyList, SmtParseError, SmtSyntaxErrorKind, SmtSyntaxExpected,
         SmtVersionErrorKind,

@@ -6,7 +6,8 @@ use std::{
 };
 
 use crate::{
-    SmtHandler, SmtNumeral, SmtPattern, SmtSymbol,
+    SmtHandler, SmtPattern,
+    lexicon::{SmtNumeral, SmtSymbol},
     parser::{Arena, ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle, TextHandle},
     token::{SmtAppendTokens, SmtSyntaxToken, SmtTokensCursor},
 };

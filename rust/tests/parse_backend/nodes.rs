@@ -12,8 +12,9 @@
 //! sorts of a function signature), this interface lends it too.
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtKeywordBuf, SmtNumeralBuf, SmtPatternBuf, SmtQuantifierKind,
-    SmtSpecialConstantBuf, SmtStringContentBuf, SmtSymbolBuf, token::SmtReserved,
+    SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind, SmtSpecialConstantBuf,
+    lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
+    token::SmtReserved,
     version::SmtVersion,
 };
 

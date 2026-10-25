@@ -20,11 +20,12 @@ use std::{
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
-    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
-    SmtMatchCases, SmtMultiple, SmtNonstandardCommandError, SmtNumeral, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
-    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm,
+    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtMatchCases,
+    SmtMultiple, SmtNonstandardCommandError, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtSymbols,
+    SmtTerm,
     lexer::SmtLexer,
+    lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
     reader::{SmtReadError, read_smt_file},
     token::{SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtSyntaxToken},
     version::SmtVersion,

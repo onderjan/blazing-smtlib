@@ -1,4 +1,4 @@
-use crate::SmtDecimal;
+use crate::lexicon::SmtDecimal;
 
 /// Version of the SMT-LIB standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]

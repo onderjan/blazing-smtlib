@@ -9,9 +9,9 @@ use std::collections::HashSet;
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtFunctionSignature, SmtFunctionSignatures,
-    SmtHandler, SmtKeyword, SmtMatchCases, SmtPartialCommandError, SmtPartialCommandHandler,
-    SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtSymbol,
-    SmtSymbols, SmtTerm,
+    SmtHandler, SmtMatchCases, SmtPartialCommandError, SmtPartialCommandHandler, SmtPattern,
+    SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
+    lexicon::{SmtKeyword, SmtSymbol},
     reader::{SmtReadError, SmtReadErrorCause, read_smt},
     token::SmtCommandNameReserved,
     version::SmtVersion,

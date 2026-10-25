@@ -1,6 +1,11 @@
 use std::fmt::{Debug, Write};
 
-use crate::{SmtBytes, SmtBytesBuf, lexer::CharClass, token::SmtReserved, version::SmtVersion};
+use crate::{
+    lexer::CharClass,
+    lexicon::{SmtBytes, SmtBytesBuf},
+    token::SmtReserved,
+    version::SmtVersion,
+};
 
 /// SMT-LIB string content.
 ///

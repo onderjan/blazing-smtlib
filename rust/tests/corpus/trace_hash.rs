@@ -18,10 +18,12 @@ use std::convert::Infallible;
 
 use blazing_smtlib::{
     SmtAttributeValue, SmtAttributes, SmtBindings, SmtCommandHandler, SmtConstructors,
-    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtKeyword,
-    SmtMatchCases, SmtMultiple, SmtNonstandardCommandError, SmtNumeral, SmtPattern,
-    SmtQuantifierKind, SmtSExpr, SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars,
-    SmtSpecialConstant, SmtStringContent, SmtSymbol, SmtSymbols, SmtTerm, version::SmtVersion,
+    SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent, SmtIndex, SmtMatchCases,
+    SmtMultiple, SmtNonstandardCommandError, SmtPattern, SmtQuantifierKind, SmtSExpr,
+    SmtSimplePattern, SmtSort, SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtSymbols,
+    SmtTerm,
+    lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol},
+    version::SmtVersion,
 };
 
 const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;

@@ -2,7 +2,8 @@ use std::ops::ControlFlow;
 
 use crate::{
     SmtApplication, SmtHandler, SmtQualifiedIdent, SmtQuantifierKind, SmtSimplePattern,
-    SmtSortedVars, SmtSymbol, SmtTerm,
+    SmtSortedVars, SmtTerm,
+    lexicon::SmtSymbol,
     parser::{
         Arena, MatchCasesStarts, PatternHandle, PatternHandleBuf, QualifiedIdentHandle,
         SimplePatternHandle, SmtCloseParenParser, SmtNonEmptyList, SmtOpenParenParser, SmtParse,

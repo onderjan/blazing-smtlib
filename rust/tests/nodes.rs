@@ -4,15 +4,18 @@ use std::convert::Infallible;
 use std::fmt::Debug;
 
 use blazing_smtlib::{
-    SmtApplication, SmtAttributeValue, SmtAttributes, SmtBinDigitsBuf, SmtBindings,
-    SmtConstructors, SmtDecimalBuf, SmtEmptyArgumentsError, SmtFunctionSignature,
-    SmtFunctionSignatures, SmtHandler, SmtHexDigitsBuf, SmtIdent, SmtIdentBuf, SmtIndex,
-    SmtIndexBuf, SmtIndices, SmtIndicesBuf, SmtKeyword, SmtMatchCases, SmtMatchCasesBuf,
-    SmtMultiple, SmtNumeralBuf, SmtPattern, SmtPatternApplication, SmtPatternApplicationBuf,
-    SmtPatternBuf, SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr,
-    SmtSimplePattern, SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort,
-    SmtSortArities, SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtStringContentBuf,
-    SmtSymbol, SmtSymbolBuf, SmtSymbols, SmtTerm, version::SmtVersion,
+    SmtApplication, SmtAttributeValue, SmtAttributes, SmtBindings, SmtConstructors,
+    SmtEmptyArgumentsError, SmtFunctionSignature, SmtFunctionSignatures, SmtHandler, SmtIdent,
+    SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices, SmtIndicesBuf, SmtMatchCases, SmtMatchCasesBuf,
+    SmtMultiple, SmtPattern, SmtPatternApplication, SmtPatternApplicationBuf, SmtPatternBuf,
+    SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
+    SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort, SmtSortArities,
+    SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtSymbols, SmtTerm,
+    lexicon::{
+        SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeyword, SmtNumeralBuf,
+        SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
+    },
+    version::SmtVersion,
 };
 
 /// Handler that is deliberately neither `Debug` nor `Clone`,

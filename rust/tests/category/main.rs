@@ -37,8 +37,10 @@ use parse_backend::{
 };
 
 use blazing_smtlib::{
-    SmtIdentBuf, SmtIndex, SmtKeywordBuf, SmtPatternBuf, SmtQuantifierKind, SmtSimplePattern,
-    SmtSpecialConstantBuf, SmtSymbol, SmtSymbolBuf, parser::SmtSyntaxErrorKind,
+    SmtIdentBuf, SmtIndex, SmtPatternBuf, SmtQuantifierKind, SmtSimplePattern,
+    SmtSpecialConstantBuf,
+    lexicon::{SmtKeywordBuf, SmtSymbol, SmtSymbolBuf},
+    parser::SmtSyntaxErrorKind,
     version::SmtVersion,
 };
 

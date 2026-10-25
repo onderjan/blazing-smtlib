@@ -8,9 +8,12 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtBinDigits, SmtComment, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral, SmtStringContent,
-    SmtSymbol, SmtSyntaxChecker, SmtWhitespace,
+    SmtSyntaxChecker,
     lexer::SmtLexer,
+    lexicon::{
+        SmtBinDigits, SmtComment, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral,
+        SmtStringContent, SmtSymbol, SmtWhitespace,
+    },
     parser::{SmtParse, SmtParseState, SmtTermParser},
     token::{
         SmtAppendTokens, SmtBatchCursor, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
