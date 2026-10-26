@@ -236,7 +236,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                     }
 
                     // remember how many signatures we have and set it as a maximum for bodies
-                    self.bodies_parser.set_max_elements(signatures.len());
+                    self.bodies_parser.set_max_items(signatures.len());
 
                     // start recursive function bodies in the handler, passing the signatures;
                     // the body parser keeps them, as each body start is given its own again
@@ -258,7 +258,7 @@ impl<H: SmtCommandHandler> DefineFunsRecParser<H> {
                 )? {
                     // the parser returned a vector of units corresponding to the number of bodies
                     // bounded by the maximum which is the number of signatures
-                    if bodies.len() != self.bodies_parser.max_elements() {
+                    if bodies.len() != self.bodies_parser.max_items() {
                         // not enough bodies processed
                         return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Missing(
                             SmtMissingItem::FunctionBody,

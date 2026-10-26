@@ -375,7 +375,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                         )));
                     }
                     // ensure the datatypes parser is expecting the correct number of elements
-                    self.datatypes_parser.set_max_elements(introductions.len());
+                    self.datatypes_parser.set_max_items(introductions.len());
                     // start datatype declarations
                     self.arities_buf.clear();
                     for (name, arity) in &introductions {
@@ -394,7 +394,7 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                 )? {
                     // there cannot be more datatypes than sort declarations due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
-                    if datatypes.len() != self.datatypes_parser.max_elements() {
+                    if datatypes.len() != self.datatypes_parser.max_items() {
                         return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Missing(
                             SmtMissingItem::Datatype,
                         )));

@@ -424,9 +424,9 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMultipleParser<H, P>
 
 /// Parses a number of items up to some maximum, followed by a closing parenthesis.
 ///
-/// The maximum can be changed by [`SmtClosedMaximumParser::set_max_elements`].
+/// The maximum can be changed by [`SmtClosedMaximumParser::set_max_items`].
 pub struct SmtClosedMaximumParser<H: SmtHandler, P: SmtParse<H>> {
-    max_elements: usize,
+    max_items: usize,
 
     outside: bool,
     results: Vec<P::Result>,
@@ -441,9 +441,9 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtClosedMaximumParser<H, P> 
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
-    pub fn new(inner: P, max_elements: usize) -> Self {
+    pub fn new(inner: P, max_items: usize) -> Self {
         Self {
-            max_elements,
+            max_items,
 
             outside: true,
             results: Vec::new(),
@@ -458,12 +458,12 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
     /// currently parsed element, meaning the parser may return more elements
     /// than the currently set maximum if this function is called in the middle
     /// of parsing elements.
-    pub fn set_max_elements(&mut self, max_elements: usize) {
-        self.max_elements = max_elements;
+    pub fn set_max_items(&mut self, max_items: usize) {
+        self.max_items = max_items;
     }
 
-    pub fn max_elements(&self) -> usize {
-        self.max_elements
+    pub fn max_items(&self) -> usize {
+        self.max_items
     }
 
     /// The parser of each item.
@@ -491,7 +491,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
                     return Ok(ControlFlow::Break(results));
                 }
 
-                if self.results.len() >= self.max_elements {
+                if self.results.len() >= self.max_items {
                     // we cannot allow this element
                     // consume the peeked closing parenthesis
                     let _ = cursor.next();
@@ -519,7 +519,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
 
 /// Parses a number of items up to some maximum, all enclosed in parentheses.
 ///
-/// The maximum can be changed by [`SmtParenMaximumParser::set_max_elements`].
+/// The maximum can be changed by [`SmtParenMaximumParser::set_max_items`].
 pub struct SmtParenMaximumParser<H: SmtHandler, P: SmtParse<H>> {
     is_opened: bool,
     inner: SmtClosedMaximumParser<H, P>,
@@ -533,10 +533,10 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtParenMaximumParser<H, P> {
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
-    pub fn new(inner: P, max_elements: usize) -> Self {
+    pub fn new(inner: P, max_items: usize) -> Self {
         Self {
             is_opened: false,
-            inner: SmtClosedMaximumParser::new(inner, max_elements),
+            inner: SmtClosedMaximumParser::new(inner, max_items),
         }
     }
 
@@ -547,12 +547,12 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
     /// currently parsed element, meaning the parser may return more elements
     /// than the currently set maximum if this function is called in the middle
     /// of parsing elements.
-    pub fn set_max_elements(&mut self, max_elements: usize) {
-        self.inner.set_max_elements(max_elements);
+    pub fn set_max_items(&mut self, max_items: usize) {
+        self.inner.set_max_items(max_items);
     }
 
-    pub fn max_elements(&self) -> usize {
-        self.inner.max_elements()
+    pub fn max_items(&self) -> usize {
+        self.inner.max_items()
     }
 
     /// The parser of each item.
