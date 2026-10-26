@@ -17,6 +17,7 @@ use crate::{
     token::{SmtCursor, SmtReserved, SmtTokenCategory},
 };
 
+/// Parses a grammar item.
 pub trait SmtParse<H: SmtHandler + ?Sized> {
     type Result;
 
@@ -69,11 +70,11 @@ pub(crate) fn parse_by_token<Z: SmtCursor, R, E>(
     Ok(ControlFlow::Continue(()))
 }
 
-/// Error emitted by a parser.
+/// Error returned by a parser.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtParseError<E>(Box<SmtParseErrorCause<E>>);
 
-/// Why a parser failed.
+/// Why a parser error was returned.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmtParseErrorCause<E> {
     /// The tokens do not form the syntax the parser accepts.
@@ -84,7 +85,7 @@ pub enum SmtParseErrorCause<E> {
     Handler(E),
 }
 
-/// What is wrong with the syntax.
+/// Why a syntax error was returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxErrorKind {
     /// One of the items was expected here.
@@ -95,10 +96,12 @@ pub enum SmtSyntaxErrorKind {
     Missing(SmtMissingItem),
 }
 
-/// An item that a parser expected, in [`SmtSyntaxErrorKind::Expected`].
+/// A syntax item was expected by a parser.
+///
+/// Used in [`SmtSyntaxErrorKind::Expected`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxExpected {
-    /// A token of the category.
+    /// A token of the given category.
     Token(SmtTokenCategory),
     /// The reserved word.
     Reserved(SmtReserved),
@@ -119,7 +122,9 @@ pub enum SmtSyntaxExpected {
     PropositionalLiteral,
 }
 
-/// A list that must not be empty, in [`SmtSyntaxErrorKind::Empty`].
+/// A list was expected not to be empty.
+///
+/// Used in [`SmtSyntaxErrorKind::Empty`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtNonEmptyList {
     IdentIndices,
@@ -138,7 +143,9 @@ pub enum SmtNonEmptyList {
     GetValueTerms,
 }
 
-/// An item of which fewer arrived than were announced, in [`SmtSyntaxErrorKind::Missing`].
+/// An item was expected but did not arrive.
+///
+/// Used in [`SmtSyntaxErrorKind::Missing`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtMissingItem {
     /// A body of a function of `define-funs-rec`.
@@ -166,12 +173,25 @@ pub(crate) mod expected {
         SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par));
 }
 
-/// What is wrong with the version a script declares.
+/// Why a version-switch error was returned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtVersionErrorKind {
-    /// The version is not one that can be switched to.
+    /// The requested version was rejected as not supported.
+    ///
+    /// This can happen if the parser itself rejects the version or
+    /// [`SmtCursor`] rejects the version switch requested by
+    /// [`set_version`](SmtCursor::set_version), prompting the parser to reject.
+    ///
+    /// The only parser in the library that switches versions is
+    /// [`SmtScriptParser`], and it rejects on versions of SMT-LIB not supported
+    /// by the library, versions not allowed by the posture, and lastly versions
+    /// rejected by the cursor.
+    ///
+    /// [`SmtLexerCursor`](crate::lexer::SmtLexerCursor) never rejects a
+    /// version, and [`SmtTokensCursor`](crate::token::SmtTokensCursor) rejects
+    /// all versions except the one already in force.
     Unsupported,
-    /// The script declares its version more times than the limit allows.
+    /// The script declares its version more times than allowed.
     TooManyDeclarations(u64),
 }
 

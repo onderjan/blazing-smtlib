@@ -7,6 +7,7 @@ use crate::{
     token::{SmtCursor, SmtToken, SmtTokenCategory},
 };
 
+/// Parses a symbol.
 pub struct SmtSymbolParser {
     _priv: (),
 }
@@ -65,7 +66,8 @@ impl<H: SmtHandler> SmtParse<H> for SmtSymbolParser {
 /// The parser needs no resources as the decision is made
 /// based only on the token itself.
 macro_rules! token_parser {
-    ($parser:ident, $result:ty, $ty:ident, $pattern:pat => $value:expr) => {
+    ($(#[$meta:meta])* $parser:ident, $result:ty, $ty:ident, $pattern:pat => $value:expr) => {
+        $(#[$meta])*
         pub struct $parser {
             _priv: (),
         }
@@ -122,10 +124,20 @@ macro_rules! token_parser {
     };
 }
 
-token_parser!(SmtOpenParenParser, (), ParenOpen, SmtToken::ParenOpen => ());
-token_parser!(SmtCloseParenParser, (), ParenClose, SmtToken::ParenClose => ());
+token_parser!(
+    /// Parses an opening parenthesis.
+    SmtOpenParenParser, (), ParenOpen, SmtToken::ParenOpen => ());
+token_parser!(
+    /// Parses a closing parenthesis.
+    SmtCloseParenParser, (), ParenClose, SmtToken::ParenClose => ());
 
-token_parser!(SmtNumeralParser, SmtNumeralBuf, Numeral, SmtToken::Numeral(numeral) => numeral.into_owned());
+token_parser!(
+    /// Parses a numeral.
+    SmtNumeralParser, SmtNumeralBuf, Numeral, SmtToken::Numeral(numeral) => numeral.into_owned());
 
-token_parser!(SmtKeywordParser, SmtKeywordBuf, Keyword, SmtToken::Keyword(keyword) => keyword.into_owned());
-token_parser!(SmtStringParser, SmtStringContentBuf, String, SmtToken::String(string) => string.into_owned());
+token_parser!(
+    /// Parses a keyword.
+    SmtKeywordParser, SmtKeywordBuf, Keyword, SmtToken::Keyword(keyword) => keyword.into_owned());
+token_parser!(
+    /// Parses a string literal.
+    SmtStringParser, SmtStringContentBuf, String, SmtToken::String(string) => string.into_owned());

@@ -12,10 +12,7 @@ use crate::{
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
-/// A parser that reads an SMT-LIB qualified identifier.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses a qualified identifier.
 pub struct SmtQualifiedIdentParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

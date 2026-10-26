@@ -9,10 +9,9 @@ use crate::{
     token::{SmtCursor, SmtToken},
 };
 
-/// Parses using the first parser, then the second, then returns the result tuple.
+/// Parses two items sequentially.
 ///
-/// Preserves self-reset: if the inner parsers are self-resetting,
-/// moves back into the default state before returning Break.
+/// The result is a pair created from the inner parser results.
 pub struct SmtPairParser<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> {
     first: P1,
     second: P2,
@@ -116,11 +115,10 @@ macro_rules! nested_pair_pattern {
 /// It is the pair parsers nested to the right, with the nested result
 /// flattened into one tuple when the last parser breaks.
 macro_rules! tuple_parser {
-    ($name:ident: $($parser:ident $value:ident),+) => {
-        /// Parses using each parser in turn, then returns the result tuple.
-        ///
-        /// Preserves self-reset: if the inner parsers are self-resetting,
-        /// moves back into the default state before returning Break.
+    ($num:expr; $name:ident: $($parser:ident $value:ident),+) => {
+        #[doc = concat!("Parses ", stringify!($num), " items sequentially.")]
+		///
+        /// The result is a tuple created from the inner parser results.
         pub struct $name<H: SmtHandler, $($parser: SmtParse<H>),+> {
             inner: nested_pair_type!(H; $($parser),+),
         }
@@ -166,17 +164,14 @@ macro_rules! tuple_parser {
     };
 }
 
-tuple_parser!(SmtTuple3Parser: P1 p1, P2 p2, P3 p3);
-tuple_parser!(SmtTuple4Parser: P1 p1, P2 p2, P3 p3, P4 p4);
-tuple_parser!(SmtTuple5Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5);
-tuple_parser!(SmtTuple6Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6);
-tuple_parser!(SmtTuple7Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7);
-tuple_parser!(SmtTuple8Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7, P8 p8);
+tuple_parser!(3; SmtTuple3Parser: P1 p1, P2 p2, P3 p3);
+tuple_parser!(4; SmtTuple4Parser: P1 p1, P2 p2, P3 p3, P4 p4);
+tuple_parser!(5; SmtTuple5Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5);
+tuple_parser!(6; SmtTuple6Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6);
+tuple_parser!(7; SmtTuple7Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7);
+tuple_parser!(8; SmtTuple8Parser: P1 p1, P2 p2, P3 p3, P4 p4, P5 p5, P6 p6, P7 p7, P8 p8);
 
-/// Parses using the inner parser, then parses a closing parenthesis, then returns the inner result.
-///
-/// Preserves self-reset: if the inner parser is self-resetting,
-/// moves back into the default state before returning Break.
+/// Parses an item followed by a closing parenthesis.
 pub struct SmtClosedParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtPairParser<H, P, SmtCloseParenParser>,
 }
@@ -218,10 +213,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedParser<H, P> {
     }
 }
 
-/// Parses an opening parenthesis, then parses using the inner parser.
-///
-/// Preserves self-reset: if the inner parser is self-resetting,
-/// moves back into the default state before returning Break.
+/// Parses an opening parenthesis followed by an item.
 pub struct SmtOpenedParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtPairParser<H, SmtOpenParenParser, P>,
 }
@@ -263,10 +255,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
     }
 }
 
-/// Parses tokens enclosed by parentheses using the inner parser, returning the inner result.
-///
-/// Preserves self-reset: if the inner parser is self-resetting,
-/// moves back into the default state before returning Break.
+/// Parses an item enclosed by parentheses.
 pub struct SmtParenParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtOpenedParser<H, SmtClosedParser<H, P>>,
 }
@@ -305,15 +294,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenParser<H, P> {
     }
 }
 
-/// Parses multiple items followed by a closing parenthesis, returning the results as a vector.
-///
-/// Note that this parser does not consume the opening parenthesis the closing would belong to,
-/// for that, use `SmtParenMultipleParser`.
-///
-/// Keeps the state of the inner parser after break for parsing a next element.
-///
-/// Preserves self-reset: if the inner parser is self-resetting,
-/// moves back into the default state before returning Break.
+/// Parses multiple items followed by a closing parenthesis.
 pub struct SmtClosedMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: P,
     resource: ClosedMultipleResource<P::Result>,
@@ -401,12 +382,7 @@ impl<T> ClosedMultipleResource<T> {
     }
 }
 
-/// Parses multiple items enclosed by parentheses, returning the results as a vector.
-///
-/// Keeps the state of the inner parser after break for parsing a next element.
-///
-/// Preserves self-reset: if the inner parser is self-resetting,
-/// moves back into the default state before returning Break.
+/// Parses multiple items enclosed by parentheses.
 pub struct SmtParenMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtOpenedParser<H, SmtClosedMultipleParser<H, P>>,
 }
@@ -446,7 +422,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMultipleParser<H, P>
     }
 }
 
-/// Parser that parses a number of items ending with a closing parenthesis up to some maximum.
+/// Parses a number of items up to some maximum, followed by a closing parenthesis.
 ///
 /// The maximum can be changed by [`SmtClosedMaximumParser::set_max_elements`].
 pub struct SmtClosedMaximumParser<H: SmtHandler, P: SmtParse<H>> {
@@ -477,12 +453,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
 
     /// Sets the maximum number of items to be parsed.
     ///
-    /// The maximum is only applied when deciding whether
-    /// parsing a next element is allowed and does not affect
-    /// previously parsed elements or the currently parsed element,
-    /// meaning the parser may return more elements than
-    /// the currently set maximum if this function is called
-    /// in the middle of parsing elements.
+    /// The maximum is only applied when deciding whether parsing a next element
+    /// is allowed and does not affect previously parsed elements or the
+    /// currently parsed element, meaning the parser may return more elements
+    /// than the currently set maximum if this function is called in the middle
+    /// of parsing elements.
     pub fn set_max_elements(&mut self, max_elements: usize) {
         self.max_elements = max_elements;
     }
@@ -542,7 +517,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
     }
 }
 
-/// Parser that parses a number of items enclosed in parentheses up to some maximum.
+/// Parses a number of items up to some maximum, all enclosed in parentheses.
 ///
 /// The maximum can be changed by [`SmtParenMaximumParser::set_max_elements`].
 pub struct SmtParenMaximumParser<H: SmtHandler, P: SmtParse<H>> {
@@ -567,12 +542,11 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
 
     /// Sets the maximum number of items to be parsed.
     ///
-    /// The maximum is only applied when deciding whether
-    /// parsing a next element is allowed and does not affect
-    /// previously parsed elements or the currently parsed element,
-    /// meaning the parser may return more elements than
-    /// the currently set maximum if this function is called
-    /// in the middle of parsing elements.
+    /// The maximum is only applied when deciding whether parsing a next element
+    /// is allowed and does not affect previously parsed elements or the
+    /// currently parsed element, meaning the parser may return more elements
+    /// than the currently set maximum if this function is called in the middle
+    /// of parsing elements.
     pub fn set_max_elements(&mut self, max_elements: usize) {
         self.inner.set_max_elements(max_elements);
     }

@@ -11,10 +11,7 @@ use crate::{
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
-/// A parser that reads an SMT-LIB identifier.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses an identifier.
 pub struct SmtIdentParser {
     _priv: (),
 }

@@ -11,6 +11,7 @@ use crate::{
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
+/// Parses a simple match pattern.
 pub struct SmtSimplePatternParser {
     _priv: (),
 }
@@ -90,10 +91,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtSimplePatternParser {
     }
 }
 
-/// A parser that reads an SMT-LIB match pattern.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses a match pattern.
 pub struct SmtPatternParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

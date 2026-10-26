@@ -17,15 +17,13 @@ mod standard;
 
 use standard::{StandardCommandKind, StandardCommandParsers};
 
-/// Parses one SMT-LIB command.
+/// Parses an SMT-LIB command.
 ///
 /// The parser finishes after every command, returning [`ControlFlow::Break`]
 /// with a [`SmtCommandOutcome`] that distinguishes the command `(exit)`
 /// and the version-switch command `(set-info :smt-lib-version <version>)`
 /// from the others. It also finishes after an EOF while awaiting a command.
 /// An EOF inside a command is a syntax error.
-///
-/// The parser self-resets after finishing.
 pub struct SmtCommandParser<H: SmtCommandHandler> {
     state: CommandParserState<H>,
     standard_parsers: StandardCommandParsers<H>,
@@ -37,7 +35,7 @@ impl<H: SmtCommandHandler> fmt::Debug for SmtCommandParser<H> {
     }
 }
 
-/// Why the command parser finished.
+/// Outcome of parsing a command with [`SmtCommandParser`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtCommandOutcome {
     /// A command other than special ones was parsed.
@@ -205,7 +203,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
     }
 }
 
-/// Determines how a single command should be handled by a command handler.
+/// Handles the result of a command parsed by [`SmtCommandPayloadParser`].
 pub trait SmtCommandRule<H: SmtCommandHandler> {
     type Parser: SmtParse<H>;
 
@@ -217,10 +215,7 @@ pub trait SmtCommandRule<H: SmtCommandHandler> {
     ) -> Result<(), H::Error>;
 }
 
-/// A parser that processes the payload of a single command (starting after its name).
-///
-/// Preserves self-reset: if the inner parser is self-resetting,
-/// moves back into the default state before returning Break.
+/// Parses the payload of a single command, starting after its name.
 pub struct SmtCommandPayloadParser<H: SmtCommandHandler, R: SmtCommandRule<H>> {
     rule: R,
     parser: R::Parser,

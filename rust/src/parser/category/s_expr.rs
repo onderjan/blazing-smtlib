@@ -10,10 +10,7 @@ use crate::{
     token::{SmtCursor, SmtToken},
 };
 
-/// A parser that reads an SMT-LIB S-expression.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses an S-expression.
 pub struct SmtSExprParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

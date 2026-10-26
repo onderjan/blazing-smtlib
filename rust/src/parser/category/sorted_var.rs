@@ -11,10 +11,7 @@ use crate::{
     token::{SmtCursor, SmtToken},
 };
 
-/// Parses a sorted variable: parentheses-enclosed pair of a symbol and a sort.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses a sorted variable (parentheses-enclosed symbol and sort).
 pub struct SmtSortedVarParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

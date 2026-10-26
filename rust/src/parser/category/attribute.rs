@@ -12,10 +12,7 @@ use crate::{
     token::{SmtCursor, SmtToken},
 };
 
-/// A parser that reads an SMT-LIB attribute followed by a closing parenthesis.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses an attribute followed by a closing parenthesis.
 pub struct SmtClosedAttributeParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
@@ -68,10 +65,7 @@ impl<H: SmtHandler> SmtParse<H> for SmtClosedAttributeParser<H> {
     }
 }
 
-/// A parser that reads multiple SMT-LIB attributes followed by a closing parenthesis.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses multiple attributes followed by a closing parenthesis.
 pub struct SmtClosedMultipleAttributeParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

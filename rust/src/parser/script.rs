@@ -9,14 +9,15 @@ use crate::{
     token::{SmtCursor, SmtVersionRefused},
 };
 
-/// Parses an SMT-LIB script: a sequence of commands, each delivered to the
-/// command handler as it is parsed.
+/// Parses an SMT-LIB script.
 ///
-/// The parser is a loop over a [`SmtCommandParser`]. If the `(exit)` command
-/// is encountered, the parser requests the producer to discard everything
-/// after its closing parenthesis.
+/// An SMT-LIB script is a (possibly empty) sequence of commands.
 ///
-/// The parser always resets and returns a unit result on EOF.
+/// The parser is a loop over a [`SmtCommandParser`]. If the `(exit)` command is
+/// encountered, the parser requests the producer to discard everything after
+/// its closing parenthesis.
+///
+/// The parser returns a unit result on EOF.
 pub struct SmtScriptParser<H: SmtCommandHandler> {
     command: SmtCommandParser<H>,
     posture: SmtVersionPosture,

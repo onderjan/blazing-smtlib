@@ -6,10 +6,11 @@ use crate::{
     token::{SmtConsume, SmtConsumeFrom, SmtCursor},
 };
 
-/// Adapts a parser to the token consumer a lexer drives.
+/// Adapts a parser to a token consumer.
 ///
-/// The adapter implements [`SmtConsume`]: it calls the parser,
-/// providing it the handler and additional persistent resources.
+/// The adapter implements [`SmtConsume`] and hands over to a parser which
+/// implements [`SmtParse`], providing it the handler and additional persistent
+/// resources.
 pub struct SmtParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     handler: &'a mut H,
     parse_state: SmtParseState<H>,

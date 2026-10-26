@@ -9,10 +9,7 @@ use crate::{
     token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
 };
 
-/// A parser that reads an SMT-LIB sort.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses a sort.
 pub struct SmtSortParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

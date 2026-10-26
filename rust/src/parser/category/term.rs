@@ -17,10 +17,7 @@ use crate::{
     token::{SmtCursor, SmtGeneralReserved, SmtLookahead, SmtReserved, SmtToken},
 };
 
-/// A parser that reads an SMT-LIB term.
-///
-/// This parser is self-restarting: after returning Break,
-/// it is in the default state.
+/// Parses a term.
 pub struct SmtTermParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }
