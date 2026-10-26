@@ -34,10 +34,11 @@ abbrev ByteList := List UInt8
 
 /--
 `Layout bytes`: the bytes are layout: a run of whitespace bytes (tab, line feed, carriage return,
-space) and comments, a comment being `;` and bytes other than a line feed or a carriage return.
+space) and comments, a comment being `;`, bytes other than a line feed or a carriage return, and
+the line feed or carriage return that ends it.
 
-This is looser than SMT-LIB's whitespace: it does not require a comment to be followed by a line
-break.
+A comment that no line break ends is allowed only by `FinalLayout`, after the last token that
+`Spaced` places.
 -/
 inductive Layout : ByteList → Prop
   /-- No layout. -/
@@ -45,20 +46,31 @@ inductive Layout : ByteList → Prop
   /-- A whitespace byte, then layout. -/
   | space {c : UInt8} {rest : ByteList} : c = 9 ∨ c = 10 ∨ c = 13 ∨ c = 32 → Layout rest →
       Layout (c :: rest)
-  /-- A comment, then layout. -/
-  | comment {body rest : ByteList} : (∀ c ∈ body, c ≠ 10 ∧ c ≠ 13) → Layout rest →
-      Layout (59 :: body ++ rest)
+  /-- A comment ended by a line break, then layout. -/
+  | comment {body rest : ByteList} {stop : UInt8} : (∀ c ∈ body, c ≠ 10 ∧ c ≠ 13) →
+      stop = 10 ∨ stop = 13 → Layout rest → Layout (59 :: body ++ stop :: rest)
 
 /--
-`Spaced tokens bytes`: the bytes are the tokens in order, with layout before each and after the
-last.
+`FinalLayout bytes`: the bytes are layout, possibly followed by a comment that runs to their end
+without a line break: `;` and bytes other than a line feed or a carriage return.
+-/
+inductive FinalLayout : ByteList → Prop
+  /-- Layout alone. -/
+  | layout {gap : ByteList} : Layout gap → FinalLayout gap
+  /-- Layout, then a comment to the end. -/
+  | comment {gap body : ByteList} : Layout gap → (∀ c ∈ body, c ≠ 10 ∧ c ≠ 13) →
+      FinalLayout (gap ++ 59 :: body)
+
+/--
+`Spaced tokens bytes`: the bytes are the tokens in order, each non-empty, with layout before each
+and final layout after the last.
 -/
 inductive Spaced : List ByteList → ByteList → Prop
-  /-- Layout alone. -/
-  | nil {gap : ByteList} : Layout gap → Spaced [] gap
-  /-- Layout, the first token, and the rest spaced. -/
-  | cons {gap token rest : ByteList} {tokens : List ByteList} : Layout gap → Spaced tokens rest →
-      Spaced (token :: tokens) (gap ++ token ++ rest)
+  /-- Final layout alone. -/
+  | nil {gap : ByteList} : FinalLayout gap → Spaced [] gap
+  /-- Layout, the first token, which is non-empty, and the rest spaced. -/
+  | cons {gap token rest : ByteList} {tokens : List ByteList} : Layout gap → token ≠ [] →
+      Spaced tokens rest → Spaced (token :: tokens) (gap ++ token ++ rest)
 
 /-! ## Spellings of string literals in 2.0 -/
 

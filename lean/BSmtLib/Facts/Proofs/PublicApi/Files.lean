@@ -35,7 +35,7 @@ theorem layout_append {a b : ByteList} (ha : Layout a) (hb : Layout b) :
   induction ha with
   | nil => exact hb
   | space hc _ ih => exact .space hc ih
-  | comment hbody _ ih => simpa [List.append_assoc] using Layout.comment hbody ih
+  | comment hbody hstop _ ih => simpa [List.append_assoc] using Layout.comment hbody hstop ih
 
 /-- A comment's body: no line break. -/
 private theorem body_of_star {body : Chars}
@@ -67,12 +67,11 @@ private theorem layout_of_part {p : Chars} (h : Regex.alt whiteSpaceChar comment
           | exact Or.inr (Or.inr (Or.inr (UInt8.toNat_inj.mp this)))
   · have hs : semi = [59] := hsemi
     subst hs
-    have hl : Layout lb := by
-      rcases hlb with ⟨c, rfl, h1, h2⟩ | ⟨c, rfl, h1, h2⟩
-      · exact .space (Or.inr (Or.inl (UInt8.toNat_inj.mp (Nat.le_antisymm h2 h1)))) .nil
-      · exact .space (Or.inr (Or.inr (Or.inl (UInt8.toNat_inj.mp (Nat.le_antisymm h2 h1))))) .nil
-    have := Layout.comment (body_of_star hbody) hl
-    simpa using this
+    rcases hlb with ⟨c, rfl, h1, h2⟩ | ⟨c, rfl, h1, h2⟩
+    · simpa using Layout.comment (body_of_star hbody)
+        (.inl (UInt8.toNat_inj.mp (Nat.le_antisymm h2 h1))) .nil
+    · simpa using Layout.comment (body_of_star hbody)
+        (.inr (UInt8.toNat_inj.mp (Nat.le_antisymm h2 h1))) .nil
 
 /-- Whitespace is layout. -/
 theorem layout_of_whitespace {w : Chars} (h : whitespace w) : Layout w := by
@@ -84,17 +83,16 @@ theorem layout_of_whitespace {w : Chars} (h : whitespace w) : Layout w := by
     exact layout_append (layout_of_part (hparts p (by simp)))
         (ih fun q hq => hparts q (by simp [hq]))
 
-/-- Whitespace at the end of the input is layout. -/
-theorem layout_of_whitespaceAtEnd {w : Chars} (h : whitespaceAtEnd w) : Layout w := by
+/-- Whitespace at the end of the input is final layout. -/
+theorem layout_of_whitespaceAtEnd {w : Chars} (h : whitespaceAtEnd w) : FinalLayout w := by
   obtain ⟨a, b, rfl, ha, hb⟩ := h
-  refine layout_append (layout_of_whitespace ha) ?_
   rcases hb with hb | ⟨semi, body, rfl, hsemi, hbody⟩
   · have : b = [] := hb
     subst this
-    exact .nil
+    simpa using FinalLayout.layout (layout_of_whitespace ha)
   · have hs : semi = [59] := hsemi
     subst hs
-    simpa using Layout.comment (body_of_star hbody) .nil
+    simpa using FinalLayout.comment (layout_of_whitespace ha) (body_of_star hbody)
 
 /-! ## The spelling of a token -/
 
@@ -151,8 +149,8 @@ theorem exit_of_unparsed {version : Lexicon.Version} {command : Tree.Command}
     split at h <;> (try split at h) <;> simp_all [Option.map_eq_some_iff]
   | _ => simp [Tree.Command.modeAfter] at h
 
-/-- The pieces of a concrete reading are spaced: their gaps are layout, so the reading followed
-by spaced tokens is spaced. -/
+/-- The pieces of a concrete reading are spaced: their gaps are layout and their tokens are
+non-empty, so the reading followed by spaced tokens is spaced. -/
 theorem spaced_pieces {version : Lexicon.Version} {offset : Nat} {segment : Chars}
     {tokens : List Lexicon.Token}
     (h : Tokenization.From version offset segment tokens)
@@ -160,14 +158,18 @@ theorem spaced_pieces {version : Lexicon.Version} {offset : Nat} {segment : Char
     Spaced (((readConcreteFrom offset segment tokens).pieces.map (·.2.text)) ++ written)
       (printConcrete ⟨(readConcreteFrom offset segment tokens).pieces, []⟩ ++ rest) := by
   have hgaps := (readConcreteFrom_gaps h).1
-  generalize (readConcreteFrom offset segment tokens).pieces = pieces at hgaps
+  have hregex := pieces_regex h
+  generalize (readConcreteFrom offset segment tokens).pieces = pieces at hgaps hregex
   induction pieces with
   | nil => simpa [printConcrete] using hrest
   | cons piece pieces ih =>
     obtain ⟨gap, token⟩ := piece
     rw [printConcrete_cons, List.map_cons, List.cons_append, List.append_assoc]
-    exact .cons (layout_of_whitespace (hgaps _ List.mem_cons_self))
-      (ih fun p hp => hgaps p (List.mem_cons_of_mem _ hp))
+    obtain ⟨c, t, htext, -⟩ := token_shape (hregex _ List.mem_cons_self)
+    have hne : token.text ≠ [] := by simp only at htext; simp [htext]
+    exact .cons (layout_of_whitespace (hgaps _ List.mem_cons_self)) hne
+      (ih (fun p hp => hgaps p (List.mem_cons_of_mem _ hp))
+        fun p hp => hregex p (List.mem_cons_of_mem _ hp))
 
 /-- Same spellings, appended, are same spellings. -/
 theorem SameSpellings.append {a b c d : List ByteList} (h₁ : SameSpellings a c)
@@ -245,13 +247,13 @@ theorem next_of_read {version next : Lexicon.Version} {command : Tree.Command}
 - the part up to the end is the commands' tokens with layout between them, each spelled as the
   version in force writes it or, for a 2.0 string literal, spelled otherwise with the same
   meaning, and exactly where no part is read in 2.0;
-- what follows is layout unless the last command is `exit`. -/
+- what follows is final layout unless the last command is `exit`. -/
 theorem spaced_of_reading {version : Lexicon.Version} {offset : Nat} {input : Chars}
     {commands : List Tree.Command} {segments : List (Lexicon.Version × Concrete)} {final : Chars}
     (h : FileReadingFrom version offset input commands segments final) :
     ∃ pre written, input = pre ++ final ∧ SameSpellings written (tokensOf version commands) ∧
-      (∀ tail, Layout tail → Spaced written (pre ++ tail)) ∧
-      (commands.getLast? = some .exit ∨ Layout final) ∧
+      (∀ tail, FinalLayout tail → Spaced written (pre ++ tail)) ∧
+      (commands.getLast? = some .exit ∨ FinalLayout final) ∧
       (version ≠ .v2_0 → (∀ command ∈ commands, command.declaredVersion ≠ some .v2_0) →
         written = tokensOf version commands) := by
   induction h with

@@ -33,7 +33,7 @@ open BSmtLib.Facts.Lexer.Adapters (toVersion fromVersion toLocation)
 open BSmtLib.Facts.Proofs.PublicApi.Discard BSmtLib.Facts.Proofs.PublicApi.Files
 open BSmtLib.Facts.Proofs.PublicApi.Recorder BSmtLib.Facts.PublicApi.Adapters
 open BSmtLib.Facts.PublicApi.Adapters.Content BSmtLibSpec.Facts.Proofs.Reader.Switches
-open BSmtLib.Facts.PublicApi.Adapters.Reprinter (from25)
+open BSmtLib.Facts.PublicApi.Adapters.Reprinter (from25 only20)
 open BSmtLib.Facts.Parser.Adapters.Handler (recordingLibrary recordingLibraryTerms)
 open BSmtLib.Facts.Proofs.Reader.Param.Posture (Looser)
 open BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Tokens (Concrete)
@@ -138,6 +138,33 @@ theorem reader_eq (version : Version) :
     Reader.script ([] : List Event) allVersions version = readerOf (fromVersion version) := by
   cases version <;> rfl
 
+/-- Every version `only20` allows, `allVersions` allows, and neither limits the declarations. -/
+theorem only20_looser : Looser only20 allVersions :=
+  ⟨by simp [only20, allVersions], fun v h => by
+    rw [Array.contains_iff_mem] at h ⊢
+    simp [only20, allVersions] at h ⊢
+    exact .inl h⟩
+
+/-- A reader allowing only 2.0, from 2.0, that reads an input to the end reads it as the reader
+allowing every version: to the same handler, with the same discarding. -/
+theorem only20_as_all {slices : List ByteList} {result : Span.Located Unit}
+    {before after : RecReader}
+    (h : readThrough (Reader.script ([] : List Event) only20 .v2_0) slices =
+      .ok (some result, before, after)) :
+    ∃ before' after' : RecReader,
+      readThrough (Reader.script ([] : List Event) allVersions .v2_0) slices =
+        .ok (some result, before', after') ∧
+      after'.handler = after.handler ∧ before'.discardedFrom = before.discardedFrom := by
+  have hI₀ : Allowed only20 (Reader.Param.Watch.new
+      (ParseAdapter.new ([] : List Event) (ScriptParser.new (H := List Event) only20))
+      .v2_0) :=
+    ⟨by
+      show only20.allowed.contains .v2_0 = true
+      rw [Array.contains_iff_mem]; simp [only20], fun _ h => by cases h⟩
+  obtain ⟨before', after', h', hhandler, hdisc, -⟩ :=
+    readThrough_looser only20_looser (keeps_allowed only20) .v2_0 hI₀ h
+  exact ⟨before', after', h', hhandler, hdisc⟩
+
 /-- Every version `from25` allows, `allVersions` allows, and neither limits the declarations. -/
 theorem from25_looser : Looser from25 allVersions :=
   ⟨by simp [from25, allVersions], fun v h => by
@@ -211,7 +238,7 @@ theorem recording_reprints (version : Version) (slices : List ByteList)
     have : (pre ++ final).take ((pre ++ final).length - final.length) = pre := by
       simp
     rw [this]
-    simpa using hspaced [] .nil
+    simpa using hspaced [] (.layout .nil)
   · have e : readUpTo before slices.flatten.length = slices.flatten.length := hupto.2 hexit
     rw [e, hpre, List.take_length]
     exact hspaced final (hlast.resolve_left hexit)
@@ -221,18 +248,18 @@ section
 -- the handlers are the one given, not the recording handler's instances
 attribute [-instance] recordingLibraryTerms recordingLibrary
 
-/-- `Reprints` of a library handler with the recording handler's state. -/
-def ReprintsWith (I : Handler.CommandHandler (List Event) Id) : Prop :=
+/-- `Reprints20` of a library handler with the recording handler's state. -/
+def Reprints20With (I : Handler.CommandHandler (List Event) Id) : Prop :=
   letI := I
-  ∀ (version : Version) (slices : List ByteList) (result : Span.Located Unit)
+  ∀ (slices : List ByteList) (result : Span.Located Unit)
     (before after : Reader (List Event) (ScriptParser (List Event) (m := Id)) (m := Id)),
-    readThrough (Reader.script ([] : List Event) allVersions version) slices =
+    readThrough (Reader.script ([] : List Event) only20 .v2_0) slices =
         .ok (some result, before, after) →
       ∃ written, Spaced written (slices.flatten.take (readUpTo before slices.flatten.length)) ∧
         SameSpellings written (printLog after.handler)
 
-/-- `ReprintsExactly` of a library handler with the recording handler's state. -/
-def ReprintsExactlyWith (I : Handler.CommandHandler (List Event) Id) : Prop :=
+/-- `ReprintsExactly25Plus` of a library handler with the recording handler's state. -/
+def ReprintsExactly25PlusWith (I : Handler.CommandHandler (List Event) Id) : Prop :=
   letI := I
   ∀ (version : Version) (slices : List ByteList) (result : Span.Located Unit)
     (before after : Reader (List Event) (ScriptParser (List Event) (m := Id)) (m := Id)),
@@ -243,12 +270,17 @@ def ReprintsExactlyWith (I : Handler.CommandHandler (List Event) Id) : Prop :=
 
 end
 
-theorem recording_ReprintsWith : ReprintsWith recordingLibrary := by
-  intro version slices result before after h
-  obtain ⟨-, -, written, h₁, h₂, -⟩ := recording_reprints version slices h
+theorem recording_Reprints20With : Reprints20With recordingLibrary := by
+  intro slices result before after h
+  obtain ⟨before', after', h', hhandler, hdiscard⟩ := only20_as_all h
+  obtain ⟨-, -, written, h₁, h₂, -⟩ := recording_reprints .v2_0 slices h'
+  have hupto : readUpTo before' slices.flatten.length = readUpTo before slices.flatten.length := by
+    simp only [readUpTo, Reader.discardedFrom] at hdiscard ⊢
+    rw [hdiscard]
+  rw [← hupto, ← hhandler]
   exact ⟨written, h₁, h₂⟩
 
-theorem recording_ReprintsExactlyWith : ReprintsExactlyWith recordingLibrary := by
+theorem recording_ReprintsExactly25PlusWith : ReprintsExactly25PlusWith recordingLibrary := by
   intro version slices result before after hv h
   obtain ⟨before', after', h', hhandler, hdiscard, hdecl⟩ := from25_as_all hv h
   obtain ⟨commands, hfile, written, h₁, -, h₃⟩ := recording_reprints version slices h'
@@ -268,13 +300,13 @@ noncomputable def recorder : Reprinter where
   print := printLog
 
 /-- The recorder reprints. -/
-theorem recorder_Reprints : recorder.Reprints :=
-  (instCommandHandler_eq ▸ recording_ReprintsWith :
-    ReprintsWith (@ContentHandler.instCommandHandler (List Event) recorderContent))
+theorem recorder_Reprints20 : recorder.Reprints20 :=
+  (instCommandHandler_eq ▸ recording_Reprints20With :
+    Reprints20With (@ContentHandler.instCommandHandler (List Event) recorderContent))
 
 /-- The recorder reprints exactly from 2.5 on. -/
-theorem recorder_ReprintsExactly : recorder.ReprintsExactly :=
-  (instCommandHandler_eq ▸ recording_ReprintsExactlyWith :
-    ReprintsExactlyWith (@ContentHandler.instCommandHandler (List Event) recorderContent))
+theorem recorder_ReprintsExactly25Plus : recorder.ReprintsExactly25Plus :=
+  (instCommandHandler_eq ▸ recording_ReprintsExactly25PlusWith :
+    ReprintsExactly25PlusWith (@ContentHandler.instCommandHandler (List Event) recorderContent))
 
 end BSmtLib.Facts.Proofs.PublicApi.Reprinting

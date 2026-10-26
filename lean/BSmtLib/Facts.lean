@@ -30,7 +30,8 @@ The main theorems about the public API are stated here; `Facts.PublicApi` states
 - the lexer does not depend on how the input is cut into slices (`lexing_slicing`), and neither
   does what the script reader tells a handler that sees contents only (`reading_slicing`);
 - what the script reader tells such a handler can be printed back as the input, up to where the
-  reader began to discard it (`reprinting`);
+  reader began to discard it: in 2.0 but for the spelling of string literals, and exactly from
+  2.5 on (`reprinting`);
 - the lexers of the chain hand over the same tokens as the library's lexer and fail with errors
   of the same cause (`lexers_agree`).
 
@@ -48,21 +49,43 @@ open BSmtLib (Version)
 /-! ## Reprinting -/
 
 /--
-There is a handler told contents only, with a printer, that gives back what the script reader
-over it reads. On every input that the reader reads to the end, in any slices, printing what the
-handler was told, with layout between the tokens, gives back the input up to where the reader
-began to discard it:
+What the script reader reads can be printed back with the same content (2.0) or exactly (2.5+).
 
-- where the reader allows every version, but for the spelling of string literals in 2.0, which
-  may come back as another literal that stands for the same bytes;
-- exactly, where the reader allows only the versions from 2.5 on and starts in one of them.
+There is a handler that is told contents only, with a printer of what it was told. When the
+script reader over this handler reads an input to the end, the printer gives back the input up to
+where the reader began to discard it. The input may be fed in any slices.
 
-A handler told contents only fails on a command that is not standard (`ContentHandler`), so the
-reader does not read an input with such a command to the end, and the theorem says nothing of it.
+The input, up to where the reader began to discard it or else to its end, is the printed tokens
+with layout around them (`Spaced`):
+
+- each token is non-empty;
+- every comment in the layout ends with a line break;
+- only the layout after the last token may end with a comment that has no line break.
+
+This holds in two cases:
+
+- the reader allows only 2.0 and starts in it (`Reprints20`), and a string literal may come back
+  as another literal that stands for the same bytes in 2.0;
+- the reader allows only the versions from 2.5 on and starts in one of them
+  (`ReprintsExactly25Plus`), and the input comes back exactly.
+
+The cases differ because string literals are escaped differently:
+
+- in 2.0, a backslash escapes `"` and `\` and stands for itself before any other byte, so `"\a"`
+  and `"\\a"` stand for the same bytes, and since the handler is told only the bytes, the printer
+  cannot tell which of the two was written;
+- from 2.5 on, a backslash is an ordinary byte and `""` stands for `"`, so every literal has only
+  one spelling.
+
+A script that switches between 2.0 and a later version is covered by neither case: a statement
+about it would have to say in which version each literal was read.
+
+The handler fails on a command that is not standard (`ContentHandler`), so the reader does not
+read an input with such a command to the end, and the theorem says nothing of it.
 -/
-theorem reprinting : ∃ r : Reprinter, r.Reprints ∧ r.ReprintsExactly :=
-  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
-    Proofs.PublicApi.Reprinting.recorder_ReprintsExactly⟩
+theorem reprinting : ∃ r : Reprinter, r.Reprints20 ∧ r.ReprintsExactly25Plus :=
+  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints20,
+    Proofs.PublicApi.Reprinting.recorder_ReprintsExactly25Plus⟩
 
 /--
 info: 'BSmtLib.Facts.reprinting' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -112,15 +135,17 @@ info: 'BSmtLib.Facts.lexing_slicing' depends on axioms: [propext, Classical.choi
 #print axioms lexing_slicing
 
 /--
-There is a handler told contents only, with a printer as in `reprinting`, over which the script
-reader ends the same way however the input is cut into slices. The reader ends with the same
-printed tokens and the same location where it began to discard.
+There is a handler told contents only, with a printer that gives back what the script reader
+reads where it allows only 2.0 and starts in it (`Reprints20`, the first part of `reprinting`), over
+which the script reader ends the same way however the input is cut into slices. That reader allows
+every version and starts in any of them; it ends with the same printed tokens and the same
+location where it began to discard.
 -/
 theorem reading_slicing :
-    ∃ r : Reprinter, r.Reprints ∧
+    ∃ r : Reprinter, r.Reprints20 ∧
       ∀ version slices, r.observe (readThrough (r.reader version) slices) =
         r.observe (readThrough (r.reader version) [slices.flatten]) :=
-  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
+  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints20,
     Proofs.PublicApi.ReaderSlicing.recorder_slicing⟩
 
 /--
@@ -152,12 +177,13 @@ info: 'BSmtLib.Facts.lexers_agree' depends on axioms: [propext, Classical.choice
 /-! ## What the statements rest on -/
 
 /--
-info: 5 theorems, stated with 59 adapters:
+info: 5 theorems, stated with 61 adapters:
 BSmtLib.Facts.PublicApi.Adapters:
   BSmtLib.Facts.PublicApi.Adapters.ByteList
   BSmtLib.Facts.PublicApi.Adapters.CollectM
   BSmtLib.Facts.PublicApi.Adapters.Collector
   BSmtLib.Facts.PublicApi.Adapters.Entry
+  BSmtLib.Facts.PublicApi.Adapters.FinalLayout
   BSmtLib.Facts.PublicApi.Adapters.Layout
   BSmtLib.Facts.PublicApi.Adapters.SameSpelling
   BSmtLib.Facts.PublicApi.Adapters.SameSpellings
@@ -209,11 +235,12 @@ BSmtLib.Facts.PublicApi.Adapters.Content:
   BSmtLib.Facts.PublicApi.Adapters.Content.ofTermNode
 BSmtLib.Facts.PublicApi.Adapters.Reprinter:
   BSmtLib.Facts.PublicApi.Adapters.Reprinter
-  BSmtLib.Facts.PublicApi.Adapters.Reprinter.Reprints
-  BSmtLib.Facts.PublicApi.Adapters.Reprinter.ReprintsExactly
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.Reprints20
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.ReprintsExactly25Plus
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.from25
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.instContentHandlerH
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.observe
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.only20
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.reader
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.readerWith
 -/
@@ -254,8 +281,9 @@ BSmtLib.Facts.reading_slicing:
     Adapters.Content.ofConstructor, Adapters.Content.ofIdentifier, Adapters.Content.ofIndex,
     Adapters.Content.ofPairs, Adapters.Content.ofPattern, Adapters.Content.ofSExprNode,
     Adapters.Content.ofSignature, Adapters.Content.ofSymbol, Adapters.Content.ofSymbolOrWildcard,
-    Adapters.Content.ofTermNode, Adapters.Layout, Adapters.Reprinter, Adapters.Reprinter.Reprints,
-    Adapters.Reprinter.instContentHandlerH, Adapters.Reprinter.observe, Adapters.Reprinter.reader,
+    Adapters.Content.ofTermNode, Adapters.FinalLayout, Adapters.Layout, Adapters.Reprinter,
+    Adapters.Reprinter.Reprints20, Adapters.Reprinter.instContentHandlerH,
+    Adapters.Reprinter.observe, Adapters.Reprinter.only20, Adapters.Reprinter.reader,
     Adapters.Reprinter.readerWith, Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced,
     Adapters.allVersions, Adapters.feed, Adapters.readThrough, Adapters.readUpTo,
     Adapters.unescape20
@@ -270,10 +298,10 @@ BSmtLib.Facts.reprinting:
     Adapters.Content.ofConstructor, Adapters.Content.ofIdentifier, Adapters.Content.ofIndex,
     Adapters.Content.ofPairs, Adapters.Content.ofPattern, Adapters.Content.ofSExprNode,
     Adapters.Content.ofSignature, Adapters.Content.ofSymbol, Adapters.Content.ofSymbolOrWildcard,
-    Adapters.Content.ofTermNode, Adapters.Layout, Adapters.Reprinter, Adapters.Reprinter.Reprints,
-    Adapters.Reprinter.ReprintsExactly, Adapters.Reprinter.from25,
-    Adapters.Reprinter.instContentHandlerH, Adapters.Reprinter.reader, Adapters.Reprinter.readerWith,
-    Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced, Adapters.allVersions,
+    Adapters.Content.ofTermNode, Adapters.FinalLayout, Adapters.Layout, Adapters.Reprinter,
+    Adapters.Reprinter.Reprints20, Adapters.Reprinter.ReprintsExactly25Plus,
+    Adapters.Reprinter.from25, Adapters.Reprinter.instContentHandlerH, Adapters.Reprinter.only20,
+    Adapters.Reprinter.readerWith, Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced,
     Adapters.feed, Adapters.readThrough, Adapters.readUpTo, Adapters.unescape20
 -/
 #guard_msgs in

@@ -102,17 +102,20 @@ info: 'BSmtLib.Facts.PublicApi.lexing_resets' depends on axioms: [propext, Class
 #print axioms lexing_resets
 
 /--
-There is a handler told contents only, with a printer as in `Facts.reprinting`, over which the
-script reader is reset by the end of an input. After it read an input to the end, the reader reads
-the next input as a new script reader over its handler does.
+There is a handler told contents only, with a printer that gives back what the script reader
+reads where it allows only 2.0 and starts in it (`Reprints20`, the first part of
+`Facts.reprinting`), over which the script reader is reset by the end of an input. After the
+reader, allowing every version and starting in any of them, read an input to the end, it reads the
+next input as does a new script reader over its handler that allows every version and starts in
+the same one.
 -/
 theorem reading_resets :
-    ∃ r : Reprinter, r.Reprints ∧
+    ∃ r : Reprinter, r.Reprints20 ∧
       ∀ version first next result before after,
         readThrough (r.reader version) first = .ok (result, before, after) →
           r.observe (readThrough after next) =
             r.observe (readThrough (Reader.script after.handler allVersions version) next) :=
-  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
+  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints20,
     Proofs.PublicApi.ReaderResets.recorder_resets⟩
 
 /--
@@ -152,12 +155,13 @@ info: 'BSmtLib.Facts.PublicApi.builds_commands' depends on axioms: [propext, Cla
 /-! ## What the statements rest on -/
 
 /--
-info: 4 theorems, stated with 53 adapters:
+info: 4 theorems, stated with 55 adapters:
 BSmtLib.Facts.PublicApi.Adapters:
   BSmtLib.Facts.PublicApi.Adapters.ByteList
   BSmtLib.Facts.PublicApi.Adapters.CollectM
   BSmtLib.Facts.PublicApi.Adapters.Collector
   BSmtLib.Facts.PublicApi.Adapters.Entry
+  BSmtLib.Facts.PublicApi.Adapters.FinalLayout
   BSmtLib.Facts.PublicApi.Adapters.Layout
   BSmtLib.Facts.PublicApi.Adapters.SameSpelling
   BSmtLib.Facts.PublicApi.Adapters.SameSpellings
@@ -205,9 +209,10 @@ BSmtLib.Facts.PublicApi.Adapters.Content:
   BSmtLib.Facts.PublicApi.Adapters.Content.ofTermNode
 BSmtLib.Facts.PublicApi.Adapters.Reprinter:
   BSmtLib.Facts.PublicApi.Adapters.Reprinter
-  BSmtLib.Facts.PublicApi.Adapters.Reprinter.Reprints
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.Reprints20
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.instContentHandlerH
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.observe
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.only20
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.reader
   BSmtLib.Facts.PublicApi.Adapters.Reprinter.readerWith
 -/
@@ -249,8 +254,9 @@ BSmtLib.Facts.PublicApi.reading_resets:
     Adapters.Content.ofConstructor, Adapters.Content.ofIdentifier, Adapters.Content.ofIndex,
     Adapters.Content.ofPairs, Adapters.Content.ofPattern, Adapters.Content.ofSExprNode,
     Adapters.Content.ofSignature, Adapters.Content.ofSymbol, Adapters.Content.ofSymbolOrWildcard,
-    Adapters.Content.ofTermNode, Adapters.Layout, Adapters.Reprinter, Adapters.Reprinter.Reprints,
-    Adapters.Reprinter.instContentHandlerH, Adapters.Reprinter.observe, Adapters.Reprinter.reader,
+    Adapters.Content.ofTermNode, Adapters.FinalLayout, Adapters.Layout, Adapters.Reprinter,
+    Adapters.Reprinter.Reprints20, Adapters.Reprinter.instContentHandlerH,
+    Adapters.Reprinter.observe, Adapters.Reprinter.only20, Adapters.Reprinter.reader,
     Adapters.Reprinter.readerWith, Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced,
     Adapters.allVersions, Adapters.feed, Adapters.readThrough, Adapters.readUpTo,
     Adapters.unescape20

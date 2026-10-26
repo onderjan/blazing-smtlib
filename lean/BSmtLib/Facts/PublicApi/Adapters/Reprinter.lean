@@ -33,6 +33,10 @@ structure _root_.BSmtLib.Facts.PublicApi.Adapters.Reprinter where
 
 instance (r : Reprinter) : ContentHandler r.H := r.inst
 
+/-- The posture that allows only version 2.0, and any number of version declarations. -/
+def only20 : Version.VersionPosture :=
+  (Version.VersionPostureBuilder.new.clearAllowed.addAllowed .v2_0 |>.setMaxDeclarations none).build
+
 /-- The posture that allows the versions from 2.5 on, and any number of version declarations. -/
 def from25 : Version.VersionPosture :=
   (Version.VersionPostureBuilder.new.setMaxDeclarations none).build
@@ -48,24 +52,24 @@ def reader (r : Reprinter) (version : Version) : Reader r.H (ScriptParser r.H) :
   r.readerWith allVersions version
 
 /--
-`r.Reprints`: on every input that the script reader over `r`'s handler reads to the end, the
-input up to where the reader began to discard it is the printed tokens with layout between them.
-Each token is as printed or, for a string literal, spelled otherwise with the same 2.0 meaning.
-The reader allows every version and is fed the input in any slices.
+`r.Reprints20`: on every input that the script reader over `r`'s handler reads to the end, the
+input up to where the reader began to discard it is the printed tokens, spaced (`Spaced`). Each
+token is as printed or, for a string literal, spelled otherwise with the same meaning in 2.0. The
+reader allows only version 2.0, starts in it and is fed the input in any slices.
 -/
-def Reprints (r : Reprinter) : Prop :=
-  ∀ version slices result before after,
-    readThrough (r.reader version) slices = .ok (some result, before, after) →
+def Reprints20 (r : Reprinter) : Prop :=
+  ∀ slices result before after,
+    readThrough (r.readerWith only20 .v2_0) slices = .ok (some result, before, after) →
       ∃ written, Spaced written (slices.flatten.take (readUpTo before slices.flatten.length)) ∧
         SameSpellings written (r.print after.handler)
 
 /--
-`r.ReprintsExactly`: on every input that the script reader over `r`'s handler reads to the end,
-the input up to where the reader began to discard it is exactly the printed tokens with layout
-between them. The reader allows the versions from 2.5 on, starts in one of them and is fed the
-input in any slices.
+`r.ReprintsExactly25Plus`: on every input that the script reader over `r`'s handler reads to the
+end, the input up to where the reader began to discard it is exactly the printed tokens, spaced
+(`Spaced`). The reader allows the versions from 2.5 on, starts in one of them and is fed the input
+in any slices.
 -/
-def ReprintsExactly (r : Reprinter) : Prop :=
+def ReprintsExactly25Plus (r : Reprinter) : Prop :=
   ∀ version slices result before after, version ≠ .v2_0 →
     readThrough (r.readerWith from25 version) slices = .ok (some result, before, after) →
       Spaced (r.print after.handler) (slices.flatten.take (readUpTo before slices.flatten.length))
