@@ -44,7 +44,8 @@ abbrev var (s : String) : Tree.Term := .identifier (.plain (ident s))
 /-- The numeral constant `s`. -/
 abbrev numeral (s : String) : Tree.Term := .constant (.numeral (chars s))
 
-/-- Two sorts with the same tokens are the same sort. -/
+/-- Two sorts with the same tokens are the same sort, whether or not they are valid: unlike
+`sortsOneToOne`, it can show that tokens are no sort of a version. -/
 theorem sort_eq_of_tokens {s t : Tree.«Sort»} (h : s.tokens = t.tokens) : s = t := by
   have h₁ := readSort_tokens s [] (n := sizeOf s + sizeOf t + 1) (by omega)
   have h₂ := readSort_tokens t [] (n := sizeOf s + sizeOf t + 1) (by omega)
@@ -139,7 +140,7 @@ example : IsCommand .v2_0
   simp [Tree.Command.Valid, Tree.«Sort».Valid, Tree.«Sort».ValidAll, Tree.Identifier.Valid]
 
 /-- The list datatype of the standard:
-`(declare-datatypes ((List 1)) ((par (T) ((nil) (cons (head T) (tail (List T)))))))`, a command
+`(declare-datatypes ((List 1)) ((par (T) ((nil) (cons (car T) (cdr (List T)))))))`, a command
 from 2.6 on. -/
 example : IsCommand .v2_6
     (commandTokens "declare-datatypes"
@@ -147,14 +148,14 @@ example : IsCommand .v2_6
         paren (paren (word "par" :: paren [Facts.Grammar.Examples.sym "T"] ++
           paren (paren [Facts.Grammar.Examples.sym "nil"] ++
             paren (Facts.Grammar.Examples.sym "cons" ::
-                paren [Facts.Grammar.Examples.sym "head", Facts.Grammar.Examples.sym "T"] ++
-              paren [Facts.Grammar.Examples.sym "tail", .parenOpen, Facts.Grammar.Examples.sym
+                paren [Facts.Grammar.Examples.sym "car", Facts.Grammar.Examples.sym "T"] ++
+              paren [Facts.Grammar.Examples.sym "cdr", .parenOpen, Facts.Grammar.Examples.sym
                   "List", Facts.Grammar.Examples.sym "T", .parenClose]))))))
     (.declareDatatypes [⟨Facts.Grammar.Examples.simple "List", chars "1"⟩]
       [⟨[Facts.Grammar.Examples.simple "T"], [⟨Facts.Grammar.Examples.simple "nil", []⟩,
         ⟨Facts.Grammar.Examples.simple "cons",
-          [⟨Facts.Grammar.Examples.simple "head", Facts.Grammar.Examples.sortOf "T"⟩,
-              ⟨Facts.Grammar.Examples.simple "tail", .mk
+          [⟨Facts.Grammar.Examples.simple "car", Facts.Grammar.Examples.sortOf "T"⟩,
+              ⟨Facts.Grammar.Examples.simple "cdr", .mk
                   (Facts.Grammar.Examples.ident "List") [Facts.Grammar.Examples.sortOf "T"]⟩]⟩]⟩])
                       := by
   refine ⟨?_, rfl⟩
@@ -373,8 +374,8 @@ the sorts of its selectors, its end, and the end of the declarations. -/
 example : (record .v2_7 [.declareDatatypes [⟨Facts.Grammar.Examples.simple "List", chars "1"⟩]
       [⟨[Facts.Grammar.Examples.simple "T"], [⟨Facts.Grammar.Examples.simple "nil", []⟩,
         ⟨Facts.Grammar.Examples.simple "cons",
-          [⟨Facts.Grammar.Examples.simple "head", Facts.Grammar.Examples.sortOf "T"⟩,
-              ⟨Facts.Grammar.Examples.simple "tail", .mk
+          [⟨Facts.Grammar.Examples.simple "car", Facts.Grammar.Examples.sortOf "T"⟩,
+              ⟨Facts.Grammar.Examples.simple "cdr", .mk
                   (Facts.Grammar.Examples.ident "List") [Facts.Grammar.Examples.sortOf "T"]⟩]⟩]⟩]]
       ).filter Event.isCall =
     [.handlerSwitch .v2_7,
@@ -384,8 +385,8 @@ example : (record .v2_7 [.declareDatatypes [⟨Facts.Grammar.Examples.simple "Li
       .call .sort (.handleSort (Facts.Grammar.Examples.ident "T") []),
       .call .sort (.handleSort (Facts.Grammar.Examples.ident "List") [4]),
       .call .nothing (.endDatatypeDeclaration [⟨Facts.Grammar.Examples.simple "nil", []⟩,
-        ⟨Facts.Grammar.Examples.simple "cons", [(Facts.Grammar.Examples.simple "head", 3),
-            (Facts.Grammar.Examples.simple "tail", 5)]⟩]),
+        ⟨Facts.Grammar.Examples.simple "cons", [(Facts.Grammar.Examples.simple "car", 3),
+            (Facts.Grammar.Examples.simple "cdr", 5)]⟩]),
       .call .nothing .endDeclareDatatypes] := rfl
 
 end BSmtLibSpec.Facts.Grammar.Examples

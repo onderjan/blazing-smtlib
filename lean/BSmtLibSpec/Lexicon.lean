@@ -207,7 +207,7 @@ def unescape20 : Chars → Chars
 The reserved words each version adds to the basic set; no version removes one.
 
 Standard: §3.1 Reserved words of each version, given as what each version adds;
-`BSmtLib.SpecChecks.Reserved` proves them equal to the standard's full lists.
+`BSmtLibSpec.Facts.Lexicon` proves them equal to the standard's full lists.
 -/
 def addedBasicReservedWords : Version → List String
   | .v2_0 => ["par", "NUMERAL", "DECIMAL", "STRING", "_", "!", "as", "let", "forall", "exists"]

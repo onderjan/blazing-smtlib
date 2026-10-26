@@ -10,7 +10,7 @@ public import BSmtLibSpec.Parser.Traversal
 
 Properties of the handler contract alone: that the traversal takes exactly the tokens a script
 is written as, that its calls determine the script, and that what it has done before a token
-arrives depends only on the tokens before it. `BSmtLib.SpecChecks` proves them.
+arrives depends only on the tokens before it. `BSmtLibSpec.Facts.Parser` proves them.
 
 They are stated on a recording run (`record`): the traversal of a script with a handler, token
 points and a producer that write down every event, in order, and a handler that returns as each handled

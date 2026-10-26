@@ -115,8 +115,8 @@ are how agents follow it.
 - The specification's source of truth is the SMT-LIB standard. Its comments
   cite the standard by version, section and production, as the one exception
   to the rule against referring to documents outside the repository. Every
-  definition in it that states a rule or a property begins with a tag saying how
-  it relates to the standard; `lean/BSmtLibSpec.lean` lists the tags.
+  definition in it that states a rule or a property carries a tag in its comment
+  saying how it relates to the standard; `lean/BSmtLibSpec.lean` lists the tags.
 - `lean/BSmtLibSpec/Facts` checks the specification: on the standard's
   examples, and that it is unambiguous. It is not trusted and not a part of the
   specification.

@@ -14,7 +14,8 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip
 The lexicon: every input has at most one tokenisation. Composition: reading can stop at the `)`
 of a command and start again on the rest, possibly in another version. Round trips: the tokens of
 an input can be printed back, exactly with the whitespace and comments between them and in a
-canonical layout without them, and are read back from what is printed.
+canonical layout without them, and are read back from what is printed. Reserved words: the
+reserved words that each version adds make up the standard's full lists, each word once.
 
 Each theorem below proves a property of the specification, from the modules imported above.
 Each is followed by the axioms its proof uses: only those of Lean's standard library, no
@@ -197,5 +198,50 @@ info: 'BSmtLibSpec.Facts.Lexicon.layout_read_only' depends on axioms: [propext, 
 -/
 #guard_msgs in
 #print axioms Lexicon.layout_read_only
+
+/-!
+### Reserved words
+
+`Lexicon.basicReservedWords` and `Lexicon.commandNames` build the reserved words of each version
+from what each version adds. The standard lists them in full for each version, and
+`Proofs.Lexicon.Reserved` transcribes those lists a second time: `listedBasicReservedWords` and
+`listedCommandNames`, the latter with `define-funs-rec` added from 2.5 on (Reading L6).
+-/
+
+/-- The basic set of reserved words of each version is, up to order, the one the version lists. -/
+theorem Lexicon.basicReservedWords_listed (version : Lexicon.Version) :
+    (Lexicon.basicReservedWords version).Perm
+      (Proofs.Lexicon.Reserved.listedBasicReservedWords version) :=
+  Proofs.Lexicon.Reserved.basicReservedWords_listed version
+
+/--
+info: 'BSmtLibSpec.Facts.Lexicon.basicReservedWords_listed' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexicon.basicReservedWords_listed
+
+/-- The command names of each version are, up to order, the ones the version lists, with
+`define-funs-rec` added from 2.5 on. -/
+theorem Lexicon.commandNames_listed (version : Lexicon.Version) :
+    (Lexicon.commandNames version).Perm (Proofs.Lexicon.Reserved.listedCommandNames version) :=
+  Proofs.Lexicon.Reserved.commandNames_listed version
+
+/--
+info: 'BSmtLibSpec.Facts.Lexicon.commandNames_listed' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms Lexicon.commandNames_listed
+
+/-- No reserved word of a version is listed twice: neither within the basic set or the command
+names, nor in both. -/
+theorem Lexicon.reservedWords_nodup (version : Lexicon.Version) :
+    (Lexicon.basicReservedWords version ++ Lexicon.commandNames version).Nodup :=
+  Proofs.Lexicon.Reserved.reservedWords_nodup version
+
+/--
+info: 'BSmtLibSpec.Facts.Lexicon.reservedWords_nodup' does not depend on any axioms
+-/
+#guard_msgs in
+#print axioms Lexicon.reservedWords_nodup
 
 end BSmtLibSpec.Facts

@@ -56,6 +56,9 @@ Behaviour that did not change between versions is only referenced to the latest 
 
 We use the following comments at every definition that states a rule or a property based
 on the standard, except where documented otherwise in the file-level documentation comment.
+The modules `Lexer`, `Parser` and `Reader` formalise our reading of how a lexer, a parser and
+a reader behave, of which the standard says little; their definitions carry no tag except
+*Property*.
 
 - **Standard:** the definition formalises a rule of the standard at the version and place given,
   and includes the version, section, and the name of production in Appendix B where relevant.
@@ -82,10 +85,15 @@ Lexicon:
 - **L7**: a 2.0 string literal may contain TAB, CR, or LF.
 - **L8**: the limitation of 2.0 to US-ASCII limits the input, not the lexicon.
 
+Grammar:
+- **G1**: before 2.6, a reserved word is not an s-expression.
+
 Syntactic modes:
 - **M1**: a version declaration changes the syntax mode between commands after
   the closing parenthesis of the `set-info` command; a declaration of a version
-  that is not supported (such as 3.0) cannot stand in a file.
+  that is not supported (such as 3.0) cannot stand in a file; `:smt-lib-version`
+  declares the version in all SMT-LIB 2 versions including 2.0 and 2.5 which do
+  not state this explicitly.
 - **M2**: `exit` ends a script; the input after it is not parsed.
 - **M3**: `reset` does not return to the initial version.
 
@@ -132,6 +140,15 @@ that should be checked by the lexer, but a rule restricting the input: the drive
 responsible for enforcing it if needed, not the lexer. The ASCII rule is syntactically
 unnecessary and was removed in later versions.
 
+### Grammar
+
+**G1**: In 2.0, 2.5 and release 2017-07-18 of 2.6, §3.2 calls an S-expression "either a
+non-parenthesis token or a (possibly empty) sequence of S-expressions enclosed in parentheses",
+which includes reserved words, but its production ⟨s_expr⟩, in §3.2 and Appendix B, does not
+include ⟨reserved⟩. Release 2021-04-02 of 2.6 is "now allowing reserved words in s-expression",
+which says they were not allowed before. We follow the production: in 2.0 and 2.5, a reserved
+word is not an s-expression.
+
 ### Syntactic modes
 
 **M1**: We consider a version declaration using `set-info` command with `:smt-lib-version`
@@ -141,6 +158,10 @@ then new commands can be read in under a new version declaration.
 The standard defines the syntax of the versions it specifies, and none for any other,
 so a declaration of a version that is not one of them (such as 3.0) names no mode in which
 the rest could be read: it cannot stand in a file.
+The standard defines the attribute `:smt-lib-version` from 2.6 on (2.6 and 2.7 §4.2.9);
+2.0 and 2.5 do not mention it. We give it the same meaning in 2.0 and 2.5, so that a file
+read in any version can declare the version it continues in; there too, a declaration whose
+value is not the number of a supported version cannot stand.
 
 **M2**: We consider `(exit)` to change the syntactic mode to a mode where all further
 bytes are discarded, exactly after the closing parenthesis. The end of the input is not one

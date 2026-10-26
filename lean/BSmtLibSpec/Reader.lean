@@ -74,7 +74,7 @@ its commands.
 So the handler is told the whole file but for three things that no call carries: the whitespace
 and the comments; everything after `exit`, which is not read, and which a caller takes from the
 input where the lexer began to discard; and, in 2.0, how a string literal is spelled, since two
-spellings can stand for the same characters (`"\a"` and `"\\a"`). `BSmtLib.SpecChecks` proves
+spellings can stand for the same characters (`"\a"` and `"\\a"`). `BSmtLibSpec.Facts.Reader` proves
 it.
 -/
 def CallsDetermineCommands : Prop :=

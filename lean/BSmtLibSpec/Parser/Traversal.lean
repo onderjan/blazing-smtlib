@@ -152,7 +152,7 @@ method of the library's handler traits but the switch of the version, which cann
 (`Handler.setVersion`).
 -/
 inductive Call (values : Values) : Returns → Type where
-  -- Sorts, s-expressions, attributes and terms (`SmtHandler`)
+  -- Sorts, s-expressions, attributes and terms
   | handleSort (identifier : Tree.Identifier) (arguments : List values.sort) : Call values .sort
   | handleSExpr (sExpr : SExprNode values) : Call values .sExpr
   | handleAttribute (keyword : Chars) (value : Option (AttributeValueNode values)) :
@@ -174,7 +174,7 @@ inductive Call (values : Values) : Returns → Type where
       Call values .term
   | endMatch (scrutinee : values.term) (cases : List (Tree.Pattern × values.term)) :
       Call values .term
-  -- Commands (`SmtCommandHandler`)
+  -- Commands
   | commandAssert (term : values.term) : Call values .nothing
   | commandCheckSat : Call values .nothing
   | commandCheckSatAssuming (assumptions : List values.term) : Call values .nothing
@@ -256,7 +256,7 @@ structure Points (m : Type → Type) where
   arrive : Received → m Unit
   process : Received → m Unit
 
-/-- A producer's refusal to switch the version (`SmtVersionRefused`). -/
+/-- A producer's refusal to switch the version. -/
 structure VersionRefused where
 
 /--

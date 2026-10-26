@@ -342,7 +342,8 @@ The s-expression is one of the version: a reserved word is an s-expression from 
 only a reserved word of the version is one.
 
 Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩: a reserved word is an s-expression from
-2.6 release 2021-04-02 on; ⟨reserved⟩ of each version.
+2.6 release 2021-04-02 on; ⟨reserved⟩ of each version. Reading G1: in 2.0 and 2.5, App. B
+⟨s_expr⟩ without ⟨reserved⟩, against the prose of §3.2.
 -/
 def SExpr.Valid (version : Version) : SExpr → Prop
   | .reserved w =>

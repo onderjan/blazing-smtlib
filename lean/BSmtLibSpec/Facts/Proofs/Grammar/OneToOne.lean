@@ -134,6 +134,10 @@ theorem readSExpr_tokens_aux : ∀ n,
         simp [Tree.SExpr.tokensAll, readSExprs, startsClose_sExpr, ih₁ sExpr _ (by omega),
           ih₂ sExprs rest (by omega)]
 
+theorem readSExpr_tokens (sExpr : Tree.SExpr) (rest : List SyntaxToken) {n : Nat}
+    (h : sizeOf sExpr < n) : readSExpr n (sExpr.tokens ++ rest) = some (sExpr, rest) :=
+  (readSExpr_tokens_aux n).1 sExpr rest h
+
 theorem readSExprs_tokens (sExprs : List Tree.SExpr) (rest : List SyntaxToken) {n : Nat}
     (h : sizeOf sExprs < n) :
     readSExprs n (Tree.SExpr.tokensAll sExprs ++ .parenClose :: rest) = some (sExprs, rest) :=

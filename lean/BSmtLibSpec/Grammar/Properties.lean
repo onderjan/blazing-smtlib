@@ -10,9 +10,9 @@ public import BSmtLibSpec.Lexer
 
 Properties of the specification alone: that each sequence of tokens is at most one tree, that
 each file is at most one sequence of commands, and that a lexer fed a command holds none of its
-tokens back. `BSmtLib.SpecChecks` proves them.
+tokens back. `BSmtLibSpec.Facts.Grammar` proves them.
 
-Together with `tokens`, which writes every tree as exactly one sequence of tokens, the first two
+Together with `tokens`, which writes every tree as exactly one sequence of tokens, the first five
 say that the valid trees of a version and the sequences of tokens they are written as
 correspond one to one: a tree can be read back from its tokens, and nothing is lost in either
 direction.
@@ -21,6 +21,41 @@ direction.
 namespace BSmtLibSpec.Grammar.Properties
 
 open BSmtLibSpec.Lexicon
+
+/--
+Property: two s-expressions of a version that are written with the same tokens are the same
+s-expression.
+
+So a sequence of tokens is an s-expression of the version in at most one way
+(`Syntax.IsSExpr`). If it did not hold, one s-expression would stand for two different trees,
+and a parser could not tell which one to hand over.
+-/
+def SExprsOneToOne : Prop :=
+  ∀ version (sExpr sExpr' : Tree.SExpr), sExpr.Valid version → sExpr'.Valid version →
+    sExpr.tokens = sExpr'.tokens → sExpr = sExpr'
+
+/--
+Property: two attributes of a version that are written with the same tokens are the same
+attribute.
+
+So a sequence of tokens is an attribute of the version in at most one way
+(`Syntax.IsAttribute`). If it did not hold, one attribute would stand for two different trees,
+and a parser could not tell which one to hand over.
+-/
+def AttributesOneToOne : Prop :=
+  ∀ version («attribute» attribute' : Tree.Attribute), «attribute».Valid version →
+    attribute'.Valid version → «attribute».tokens = attribute'.tokens → «attribute» = attribute'
+
+/--
+Property: two sorts of a version that are written with the same tokens are the same sort.
+
+So a sequence of tokens is a sort of the version in at most one way (`Syntax.IsSort`). If it did
+not hold, one sort would stand for two different trees, and a parser could not tell which one to
+hand over.
+-/
+def SortsOneToOne : Prop :=
+  ∀ version (sort sort' : Tree.Sort), sort.Valid version → sort'.Valid version →
+    sort.tokens = sort'.tokens → sort = sort'
 
 /--
 Property: two terms of a version that are written with the same tokens are the same term.

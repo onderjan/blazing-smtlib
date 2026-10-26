@@ -9,7 +9,9 @@ public import BSmtLibSpec.Lexicon.Properties
 
 What a lexer hands over, in a form that does not depend on how a lexer represents its tokens,
 and what it means for a lexer to be correct. The properties are trusted as much as the spec:
-a proof shows that a property holds, so the property has to say what is meant.
+a proof shows that a property holds, so the property has to say what is meant. An error named
+in code, such as `UnexpectedTrailingToken`, is the error of the library's interface that the
+definition specifies.
 -/
 
 namespace BSmtLibSpec.Lexer
@@ -316,7 +318,7 @@ def Correct (feed : Version → List Chars → Bool → Fed) : Prop :=
 
 /-! ## Consequences of correctness
 
-Properties that are not a part of `Correct` because they follow from it. `BSmtLib.SpecChecks`
+Properties that are not a part of `Correct` because they follow from it. `BSmtLibSpec.Facts.Lexer`
 proves `Sequential` and `WholeInputCorrect` as consequences of `Correct`, for every lexer at
 once.
 -/
@@ -360,7 +362,7 @@ def WholeInputCorrect (feed : Version → List Chars → Bool → Fed) (version 
 
 /-! ## About the specification
 
-A property of the specification alone, which `BSmtLib.SpecChecks` proves.
+A property of the specification alone, which `BSmtLibSpec.Facts.Lexicon` proves.
 -/
 
 /--
@@ -440,7 +442,7 @@ to the design of recovery.
 structure Consumer where
   Result : Type
   Error : Type
-  /-- Whether the consumer is handed the whitespace and comments (`IS_CONCRETE`). -/
+  /-- Whether the consumer is handed the whitespace and comments. -/
   concrete : Bool
   answer : List Handed → Answer Result Error
   /-- The version the consumer switches to after the entry, if it switches. -/
