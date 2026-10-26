@@ -5,20 +5,25 @@ module
 /-!
 # Regular expressions
 
-The formalism the lexicon is written in. A regular expression is given directly by the
-character sequences it matches: each combinator is defined in one line, and that definition
-is all there is to its meaning.
+The formalism for lexicon production rules, as used in the SMT-LIB specification
+documents, especially their Appendix B (Concrete Syntax).
 
-The standard counts characters in an 8-bit encoding, with codes from 0 to 255, so a
-character is a byte.
+We consider a "character" a byte in an 8-bit encoding. This allows both
+traditional single-byte encodings and UTF-8 to function, since SMT-LIB syntax
+treats every non-ASCII code point alike (2.7 §3.1).
+
+For the Lean formalism, we define a regular expression as a total function from
+character sequences to propositions. Every combinator then returns a regular
+expression, a function that, given a character sequence, returns a proposition
+that holds exactly when the regular expression matches.
 -/
 
 namespace BSmtLibSpec
 
-/-- A sequence of characters. -/
+/-- A sequence of 8-bit characters. -/
 abbrev Regex.Chars := List UInt8
 
-/-- The characters of an ASCII string. Only ASCII strings are used. -/
+/-- The characters of an ASCII string. Only ASCII strings are used in the specification. -/
 def Regex.chars (s : String) : Chars := s.toList.map Char.toUInt8
 
 /-- A regular expression: the set of character sequences it matches. -/
