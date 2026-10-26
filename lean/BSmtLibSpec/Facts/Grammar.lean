@@ -10,8 +10,8 @@ public import BSmtLibSpec.Facts.Proofs.Grammar.RoundTrip
 /-!
 # Facts about the grammar
 
-The grammar: the tokens of a tree determine the tree, and every file has at most one reading,
-from which it is reproduced.
+- The tokens of a tree determine the tree.
+- Every file has at most one reading, from which it is reproduced.
 
 Each theorem below proves a property of the specification, from the modules imported above.
 Each is followed by the axioms its proof uses: only those of Lean's standard library, no
@@ -140,9 +140,14 @@ info: 'BSmtLibSpec.Facts.Grammar.commandHandedOver' depends on axioms: [propext,
 /-!
 ### Reproducing a file
 
-A file is reproduced from its reading, the concrete readings of its commands and what follows
-the last of them, and its commands (`Grammar.reproduce`): each command is written as its
-tokens, in the version in force, with the whitespace and comments of the input between them.
+A file is reproduced (`Grammar.reproduce`) from:
+
+- its reading;
+- the concrete readings of its commands, and what follows the last of them;
+- its commands.
+
+Each command is written as its tokens, in the version in force, with the whitespace and comments
+of the input between them.
 Only a 2.0 string literal can come out written differently: as one that stands for the same
 content (`Lexicon.SameButStrings20`).
 -/

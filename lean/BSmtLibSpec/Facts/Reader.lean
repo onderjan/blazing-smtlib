@@ -7,8 +7,8 @@ public import BSmtLibSpec.Facts.Proofs.Reader
 /-!
 # Facts about readers
 
-Readers: the calls on a file determine the file, and a reader that lexes then parses reads files
-and finishes only on files.
+- The calls on a file determine the file.
+- A reader that lexes then parses reads files, and finishes only on files.
 
 Each theorem below proves a property of the specification, from the modules imported above.
 Each is followed by the axioms its proof uses: only those of Lean's standard library, no

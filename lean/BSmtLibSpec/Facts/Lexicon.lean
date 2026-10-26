@@ -11,11 +11,14 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip
 /-!
 # Facts about the lexicon
 
-The lexicon: every input has at most one tokenisation. Composition: reading can stop at the `)`
-of a command and start again on the rest, possibly in another version. Round trips: the tokens of
-an input can be printed back, exactly with the whitespace and comments between them and in a
-canonical layout without them, and are read back from what is printed. Reserved words: the
-reserved words that each version adds make up the standard's full lists, each word once.
+- Tokenisation: every input has at most one tokenisation.
+- Composition: reading can stop at the `)` of a command and start again on the rest, possibly in
+  another version.
+- Round trips: the tokens of an input can be printed back, exactly with the whitespace and
+  comments between them and in a canonical layout without them, and are read back from what is
+  printed.
+- Reserved words: the reserved words that each version adds make up the standard's full lists,
+  each word once.
 
 Each theorem below proves a property of the specification, from the modules imported above.
 Each is followed by the axioms its proof uses: only those of Lean's standard library, no
@@ -39,9 +42,12 @@ info: 'BSmtLibSpec.Facts.Lexicon.unique' depends on axioms: [propext, Classical.
 
 A command ends with a `)`, which needs no delimiter. Characters whose tokenisation ends with a
 `)` at their end are a point where reading can stop and start again, possibly in another
-version: a lexer fed them has handed over all their tokens and holds nothing back, the
-tokenisations of the characters followed by more are their tokens followed by those of the more
-read on their own, and the more read on their own from any offset are the same tokens, moved.
+version:
+
+- a lexer fed them has handed over all their tokens and holds nothing back;
+- the tokenisations of the characters followed by more are their tokens followed by those of the
+  more read on their own;
+- the more, read on their own from any offset, are the same tokens, moved.
 -/
 
 /-- Characters whose tokenisation ends with a `)` at their end are handed over whole, and the

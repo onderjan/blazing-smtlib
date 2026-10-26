@@ -8,9 +8,11 @@ public import BSmtLibSpec.Lexer
 /-!
 # Properties of the grammar
 
-Properties of the specification alone: that each sequence of tokens is at most one tree, that
-each file is at most one sequence of commands, and that a lexer fed a command holds none of its
-tokens back. `BSmtLibSpec.Facts.Grammar` proves them.
+Properties of the specification alone, which `BSmtLibSpec.Facts.Grammar` proves:
+
+- each sequence of tokens is at most one tree;
+- each file is at most one sequence of commands;
+- a lexer fed a command holds none of its tokens back.
 
 Together with `tokens`, which writes every tree as exactly one sequence of tokens, the first five
 say that, in each version, the valid trees and the sequences of tokens they are written as

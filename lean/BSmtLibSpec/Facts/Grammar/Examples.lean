@@ -9,9 +9,13 @@ public import BSmtLibSpec.Parser
 /-!
 # The standard's examples of syntax
 
-Examples the standard gives with its syntactic rules, checked against the grammar: the trees
-they are, in which versions, and how a file is read; and the calls the traversal makes for a few
-scripts, pinned by their recordings. Not trusted: these are proofs.
+Examples the standard gives with its syntactic rules, checked against the grammar:
+
+- the trees they are, and in which versions;
+- how a file is read;
+- the calls the traversal makes for a few scripts, pinned by their recordings.
+
+Not trusted: these are proofs.
 -/
 
 namespace BSmtLibSpec.Facts.Grammar.Examples

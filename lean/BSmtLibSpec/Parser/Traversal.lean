@@ -46,15 +46,19 @@ of the input, so the parser receives the end of the input right after the `)` of
 
 ## Versions
 
-The handler is told the version in force: at the start of the traversal, before anything else,
-the initial version, and after each version declaration, the version it declares, after the
-producer's switch.
+The handler is told the version in force:
+
+- at the start of the traversal, before anything else: the initial version;
+- after each version declaration, after the producer's switch: the version it declares.
 
 ## The producer
 
-Besides the handler, the traversal tells the producer of the tokens two things (`Producer`): to
-switch the version after a version declaration, which it may refuse, and to discard the rest of
-the input after `exit`. Each comes after the handler's call for the same `)`.
+Besides the handler, the traversal tells the producer of the tokens two things (`Producer`):
+
+- to switch the version after a version declaration, which it may refuse;
+- to discard the rest of the input after `exit`.
+
+Each comes after the handler's call for the same `)`.
 
 ## Failures
 

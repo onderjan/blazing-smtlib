@@ -8,15 +8,19 @@ public import BSmtLibSpec.Parser.Traversal
 /-!
 # Properties of the traversal
 
-Properties of the handler contract alone: that the traversal takes exactly the tokens a script
-is written as, that its calls determine the script, and that what it has done before a token
-arrives depends only on the tokens before it. `BSmtLibSpec.Facts.Parser` proves them.
+Properties of the handler contract alone, which `BSmtLibSpec.Facts.Parser` proves:
 
-They are stated on a recording run (`record`): the traversal of a script with a handler, token
-points and a producer that write down every event, in order, and a handler that returns as each
-handled value the number of calls before it, so that a call names the earlier calls whose results
-it receives. A recording run never fails: the policy restricts nothing, the producer never
-refuses, and the handler never fails.
+- the traversal takes exactly the tokens a script is written as;
+- its calls determine the script;
+- what it has done before a token arrives depends only on the tokens before it.
+
+They are stated on a recording run (`record`), a traversal of a script in which:
+
+- the handler, the token points and the producer write down every event, in order;
+- the handler returns as each handled value the number of calls before it, so that a call names
+  the earlier calls whose results it receives;
+- nothing fails: the policy restricts nothing, the producer never refuses, and the handler never
+  fails.
 
 A recording stands for the run with every other handler: the traversal never looks at a value
 a handler returns, it only hands it on to later calls, so the run with any handler makes the

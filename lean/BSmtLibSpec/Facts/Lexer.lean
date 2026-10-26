@@ -9,10 +9,13 @@ public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
 /-!
 # Facts about a lexer
 
-A lexer fed in slices: what its properties ask for exists, and a lexer that is correct hands over
-more as it is fed more or the end of the input, and is correct on whole inputs. A lexer and its
-consumers: what a lexer does with a consumer is determined, and the input after a switch of the
-version is located as in the whole input.
+- A lexer fed in slices:
+  - what its properties ask for exists;
+  - a correct lexer hands over more as it is fed more or the end of the input;
+  - a correct lexer is correct on whole inputs.
+- A lexer and its consumers:
+  - what a lexer does with a consumer is determined;
+  - the input after a version switch is located as in the whole input.
 
 Each theorem below proves a property of the specification, from the modules imported above.
 Each is followed by the axioms its proof uses: only those of Lean's standard library, no

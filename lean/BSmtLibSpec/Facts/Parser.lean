@@ -7,8 +7,11 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Bridge
 /-!
 # Facts about the parser
 
-The traversal: it makes the calls of a parser that goes by the items it receives, its calls
-rebuild the script, and they are placed by the items before them, for every handler.
+The traversal, for every handler:
+
+- it makes the calls of a parser that goes by the items it receives;
+- its calls rebuild the script;
+- its calls are placed by the items before them.
 
 Each theorem below proves a property of the specification, from the modules imported above.
 Each is followed by the axioms its proof uses: only those of Lean's standard library, no

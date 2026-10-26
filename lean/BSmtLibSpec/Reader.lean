@@ -11,11 +11,13 @@ public import BSmtLibSpec.Parser
 A reader is a lexer whose consumer is a parser. It is fed an input in slices, and then the end
 of the input, and tells its handler what the input holds.
 
-What a reader does on every input is what a correct lexer does with a correct parser as its
-consumer (`LexesThenParses`). On a file, the handler is told the traversal's calls for the
-file's commands and the reader finishes; on any other input it does not finish (`ReadsFiles`,
-`FinishesOnlyOnFiles`). The calls on a file determine the file's commands
-(`CallsDetermineCommands`).
+- On every input, a reader does what a correct lexer does with a correct parser as its consumer
+  (`LexesThenParses`).
+- On a file, the handler is told the traversal's calls for the file's commands, and the reader
+  finishes (`ReadsFiles`).
+- On any other input, the reader does not finish (`FinishesOnlyOnFiles`).
+- The calls on a file determine the file's initial version and commands
+  (`CallsDetermineCommands`).
 
 A reader can have a parser of any syntactic category; only the reader of scripts is specified
 here. It reads under the policy that allows every version, and is seen through a recording
