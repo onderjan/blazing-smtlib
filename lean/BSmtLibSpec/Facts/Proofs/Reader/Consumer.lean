@@ -17,7 +17,7 @@ switch and the discarding that the traversal asks for after the `)` of a command
 
 A parser is told only what a token stands for. To apply what is known of a parser on a whole
 script, the tokens handed over so far are completed by tokens that stand for the rest of the
-script (`handedFor`); each item a parser takes is one that a lexer of 2.7 can hand over, by
+script (`handedFor`); each item a parser takes is one that a lexer can hand over in 2.7, by
 `takes_reserved`.
 
 Not trusted: everything here is proved.
@@ -81,7 +81,7 @@ theorem stood_append (taken more : List Handed) :
     stood parser item (taken ++ more) = stood parser item taken ++ stood parser item more := by
   simp [stood]
 
-/-- Every item that a parser takes is one that a lexer of 2.7 hands over. -/
+/-- Every item that a parser takes is one that a lexer hands over in 2.7. -/
 theorem ofVersion_of_takes {version : Version} {commands : List Tree.Command}
     {taken : List Traversal.Received} {ending : Ending} (h : Takes version commands taken ending)
     {received : Traversal.Received} (hr : received ∈ taken) : received.OfVersion .v2_7 := by

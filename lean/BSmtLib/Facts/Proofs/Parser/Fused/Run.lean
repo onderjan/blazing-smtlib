@@ -13,7 +13,7 @@ import all BSmtLib.Lexer.Cursor
 /-!
 # Runs of the port's parser calls
 
-What the proofs of the fused reader share: a parser program of the port run on the handler, bound
+What the proofs about the fused reader share: a parser program of the port run on the handler, bound
 to what follows it (`run_bind_eq`, `run_call_bind`, `run_call_map`); the fused category steps'
 outcomes read as the port's results (`PureOutcome.toRun`, `HandledOutcome.toRun`, `qualToRun`);
 and the token as the port views it, by its category and content (`inputOf`), with the facts about

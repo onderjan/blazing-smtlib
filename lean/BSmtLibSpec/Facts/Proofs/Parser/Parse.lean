@@ -596,7 +596,7 @@ def commandsFrom : Nat → Nat → Program values Unit
   | 0, _ => .stuck
   | n + 1, declarations => commandsStep (commandsFrom n) n declarations
 
-/-- A script read from the version, with fuel `n`: the handler is told the version, then the
+/-- A script with the initial version, with fuel `n`: the handler is told the version, then the
 commands. -/
 def parseScript (n : Nat) (version : Version) : Program values Unit :=
   .setVersion version (commandsFrom n 0)

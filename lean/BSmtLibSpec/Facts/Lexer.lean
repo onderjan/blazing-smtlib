@@ -7,7 +7,7 @@ public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
 @[expose] public section
 
 /-!
-# Facts of a lexer
+# Facts about a lexer
 
 A lexer fed in slices: what its properties ask for exists, and a lexer that is correct hands over
 more as it is fed more or the end of the input, and is correct on whole inputs. A lexer and its

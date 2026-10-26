@@ -77,11 +77,11 @@ open BSmtLib.Facts.Proofs.Reader.Lexes.Reader BSmtLib.Facts.Proofs.Reader.Reader
 open BSmtLib.Facts.Proofs.Reader.Session BSmtLib.Facts.Proofs.Reader.Valid
 
 /--
-The library's lexer, fed the characters of a file of commands, read from the version, cut into any
-slices, and then the end of the input, with the library's script parser as a consumer of the lexer
-spec: the input ends with the parser's result returned; the tokens the parser took stand for what a
-parser receives for the script, version switches and `exit` included; and the parser's recording
-run on them has the traversal's events.
+The library's lexer, fed the characters of a file of commands, with the initial version, cut into
+any slices, and then the end of the input, with the library's script parser as a consumer of the
+lexer spec: the input ends with the parser's result returned; the tokens the parser took stand for
+what a parser receives for the script, version switches and `exit` included; and the parser's
+recording run on them has the traversal's events.
 -/
 theorem library_lexes_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
@@ -103,7 +103,7 @@ info: 'BSmtLib.Facts.Reader.library_lexes_file' depends on axioms: [propext, Cla
 #print axioms library_lexes_file
 
 /--
-The library's lexer, fed the characters of any input, read from the version, cut into any slices,
+The library's lexer, fed the characters of any input, with the initial version, cut into any slices,
 and then the end of the input, with the library's script parser as a consumer of the lexer spec,
 ends in one of four ways, with the parser's recording run on the tokens taken as the specification
 gives it:
@@ -236,8 +236,8 @@ info: 'BSmtLib.Facts.Reader.library_finishes_iff_file' depends on axioms: [prope
 
 /--
 The library's lexer with the library's parse adapter as its consumer, over the recording handler
-and the script parser that allows every version, fed the characters of a file of commands, read
-from the version, cut into any slices, by its public calls (`Param.paFeed`: `Lexer.lexSlice` for
+and the script parser that allows every version, fed the characters of a file of commands, with
+the initial version, cut into any slices, by its public calls (`Param.paFeed`: `Lexer.lexSlice` for
 each slice, then `Lexer.lexEof`): no call fails, the end of the input returns the parser's
 result, and the handler has recorded the calls of the traversal of the script, in order.
 -/

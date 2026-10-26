@@ -132,8 +132,8 @@ theorem readUpTo_of_reading {version : Lexicon.Version} {slices : List ByteList}
     | none => rfl
     | some l => rw [hb] at this; cases this
 
-/-- The reader of the recording handler from the version, allowing every version, is the reader
-of the end-to-end proofs. -/
+/-- The reader of the recording handler with the initial version, allowing every version, is the
+reader of the end-to-end proofs. -/
 theorem reader_eq (version : Version) :
     Reader.script ([] : List Event) allVersions version = readerOf (fromVersion version) := by
   cases version <;> rfl

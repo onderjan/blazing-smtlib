@@ -11,7 +11,7 @@ import all BSmtLib.Token.Reserved
 /-!
 # The pattern parser's steps, keeping where they stop
 
-The lemmas of the patterns in `Facts.Proofs.Parser.TermParts`, for `RunsS`.
+The lemmas about the patterns in `Facts.Proofs.Parser.TermParts`, for `RunsS`.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.StepsPattern

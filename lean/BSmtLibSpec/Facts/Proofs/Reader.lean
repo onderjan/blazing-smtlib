@@ -7,9 +7,9 @@ public import BSmtLibSpec.Facts.Proofs.Reader.Finishes
 /-!
 # Readers
 
-The calls for the commands of a file determine the file's version and commands: the commands
-of a file make a script (`script_of_file`), the first call is the switch to the version the file
-is read from, and the calls of a script's recording rebuild the script
+The calls for the commands of a file determine the file's initial version and commands: the commands
+of a file make a script (`script_of_file`), the first call is the switch to the file's initial
+version, and the calls of a script's recording rebuild the script
 (`Parser.recover_record`).
 
 That a reader which lexes then parses (`BSmtLibSpec.Reader.LexesThenParses`) reads files and

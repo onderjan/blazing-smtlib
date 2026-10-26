@@ -329,10 +329,10 @@ def step (state : State) : Event → Option State
   | .handlerSwitch version => some { state.push .none with version }
   | _ => some state
 
-/-- The state where the rebuilding of a script from the version starts. -/
+/-- The state where the rebuilding of a script with the initial version starts. -/
 def initial (version : Version) : State := ⟨version, [], .none, []⟩
 
-/-- The commands that the calls rebuild, read from the version, if they rebuild any. -/
+/-- The commands that the calls rebuild, with the initial version, if they rebuild any. -/
 def recover (version : Version) (calls : List Event) : Option (List Tree.Command) :=
   (calls.foldlM step (initial version)).map State.commands
 

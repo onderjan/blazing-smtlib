@@ -171,8 +171,6 @@ Reading L8: the lexer does not perform the check for non-ASCII bytes.
 /--
 What a lexer has done after being fed slices, and possibly the end of the input: the tokens it
 handed over, in order, and whether it failed.
-
-The standard knows only whole inputs; a lexer fed in slices is this library's.
 -/
 structure Fed where
   handed : List Handed
@@ -195,9 +193,7 @@ Property: `start` is the longest start of `input` that is viable.
 Up to the end of `start`, characters may still follow that make a valid input; past it, none
 can. While the input is `Viable`, `start` is all of it; once it is not, `start` ends where it
 stopped being viable. Of `(a #q`, it is `(a #`: `#x1` could follow, but nothing can follow
-`(a #q`.
-
-The standard speaks only of whole inputs; a lexer fed in slices has read a start of one.
+`(a #q`. A lexer fed in slices has read such a start of the input.
 -/
 def LongestViableStart (version : Version) (input start : Chars) : Prop :=
   start <+: input ∧ Viable version start ∧
@@ -210,15 +206,12 @@ each of them but a parenthesis is in the input.
 These are tokens that a lexer fed the input in slices may hand over: they are `Determined`,
 and their delimiter has been read (`DelimiterSeen`). After `(x |abc|`, `(` and `x` are ready,
 but `|abc|` is not: it is determined, but the character after it has not been read.
-
-Waiting for the delimiter of a token that is already determined is this library's; the standard
-does not speak of a lexer fed in slices.
 -/
 def HandoverReady (version : Version) (input : Chars) (tokens : List Token) : Prop :=
   Determined version input tokens ∧ ∀ token ∈ tokens, DelimiterSeen input token
 
 /--
-Property: the tokens are ready to be handed over, and no longer list is.
+Property: the tokens are ready to be handed over, and no longer list of tokens is ready.
 
 These are all the tokens that a lexer fed the input in slices may hand over, so a lexer that
 hands them over holds nothing back. On an input that is not `Viable`, every list is
@@ -273,7 +266,7 @@ def HandsOverAll (feed : Version → List Chars → Bool → Fed) (version : Ver
 
 /--
 Property: a lexer fed the slices, and then the end of the input if it has ended, has handed
-over the tokens maximal to hand over on the longest viable start of the input, and nothing else.
+over the maximal list of ready tokens on the longest viable start of the input, and nothing else.
 
 It is what the lexer must have handed over when the input is not `Complete`. `start` is that
 longest viable start (`LongestViableStart`), all of the input while it is viable. So the lexer
@@ -333,8 +326,8 @@ def Extends (before later : Fed) : Prop :=
 Property: what a lexer has done extends as it is fed more slices, and as it is fed the end of
 the input.
 
-What a lexer hands over is never taken back, so what a consumer has done with the tokens of a
-command, a later command cannot change. The end of the input only releases what waited for it.
+What a lexer hands over is never taken back, so a later command cannot change what a consumer
+has done with the tokens of an earlier one. The end of the input only releases what waited for it.
 -/
 def Sequential (feed : Version → List Chars → Bool → Fed) (version : Version)
     (slices more : List Chars) : Prop :=
@@ -425,16 +418,16 @@ inductive Answer (α ε : Type) where
 
 /--
 A consumer as a lexer sees it: its results and errors, whether it is concrete, and what it
-answers and asks for after each entry, given the entries it has taken so far, in order, the last
-one among them. The entries are the tokens, and for a concrete consumer also the pieces of
+answers and asks for after each entry, given the entries it has taken so far, in order, ending
+with that entry. The entries are the tokens, and for a concrete consumer also the pieces of
 whitespace and comments.
 
 A consumer that asks for a version switch has the input after the entry read in that
 version; one that asks for discarding has the input after the entry dropped. Both requests stand
 whether the consumer continues, breaks or fails at the entry: a consumer that breaks has the
 trailing input read in the version it asked for, and one that fails leaves the lexer in that
-version and discarding. What a lexer that recovers from such a failure is to read next is left
-to the design of recovery.
+version and discarding. What a lexer that recovers from such a failure reads next is not stated
+here.
 -/
 structure Consumer where
   Result : Type
@@ -517,8 +510,8 @@ def Session.fed {α ε : Type} (session : Session α ε) : Fed :=
 /--
 Property: the end of the input resets the version and the discarding.
 
-The session of a lexer created with the version `start`, which reaches the outcome with the
-tokens taken: if the outcome finishes the input, the version is reset to `start` and the lexer
+handed over the tokens taken: if the outcome finishes the input, the version is reset to `start`
+and the lexer no longer discards; otherwise the version and the discarding are as given.
 no longer discards; otherwise the version and the discarding are as given.
 -/
 def settle {α ε : Type} (start : Version) (taken : List Handed) (outcome : Outcome α ε)
@@ -527,8 +520,7 @@ def settle {α ε : Type} (start : Version) (taken : List Handed) (outcome : Out
   else ⟨taken, outcome, version, discardedFrom⟩
 
 /--
-The location, located in an input on its own, as located in the input that is `before`
-followed by that input.
+A location in an input read on its own, moved to where it lies when `before` comes first.
 -/
 def Location.after (before : Chars) (location : Location) : Location :=
   let start := locate before before.length
@@ -536,8 +528,8 @@ def Location.after (before : Chars) (location : Location) : Location :=
     line := start.line + location.line
     column := if location.line = 0 then start.column + location.column else location.column }
 
-/-- The token, handed over from an input on its own, as handed over from the input that is
-`before` followed by that input. -/
+/-- A token handed over from an input read on its own, moved to where it lies when `before`
+comes first. -/
 def Handed.after (before : Chars) (handed : Handed) : Handed :=
   { handed with start := handed.start.after before, «end» := handed.«end».after before }
 
@@ -554,8 +546,8 @@ def segment (feed : Version → List Chars → Bool → Fed) (version : Version)
   let fed := feed version [input.drop offset] ended
   { handed := fed.handed.map (Handed.after (input.take offset)), failed := fed.failed }
 
-/-- The piece of layout of the input that starts at the offset, has the length and the content,
-as handed over. -/
+/-- The piece of layout that starts at the offset, with the length and the content, as a lexer
+hands it over. -/
 def layoutEntry (input : Chars) (type : TokenType) (offset length : Nat) (content : Chars) :
     Handed :=
   { type, start := locate input offset, «end» := locate input (offset + length), reserved := none
@@ -659,13 +651,13 @@ inductive AfterBreak {α ε : Type} (result : α) (location : Location) :
   | held : AfterBreak result location [] false (.holding result location)
 
 /--
-Property: what a lexer created with the version `start`, fed the input, and then the end of the
-input if it has ended, does with the consumer from the point where the consumer has taken
-`taken`, the version in force is `version`, the entries ready next are `ready` and the lexer
-fails after them exactly if `failed`: it ends in the session.
+Property: `Runs feed consumer start input ended version ready failed taken session`: a lexer
+created with the version `start` and fed the input, then the end of the input if it has ended,
+ends in `session`, from the point where the consumer has taken `taken`, `version` is in force,
+the entries ready next are `ready`, and the lexer fails after them exactly if `failed`.
 
 Each constructor is one step: the consumer takes the next ready entry and answers, or no entry
-is ready. The rules of the section's documentation are the constructors' premises.
+is ready. The rules at the start of this section are the premises of the constructors.
 -/
 inductive Runs (feed : Version → List Chars → Bool → Fed) (consumer : Consumer)
     (start : Version) (input : Chars) (ended : Bool) :
@@ -752,7 +744,7 @@ inductive Runs (feed : Version → List Chars → Bool → Fed) (consumer : Cons
             ((consumer.switchTo (taken ++ [token])).getD version)) (some token.«end»))
 
 /--
-What a lexer has done with a consumer, created with a version: after being fed the earlier
+What a lexer created with a version has done with a consumer after being fed the earlier
 inputs, each as slices followed by the end of the input, then the slices, and then the end of
 the input if it has ended. The consumer starts each input with no entries taken.
 

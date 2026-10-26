@@ -23,9 +23,9 @@ is then also `BSmtLibSpec.Lexer.Sequential` and `BSmtLibSpec.Lexer.WholeInputCor
 /-!
 ## What holds
 
-Each theorem below proves a property of the specification of a lexer of the chain, from the
-modules imported above. Each is followed by the axioms its proof uses: only those of Lean's
-standard library, no `sorry` and no axiom of its own. The build fails if that changes.
+Each theorem below proves a property that the specification states about a lexer of the chain,
+from the modules imported above. Each is followed by the axioms its proof uses: only those of
+Lean's standard library, no `sorry` and no axiom of its own. The build fails if that changes.
 -/
 
 namespace BSmtLib.Facts

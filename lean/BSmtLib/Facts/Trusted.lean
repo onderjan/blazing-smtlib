@@ -53,7 +53,7 @@ inductive Side where
   /-- The lexers of the chain from the specification to the library's lexer:
   `BSmtLib.Lexer.Internal.VNaive`, `WRustPort` and `X1BatchInCore`, and the modules below them. -/
   | chain
-  /-- Everything else: the facts of the library and of the specification, this tool. -/
+  /-- Everything else: the facts about the library and about the specification, this tool. -/
   | other
   deriving BEq
 

@@ -340,7 +340,7 @@ theorem processed_eventsBeforeProcessing : ∀ (k : Nat) (events : List Event),
     cases event <;> simp only [eventsBeforeProcessing, List.filterMap_cons, Event.processed,
       ih₀, ih₁, List.take_succ_cons]
 
-/-- A recording begins with the handler's switch to the version the script is read from. -/
+/-- A recording begins with the handler's switch to the script's initial version. -/
 theorem record_head {version : Version} {commands : List Tree.Command}
     (h : Script version commands) :
     ∃ rest, record version commands = .handlerSwitch version :: rest :=

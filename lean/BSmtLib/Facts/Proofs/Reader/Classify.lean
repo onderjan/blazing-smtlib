@@ -318,7 +318,7 @@ theorem file_exit (hc : Correct feed) {start : Lexicon.Version} {input : Regex.C
 /-! ## How a session ends -/
 
 /--
-How a session with the script consumer, read from the version, ends on the input after the end of
+How a session with the script consumer, with the initial version, ends on the input after the end of
 the input: as one of the four ways of the module's documentation. `feed` is what the lexer hands
 over to the collector.
 -/

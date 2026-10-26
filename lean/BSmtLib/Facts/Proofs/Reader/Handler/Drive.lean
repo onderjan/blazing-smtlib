@@ -48,8 +48,8 @@ abbrev tokenStep (version : Version) (parser : ScriptParser H)
     (token : Internal.Input) : PM H ((Version × ScriptParser H) ⊕ Unit) :=
   afterToken nullPoints nullProducer version parser token
 
-/-- The script parser over the tokens, from the version and the parser: where it goes on after
-the last, in which version and state, or its end and the tokens after it. -/
+/-- The script parser over the tokens, with the initial version and the parser: where it goes on
+after the last, in which version and state, or its end and the tokens after it. -/
 def drive : Version → ScriptParser H → List Internal.Input →
     PM H ((Version × ScriptParser H) ⊕ (Unit × List Internal.Input))
   | version, parser, [] => pure (.inl (version, parser))

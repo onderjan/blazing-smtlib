@@ -22,7 +22,7 @@ open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested resetConsumed r
     EndsAfter consumedSpanOf foldConsumedCategories consumedEndOf)
 
 /- The lexer's state and the monads of its steps. They are public, in `Internal`, only so that the
-proofs of the lexers can read them; they are not a part of the library's interface. -/
+proofs about the lexers can read them; they are not a part of the library's interface. -/
 namespace Internal
 
 /-- Maximal number of tokens that can be batched. -/
@@ -270,7 +270,7 @@ theorem LexerCore.Bound.weaken {self : LexerCore} {floor : Option Nat} {low : Na
   ⟨Nat.zero_le _, h.2⟩
 
 /-!
-The steps of the lexer. They are public, in `Internal`, only so that the proofs of the lexers
+The steps of the lexer. They are public, in `Internal`, only so that the proofs about the lexers
 can read them; they are not a part of the library's interface.
 -/
 

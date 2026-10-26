@@ -12,12 +12,12 @@ syntactic category has two definitions, one case for each production:
 
 - `tokens`, how a syntax tree of the category is written: the production read from left to
   right, with the tokens of its parts in their places;
-- `Valid version`, the conditions that the production puts beside its tokens: that a version
-  has it, that a repetition `+` is not empty, that two lists have the same length.
+- `Valid version`, the conditions of the production that its tokens do not express: that the
+  version has it, that a repetition `+` is not empty, that two lists have the same length.
 
-A sequence of tokens is of a category in a version exactly when it is the `tokens` of a tree
-of that category that is `Valid` in that version (`IsTerm`, `IsCommand`). A tree is printed the
-same in every version; only `Valid` depends on the version.
+In a version, a sequence of tokens is a term, a command, or a tree of another category exactly
+when it is the `tokens` of a tree of that category that is `Valid` in that version (`IsTerm`,
+`IsCommand`). A tree is written the same in every version; only `Valid` depends on the version.
 
 How each production is written is the standard's; the trees and the split into `tokens` and
 `Valid` are how this specification records it.
@@ -338,7 +338,7 @@ def Command.tokens : Command → List SyntaxToken
 mutual
 
 /--
-The s-expression is valid: a reserved word is an s-expression from 2.6 on, and only one that
+An s-expression is valid when it holds reserved words only from 2.6 on, and only words that
 the version reserves.
 
 Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩: a reserved word is an s-expression from
@@ -360,7 +360,7 @@ def SExpr.ValidAll (version : Version) : List SExpr → Prop
 end
 
 /--
-The index is valid: a symbol is an index from 2.5 on.
+An index is valid when it is a numeral, or a symbol from 2.5 on.
 
 Standard: 2.7 §3.3 Identifiers; App. B ⟨index⟩ of each version.
 -/
@@ -369,7 +369,7 @@ def Index.Valid (version : Version) : Index → Prop
   | .symbol _ => versionAtLeast version .v2_5
 
 /--
-The identifier is valid: its indices are.
+An identifier is valid when its indices are valid.
 
 Standard: 2.7 §3.3 Identifiers; App. B ⟨identifier⟩.
 -/
@@ -379,7 +379,7 @@ def Identifier.Valid (version : Version) (identifier : Identifier) : Prop :=
 mutual
 
 /--
-The sort is valid: its identifier and its arguments are.
+A sort is valid when its identifier and its arguments are valid.
 
 Standard: 2.7 §3.5 Sorts; App. B ⟨sort⟩.
 -/
@@ -394,7 +394,7 @@ def Sort.ValidAll (version : Version) : List «Sort» → Prop
 end
 
 /--
-The attribute value is valid: the items of a list value are.
+An attribute value is valid when the items of a list value are valid.
 
 Standard: 2.7 §3.4 Attributes; App. B ⟨attribute_value⟩.
 -/
@@ -403,7 +403,7 @@ def AttributeValue.Valid (version : Version) : AttributeValue → Prop
   | _ => True
 
 /--
-The attribute is valid: its value is, if it has one.
+An attribute is valid when its value is valid, if it has one.
 
 Standard: 2.7 §3.4 Attributes; App. B ⟨attribute⟩.
 -/
@@ -412,7 +412,7 @@ def Attribute.Valid (version : Version) : Attribute → Prop
   | ⟨_, some value⟩ => value.Valid version
 
 /--
-The qualified identifier is valid: its identifier and sort are.
+A qualified identifier is valid when its identifier and its sort are valid.
 
 Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨qual_identifier⟩.
 -/
@@ -421,7 +421,7 @@ def QualIdentifier.Valid (version : Version) : QualIdentifier → Prop
   | .as identifier sort => identifier.Valid version ∧ sort.Valid version
 
 /--
-The sorted variable is valid: its sort is.
+A sorted variable is valid when its sort is valid.
 
 Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨sorted_var⟩.
 -/
@@ -429,7 +429,7 @@ def SortedVar.Valid (version : Version) (sortedVar : SortedVar) : Prop :=
   sortedVar.sort.Valid version
 
 /--
-The symbol or wildcard is valid: the wildcard is allowed from 2.7 on.
+A symbol or wildcard is valid when it is a symbol, or the wildcard from 2.7 on.
 
 Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩ of each version.
 -/
@@ -438,7 +438,7 @@ def SymbolOrWildcard.Valid (version : Version) : SymbolOrWildcard → Prop
   | .wildcard => versionAtLeast version .v2_7
 
 /--
-The pattern is valid: a constructor has at least one argument, and its parts are valid.
+A pattern is valid when a constructor in it has at least one argument, and its parts are valid.
 
 Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨pattern⟩.
 -/
@@ -449,8 +449,8 @@ def Pattern.Valid (version : Version) : Pattern → Prop
 mutual
 
 /--
-The term is valid: its repetitions `+` are not empty, `match` is allowed from 2.6 on and
-`lambda` from 2.7 on, and its parts are valid.
+A term is valid when its repetitions `+` are not empty, `match` is used only from 2.6 on and
+`lambda` only from 2.7 on, and its parts are valid.
 
 Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨term⟩ of each version.
 -/
@@ -491,7 +491,7 @@ def Term.ValidCases (version : Version) : List (Pattern × Term) → Prop
 end
 
 /--
-The selector declaration is valid: its sort is.
+A selector declaration is valid when its sort is valid.
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨selector_dec⟩.
 -/
@@ -499,7 +499,7 @@ def SelectorDec.Valid (version : Version) (selector : SelectorDec) : Prop :=
   selector.sort.Valid version
 
 /--
-The constructor declaration is valid: its selectors are.
+A constructor declaration is valid when its selectors are valid.
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨constructor_dec⟩.
 -/
@@ -507,7 +507,7 @@ def ConstructorDec.Valid (version : Version) (constructor : ConstructorDec) : Pr
   ∀ selector ∈ constructor.selectors, selector.Valid version
 
 /--
-The datatype declaration is valid: it has at least one constructor, and its constructors are
+A datatype declaration is valid when it has at least one constructor, and its constructors are
 valid.
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨datatype_dec⟩.
@@ -516,7 +516,7 @@ def DatatypeDec.Valid (version : Version) (datatype : DatatypeDec) : Prop :=
   datatype.constructors ≠ [] ∧ ∀ constructor ∈ datatype.constructors, constructor.Valid version
 
 /--
-The function declaration is valid: its sorts are.
+A function declaration is valid when its sorts are valid.
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨function_dec⟩.
 -/
@@ -525,7 +525,7 @@ def FunctionDec.Valid (version : Version) (declaration : FunctionDec) : Prop :=
     declaration.result.Valid version
 
 /--
-The function definition is valid: its sorts and its body are.
+A function definition is valid when its sorts and its body are valid.
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨function_def⟩.
 -/
@@ -534,7 +534,8 @@ def FunctionDef.Valid (version : Version) (definition : FunctionDef) : Prop :=
     definition.result.Valid version ∧ definition.body.Valid version
 
 /--
-The propositional literal is valid: a negation is written with the symbol `not`, quoted or not.
+A propositional literal is valid when a negation in it is written with the symbol `not`, quoted
+or not.
 
 Standard: 2.5 and 2.6 §3.9 Scripts; App. B ⟨prop_literal⟩.
 -/
@@ -543,7 +544,7 @@ def PropLiteral.Valid : PropLiteral → Prop
   | .negative negation _ => negation.name = chars "not"
 
 /--
-The command is valid: the version has the command, its repetitions `+` are not empty, the
+A command is valid when the version has the command, its repetitions `+` are not empty, the
 lists that the standard pairs have the same length, and its parts are valid.
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, ⟨option⟩ and ⟨info_flag⟩ of each version, the
@@ -598,8 +599,8 @@ namespace Syntax
 /-! ## Sequences of tokens of a category -/
 
 /--
-`IsSExpr version tokens sExpr`: the tokens are the s-expression: they are how the s-expression
-is written, and the s-expression is valid.
+`IsSExpr version tokens sExpr`: the tokens are how the s-expression is written, and the
+s-expression is valid.
 
 Standard: 2.7 §3.2 S-expressions; App. B ⟨s_expr⟩, as `Tree.SExpr.tokens` and
 `Tree.SExpr.Valid`.
@@ -608,8 +609,8 @@ def IsSExpr (version : Version) (tokens : List SyntaxToken) (sExpr : Tree.SExpr)
   sExpr.Valid version ∧ sExpr.tokens = tokens
 
 /--
-`IsAttribute version tokens attribute`: the tokens are the attribute: they are how the attribute
-is written, and the attribute is valid.
+`IsAttribute version tokens attribute`: the tokens are how the attribute is written, and the
+attribute is valid.
 
 Standard: 2.7 §3.4 Attributes; App. B ⟨attribute⟩, as `Tree.Attribute.tokens` and
 `Tree.Attribute.Valid`.
@@ -619,8 +620,7 @@ def IsAttribute (version : Version) (tokens : List SyntaxToken) («attribute» :
   «attribute».Valid version ∧ «attribute».tokens = tokens
 
 /--
-`IsSort version tokens sort`: the tokens are the sort: they are how the sort is written, and the
-sort is valid.
+`IsSort version tokens sort`: the tokens are how the sort is written, and the sort is valid.
 
 Standard: 2.7 §3.5 Sorts; App. B ⟨sort⟩, as `Tree.Sort.tokens` and `Tree.Sort.Valid`.
 -/
@@ -628,8 +628,7 @@ def IsSort (version : Version) (tokens : List SyntaxToken) (sort : Tree.Sort) : 
   sort.Valid version ∧ sort.tokens = tokens
 
 /--
-`IsTerm version tokens term`: the tokens are the term: they are how the term is written, and the
-term is valid.
+`IsTerm version tokens term`: the tokens are how the term is written, and the term is valid.
 
 Standard: 2.7 §3.6 Terms and Formulas; App. B ⟨term⟩, as `Tree.Term.tokens` and
 `Tree.Term.Valid`.
@@ -638,8 +637,8 @@ def IsTerm (version : Version) (tokens : List SyntaxToken) (term : Tree.Term) : 
   term.Valid version ∧ term.tokens = tokens
 
 /--
-`IsCommand version tokens command`: the tokens are the command: they are how the command is
-written, and the command is valid.
+`IsCommand version tokens command`: the tokens are how the command is written, and the
+command is valid.
 
 Standard: 2.7 §3.11 Scripts; App. B ⟨command⟩, as `Tree.Command.tokens` and
 `Tree.Command.Valid`.

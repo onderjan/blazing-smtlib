@@ -51,7 +51,7 @@ theorem atLeast_v2_0 (version : BSmtLibSpec.Lexicon.Version) : versionAtLeast ve
 theorem atLeast_v2_5_of_v2_7 (h : versionAtLeast version .v2_7) : versionAtLeast version .v2_5 := by
   cases version <;> simp_all [versionAtLeast, BSmtLibSpec.Lexicon.Version.upTo]
 
-/-- A word of 2.0. -/
+/-- A word that 2.0 reserves is reserved in every version. -/
 theorem reservedIn_v2_0 {w : String}
     (hw : w ∈ addedBasicReservedWords .v2_0 ∨ w ∈ addedCommandNames .v2_0) :
     ReservedIn version (chars w) :=

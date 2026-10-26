@@ -16,8 +16,8 @@ namespace BSmtLibSpec.Grammar
 open BSmtLibSpec.Lexicon
 
 /--
-`Script version commands`: read from the version, the commands make a script: each is valid in
-the version in force where it starts, and only the last one may stop the reading.
+`Script version commands`: with the initial version `version`, the commands make a script: each is
+valid in the version in force where it starts, and only the last one may stop the reading.
 
 The commands of a file make a script (`File`); a script is what a parser of tokens is given.
 

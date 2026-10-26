@@ -15,7 +15,7 @@ waiting in a state at the end of the tokens, done with a result and the tokens a
 with a syntax error and the tokens after the token whose step raised it, or failed with the
 handler's error. `RunsS` is `Runs` for `driveS`: its programs are handler-only (they make calls
 and fail with the handler's error only), so that a syntax error is where the continuation raises
-it. Its rules are those of `Runs`, and the lemmas of the parsers' steps are proved again with
+it. Its rules are those of `Runs`, and the lemmas about the parsers' steps are proved again with
 them in the modules beside this one.
 -/
 

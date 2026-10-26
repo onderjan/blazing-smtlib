@@ -153,7 +153,7 @@ info: 'BSmtLib.Facts.Parser.command_follows_traversal' depends on axioms: [prope
 #print axioms command_follows_traversal
 
 /--
-On the tokens a parser receives for a valid script read from the version, followed by anything,
+On the tokens a parser receives for a valid script with the initial version, followed by anything,
 the script parser run as the parse adapter runs it, the handler told the version first, makes the
 traversal's calls among the traversal's token points, under the policy of its posture, with the
 same producer, and finishes at the end of the input, before the rest.

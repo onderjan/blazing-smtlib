@@ -95,7 +95,7 @@ def toldAt (adapter : ParseAdapter H (ScriptParser H)) (version : Version) : H :
   if ParseAdapter.Internal.versionSet adapter then adapter.handler
   else ((Handler.setVersion (H := H) version).run adapter.handler).2
 
-/-- The driver's run over the items of a script read from the version, from the handler told
+/-- The driver's run over the items of a script with the initial version, from the handler told
 the version first. -/
 def hRun (version : Lexicon.Version) (init : H) (items : List LibItem) :=
   (drive (Bridge.libVersion version) (ScriptParser.new unrestrictedPosture)

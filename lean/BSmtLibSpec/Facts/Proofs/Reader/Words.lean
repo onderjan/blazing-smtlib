@@ -10,8 +10,8 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
 # The reserved words that a parser takes
 
 Every reserved word among the items that a parser takes for commands, a script's or those that a
-declaration of a version that is not supported ends, is a reserved word of 2.7, which has the
-reserved words of every version (`takes_reserved`).
+declaration of a version that is not supported ends, is reserved in 2.7, which reserves the
+words that every version reserves (`takes_reserved`).
 
 The tokens of a tree hold a reserved word only as one of the fixed words of its productions,
 all of which 2.7 reserves, or as a reserved s-expression, which a valid tree has only with a
@@ -27,15 +27,15 @@ open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Regex (Chars chars)
 open BSmtLibSpec.Parser.Traversal
 
-/-- The reserved words of 2.7. -/
+/-- The words that 2.7 reserves. -/
 private abbrev words27 : List String := basicReservedWords .v2_7 ++ commandNames .v2_7
 
-/-- The token is no reserved word, or one of 2.7. -/
+/-- The token is no reserved word, or reserved in 2.7. -/
 private def Ok : SyntaxToken → Prop
   | .reserved w => w ∈ words27.map chars
   | _ => True
 
-/-- Each of the tokens is no reserved word, or one of 2.7. -/
+/-- Each of the tokens is no reserved word, or reserved in 2.7. -/
 private def Good (tokens : List SyntaxToken) : Prop := ∀ t ∈ tokens, Ok t
 
 private theorem good_nil : Good [] := by simp [Good]
@@ -72,7 +72,7 @@ private theorem good_map {α : Type} {l : List α} {f : α → SyntaxToken} (h :
 private theorem ok_word {w : String} (h : w ∈ words27) : Ok (word w) :=
   List.mem_map_of_mem h
 
-/-- Every version's reserved words are among those of 2.7. -/
+/-- 2.7 reserves every word that a version reserves. -/
 private theorem version_words {version : Version} {w : Chars}
     (h : w ∈ (basicReservedWords version ++ commandNames version).map chars) :
     w ∈ words27.map chars := by
@@ -87,7 +87,7 @@ private theorem version_words {version : Version} {w : Chars}
 
 /--
 Proves `Good` of tokens built with `paren`, `::` and `++` from parts whose facts are hypotheses,
-from tokens that are no reserved word, and from fixed words of 2.7.
+from tokens that are no reserved word, and from fixed words that 2.7 reserves.
 -/
 local macro "good" : tactic =>
   `(tactic| repeat' (first
@@ -416,7 +416,7 @@ private theorem received_good {version : Version} {c : Tree.Command} (h : c.Vali
   cases he
   exact command_good c h _ ht
 
-/-- Every reserved word that a parser takes is one of 2.7. -/
+/-- 2.7 reserves every reserved word that a parser takes. -/
 theorem takes_reserved {version : Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (h : Takes version commands taken ending)
     {word : Chars} (hw : Received.token (.reserved word) ∈ taken) :

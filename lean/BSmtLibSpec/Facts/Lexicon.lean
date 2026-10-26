@@ -9,7 +9,7 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip
 @[expose] public section
 
 /-!
-# Facts of the lexicon
+# Facts about the lexicon
 
 The lexicon: every input has at most one tokenisation. Composition: reading can stop at the `)`
 of a command and start again on the rest, possibly in another version. Round trips: the tokens of

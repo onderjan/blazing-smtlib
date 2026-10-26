@@ -123,9 +123,9 @@ def answerOf (atEnd : Bool) : Ending → Answer Unit ScriptError
 library's parser does not do; that makes the consumer's obligation at the end of the input hold
 by its definition. -/
 /--
-The library's script parser, from the version, as a consumer of the lexer spec: after each token
-it answers as the parser's recording run on the tokens taken so far ends, and asks for the switch
-and the discarding that run asks for after the last token's processing.
+The library's script parser, with the initial version, as a consumer of the lexer spec: after each
+token it answers as the parser's recording run on the tokens taken so far ends, and asks for the
+switch and the discarding that run asks for after the last token's processing.
 -/
 def scriptConsumer (version : Lexicon.Version) : Consumer where
   Result := Unit

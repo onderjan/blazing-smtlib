@@ -529,7 +529,7 @@ under the posture. -/
 abbrev adapterOf (posture : Version.VersionPosture) : RecAdapter :=
   ParseAdapter.new ([] : List Event) (ScriptParser.new (H := List Event) posture)
 
-/-- The script reader with the recording handler, under the posture, from the version. -/
+/-- The script reader with the recording handler, under the posture, with the initial version. -/
 abbrev readerWith (posture : Version.VersionPosture) (version : Version) :
     Reader (List Event) (ScriptParser (List Event)) :=
   Reader.script ([] : List Event) posture version

@@ -5,7 +5,7 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Bridge
 @[expose] public section
 
 /-!
-# Facts of the parser
+# Facts about the parser
 
 The traversal: it makes the calls of a parser that goes by the items it receives, its calls
 rebuild the script, and they are placed by the items before them, for every handler.

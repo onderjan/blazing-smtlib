@@ -164,7 +164,7 @@ def resultOf {ε α β : Type} : Except ε (α × β) → Except ε α
   | .ok (result, _) => .ok result
   | .error error => .error error
 
-/-- The library's lexer with the collector, from the version, fed the slices by
+/-- The library's lexer with the collector, created with the version, fed the slices by
 `Lexer.lexSlice` and then the end of the input by `Lexer.lexEof`: the result or the first error,
 and the entries written down. -/
 def collect (version : Version) (slices : List ByteList) :

@@ -43,7 +43,7 @@ def writeSegment (version : Version) (gaps : List Gap) (final : Gap) (command : 
     fun piece => piece.1 ++ piece.2) ++ final
 
 /-- A file reproduced from the gaps of its concrete reading, command by command, what follows its
-last command, and its commands read from the version. -/
+last command, and its commands, with the initial version. -/
 def reproduce : Version → List Tree.Command → List Concrete → Chars → Chars
   | version, command :: commands, segment :: segments, final =>
     writeSegment version (segment.pieces.map Prod.fst) segment.final command ++
@@ -51,10 +51,11 @@ def reproduce : Version → List Tree.Command → List Concrete → Chars → Ch
   | _, _, _, final => final
 
 /--
-`FileReadingFrom version offset input commands segments final`: read from the version, the input,
-whose first character is at `offset`, has the commands, each read from the characters whose
-concrete reading, with the version it is read in, is the next of `segments`, and `final` follows
-the last command: whitespace, or the unparsed rest after `exit`.
+`FileReadingFrom version offset input commands segments final`: with the initial version
+`version` and the starting offset `offset`, the input is read as the commands, each read from
+the characters whose concrete reading, with the version it is read in, is the next of
+`segments`, and `final` follows the last command: whitespace and comments, or the unparsed rest
+after `exit`.
 -/
 inductive FileReadingFrom : Version → Nat → Chars → List Tree.Command →
     List (Version × Concrete) → Chars → Prop

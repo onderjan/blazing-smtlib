@@ -9,8 +9,7 @@ public import BSmtLibSpec.Parser.VersionPolicy
 # The traversal
 
 The handler contract: which handler calls a parser makes for each syntax tree, with which
-arguments, in which order, and at which token. The standard has no parser; this is the
-library's.
+arguments, in which order, and at which token.
 
 ## Calls
 
@@ -20,9 +19,9 @@ as they were written. A call that brings names into scope returns a scope value,
 that ends the scope receives back. The calls are the constructors of `Call`; a handler answers
 each of them (`Handler`).
 
-No two constructs are reported with the same calls, so the calls determine the tree; and the
-calls come in an order in which a handler never has to keep anything back: it can build what it
-builds with a stack.
+No two constructs are reported with the same calls, so the calls determine the tree. The calls
+come in an order in which a handler never has to keep anything back: it can build its values
+with a stack.
 
 ## Tokens
 
@@ -48,8 +47,8 @@ of the input, so the parser receives the end of the input right after the `)` of
 ## Versions
 
 The handler is told the version in force: at the start of the traversal, before anything else,
-the version the script is read from, and after each version declaration, the version it
-declares, after the producer's switch.
+the initial version, and after each version declaration, the version it declares, after the
+producer's switch.
 
 ## The producer
 
@@ -59,16 +58,16 @@ the input after `exit`. Each comes after the handler's call for the same `)`.
 
 ## Failures
 
-A handler call can fail with the handler's error, except the version switch, which
-cannot fail. A version declaration can be rejected: if it breaks the version policy, or if the
+A handler call can fail with the handler's error, except the version switch, which cannot
+fail. A version declaration can be rejected: if it breaks the version policy, or if the
 producer refuses to switch to it. A failure stops the traversal: no call and no token point
 follows it.
 
 A version declaration that names no supported version cannot stand in a script (Reading M1), but
 a parser only knows it at the declaration's `)`. The traversal takes such a declaration as
 `set-info`, like any other, and then rejects it as a version that is not supported, as it
-rejects a version the policy does not allow: the commands it is the last of are what a parser
-takes before it fails.
+rejects a version the policy does not allow: a parser takes the commands up to and including
+that declaration, and then fails.
 -/
 
 namespace BSmtLibSpec.Parser
@@ -261,8 +260,7 @@ structure VersionRefused where
 
 /--
 The producer of the tokens in a monad `m`, as far as the traversal tells it anything: its version
-switch, which it may refuse, and its discarding of the rest of the input, which cannot
-fail.
+switch, which it may refuse, and its discarding of the rest of the input, which cannot fail.
 -/
 structure Producer (m : Type → Type) where
   setVersion : Version → ExceptT VersionRefused m Unit
@@ -419,7 +417,7 @@ def attributesThen (keyword : Chars) (value : Option Tree.AttributeValue) :
     pure (handled :: others)
 
 /--
-A qualified identifier, given the calls due when its first token arrives, none unless given: its
+A qualified identifier, given the calls due when its first token arrives (none by default): its
 tokens and its sort, if it is qualified by `as`.
 -/
 def qualIdentifier : Tree.QualIdentifier → (atArrival : Run m ε Unit := pure ()) →
@@ -448,7 +446,7 @@ def sortedVars : List Tree.SortedVar → Run m ε (List (Tree.Symbol × values.s
 
 mutual
 
-/-- A term, given the calls due when its first token arrives, none unless given. -/
+/-- A term, given the calls due when its first token arrives (none by default). -/
 def term : Tree.Term → (atArrival : Run m ε Unit := pure ()) → Run m ε values.term
   /- ⟨spec_constant⟩ -/
   | .constant value, atArrival => do
@@ -546,9 +544,9 @@ def bindings : List (Tree.Symbol × Tree.Term) → Run m ε (List (Tree.Symbol �
     pure ((symbol, handled) :: others)
 
 /--
-The cases of a `match`, one after another, each `(` ⟨pattern⟩ ⟨term⟩ `)`: the start with the
-scrutinee and the pattern after the pattern's last token, the body, then the end with the
-scrutinee after the `)`.
+The cases of a `match`, one after another, each `(` ⟨pattern⟩ ⟨term⟩ `)`: for each case, the
+start of the case, with the scrutinee and the pattern, after the pattern's last token; then
+the body; then the end of the case, with the scrutinee, after the `)`.
 -/
 def cases (scrutinee : values.term) :
     List (Tree.Pattern × Tree.Term) → Run m ε (List (Tree.Pattern × values.term))
@@ -864,9 +862,9 @@ def command : Tree.Command → Run m ε Unit
 /-! ## The traversal of a script -/
 
 /--
-The switch of a script to the version a declaration names, right after the declaration's
-`set-info`, given the producer and the number of declarations the script made before it: the
-check against the policy, the producer's switch, which it may refuse, then the handler's switch.
+The switch of a script to the version a declaration names, right after the declaration's `)`,
+given the producer and the number of declarations the script made before it: the check against
+the policy, the producer's switch, which it may refuse, then the handler's switch.
 A refusal is rejected as a version the policy does not allow. The new version holds from the
 next command.
 -/
@@ -883,8 +881,7 @@ The commands of a script, given the producer and the number of version declarati
 before them, up to the end of the input, which the parser receives as well. After a version
 declaration, the script switches the version. After `exit`, the producer discards the rest of
 the input; the parser then receives the end of the input alone. A version declaration that
-names no supported version is rejected after its `set-info`, as a version that is not
-supported.
+names no supported version is rejected after its `)`, as a version that is not supported.
 -/
 def commands (producer : Producer m) (policy : VersionPolicy) :
     Nat → List Tree.Command → Run m ε Unit
@@ -904,8 +901,8 @@ def commands (producer : Producer m) (policy : VersionPolicy) :
       commands producer policy (declarations + 1) rest
 
 /--
-A script read from the version, under a version policy, given the producer: the handler's switch
-to the version, before anything else; then its commands, each version declaration followed by
+A script with the initial version, under a version policy, given the producer: the handler's switch
+to that version, before anything else; then its commands, each version declaration followed by
 its check against the policy and the switches.
 -/
 def script (producer : Producer m) (policy : VersionPolicy) (version : Version)

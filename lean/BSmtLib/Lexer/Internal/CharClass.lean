@@ -258,7 +258,7 @@ is `@[specialize]`, so that each kind gets its own compiled scan instead of a ca
 closure for every byte. The 4-byte unrolling of the Rust scan is left out. -/
 
 /-!
-The scan of the runs. It is public, in `Internal`, only so that the proofs of the lexers can read
+The scan of the runs. It is public, in `Internal`, only so that the proofs about the lexers can read
 it; it is not a part of the library's interface.
 -/
 

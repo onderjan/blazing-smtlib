@@ -92,7 +92,7 @@ theorem hRun_traversal
   · intro hl; cases hl; rfl
 
 /-- The script reader with a handler whose calls never fail, from the handler, allowing every
-version, fed a file of commands read from the version in any slices and then the end of the
+version, fed a file of commands, with the initial version, in any slices and then the end of the
 input: it reads to the end with a result, and the traversal of the file's commands from the same
 handler, with token points and a producer that do nothing, does not fail and leaves the handler
 the reader leaves, for every spec handler the library handler agrees with. -/

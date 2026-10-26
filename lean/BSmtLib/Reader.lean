@@ -138,7 +138,7 @@ def ReadError.location {E : Type} (self : ReadError E) : Span.Location :=
 
 /-- Converts the error of a parser, located at `span`, into a read error. -/
 /- LEAN: Rust's private `from_parse`. It is public here as the statements about the reader's
-errors in the facts of the public interface name it. -/
+errors in the facts about the public interface name it. -/
 def ReadError.ofParse {E : Type} (err : ParseError E) (span : Span) : ReadError E :=
   let cause := match err.cause with
     | .syntax err => ReadErrorCause.«syntax» err

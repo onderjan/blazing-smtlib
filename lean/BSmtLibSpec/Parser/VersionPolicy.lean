@@ -7,10 +7,9 @@ public import BSmtLibSpec.Grammar
 /-!
 # Version policies
 
-A policy restricts which versions a script may declare, and how often. The standard has no
-such policies; they are this library's. A parser checks a version declaration against its
-policy after the declaration's `set-info`, when the declaration is complete; a declaration that
-breaks the policy stops the parse there.
+A policy restricts which versions a script may declare, and how often. A parser checks a version
+declaration against its policy after the declaration's `)`, when the declaration is complete; a
+declaration that breaks the policy stops the parse there.
 -/
 
 namespace BSmtLibSpec.Parser
@@ -19,7 +18,7 @@ open BSmtLibSpec.Lexicon BSmtLibSpec.Grammar
 
 /--
 A policy on the versions that a script declares: which versions it may declare, and how many
-declarations it may make, without a limit if there is none.
+declarations it may make (`none`: any number).
 -/
 structure VersionPolicy where
   allowed : List Version

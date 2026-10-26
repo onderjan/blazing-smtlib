@@ -100,7 +100,7 @@ theorem readThrough_of_hFeed : ∀ (slices : List Regex.Chars) (lexer : HLexer H
 theorem allVersions_eq : allVersions = unrestrictedPosture := rfl
 
 /-- The script reader with a handler whose calls never fail, from the handler, allowing every
-version, fed a file of commands read from the version in any slices and then the end of the
+version, fed a file of commands, with the initial version, in any slices and then the end of the
 input: it reads to the end with a result, and its handler holds what the script parser's driver
 over items standing for what a parser receives for the script leaves it with, the driver having
 finished the script. -/

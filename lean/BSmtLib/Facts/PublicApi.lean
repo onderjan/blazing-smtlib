@@ -141,7 +141,7 @@ info: 'BSmtLib.Facts.PublicApi.lexing_composes' depends on axioms: [propext, Cla
 
 /--
 The library's lexer, with a consumer that takes every token: after the end of an input, it lexes
-the next input as a new lexer from the version does.
+the next input as a new lexer created with the version does.
 -/
 theorem lexing_resets (version : Version) (first : List ByteList) (log : List Entry)
     (result : Option (Located Unit)) (lexer : Lexer Collector)
@@ -202,8 +202,8 @@ info: 'BSmtLib.Facts.PublicApi.lexers_agree' depends on axioms: [propext, Classi
 /--
 There is a handler told contents only, whose state is the version in force and a list of commands
 of the specification, and whose sorts, s-expressions, attributes and terms are those of the
-specification, such that the script reader over it, from the version and no commands, reads every
-file to the end and builds the file's commands.
+specification, such that the script reader over it, with the initial version and no commands, reads
+every file to the end and builds the file's commands.
 -/
 theorem builds_commands :
     ∃ inst : ContentHandler (BSmtLibSpec.Lexicon.Version × List BSmtLibSpec.Grammar.Tree.Command),

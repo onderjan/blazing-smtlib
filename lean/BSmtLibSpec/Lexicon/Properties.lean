@@ -15,7 +15,7 @@ namespace BSmtLibSpec.Lexicon.Properties
 
 open Regex (Chars)
 
-/-! ## About the spec -/
+/-! ## About the specification -/
 
 /--
 Property: every input has at most one tokenisation.
@@ -29,11 +29,11 @@ def Unique : Prop :=
     Tokenization version input tokens → Tokenization version input tokens' → tokens = tokens'
 
 /--
-Property: there is a tokenisation of an input that starts with the given characters.
+Property: some input that starts with the given characters has a tokenisation.
 
 A lexer fed an input in slices does not know the characters that follow. It can report an
-error only once the characters fed are not viable: until then, the characters that follow may
-still make a valid input of them.
+error only once the characters fed are not viable: until then, the characters still to come may
+yet make them the start of a valid input.
 -/
 def Viable (version : Version) (start : Chars) : Prop :=
   ∃ rest tokens, Tokenization version (start ++ rest) tokens

@@ -13,7 +13,7 @@ with layout between them: up to the end of its last command, and then either whi
 unread rest after `exit` (`spaced_of_reading`). The tokens are written as in the input but for
 the spelling of 2.0 string literals, and exactly on an input without a backslash.
 
-Facts of the specification, in the terms of the theorems of `Facts.PublicApi`.
+Facts about the specification, in the terms of the theorems of `Facts.PublicApi`.
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Files
@@ -131,7 +131,7 @@ theorem lexForm_token_exact {version : Lexicon.Version} {token : Lexicon.Token}
 
 /-! ## The tokens of commands -/
 
-/-- The tokens of the commands, read from the version, each command's tokens as the version in
+/-- The tokens of the commands, with the initial version, each command's tokens as the version in
 force writes them. -/
 def tokensOf : Lexicon.Version → List Tree.Command → List ByteList
   | _, [] => []

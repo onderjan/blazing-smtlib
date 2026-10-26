@@ -261,8 +261,8 @@ theorem parse_endOfInput {version : Lexicon.Version} {received : List Received}
 
 /-! ## The tokens a run takes -/
 
-/-- What the tokens taken stand for, from the version, is where the parser's run depends only
-on what its items stand for, at every start of them, and the stand-in consumer went on at every
+/-- What the tokens taken stand for, with the initial version, is where the parser's run depends
+only on what its items stand for, at every start of them, and the stand-in consumer went on at every
 token but the last. -/
 def Good (version : Lexicon.Version) (taken : List Handed) : Prop :=
   (∀ n ≤ taken.length, Dom version ((taken.take n).map (rcv ∘ itemOf))) ∧

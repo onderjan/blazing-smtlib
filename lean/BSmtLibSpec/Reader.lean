@@ -33,16 +33,15 @@ open Regex (Chars)
 /-! ## Reading an input -/
 
 /--
-The calls a handler is told for the commands read from the version, in order: the switch to the
-version, then the traversal's calls.
+The calls a handler is told for the commands with the initial version, in order: the switch to
+that version, then the traversal's calls.
 -/
 def calls (version : Version) (commands : List Tree.Command) : List Event :=
   (record version commands).filter Event.isCall
 
 /--
-A reader as its recording runs show it: from the version to start in and the input in slices,
-followed by the end of the input if it has ended, the calls its handler was told, in order, and
-whether it finished.
+A reader as its recording runs show it: given the initial version, the input in slices and
+whether the input has ended, the calls its handler was told, in order, and whether it finished.
 -/
 structure RecordingReader where
   read : Version → List Chars → Bool → List Event × Bool
@@ -66,14 +65,14 @@ def FinishesOnlyOnFiles (reader : RecordingReader) : Prop :=
     ∃ commands, File version slices.flatten commands
 
 /--
-Property: the calls for the commands of a file determine the version the file is read from and
-its commands.
+Property: the calls for the commands of a file determine the file's initial version and its
+commands.
 
 So the handler is told the whole file but for three things that no call carries: the whitespace
 and the comments; everything after `exit`, which is not read, and which a caller takes from the
 input where the lexer began to discard; and, in 2.0, how a string literal is spelled, since two
-spellings can stand for the same characters (`"\a"` and `"\\a"`). `BSmtLibSpec.Facts.Reader` proves
-it.
+spellings can stand for the same characters (`"\a"` and `"\\a"`). `BSmtLibSpec.Facts.Reader`
+proves it.
 -/
 def CallsDetermineCommands : Prop :=
   ∀ version version' input input' commands commands',
@@ -84,9 +83,9 @@ def CallsDetermineCommands : Prop :=
 /-! ## A lexer with a parser as its consumer -/
 
 /--
-What a lexer hands over, as a parser receives it, if it does: the end of the file as the end of
-the input, whitespace and comments not at all, and every other token as the syntax token it
-stands for.
+What a parser receives for a token that a lexer hands over, if anything: the end of the input
+for the end-of-file token, nothing for whitespace and comments, and the syntax token it stands
+for for every other token.
 -/
 def _root_.BSmtLibSpec.Lexer.Handed.received (handed : Lexer.Handed) : Option Received :=
   match handed.type with
@@ -118,11 +117,11 @@ def requestsAfterLast (events : List Event) : Option Version × Bool :=
     (none, false)
 
 /--
-A parser as a plain consumer of a lexer, given what it takes for each token handed over: after
-each token it answers as its run on the tokens so far ends, breaking when it has finished and
-failing when it has rejected or failed; at the end of the input it fails rather than wait. It
-asks for the version switch and the discarding that its run asked of its producer after
-the last token.
+A parser as a plain consumer of a lexer, given the item it takes for each token handed over.
+After each token, it answers by how its run on the tokens so far ends: it breaks when the run
+has finished, fails when the run has rejected an item or failed, and continues otherwise; at the
+end of the input it fails rather than wait. It asks for the version switch and the discarding
+that its run asked of its producer after the last token.
 -/
 def consumer (parser : RecordingParser)
     (item : Lexer.Handed → parser.Item) (version : Version) : Lexer.Consumer where
@@ -139,12 +138,15 @@ def consumer (parser : RecordingParser)
   discards taken := (requestsAfterLast (parser.parse version (taken.map item)).1).2
 
 /--
-Property: on every input, ended or not, a reader does what a lexer that is correct with every
-consumer does with a parser, as its consumer, that follows the traversal and rejects the first
-item that no script continues with: the handler is told the parser's calls on the tokens the
-lexer handed over, and the reader finishes when the lexer does. The parser takes each token that
-a lexer of some version can hand over for what the token stands for. Until the lexer hands over
-the first token, the handler is told nothing, not even the version.
+Property: on every input, ended or not, a reader does what a correct lexer does with a correct
+parser as its consumer.
+
+The lexer is correct with every consumer (`Lexer.CorrectWithConsumers`). The parser follows the
+traversal and rejects the first item that no script continues with (`FollowsTheTraversal`,
+`RejectsFirstUnviable`); it takes each token that a lexer can hand over in some version for what
+the token stands for. The handler is told the parser's calls on the tokens the lexer handed
+over, and the reader finishes when the lexer does. Until the lexer hands over the first token,
+the handler is told nothing, not even the version.
 -/
 def LexesThenParses (reader : RecordingReader) : Prop :=
   ∃ (lexing : Lexer.Lexing) (parser : RecordingParser) (item : Lexer.Handed → parser.Item),

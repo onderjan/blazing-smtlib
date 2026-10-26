@@ -9,7 +9,7 @@ import all Std.Data.ByteSlice
 /-!
 # Byte arrays, views of them, and the content buffer
 
-Facts of the library's byte arrays and views (`ByteArray`, `ByteSlice`) that the links between
+Facts about the library's byte arrays and views (`ByteArray`, `ByteSlice`) that the links between
 the lexers use: reads of an array by `get!`, the views a slice gives of its array and the
 positions of its bytes in it, and the content buffer (`ContentBuffer`), which stands for the
 bytes of its array below its length (`contentBytes`) as long as the length is within the array

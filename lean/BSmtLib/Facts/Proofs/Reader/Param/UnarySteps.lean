@@ -9,7 +9,7 @@ import all BSmtLib.Version
 @[expose] public section
 
 /-!
-# The facts of `UL` for each function of the lexer
+# The facts about `UL` for each function of the lexer
 
 The helpers of the lexer's state keep the version; the consumer is called only in
 `flushCursor`, which hands it cursors in the lexer's version, and `handOver` puts the version of

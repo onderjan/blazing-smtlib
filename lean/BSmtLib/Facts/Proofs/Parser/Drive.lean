@@ -9,7 +9,7 @@ public import BSmtLib.Facts.Parser.Adapters
 
 `drive` (an adapter, in `Adapters.Run`) runs a parser stepped by single tokens over a list of
 tokens, marking each token's arrival and processing with the spec's `Points` before the step that
-takes it, and making the parser's calls due at the token's arrival (`arrival`, none unless given)
+takes it, and making the parser's calls due at the token's arrival (`arrival`, none by default)
 between the two. It is the parser's run as the spec's traversal sees it.
 
 The framework for proving a parser against the traversal is one predicate and its rules:

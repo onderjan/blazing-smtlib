@@ -439,8 +439,8 @@ section
 variable {H : Type} {m : Type → Type} [Monad m]
 
 /--
-The script parser under a posture, from its start, over what a parser receives for a script read
-from the version and any rest, with the handler told the version first as the parse adapter
+The script parser under a posture, from its start, over what a parser receives for a script with
+the initial version and any rest, with the handler told the version first as the parse adapter
 does, is the spec's script under the policy of the posture, and finishes before the rest.
 -/
 theorem script_correct [Handler.CommandHandler H m] [LawfulMonad m] {points : Points (StateT H m)}

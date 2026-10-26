@@ -61,7 +61,7 @@ inductive SyntaxToken where
   | string (content : Chars)
   /--
   A simple or a quoted symbol: `abc` and `|abc|` are the same symbol. Whether it was quoted
-  is recorded for printing, not for identity.
+  is kept so that a symbol is written as it was read, not for identity.
   -/
   | symbol (symbol : Tree.Symbol)
   | keyword (name : Chars)

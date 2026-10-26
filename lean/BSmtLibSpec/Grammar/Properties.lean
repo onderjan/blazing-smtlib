@@ -75,9 +75,9 @@ Property: two commands valid in the same version and written with the same token
 command.
 
 So in each version, a sequence of tokens is a command in at most one way (`Syntax.IsCommand`).
-The version matters: `(check-sat-assuming (p))` is written the same as a command of 2.7 with a
-list of terms and as a command of 2.6 with a list of propositional literals, and only one of them
-is valid in each version.
+The version matters: `(check-sat-assuming (p))` is written the same as a command with a
+list of terms, valid in 2.7, and as one with a list of propositional literals, valid in 2.6, and
+only one of them is valid in each version.
 -/
 def CommandsOneToOne : Prop :=
   ∀ version (command command' : Tree.Command), command.Valid version →
@@ -87,8 +87,8 @@ def CommandsOneToOne : Prop :=
 Property: every file has at most one reading.
 
 This does not follow from `CommandsOneToOne` alone: a file can change the version in which the
-rest of it is read, so it also rests on the version after each command being determined by the
-command.
+rest of it is read, so it also rests on each command determining the version that the rest is
+read in.
 -/
 def FilesUnique : Prop :=
   ∀ version input (commands commands' : List Tree.Command),

@@ -90,7 +90,7 @@ def consume {b : Token.BatchTag} (cursor : LexerCursor b) (h : cursor.HasNext) :
 instance {b : Token.BatchTag} : Token.ConsumeFrom (Watch C) (LexerCursor b) WM where
   consume cursor h := Watch.consume cursor h
 
-/-- The record of a consumer before anything went wrong, from the version. -/
+/-- The record of a consumer before anything went wrong, with the initial version. -/
 def new (inner : C) (version : Version) : Watch C :=
   { inner, errored := false, version, spoiled := false, layout := false }
 

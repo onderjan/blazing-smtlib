@@ -15,7 +15,7 @@ import all BSmtLib.Reader
 The reader's lexer, after the slices and before the end of the input, has the fields of the
 library's lexer with the script consumer of the end-to-end proofs fed the same slices
 (`feed_core`), so it began to discard where that lexer's session, the input not ended, says
-(`reader_discardedFrom`). Facts of the library, from the end-to-end proofs.
+(`reader_discardedFrom`). Facts about the library, from the end-to-end proofs.
 
 Any lexer correct with every consumer, with the script consumer, fed a file without the end of
 the input, goes through the file's readings (`Reader.ValidOpen.runs_group_open`), so with no

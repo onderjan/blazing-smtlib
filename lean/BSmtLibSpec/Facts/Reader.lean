@@ -5,7 +5,7 @@ public import BSmtLibSpec.Facts.Proofs.Reader
 @[expose] public section
 
 /-!
-# Facts of readers
+# Facts about readers
 
 Readers: the calls on a file determine the file, and a reader that lexes then parses reads files
 and finishes only on files.
@@ -28,7 +28,7 @@ and finishes on it (`BSmtLibSpec.Reader.ReadsFiles`), and finishes on nothing el
 (`BSmtLibSpec.Reader.FinishesOnlyOnFiles`).
 -/
 
-/-- The calls for the commands of a file determine the version the file is read from and its
+/-- The calls for the commands of a file determine the file's initial version and its
 commands. -/
 theorem Reader.callsDetermineCommands : BSmtLibSpec.Reader.CallsDetermineCommands :=
   fun _ _ _ _ _ _ h h' hc => Proofs.Reader.calls_determine h h' hc

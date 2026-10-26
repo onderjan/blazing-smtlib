@@ -14,7 +14,7 @@ How the characters of a file are read as commands, on three levels:
   (`Syntax.IsCommand`);
 - **reading modes**: a run of commands is read in one version, until a command changes the
   mode in which the input after it is read (`File.Mode`, `Tree.Command.modeAfter`);
-- **files**: a file is read from a starting version, mode after mode, up to the end of the
+- **files**: a file is read starting in an initial version, mode after mode, up to the end of the
   input or up to `exit`, after which the rest of the file is not read (`File`).
 
 A command that changes the mode does so after its closing parenthesis: it is read entirely in
@@ -39,12 +39,12 @@ inductive File.Mode where
 
 /--
 The mode in which the input after the command is read, given the version the command is read
-in, or `none` if the command cannot stand in a file: a version declaration of a version that is
-not supported.
+in, or `none` if the command cannot stand in a file, as a declaration of an unsupported version
+cannot.
 
 A version declaration is a `set-info` of `:smt-lib-version`; it is read in the version in force
-like any other `set-info`, and the version it declares is read from its `)` on. `exit` stops the
-reading. Every other command, `reset` among them, leaves the mode as it is.
+like any other `set-info`, and the input after its `)` is read in the version it declares. `exit`
+stops the reading. Every other command, `reset` among them, leaves the mode as it is.
 
 Reading M1: a version declaration changes the mode after its `)`; the value of a declaration is
 the number of a supported version. Reading M2: `exit` ends the reading; the input after it is
@@ -61,7 +61,7 @@ def Tree.Command.modeAfter (version : Version) : Tree.Command → Option File.Mo
   | _ => some (.read version)
 
 /--
-The version the command declares, if it is a version declaration of a supported version.
+The version the command declares, if it declares a supported version.
 -/
 def Tree.Command.declaredVersion (command : Tree.Command) : Option Version :=
   match command with
@@ -86,18 +86,19 @@ def Tree.Command.namesNoVersion : Tree.Command → Bool
   | _ => false
 
 /--
-`File.From version offset input commands`: read from the version, the input, whose first
-character is at `offset`, has the commands.
+`File.From version offset input commands`: with the initial version `version` and the starting
+offset `offset`, the input is read as the commands.
 
-Each command is the whitespace before it and its tokens, read in the version in force. After a
-command that keeps the mode in a version, the rest is read in that version; after `exit`, the
-rest is not read. A file that is not ended by `exit` ends with whitespace.
+Each command is the whitespace and comments before it and its tokens, read in the version in
+force. After each command, the rest is read in the version that the command leaves in force;
+after `exit`, the rest is not read. A file that is not ended by `exit` ends with whitespace and
+comments.
 
 Standard: 2.7 §3.11 Scripts: a script is a sequence of commands. Readings M1, M2 and M3, as
 `Tree.Command.modeAfter`.
 -/
 inductive File.From : Version → Nat → Chars → List Tree.Command → Prop
-  /-- The end of the input, after whitespace. -/
+  /-- The end of the input, after whitespace and comments. -/
   | done : Tokenization.From version offset input [] → File.From version offset input []
 
   /-- A command after which the rest is read in a version. -/
@@ -114,7 +115,8 @@ inductive File.From : Version → Nat → Chars → List Tree.Command → Prop
       File.From version offset (segment ++ rest) [command]
 
 /--
-`File version input commands`: read from the version, the input has the commands.
+`File version input commands`: with the initial version `version`, the input is read as the
+commands.
 
 Standard: 2.7 §3.11 Scripts, as `File.From`.
 -/

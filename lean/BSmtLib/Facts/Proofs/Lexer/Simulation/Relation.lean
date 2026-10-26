@@ -198,7 +198,7 @@ theorem SimR.post {P : S → T → Prop} {Q Q' : α → β → S → T → Prop}
   SimR.mono (fun _ _ h => h) hQ (fun _ _ h => h) hf
 
 omit [LawfulMonad m] in
-/-- Facts of the related states can be used to show the simulation. -/
+/-- Facts about the related states can be used to show the simulation. -/
 theorem SimR.intro {P : S → T → Prop} {Q : α → β → S → T → Prop} {f : M m H ε S α}
     {g : M m H ε T β}
     (hf : ∀ s₀ t₀, P s₀ t₀ → SimR Er (fun s t => P s t ∧ s = s₀ ∧ t = t₀) Q f g) :

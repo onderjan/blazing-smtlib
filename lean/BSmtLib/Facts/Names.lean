@@ -14,7 +14,7 @@ public import BSmtLib.Facts.Counterparts
 # The naming rule, the re-exports and the Rust counterparts, checked
 
 The checks of `BSmtLib.Facts.Naming`, `BSmtLib.Facts.Reexports` and `BSmtLib.Facts.Counterparts`
-on the library, the lexers of the chain, the specification and the facts of both, pinned by
+on the library, the lexers of the chain, the specification and the facts about both, pinned by
 `#guard_msgs`: a declaration added in the wrong place, a stale or missing re-export, a name that
 resolves elsewhere than it did, or a public name of the library with neither a Rust counterpart
 nor a `LEAN:` reason fails the build.

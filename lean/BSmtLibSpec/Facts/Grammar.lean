@@ -8,7 +8,7 @@ public import BSmtLibSpec.Facts.Proofs.Grammar.RoundTrip
 @[expose] public section
 
 /-!
-# Facts of the grammar
+# Facts about the grammar
 
 The grammar: the tokens of a tree determine the tree, and every file has at most one reading,
 from which it is reproduced.

@@ -32,8 +32,8 @@ theorem libVersion_eq (version : BSmtLibSpec.Lexicon.Version) :
 
 /-- There is a handler told contents only, whose state is the version in force and a list of
 commands of the specification and whose sorts, s-expressions, attributes and terms are those of
-the specification, such that the script reader over it, from the version and no commands, reads
-every file to the end and builds the file's commands. -/
+the specification, such that the script reader over it, with the initial version and no commands,
+reads every file to the end and builds the file's commands. -/
 theorem builds_commands :
     ∃ inst : ContentHandler (BSmtLibSpec.Lexicon.Version × List Tree.Command),
       inst.«Sort» = Tree.Sort ∧

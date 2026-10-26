@@ -161,7 +161,7 @@ theorem takenFrom_of_chain {version last : BSmtLibSpec.Lexicon.Version} {cs : Li
   obtain ⟨rest, ending, hrest⟩ := hu
   exact ⟨_, _, takes_of_chain h hrest⟩
 
-/-- The items are those of commands read from the version, each followed by more commands in a
+/-- The items are those of commands with the initial version, each followed by more commands in a
 version, and then those of `exit`: after them, the producer is asked to discard the rest. -/
 def AfterExit (version : BSmtLibSpec.Lexicon.Version) (items : List Received) : Prop :=
   ∃ done last, Chain version done last ∧ items = cmdToks done ++ toks Tree.Command.exit.tokens
@@ -264,7 +264,7 @@ theorem cmdEnd_ne_endOfInput {version : BSmtLibSpec.Lexicon.Version} {c : Tree.C
 
 /-! ## The script parser's state -/
 
-/-- What the script parser has taken, from the version `start` on: the items `pre`, in the
+/-- What the script parser has taken, with the initial version `start`: the items `pre`, in the
 parser's state, which it is in with the version `version`. Either it is in a command, or it has
 taken `exit`, after which it waits for a command again. -/
 def ScriptInv (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (version : Version)

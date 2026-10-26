@@ -8,7 +8,7 @@ public import BSmtLib.Facts.PublicApi
 @[expose] public section
 
 /-!
-# Facts of the library
+# Facts about the library
 
 What the library satisfies with respect to the specification, one module for each part: the
 lexers (`Facts.Lexer`), the parsers (`Facts.Parser`) and the readers (`Facts.Reader`); and what

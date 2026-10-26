@@ -28,8 +28,8 @@ def Tokenization.Delimited (category : Category) (rest : Chars) : Prop :=
     ∃ c more, rest = c :: more ∧ (whiteSpaceChar [c] ∨ oneOf "();" [c])
 
 /--
-`Tokenization.From version offset input tokens`: in the version, the tokens are a tokenisation
-of the input, whose first character is at `offset`.
+`Tokenization.From version offset input tokens`: with the starting offset `offset`, the tokens
+are a tokenisation of the input.
 
 Standard: 2.7 §3.1: the only lexical function of whitespace is to break the source text into
 tokens. Readings L1 and L2.
@@ -42,8 +42,7 @@ inductive Tokenization.From (version : Version) : Nat → Chars → List Token �
         (⟨category, offset + w.length, s⟩ :: tokens)
 
 /--
-`Tokenization version input tokens`: in the version, the tokens are a tokenisation of the
-input.
+`Tokenization version input tokens`: the tokens are a tokenisation of the input.
 
 Standard: 2.7 §3.1, as `Tokenization.From`.
 -/

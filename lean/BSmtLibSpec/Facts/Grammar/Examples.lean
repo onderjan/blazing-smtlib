@@ -54,7 +54,7 @@ theorem sort_eq_of_tokens {s t : Tree.«Sort»} (h : s.tokens = t.tokens) : s = 
 
 /-! ## Identifiers and sorts -/
 
-/-- `(_ BitVec 3)` is a sort of 2.0. -/
+/-- `(_ BitVec 3)` is a valid sort in 2.0. -/
 example : (Tree.«Sort».mk ⟨Facts.Grammar.Examples.simple
     "BitVec", [.numeral (chars "3")]⟩ []).tokens =
       paren [word "_", Facts.Grammar.Examples.sym "BitVec", Facts.Grammar.Examples.num "3"] ∧
@@ -63,21 +63,21 @@ example : (Tree.«Sort».mk ⟨Facts.Grammar.Examples.simple
   refine ⟨rfl, ?_⟩
   simp [Tree.«Sort».Valid, Tree.«Sort».ValidAll, Tree.Identifier.Valid, Tree.Index.Valid]
 
-/-- `(List (Array Int Real))` is a sort of 2.0. -/
+/-- `(List (Array Int Real))` is a valid sort in 2.0. -/
 example : (Tree.«Sort».mk (Facts.Grammar.Examples.ident "List") [.mk
     (Facts.Grammar.Examples.ident "Array") [Facts.Grammar.Examples.sortOf "Int",
     Facts.Grammar.Examples.sortOf "Real"]]).tokens =
     paren [Facts.Grammar.Examples.sym "List", .parenOpen, Facts.Grammar.Examples.sym "Array",
         Facts.Grammar.Examples.sym "Int", Facts.Grammar.Examples.sym "Real", .parenClose] := rfl
 
-/-- `(_ move up)`, with a symbol as its index, is a sort from 2.5 on. -/
+/-- `(_ move up)`, with a symbol as its index, is a valid sort from 2.5 on. -/
 example : (Tree.«Sort».mk ⟨Facts.Grammar.Examples.simple
     "move", [.symbol (Facts.Grammar.Examples.simple "up")]⟩ []).Valid .v2_5 := by
   simp [Tree.«Sort».Valid, Tree.«Sort».ValidAll, Tree.Identifier.Valid, Tree.Index.Valid,
     versionAtLeast, Version.upTo]
 
-/-- `(_ move up)` is no sort of 2.0, where indices are numerals: the only tree written so is
-not one of 2.0. -/
+/-- `(_ move up)` is no valid sort in 2.0, where indices are numerals: the only tree written so is
+not valid in 2.0. -/
 example : ¬ ∃ s : Tree.«Sort», s.Valid .v2_0 ∧
     s.tokens = paren [word "_", Facts.Grammar.Examples.sym "move", Facts.Grammar.Examples.sym "up"]
         := by
@@ -89,7 +89,7 @@ example : ¬ ∃ s : Tree.«Sort», s.Valid .v2_0 ∧
   simp [Tree.«Sort».Valid, Tree.Identifier.Valid, Tree.Index.Valid, versionAtLeast,
     Version.upTo] at hv
 
-/-- `(Array Int Real)` is a sort of every version. -/
+/-- `(Array Int Real)` is a valid sort in every version. -/
 example : IsSort .v2_0 (paren [sym "Array", sym "Int", sym "Real"])
     (.mk (ident "Array") [sortOf "Int", sortOf "Real"]) := by
   refine ⟨?_, rfl⟩
@@ -104,7 +104,7 @@ example : IsSExpr .v2_0 (paren [sym "a", .parenOpen, sym "b", num "1", .parenClo
   refine ⟨?_, rfl⟩
   simp [Tree.SExpr.Valid, Tree.SExpr.ValidAll]
 
-/-- `(assert)`, with a reserved word, is an s-expression from 2.6 on, and none of 2.5. -/
+/-- `(assert)`, with a reserved word, is a valid s-expression from 2.6 on, and not in 2.5. -/
 example : IsSExpr .v2_6 (paren [word "assert"]) (.list [.reserved (chars "assert")]) ∧
     ¬ IsSExpr .v2_5 (paren [word "assert"]) (.list [.reserved (chars "assert")]) := by
   refine ⟨⟨?_, rfl⟩, fun h => ?_⟩
@@ -130,7 +130,7 @@ example : IsTerm .v2_0 (paren [Facts.Grammar.Examples.sym "f", Facts.Grammar.Exa
 
 /-! ## Commands -/
 
-/-- `(declare-fun f (Int) Int)` is a command of 2.0. -/
+/-- `(declare-fun f (Int) Int)` is a valid command in 2.0. -/
 example : IsCommand .v2_0
     (commandTokens "declare-fun" [Facts.Grammar.Examples.sym "f", .parenOpen,
     Facts.Grammar.Examples.sym "Int", .parenClose, Facts.Grammar.Examples.sym "Int"])
@@ -182,7 +182,7 @@ example :
 
 /-! ## Version declarations -/
 
-/-- `(set-info :smt-lib-version 2.6)` is a command of 2.7 too, read in 2.7; after it, the rest
+/-- `(set-info :smt-lib-version 2.6)` is a valid command in 2.7 too, read in 2.7; after it, the rest
 of the file is read in 2.6. -/
 example :
     IsCommand .v2_7 (commandTokens "set-info" [.keyword (chars "smt-lib-version"),

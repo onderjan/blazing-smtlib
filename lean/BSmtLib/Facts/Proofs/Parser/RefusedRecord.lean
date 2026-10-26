@@ -93,7 +93,7 @@ theorem commands_U {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.C
       adapt_bind]
     simp [mapCause]
 
-/-- The recording run with the library's handler of a script read from the version is the spec's,
+/-- The recording run with the library's handler of a script with the initial version is the spec's,
 its errors mapped. -/
 theorem script_U {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
