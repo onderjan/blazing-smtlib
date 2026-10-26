@@ -142,7 +142,7 @@ def Answering.entry (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.Batch
   | some handed => some handed
   | none => if consumer.concrete then some (toLayout cursor token) else none
 
-/-- The cursor after the switch of the version that the consumer asks for at the last of the
+/-- The cursor after the version switch that the consumer asks for at the last of the
 entries `taken`, if it asks for one. The lexer's cursor never refuses a version. -/
 def Answering.switched (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
     (taken : List Handed) (cursor : LexerCursor batch) :

@@ -42,7 +42,7 @@ variable (version : BSmtLibSpec.Lexicon.Version)
 def SymbolOrWildcardLang : Lang :=
   fun u => ∃ s : Tree.SymbolOrWildcard, s.Valid version ∧ u = [.token s.token]
 
-/-- A pattern of the version. -/
+/-- A valid pattern. -/
 def PatternLang : Lang :=
   fun u => ∃ pattern : Tree.Pattern, pattern.Valid version ∧ u = toks pattern.tokens
 
@@ -145,7 +145,7 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- A qualified identifier of the version. -/
+/-- A valid qualified identifier. -/
 def QualLang : Lang :=
   fun u => ∃ q : Tree.QualIdentifier, q.Valid version ∧ u = toks q.tokens
 
@@ -257,7 +257,7 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- A sorted variable of the version. -/
+/-- A valid sorted variable. -/
 def SortedVarLang : Lang :=
   fun u => ∃ var : Tree.SortedVar, var.Valid version ∧ u = toks var.tokens
 

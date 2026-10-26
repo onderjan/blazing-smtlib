@@ -566,7 +566,7 @@ theorem commandRem_noEmpty (v : BSmtLibSpec.Lexicon.Version) (follows : CmdEnd �
   obtain ⟨a, e, w, ha, -, rfl⟩ := commandRem_endsFollowed v follows state u hu
   exact ha (List.append_eq_nil_iff.mp h).1
 
-/-- A command of the version, then what a parser takes as the command ends. -/
+/-- A valid command, then what a parser takes as the command ends. -/
 theorem takes_command {version : BSmtLibSpec.Lexicon.Version} {c : Tree.Command}
     (hc : c.Valid version) :
     ∃ tail ending, Takes version [c] (toks c.tokens ++ tail) ending := by
@@ -701,7 +701,7 @@ def RunFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received)
     Takes start commands (pre ++ (items.take (j + 1)).map rcv) (.failed .unsupportedVersion)
 
 /-- The script parser's run over items goes on in a state that says what it has taken, where
-each item's reserved words are ones of the version in force there, as every reading of the
+each item's reserved words are reserved by the version in force there, as every reading of the
 items before it says; or it finishes, or fails, at an item after which a parser takes no
 more. -/
 theorem script_runs (start : BSmtLibSpec.Lexicon.Version) :

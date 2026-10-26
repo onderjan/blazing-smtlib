@@ -28,7 +28,7 @@ open BSmtLib.Facts.Reader.Adapters
 variable {feed : Lexicon.Version → List Regex.Chars → Bool → Fed}
 
 /-- A token a correct lexer hands over from an offset on, the input ended or not, stands for an
-item of the version. -/
+item that a lexer can hand over in the version. -/
 theorem segment_ofVersion' (hc : Correct feed) (version : Lexicon.Version)
     (input : Regex.Chars) (ended : Bool) (offset : Nat) :
     ∀ h ∈ (segment feed version input ended offset).handed,

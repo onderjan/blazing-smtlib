@@ -13,7 +13,7 @@ through the calls in order and keeps, for each call, what it stands for (`Fragme
 that returns a handled value stands for the tree it reports, built from what the earlier calls
 it names stand for. A recorded call names an earlier call by its number, which is the position
 of that call's fragment. A command made of several calls waits in `Pending` until its last call.
-The handler's switch of the version changes the version in force, which tells the literals of
+The handler's version switch changes the version in force, which tells the literals of
 2.5 and 2.6 from terms in `check-sat-assuming`.
 
 Not trusted: this is a check of the specification.
@@ -322,7 +322,7 @@ def call : {returns : Returns} → Call Recorded returns → Option State
 
 end State
 
-/-- What an event does: a call acts, the handler's switch of the version stands for nothing and
+/-- What an event does: a call acts, the handler's version switch stands for nothing and
 changes the version in force, and every other event is not a call. -/
 def step (state : State) : Event → Option State
   | .call _ request => state.call request

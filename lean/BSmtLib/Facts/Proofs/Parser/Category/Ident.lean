@@ -189,8 +189,8 @@ private theorem indices_move {version : Version} (symbol : Lexicon.Value.Symbol)
         (fun i hi => hindices i (List.mem_cons_of_mem _ hi)) (found.push (.symbol name))
       exact ⟨found', .cons (by simp [IdentState.step, hversion]) hmoves⟩
 
-/-- The identifier parser on `(` `_`, a symbol, indices of the version and a token that is
-neither an index of the version nor `)`. -/
+/-- The identifier parser on `(` `_`, a symbol, valid indices and a token that is
+neither a valid index nor `)`. -/
 theorem ident_rejects_index {version : Version} (symbol : Lexicon.Value.Symbol)
     {indices : List Parser.Internal.Input} (hindices : ∀ index ∈ indices, IsIndex version index)
     {token : Parser.Internal.Input} (htoken : ¬ IsIndex version token)

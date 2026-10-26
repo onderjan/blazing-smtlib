@@ -151,8 +151,8 @@ private theorem arguments_move {version : Version} (constructor : Lexicon.Value.
       simp [PatternState.step, PatternState.symbolOrWildcard?, PatternState.wildcardAllowed,
         hversion, hw]
 
-/-- The pattern parser on `(`, a constructor, arguments of the version and a token that is
-neither an argument of the version nor `)`; the error names the wildcard from 2.7 on. -/
+/-- The pattern parser on `(`, a constructor, valid arguments and a token that is
+neither a valid argument nor `)`; the error names the wildcard from 2.7 on. -/
 theorem pattern_rejects_argument {version : Version} (constructor : Lexicon.Value.Symbol)
     {arguments : List Parser.Internal.Input}
     (harguments : ∀ argument ∈ arguments, IsArgument version argument)

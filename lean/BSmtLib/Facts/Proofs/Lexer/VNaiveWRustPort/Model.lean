@@ -13,7 +13,7 @@ as the spec's consumer `C` does. `hand1` states what becomes of one lexeme, from
 consumer has done so far (`HandOut`): it goes on (`cont`), with the tokens it has taken and the
 version in force (`Prog`); it has broken at a lexeme and waits for the next one, which is
 trailing input (`wait`); or it has stopped (`stop`), and the rest of the lexemes do not matter.
-While the lexer holds a result (`hd`), the next lexeme is trailing input. A switch of the version
+While the lexer holds a result (`hd`), the next lexeme is trailing input. A version switch
 that changes the lexical rules (between 2.0 and the later versions) stops the hand-over: the
 lexemes after it are lexed again; another switch only changes the version the tokens are reported
 in.

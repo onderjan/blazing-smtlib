@@ -13,8 +13,8 @@ import all BSmtLib.Parser.Category.Attribute
 # The steps of the command parser advance
 
 The command parser takes `(`, then a command's name, from which its payload parser starts: the
-remainders of the payload's initial state, after the `(` and the name, are commands of the version
-(`payloadInit_command`), which needs the name to be a reserved word of the version, as a lexer
+remainders of the payload's initial state, after the `(` and the name, are valid commands
+(`payloadInit_command`), which needs the version to reserve the name, as a lexer
 hands it over.
 -/
 
@@ -50,7 +50,7 @@ def commandAddedIn : Token.Reserved.CommandNameReserved → BSmtLibSpec.Lexicon.
   | _ => .v2_0
 
 set_option maxHeartbeats 2000000 in
-/-- A command name that is a reserved word of the version is a command of the version. -/
+/-- A command name that the version reserves names a command that the version has. -/
 theorem commandName_lexical {version : Version} {name : Token.Reserved.CommandNameReserved}
     (h : (Received.token (.reserved (Bridge.reserved (.commandName name)))).OfVersion
       (Bridge.version version)) :

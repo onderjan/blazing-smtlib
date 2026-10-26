@@ -7,11 +7,11 @@ public import BSmtLib.Facts.Proofs.Parser.Rejection.Unique
 /-!
 # The reserved words of what a parser takes
 
-Every reserved word among the tokens of a valid tree is a reserved word of the tree's version:
-the words that start constructs and commands are those of a version that has the construct, and
-an s-expression holds only reserved words of its version. So every item of what a parser takes
-for a script, or for commands that a declaration of a version that is not supported ends, is one
-that a lexer of the version in force can hand over (`takes_ofVersion`).
+Every reserved word among the tokens of a valid tree is reserved by the version the tree is valid
+in: the words that start constructs and commands are reserved by every version that has the
+construct, and a valid s-expression holds only words that the version reserves. So every item of
+what a parser takes for a script, or for commands that a declaration of a version that is not supported ends, is one
+that a lexer can hand over in the version in force (`takes_ofVersion`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Rejection.Lexical
@@ -24,11 +24,11 @@ open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
 
-/-- The word is a reserved word of the version. -/
+/-- The version reserves the word. -/
 def ReservedIn (version : BSmtLibSpec.Lexicon.Version) (w : BSmtLibSpec.Regex.Chars) : Prop :=
   w ∈ (basicReservedWords version ++ commandNames version).map chars
 
-/-- Every reserved word among the tokens is one of the version. -/
+/-- The version reserves every reserved word among the tokens. -/
 def LexicalIn (version : BSmtLibSpec.Lexicon.Version)
     (tokens : List BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
   ∀ w, BSmtLibSpec.Grammar.SyntaxToken.reserved w ∈ tokens → ReservedIn version w
@@ -337,7 +337,7 @@ theorem functionDef_lexical {definition : Tree.FunctionDef} (h : definition.Vali
 theorem propLiteral_lexical (literal : Tree.PropLiteral) : LexicalIn version literal.tokens := by
   cases literal <;> simp [Tree.PropLiteral.tokens, lexicalIn_cons]
 
-/-- Every reserved word among the tokens of a valid command is one of its version. -/
+/-- The version reserves every reserved word among the tokens of a valid command. -/
 theorem command_lexical {command : Tree.Command} (h : command.Valid version) :
     LexicalIn version command.tokens := by
   cases command <;> simp only [Tree.Command.tokens, Tree.Command.Valid] at h ⊢
@@ -420,8 +420,8 @@ theorem ofVersion_command {command : Tree.Command} (h : command.Valid version) {
   | reserved w => exact command_lexical h w (List.mem_of_getElem? htoken)
   | _ => trivial
 
-/-- Every item of what a parser takes for commands is one that a lexer of the version in force
-there can hand over. -/
+/-- Every item of what a parser takes for commands is one that a lexer can hand over in the
+version in force there. -/
 theorem takes_ofVersion {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (h : Takes start commands taken ending) :
     ∀ position (item : Received), taken[position]? = some item →

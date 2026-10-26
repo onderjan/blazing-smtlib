@@ -39,7 +39,7 @@ open BSmtLib.Parser.Adapter BSmtLib.Parser.Script
 
 attribute [local instance high] Stop.consumeFrom
 
-/-- The cursor after the requests: the switch of the version, then discarding. -/
+/-- The cursor after the requests: the version switch, then discarding. -/
 def applyRequests {b : Token.BatchTag} (cursor : LexerCursor b)
     (switch : Option BSmtLibSpec.Lexicon.Version)
     (discard : Bool) : LexerCursor b :=

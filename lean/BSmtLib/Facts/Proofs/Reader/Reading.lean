@@ -80,7 +80,7 @@ theorem tokenizationFrom_split_close {version : Lexicon.Version} :
 
 /-! ## The characters of commands -/
 
-/-- Commands of the version that keep it, whose tokens a tokenisation starts with: the
+/-- Valid commands that keep the version, whose tokens a tokenisation starts with: the
 characters start with them, as a file reads them. -/
 theorem file_of_tokens {version : Lexicon.Version} :
     ∀ (commands : List Tree.Command) {o : Nat} {S : Chars} {A more : List Lexicon.Token},
@@ -201,7 +201,7 @@ theorem map_token_injective : ∀ {xs ys : List Grammar.SyntaxToken},
     rw [h.1, map_token_injective h.2]
 
 /-- Handed tokens without the end-of-file token at the start of what a correct lexer hands over
-from an offset, standing for the tokens of commands of the version, the last of which may change
+from an offset, standing for the tokens of valid commands, the last of which may change
 the mode: the characters from the offset start with those commands, up to the end of the last
 handed token, as a file reads them. -/
 theorem reading_split (hc : Correct feed) {version : Lexicon.Version} {input : Chars}
@@ -333,7 +333,7 @@ theorem reading_split (hc : Correct feed) {version : Lexicon.Version} {input : C
 
 /-- What a correct lexer hands over from an offset within the input, read on its own after the
 end of the input, where the end-of-file token follows handed tokens standing for the tokens of
-commands of the version that keep it: the characters from the offset are those commands, as a
+valid commands that keep the version: the characters from the offset are those commands, as a
 file reads them. -/
 theorem reading_end (hc : Correct feed) {version : Lexicon.Version} {input : Chars}
     {offset : Nat} (hoff : offset ≤ input.length) {current ready : List Handed} {token : Handed}

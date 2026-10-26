@@ -272,7 +272,7 @@ def signatureRem : SignatureState Nat → Lang
       (SortLang version)
   | .result _ _ state => sortRem version state
 
-/-- A function declaration of the version. -/
+/-- A valid function declaration. -/
 def FunctionDecLang : Lang :=
   fun u => ∃ dec : Tree.FunctionDec, dec.Valid version ∧ u = toks dec.tokens
 
@@ -414,7 +414,7 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- A constructor declaration of the version. -/
+/-- A valid constructor declaration. -/
 def ConstructorLang : Lang :=
   fun u => ∃ c : Tree.ConstructorDec, c.Valid version ∧ u = toks c.tokens
 
@@ -485,7 +485,7 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- A datatype declaration of the version. -/
+/-- A valid datatype declaration. -/
 def DatatypeLang : Lang :=
   fun u => ∃ d : Tree.DatatypeDec, d.Valid version ∧ u = toks d.tokens
 

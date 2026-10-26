@@ -91,8 +91,8 @@ info: 'BSmtLibSpec.Facts.Lexer.wholeInputCorrect' depends on axioms: [propext, C
 
 `BSmtLibSpec.Lexer.Runs` states what a lexer does with a consumer relative to what it hands over to
 the collector. What it does is determined by the input and the consumer, so the result it holds or
-returns, where its discarding began and the version in force are too. The input after a switch
-of the version is read on its own and located in the whole input; locating it so agrees with
+returns, where its discarding began and the version in force are too. The input after a version
+switch is read on its own and located in the whole input; locating it so agrees with
 locating its characters in the whole input, and from the start of the input, the tokens ready
 are those the lexer hands over to the collector. The collector meets the obligation of every
 consumer.

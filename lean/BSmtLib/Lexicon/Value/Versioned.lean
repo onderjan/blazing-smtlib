@@ -31,7 +31,7 @@ def newIn (value : ByteSlice) (version : Version) : Except DisallowedBytesError 
   if SymbolBuf.isSimpleIn value version then newUnquoted value else newQuoted value
 
 /-- Whether the symbol reads back as itself in the given version: it is quoted, or it is simple
-and not a reserved word of the version. -/
+and the version does not reserve it. -/
 def isSymbolIn (self : Symbol) (version : Version) : Bool :=
   self.isQuoted || (Reserved.fromBytes? self.asSlice version).isNone
 
@@ -55,7 +55,7 @@ def newIn (value : ByteArray) (version : Version) : Except DisallowedByteVecErro
   if isSimpleIn value.toByteSlice version then newUnquoted value else newQuoted value
 
 /-- Whether the symbol reads back as itself in the given version: it is quoted, or it is simple
-and not a reserved word of the version. -/
+and the version does not reserve it. -/
 def isSymbolIn (self : SymbolBuf) (version : Version) : Bool :=
   self.view.isSymbolIn version
 

@@ -108,7 +108,7 @@ theorem unescape20_eq : ∀ bytes : ByteList, PublicApi.Adapters.unescape20 byte
   | [] => by simp [PublicApi.Adapters.unescape20, Lexicon.unescape20]
   | [_] => by simp [PublicApi.Adapters.unescape20, Lexicon.unescape20]
 
-/-- A token of the version is spelled as the version writes what it stands for. -/
+/-- A lexical token is spelled as the version writes what it stands for. -/
 theorem sameSpelling_token {version : Lexicon.Version} {token : Lexicon.Token}
     (h : categoryRegex version token.category token.text) :
     SameSpelling token.text (lexForm version (Grammar.SyntaxToken.ofToken version token)).2 := by
@@ -122,7 +122,7 @@ theorem sameSpelling_token {version : Lexicon.Version} {token : Lexicon.Token}
     rw [hx, hy] at hu
     simpa using hu.symm
 
-/-- A token of a version other than 2.0 is written as itself. -/
+/-- In a version other than 2.0, a lexical token is written as itself. -/
 theorem lexForm_token_exact {version : Lexicon.Version} {token : Lexicon.Token}
     (h : categoryRegex version token.category token.text) (hv : version ≠ .v2_0) :
     (lexForm version (Grammar.SyntaxToken.ofToken version token)).2 = token.text := by

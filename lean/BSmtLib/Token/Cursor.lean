@@ -188,7 +188,7 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
   consumed_trans {a b c : Z} : Consumed a b → Consumed b c → Consumed a c
   /-- A producer cannot consume tokens without end. -/
   consumed_wf : WellFounded Consumed
-  /-- A switch of the version keeps the tokens consumed. -/
+  /-- A version switch keeps the tokens consumed. -/
   setVersion_consumed {cursor origin next : Z} {version : Version} :
     Consumed cursor origin → setVersion cursor version = .ok next → Consumed next origin
   /-- Discarding keeps the tokens consumed. -/

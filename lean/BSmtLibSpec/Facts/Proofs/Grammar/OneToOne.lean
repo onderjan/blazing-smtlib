@@ -8,7 +8,7 @@ public import BSmtLibSpec.Facts.Proofs.Grammar.Read
 # Trees are read back from their tokens
 
 Each reader of `Grammar.Read` reads the tokens of a tree back as that tree, whatever follows
-them: `readTerm_tokens` for terms and `readCommand_tokens` for the commands of a version, with
+them: `readTerm_tokens` for terms and `readCommand_tokens` for valid commands, with
 a lemma for each category below. Each goes by the shape of the tree, the readers of nested
 categories by induction on their fuel.
 

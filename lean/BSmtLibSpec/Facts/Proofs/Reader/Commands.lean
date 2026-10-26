@@ -87,7 +87,7 @@ theorem tokenizationFrom_split {version : Version} :
           exact .token hw hs (delimited_take _ hd) h₃
         · rw [e₂]; exact h₄
 
-/-- The tokens of a readout are tokens of the version. -/
+/-- The tokens of a readout are lexical tokens. -/
 theorem readout_regex {version : Version} {input : Chars} {tokens : List Token}
     (h : Readout version input tokens) :
     ∀ token ∈ tokens, categoryRegex version token.category token.text := by
@@ -276,7 +276,7 @@ theorem stands_endOfFile (hI : StandsFor parser item) {handed : Handed}
 
 /--
 Tokens that a correct lexer has handed over after a block, reading from `offset` on, and that
-stand for the tokens of a command of the version, are the tokens of characters that follow the
+stand for the tokens of a valid command, are the tokens of characters that follow the
 block and are the command; the block grows by them.
 -/
 theorem command_of_handed (hI : StandsFor parser item) {version : Version} {input : Chars}

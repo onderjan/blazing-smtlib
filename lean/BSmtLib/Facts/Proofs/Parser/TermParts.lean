@@ -186,7 +186,7 @@ theorem versionAtLeast_wildcard (h : versionAtLeast (Bridge.version version) .v2
     PatternState.wildcardAllowed version = true := by
   simp [PatternState.wildcardAllowed, versionAtLeast_v2_7 h]
 
-/-- The token standing for a symbol or the wildcard of the version, as the pattern parser
+/-- The token standing for a valid symbol or wildcard, as the pattern parser
 reads it. -/
 theorem symbolOrWildcard_runs {item : Tree.SymbolOrWildcard}
     (hvalid : item.Valid (Bridge.version version)) {token : Parser.Internal.Input}

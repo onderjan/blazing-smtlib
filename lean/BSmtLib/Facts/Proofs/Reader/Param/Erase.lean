@@ -123,7 +123,7 @@ theorem erases_call {returns : Returns} (request : Call Recorded returns) :
   · intro events; exact ⟨[_], rfl, by simp [Event.isCall]⟩
   · intro _ _ _; trivial
 
-/-- The recording handler's switch of the version writes one call. -/
+/-- The recording handler's version switch writes one call. -/
 theorem erases_setVersion (version : BSmtLibSpec.Lexicon.Version) :
     Erases (ExceptT.lift (recordingHandler.setVersion version) : Parser.Quiet.RPM Unit) := by
   constructor

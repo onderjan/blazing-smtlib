@@ -7,8 +7,8 @@ public import BSmtLib.Facts.Proofs.Parser.Cut
 /-!
 # Where the traversal of a script asks its producer
 
-In the recording run of a script (`BSmtLibSpec.Parser.Properties.record`), the producer's events, a
-switch of the version and the discarding, come right after a command: the switch after a version
+In the recording run of a script (`BSmtLibSpec.Parser.Properties.record`), the producer's events,
+a version switch and the discarding, come right after a command: the switch after a version
 declaration, the discarding after `exit`. Nothing a command does itself is the producer's: the
 traversal of a command is not given the producer. That is shown without going through the commands
 one by one: the reader of a command (`BSmtLibSpec.Facts.Proofs.Parser.Simulation.commandFirst`)
@@ -740,7 +740,7 @@ theorem afterLastProcess_cons_quiet {e : Event} (he : isProcessing e = false) (X
     simp only [List.singleton_append, List.nil_append] at h₁ h₂
     rw [h₁, h₂]
     simp [afterLastProcess, he]
-/-- The handler's switch of the version before the events changes nothing the producer is asked
+/-- The handler's version switch before the events changes nothing the producer is asked
 for after the last processing. -/
 theorem switchOf_handlerSwitch (version : Lexicon.Version) (X : List Event) :
     switchOf (.handlerSwitch version :: X) = switchOf X ∧

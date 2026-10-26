@@ -232,7 +232,7 @@ info: 'BSmtLibSpec.Facts.Lexicon.commandNames_listed' depends on axioms: [propex
 #guard_msgs in
 #print axioms Lexicon.commandNames_listed
 
-/-- No reserved word of a version is listed twice: neither within the basic set or the command
+/-- No word that a version reserves is listed twice: neither within the basic set or the command
 names, nor in both. -/
 theorem Lexicon.reservedWords_nodup (version : Lexicon.Version) :
     (Lexicon.basicReservedWords version ++ Lexicon.commandNames version).Nodup :=

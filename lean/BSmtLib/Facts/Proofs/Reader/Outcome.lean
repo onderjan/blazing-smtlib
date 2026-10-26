@@ -12,7 +12,7 @@ public import BSmtLib.Facts.Proofs.Parser.Rejection.Discard
 The pieces of the walk through `BSmtLibSpec.Lexer.Runs` in `Classify`:
 
 - what a correct lexer hands over from an offset, read on its own after the end of the input:
-  tokens of the version, located in the whole input, and the end-of-file token last unless it
+  lexical tokens, located in the whole input, and the end-of-file token last unless it
   failed (`segment_mem`, `segment_ofVersion`, `segment_ends`);
 - facts about what a parser takes: how it ends (`takes_ending`, `takes_finished_last`), the
   version in force after an item (`versionAt_succ`), where discarding is asked for
@@ -55,7 +55,7 @@ theorem rcv_itemOf_endOfInput_iff (handed : Handed) :
 variable {feed : Lexicon.Version → List Regex.Chars → Bool → Fed}
 
 /-- What a correct lexer hands over from an offset on, read on its own after the end of the
-input: the end-of-file token, or tokens of the version located in the whole input. -/
+input: the end-of-file token, or lexical tokens located in the whole input. -/
 theorem segment_mem (hc : Correct feed) (version : Lexicon.Version) (input : Regex.Chars)
     (offset : Nat) :
     ∀ h ∈ (segment feed version input true offset).handed, h.type = .endOfFile ∨
@@ -86,7 +86,8 @@ theorem segment_mem (hc : Correct feed) (version : Lexicon.Version) (input : Reg
     exact Or.inr ⟨token, (Facts.Proofs.Lexer.StreamingFacts.tokenizationFrom_mem hall token
       (List.mem_append_left _ htoken)).1, rfl⟩
 
-/-- A token a correct lexer hands over from an offset on stands for an item of the version. -/
+/-- A token a correct lexer hands over from an offset on stands for an item that a lexer can hand
+over in the version. -/
 theorem segment_ofVersion (hc : Correct feed) (version : Lexicon.Version)
     (input : Regex.Chars) (offset : Nat) :
     ∀ h ∈ (segment feed version input true offset).handed,

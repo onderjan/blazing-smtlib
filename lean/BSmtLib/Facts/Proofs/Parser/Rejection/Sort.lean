@@ -41,15 +41,15 @@ abbrev wordItem (w : String) : Received := .token (word w)
 /-- A symbol, any. -/
 def SymbolLang : Lang := fun u => ∃ name, u = [.token (.symbol name)]
 
-/-- An index of the version. -/
+/-- A valid index. -/
 def IndexLang (version : BSmtLibSpec.Lexicon.Version) : Lang :=
   fun u => ∃ index : Tree.Index, index.Valid version ∧ u = toks index.tokens
 
-/-- An identifier of the version. -/
+/-- A valid identifier. -/
 def IdentLang (version : BSmtLibSpec.Lexicon.Version) : Lang :=
   fun u => ∃ identifier : Tree.Identifier, identifier.Valid version ∧ u = toks identifier.tokens
 
-/-- A sort of the version. -/
+/-- A valid sort. -/
 def SortLang (version : BSmtLibSpec.Lexicon.Version) : Lang :=
   fun u => ∃ sort : Tree.«Sort», sort.Valid version ∧ u = toks sort.tokens
 

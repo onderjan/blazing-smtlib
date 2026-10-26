@@ -87,7 +87,7 @@ theorem relex_discardRest (c : LexerCursor g) :
 theorem version_discardRest (c : LexerCursor g) : c.discardRest.version = c.version := by
   cases c; rfl
 
-/-- A switch of the version: the version, and, if the lexical rules change, a request to relex
+/-- A version switch: the version, and, if the lexical rules change, a request to relex
 and no token left. -/
 theorem setVersion_eq (c : LexerCursor g) (v : Version) :
     ∃ c', c.setVersion v = .ok c' ∧ c'.version = v ∧ cNext c' = cNext c ∧

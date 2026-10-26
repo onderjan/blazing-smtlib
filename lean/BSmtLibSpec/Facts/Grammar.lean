@@ -31,7 +31,7 @@ it (`Lexicon.tokenizationFrom_close_prefix`); so the first command of a file is 
 with it the mode in which the rest is read.
 -/
 
-/-- Two s-expressions of a version that are written with the same tokens are the same
+/-- Two s-expressions valid in the same version and written with the same tokens are the same
 s-expression. -/
 theorem Grammar.sExprsOneToOne : BSmtLibSpec.Grammar.Properties.SExprsOneToOne := by
   intro _ sExpr sExpr' _ _ h
@@ -48,7 +48,8 @@ info: 'BSmtLibSpec.Facts.Grammar.sExprsOneToOne' depends on axioms: [propext, Cl
 #guard_msgs in
 #print axioms Grammar.sExprsOneToOne
 
-/-- Two attributes of a version that are written with the same tokens are the same attribute. -/
+/-- Two attributes valid in the same version and written with the same tokens are the same
+attribute. -/
 theorem Grammar.attributesOneToOne : BSmtLibSpec.Grammar.Properties.AttributesOneToOne := by
   intro _ «attribute» attribute' _ _ h
   have h₁ := Proofs.Grammar.OneToOne.readAttribute_tokens «attribute» []
@@ -64,7 +65,7 @@ info: 'BSmtLibSpec.Facts.Grammar.attributesOneToOne' depends on axioms: [propext
 #guard_msgs in
 #print axioms Grammar.attributesOneToOne
 
-/-- Two sorts of a version that are written with the same tokens are the same sort. -/
+/-- Two sorts valid in the same version and written with the same tokens are the same sort. -/
 theorem Grammar.sortsOneToOne : BSmtLibSpec.Grammar.Properties.SortsOneToOne := by
   intro _ sort sort' _ _ h
   have h₁ := Proofs.Grammar.OneToOne.readSort_tokens sort [] (n := sizeOf sort + sizeOf sort' + 1)
@@ -80,7 +81,7 @@ info: 'BSmtLibSpec.Facts.Grammar.sortsOneToOne' depends on axioms: [propext, Cla
 #guard_msgs in
 #print axioms Grammar.sortsOneToOne
 
-/-- Two terms of a version that are written with the same tokens are the same term. -/
+/-- Two terms valid in the same version and written with the same tokens are the same term. -/
 theorem Grammar.termsOneToOne : BSmtLibSpec.Grammar.Properties.TermsOneToOne := by
   intro _ term term' _ _ h
   have h₁ := Proofs.Grammar.OneToOne.readTerm_tokens term [] (n := sizeOf term + sizeOf term' + 1)
@@ -96,7 +97,8 @@ info: 'BSmtLibSpec.Facts.Grammar.termsOneToOne' depends on axioms: [propext, Cla
 #guard_msgs in
 #print axioms Grammar.termsOneToOne
 
-/-- Two commands of a version that are written with the same tokens are the same command. -/
+/-- Two commands valid in the same version and written with the same tokens are the same
+command. -/
 theorem Grammar.commandsOneToOne : BSmtLibSpec.Grammar.Properties.CommandsOneToOne := by
   intro version command command' hv hv' h
   have h₁ := Proofs.Grammar.OneToOne.readCommand_tokens version command [] hv

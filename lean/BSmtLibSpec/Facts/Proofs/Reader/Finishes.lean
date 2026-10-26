@@ -11,7 +11,7 @@ A correct lexer with a parser that follows the traversal and rejects the first i
 script continues with as its consumer finishes only when the parser has taken what a parser
 takes for a script (`finishes_script`): as long as the parser continues, the items it took stand
 for a strict start of what a parser takes for commands, as it would otherwise have rejected an
-item or finished; the lexer hands over reserved words of the version in force, which is the
+item or finished; the lexer hands over only words that the version in force reserves, which is the
 version the traversal has switched to, and after the parser has asked for the discarding, as
 the traversal does after `exit`, nothing but the end of the file (`viable_step`). The tokens the
 parser took are then those of a file with that script, each command read in the version in force

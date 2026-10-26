@@ -14,7 +14,7 @@ import all BSmtLib.Lexicon.Value
 (`BSmtLibSpec.Lexer.Consumer`): what it answers after each token is what the library's script parser
 does in its recording run on the tokens taken so far (`Rejection.libraryParser`), each read as the
 parser's token that stands for it (`itemOf`); it asks the producer for what that run asks for after
-the last token's processing: a switch of the version, discarding. It and `itemOf` are adapters, in
+the last token's processing: a version switch, discarding. It and `itemOf` are adapters, in
 `Facts.Reader.Adapters`; this module proves what they do.
 
 Along the tokens of a script, its answers are those the parser properties give: it goes on at

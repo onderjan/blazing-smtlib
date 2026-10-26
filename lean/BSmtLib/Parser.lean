@@ -420,7 +420,7 @@ theorem Input.ofSyntax_toSyntax (token : Input) : Input.ofSyntax token.toSyntax 
 
 /- LEAN: Rust's `SingleTokenCursor`, with which a parser hands a token it took on to a parser
 it holds. A parser stepped by single tokens has the token as an `Input`, so this producer gives
-one; as Rust's, it refuses every switch of the version, and its consumer does not call
+one; as Rust's, it refuses every version switch, and its consumer does not call
 `discardRest` on it (Rust's panics), which here drops the token. -/
 /-- A producer of one token, in a version. -/
 structure InputCursor where
@@ -525,7 +525,7 @@ copied at every token. A failed parser goes on from its reset too, as a parser t
 in no state it promises. -/
 /--
 Has the parser take the token, taken from `cursor` and leaving `next`: its arrival, its step, and
-what the step asks of the cursor. A refused switch of the version fails with
+what the step asks of the cursor. A refused version switch fails with
 `VersionErrorKind.unsupported`.
 -/
 @[inline]

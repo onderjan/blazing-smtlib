@@ -193,7 +193,7 @@ theorem driveScript_processed : ∀ (items : List Parser.Internal.Input), NoLayo
     · rw [hrun] at h
       cases h
 
-/-- The reserved words of the items before a position are those of the version in force, as
+/-- The reserved words of the items before a position are reserved by the version in force, as
 every reading of the items says, where they are as one reading says. -/
 theorem lexical_of_witness {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
@@ -257,7 +257,7 @@ theorem takes_prefix_length {start : BSmtLibSpec.Lexicon.Version}
   simp only [List.length_take] at this
   omega
 
-/-- Over a start of what a parser takes, of items whose reserved words are those of the version
+/-- Over a start of what a parser takes, of items whose reserved words are reserved by the version
 in force, the parser goes on, in a state that says what it has taken. -/
 theorem prefix_goes_on {version : Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending}
@@ -795,7 +795,7 @@ theorem rejects_core (version : BSmtLibSpec.Lexicon.Version) (commands : List Tr
 
 open BSmtLibSpec.Lexicon (basicReservedWords commandNames)
 
-/-- Every reserved word of a version is one of the library's. -/
+/-- Every word that a version reserves is one of the library's. -/
 theorem decodeReserved_isSome : ∀ v : BSmtLibSpec.Lexicon.Version,
     ∀ s ∈ basicReservedWords v ++ commandNames v,
     (decodeReserved (BSmtLibSpec.Regex.chars s)).isSome := by

@@ -35,7 +35,7 @@ def isPoint : Event → Bool
   | .arrive _ | .process _ => true
   | _ => false
 
-/-- The event is the handler's switch of the version. -/
+/-- The event is the handler's version switch. -/
 def isSwitch : Event → Bool
   | .handlerSwitch _ => true
   | _ => false
@@ -122,7 +122,7 @@ theorem silent_call [CallsPass bad] {returns : Returns} (request : Call Recorded
   refine ⟨[.call returns request], ?_, by simp [CallsPass.call], fun _ _ => trivial⟩
   rfl
 
-/-- The handler's switch of the version is silent. -/
+/-- The handler's version switch is silent. -/
 theorem silent_handlerSetVersion (version : BSmtLibSpec.Lexicon.Version) :
     Silent (ExceptT.lift (recordingHandler.setVersion version) : RPM Unit) := by
   constructor

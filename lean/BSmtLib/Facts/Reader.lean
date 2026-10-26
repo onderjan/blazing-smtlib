@@ -19,7 +19,7 @@ The composition of the lexer proofs (`BSmtLib.Facts.Lexer`) with the parser proo
 - The consumer: `Adapters.scriptConsumer version` is the library's script parser as a consumer of
   the lexer spec (`BSmtLibSpec.Lexer.Consumer`): after each token it answers as the parser's
   recording run (`Rejection.libraryParser`) on the tokens taken so far ends, each token read as the
-  parser's token that stands for it, and it asks for the switch of the version and the discarding
+  parser's token that stands for it, and it asks for the version switch and the discarding
   that the run asks of its producer after the last token's processing.
 - The lexer: `Facts.Lexer.correctWithConsumers` states that the library's lexer, fed by the
   adapter with every consumer of the spec, does what `BSmtLibSpec.Lexer.Runs` states, relative to

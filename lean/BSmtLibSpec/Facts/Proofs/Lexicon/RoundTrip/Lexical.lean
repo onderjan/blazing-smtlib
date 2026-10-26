@@ -268,7 +268,7 @@ theorem stringChar_unit20 {p : Chars}
     · simp [decodeUnit20, hdd, hd]
     · simp [decodeUnit20, hdd, hd, h92]
 
-/-- The escaped content of a string literal is a body of a string literal of the version. -/
+/-- The escaped content of a string literal is a body of a string literal. -/
 theorem escaped_body {version : Version} {content : Chars} (h : ∀ x ∈ content, StringChar x) :
     categoryRegex version .string (34 :: (content.flatMap (escapeChar version) ++ [34])) := by
   have hparts : content.flatMap (escapeChar version) =
@@ -314,7 +314,7 @@ theorem escaped_body {version : Version} {content : Chars} (h : ∀ x ∈ conten
 
 /-! ## Written tokens are tokens -/
 
-/-- A syntax token read from a token of the version is written as a token of the version. -/
+/-- A syntax token read from a lexical token is written as a lexical token. -/
 theorem lexForm_regex {version : Version} {token : Token}
     (h : categoryRegex version token.category token.text) :
     categoryRegex version (lexForm version (SyntaxToken.ofToken version token)).1
@@ -361,7 +361,7 @@ theorem lexForm_regex {version : Version} {token : Token}
   | decimal => simpa [SyntaxToken.ofToken, lexForm] using h
   | reserved => simpa [SyntaxToken.ofToken, lexForm] using h
 
-/-- A syntax token read from a token of the version is written as that very token, except for
+/-- A syntax token read from a lexical token is written as that very token, except for
 a 2.0 string literal with a backslash that does not start `\\` or `\"`. -/
 theorem lexForm_ofToken {version : Version} {token : Token}
     (h : categoryRegex version token.category token.text)

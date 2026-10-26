@@ -13,7 +13,7 @@ the tokens of the file's commands, each command read in the version in force, an
 takes them, switches the version after each version declaration and has the rest discarded after
 `exit`, and finishes at the end of the input (`files_runs`).
 
-The lexer reads the input after a switch of the version on its own (`BSmtLibSpec.Lexer.segment`);
+The lexer reads the input after a version switch on its own (`BSmtLibSpec.Lexer.segment`);
 until the next switch, the commands it reads are a block whose characters end with a `)`, so the
 lexer has handed their tokens over whatever follows (`command_block`).
 

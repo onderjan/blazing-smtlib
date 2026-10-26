@@ -45,7 +45,7 @@ abbrev var (s : String) : Tree.Term := .identifier (.plain (ident s))
 abbrev numeral (s : String) : Tree.Term := .constant (.numeral (chars s))
 
 /-- Two sorts with the same tokens are the same sort, whether or not they are valid: unlike
-`sortsOneToOne`, it can show that tokens are no sort of a version. -/
+`sortsOneToOne`, it can show that tokens are no sort in a version. -/
 theorem sort_eq_of_tokens {s t : Tree.«Sort»} (h : s.tokens = t.tokens) : s = t := by
   have h₁ := readSort_tokens s [] (n := sizeOf s + sizeOf t + 1) (by omega)
   have h₂ := readSort_tokens t [] (n := sizeOf s + sizeOf t + 1) (by omega)

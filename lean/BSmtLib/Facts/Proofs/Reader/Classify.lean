@@ -60,7 +60,7 @@ def Hist (start : Lexicon.Version) (input : Regex.Chars) (before : List Handed)
       Takes version rest (taken.drop before.length) ending ∧
       ∀ more, File.From version offset (input.drop offset) more → File start input (done ++ more)
 
-/-- No switch of the version was asked for at the tokens taken since `before`. -/
+/-- No version switch was asked for at the tokens taken since `before`. -/
 def Quiet (start : Lexicon.Version) (before taken : List Handed) : Prop :=
   ∀ k, before.length ≤ k → k < taken.length →
     (scriptConsumer start).switchTo (taken.take (k + 1)) = none

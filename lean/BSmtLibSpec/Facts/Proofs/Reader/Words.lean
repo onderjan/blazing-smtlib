@@ -15,7 +15,7 @@ reserved words of every version (`takes_reserved`).
 
 The tokens of a tree hold a reserved word only as one of the fixed words of its productions,
 all of which 2.7 reserves, or as a reserved s-expression, which a valid tree has only with a
-reserved word of its version. The proof follows the token functions of each category.
+word that its version reserves. The proof follows the token functions of each category.
 
 Not trusted: everything here is proved.
 -/

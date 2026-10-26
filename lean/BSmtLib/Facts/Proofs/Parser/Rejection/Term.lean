@@ -41,18 +41,18 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- A term of the version. -/
+/-- A valid term. -/
 def TermLang : Lang := fun u => ∃ term : Tree.Term, term.Valid version ∧ u = toks term.tokens
 
-/-- What follows the `(` of a term of the version. -/
+/-- What follows the `(` of a valid term. -/
 def OpenedLang : Lang :=
   fun u => ∃ term : Tree.Term, term.Valid version ∧ toks term.tokens = openItem :: u
 
-/-- A binding of a `let`, of the version. -/
+/-- A valid binding of a `let`. -/
 def BindingLang : Lang := fun u => ∃ (symbol : Tree.Symbol) (term : Tree.Term),
   term.Valid version ∧ u = toks (paren (.symbol symbol :: term.tokens))
 
-/-- A case of a `match`, of the version. -/
+/-- A valid case of a `match`. -/
 def CaseLang : Lang := fun u => ∃ (pattern : Tree.Pattern) (term : Tree.Term),
   pattern.Valid version ∧ term.Valid version ∧ u = toks (paren (pattern.tokens ++ term.tokens))
 

@@ -456,7 +456,7 @@ theorem Advances.from {σ ρ : Type} {rem : σ → Lang} {fin : σ → ρ → La
 
 /--
 Every step of the parser, in the version, advances: on every token that stands for an item that
-a lexer of the version can hand over, its results advance with that item, and its failures are no
+a lexer can hand over in the version, its results advance with that item, and its failures are no
 rejection of a version declaration.
 -/
 def StepsAdvance {σ ρ : Type} (version : Version)

@@ -67,8 +67,8 @@ theorem fed_eq_of_flatten {feed : Version → List Chars → Bool → Fed} (h : 
 
 /-! ## Tokens as a parser receives them -/
 
-/-- A token of a version, wherever it is located, stands for its syntax token, which is one that
-a lexer of the version hands over. -/
+/-- A lexical token, wherever it is located, stands for its syntax token, which is one that a
+lexer hands over in the version. -/
 theorem received_handed {version : Version} {token : Token}
     (h : categoryRegex version token.category token.text) (input : Chars) :
     (token.handed version input).received =

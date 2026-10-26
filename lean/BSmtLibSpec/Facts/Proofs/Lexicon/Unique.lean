@@ -170,7 +170,7 @@ theorem keyword_inv {s : Chars} (h : keyword s) :
   obtain ⟨t, rfl, ht⟩ := seq_lit h
   exact ⟨t, rfl, plus_mem (single_mem fun p hp => symChar_inv hp) ht⟩
 
-/-- The reserved words of the version, as character sequences. -/
+/-- The words that the version reserves, as character sequences. -/
 def reservedWords (version : Version) : List Chars :=
   (basicReservedWords version ++ commandNames version).map chars
 

@@ -186,7 +186,7 @@ def payloadRem : Parser.Command.Internal.Standard.Payload Nat Nat Nat Nat Nat �
   | .setInfo declaration state => setInfoRem version follows declaration state
   | .setOption state => cat (attrRem version true false state) (follows (.next version))
 
-/-- A command of the version, then what follows it. -/
+/-- A valid command, then what follows it. -/
 def CommandLang : Lang := fun u => ∃ (cmd : Tree.Command) (w : List Received), cmd.Valid version ∧
   follows (cmdEnd version cmd) w ∧ u = toks cmd.tokens ++ w
 

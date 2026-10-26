@@ -577,7 +577,7 @@ def readCommandAfter (version : Version) (n : Nat) (w : Chars) (tokens : List Sy
     pure (.setOption option, rest)
   else none
 
-/-- A command of the version. -/
+/-- A command. -/
 def readCommand (version : Version) (n : Nat) : Reader Tree.Command
   | .parenOpen :: .reserved w :: rest => readCommandAfter version n w rest
   | _ => none

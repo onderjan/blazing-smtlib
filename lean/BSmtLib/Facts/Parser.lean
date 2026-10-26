@@ -1606,8 +1606,8 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_empty' depends on axioms: [prop
 #guard_msgs in
 #print axioms ident_parser_rejects_empty
 
-/-- The identifier parser on `(` `_`, a symbol, indices of the version and a token that is
-neither an index of the version nor `)`. -/
+/-- The identifier parser on `(` `_`, a symbol, valid indices and a token that is
+neither a valid index nor `)`. -/
 theorem ident_parser_rejects_index {version : Version} (symbol : Lexicon.Value.Symbol)
     {indices : List Parser.Internal.Input}
     (hindices : ∀ index ∈ indices, (∃ digits, index = .constant (.numeral digits)) ∨
@@ -2014,8 +2014,8 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_empty' depends on axioms: [pr
 #guard_msgs in
 #print axioms pattern_parser_rejects_empty
 
-/-- The pattern parser on `(`, a constructor, arguments of the version and a token that is
-neither an argument of the version nor `)`; the error names the wildcard from 2.7 on. -/
+/-- The pattern parser on `(`, a constructor, valid arguments and a token that is
+neither a valid argument nor `)`; the error names the wildcard from 2.7 on. -/
 theorem pattern_parser_rejects_argument {version : Version} (constructor : Lexicon.Value.Symbol)
     {arguments : List Parser.Internal.Input}
     (harguments : ∀ argument ∈ arguments, (∃ symbol, argument = .symbol symbol) ∨

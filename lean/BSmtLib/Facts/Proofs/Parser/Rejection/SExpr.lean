@@ -36,7 +36,7 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- An s-expression of the version. -/
+/-- A valid s-expression. -/
 def SExprLang : Lang :=
   fun u => ∃ item : Tree.SExpr, item.Valid version ∧ u = toks item.tokens
 
@@ -167,11 +167,11 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- An attribute value of the version. -/
+/-- A valid attribute value. -/
 def ValueLang : Lang :=
   fun u => ∃ value : Tree.AttributeValue, value.Valid version ∧ u = toks value.tokens
 
-/-- An attribute of the version. -/
+/-- A valid attribute. -/
 def AttrLang : Lang :=
   fun u => ∃ attr : Tree.Attribute, attr.Valid version ∧ u = toks attr.tokens
 

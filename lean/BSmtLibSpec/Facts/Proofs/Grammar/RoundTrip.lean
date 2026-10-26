@@ -124,7 +124,7 @@ theorem command_tokens_pieces {version : Version} {offset : Nat} {segment : Char
   simp only [Concrete.tokens] at ht
   rw [hc.2, ← List.map_map, ht]
 
-/-- The tokens of the concrete reading of a tokenisation are tokens of the version. -/
+/-- The tokens of the concrete reading of a tokenisation are lexical tokens. -/
 theorem pieces_regex {version : Version} {offset : Nat} {input : Chars} {tokens : List Token}
     (h : Tokenization.From version offset input tokens) :
     ∀ piece ∈ (readConcreteFrom offset input tokens).pieces,
