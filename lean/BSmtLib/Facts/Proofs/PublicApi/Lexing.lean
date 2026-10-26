@@ -322,31 +322,4 @@ theorem map_lexEntry_shift (base : Span.Location) (ls : List Lexeme) :
   funext l
   simp [lexEntry, Lexeme.shift, locShift, Nat.add_comm]
 
-/-- An input that the library's lexer with the collector lexes to the end, with a `)` as its last
-token, is lexed as a prefix of every input it starts. -/
-theorem composes (version : Version) (first rest : ByteList)
-    (result : Option (Span.Located Unit)) (entries : List Entry)
-    (h : collect version [first] = (.ok result, entries))
-    (hclose : entries.dropLast.getLast?.map (·.1) = some .parenClose) :
-    (collect version [first ++ rest]).2 =
-        entries.dropLast ++ shift first.length (collect version [rest]).2 ∧
-      (collect version [first ++ rest]).1.toBool = (collect version [rest]).1.toBool := by
-  obtain ⟨e1, b1⟩ := collect_stream version [first]
-  obtain ⟨e2, b2⟩ := collect_stream version [first ++ rest]
-  obtain ⟨e3, b3⟩ := collect_stream version [rest]
-  simp only [List.flatten_cons, List.flatten_nil, List.append_nil, stream_zero] at e1 b1 e2 b2 e3 b3
-  rw [h] at e1 b1
-  dsimp only at e1 b1
-  have hS : streamFrom version true true Span.Location.initial first =
-      ((streamFrom version true true Span.Location.initial first).1, false) := by
-    refine Prod.ext rfl ?_
-    revert b1
-    cases (streamFrom version true true Span.Location.initial first).2 <;> simp [Except.toBool]
-  rw [e1] at hclose
-  obtain ⟨loc, hl⟩ := lexBytes_of_close hS hclose
-  rw [streamFrom_append hl] at e2 b2
-  refine ⟨?_, ?_⟩
-  · rw [e2, e3, e1, List.map_append, map_lexEntry_shift, locAfter_offset', List.map_dropLast]
-  · rw [b2, b3]
-
 end BSmtLib.Facts.Proofs.PublicApi.Lexing

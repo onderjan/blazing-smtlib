@@ -200,4 +200,42 @@ def Tiles : List Entry → Nat → Nat → Prop
 def shift (k : Nat) (entries : List Entry) : List Entry :=
   entries.map fun (category, start, stop) => (category, start + k, stop + k)
 
+/-! ## Moving past a prefix -/
+
+/-- The location after the bytes, from the start of the input: each byte adds one to the offset;
+a line feed starts the next line at column zero, and another byte adds one to the column. -/
+def locationAfter (bytes : ByteList) : Span.Location :=
+  bytes.foldl Span.Location.afterByte Span.Location.initial
+
+/--
+`Moved base location moved`: `location` is a location in an input that follows a prefix ending
+at `base`, and `moved` is the same location in the whole input. The offsets add up, and so do
+the lines. On the first line after the prefix the columns add up too; on a later line the column
+stays.
+-/
+def Moved (base location moved : Span.Location) : Prop :=
+  moved.offset = base.offset + location.offset ∧ moved.line = base.line + location.line ∧
+    moved.column = if location.line = 0 then base.column + location.column else location.column
+
+/--
+`MovedResult base result moved`: `moved` is the result `result` of a run of the collector, moved
+past a prefix ending at `base` as `Moved` moves a location:
+
+- a result is moved with its location;
+- an error keeps its cause, and is moved with its span and where it continues from.
+-/
+def MovedResult (base : Span.Location) :
+    Except (LexerError Empty) (Option (Span.Located Unit)) →
+      Except (LexerError Empty) (Option (Span.Located Unit)) → Prop
+  | .ok none, .ok none => True
+  | .ok (some result), .ok (some moved) => Moved base result.location moved.location
+  | .error error, .error moved =>
+    moved.cause = error.cause ∧ Moved base error.span.start moved.span.start ∧
+      Moved base error.span.end moved.span.end ∧
+      match error.continuesFrom, moved.continuesFrom with
+      | none, none => True
+      | some location, some movedLocation => Moved base location movedLocation
+      | _, _ => False
+  | _, _ => False
+
 end BSmtLib.Facts.PublicApi.Adapters

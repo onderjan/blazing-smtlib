@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Trusted
 public import BSmtLib.Facts.PublicApi.Adapters.Chain
 public import BSmtLib.Facts.PublicApi.Adapters.Builder
 public import BSmtLib.Facts.Proofs.PublicApi.Reprinting
-public import BSmtLib.Facts.Proofs.PublicApi.Lexing
+public import BSmtLib.Facts.Proofs.PublicApi.Composes
 public import BSmtLib.Facts.Proofs.PublicApi.Resets
 public import BSmtLib.Facts.Proofs.PublicApi.Slicing
 public import BSmtLib.Facts.Proofs.PublicApi.Lossless
@@ -65,17 +65,21 @@ after it. For the longer input:
 
 - its tokens are those of the prefix but the end of the input, and then the tokens of the rest as
   the rest alone has them, moved by the length of the prefix;
-- it fails exactly when the rest alone fails.
+- it ends as the rest alone ends, moved past the prefix (`MovedResult`): with the same result, its
+  location moved, or with an error of the same cause, its span and where it continues from moved.
 
-The lexer's consumer takes every token.
+A location is moved past the prefix as `Moved` states: the offset and the line of the end of the
+prefix (`locationAfter`) are added to its own, and on the first line of the rest so is the
+column. The lexer's consumer takes every token.
 -/
 theorem lexing_composes (version : Version) (first rest : ByteList) (result : Option (Located Unit))
     (entries : List Entry) (h : collect version [first] = (.ok result, entries))
     (hclose : entries.dropLast.getLast?.map (·.1) = some .parenClose) :
     (collect version [first ++ rest]).2 =
         entries.dropLast ++ shift first.length (collect version [rest]).2 ∧
-      (collect version [first ++ rest]).1.toBool = (collect version [rest]).1.toBool :=
-  Proofs.PublicApi.Lexing.composes version first rest result entries h hclose
+      MovedResult (locationAfter first) (collect version [rest]).1
+        (collect version [first ++ rest]).1 :=
+  Proofs.PublicApi.Composes.composes version first rest result entries h hclose
 
 /--
 info: 'BSmtLib.Facts.PublicApi.lexing_composes' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -155,7 +159,7 @@ info: 'BSmtLib.Facts.PublicApi.builds_commands' depends on axioms: [propext, Cla
 /-! ## What the statements rest on -/
 
 /--
-info: 4 theorems, stated with 55 adapters:
+info: 4 theorems, stated with 58 adapters:
 BSmtLib.Facts.PublicApi.Adapters:
   BSmtLib.Facts.PublicApi.Adapters.ByteList
   BSmtLib.Facts.PublicApi.Adapters.CollectM
@@ -163,6 +167,8 @@ BSmtLib.Facts.PublicApi.Adapters:
   BSmtLib.Facts.PublicApi.Adapters.Entry
   BSmtLib.Facts.PublicApi.Adapters.FinalLayout
   BSmtLib.Facts.PublicApi.Adapters.Layout
+  BSmtLib.Facts.PublicApi.Adapters.Moved
+  BSmtLib.Facts.PublicApi.Adapters.MovedResult
   BSmtLib.Facts.PublicApi.Adapters.SameSpelling
   BSmtLib.Facts.PublicApi.Adapters.SameSpellings
   BSmtLib.Facts.PublicApi.Adapters.Spaced
@@ -172,6 +178,7 @@ BSmtLib.Facts.PublicApi.Adapters:
   BSmtLib.Facts.PublicApi.Adapters.feed
   BSmtLib.Facts.PublicApi.Adapters.instConsumeCollectorUnitEmpty
   BSmtLib.Facts.PublicApi.Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty
+  BSmtLib.Facts.PublicApi.Adapters.locationAfter
   BSmtLib.Facts.PublicApi.Adapters.readThrough
   BSmtLib.Facts.PublicApi.Adapters.readUpTo
   BSmtLib.Facts.PublicApi.Adapters.resultOf
@@ -236,9 +243,11 @@ info: BSmtLib.Facts.PublicApi.builds_commands:
     BSmtLibSpec.Grammar.Tree.Command, BSmtLibSpec.Grammar.Tree.SExpr, BSmtLibSpec.Grammar.Tree.Sort,
     BSmtLibSpec.Grammar.Tree.Term, BSmtLibSpec.Lexicon.Version
 BSmtLib.Facts.PublicApi.lexing_composes:
-  small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry, Adapters.collect,
-    Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,
-    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf, Adapters.shift
+  small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry, Adapters.Moved,
+    Adapters.MovedResult, Adapters.collect, Adapters.collectWith,
+    Adapters.instConsumeCollectorUnitEmpty,
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.locationAfter,
+    Adapters.resultOf, Adapters.shift
 BSmtLib.Facts.PublicApi.lexing_resets:
   small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry,
     Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,

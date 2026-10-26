@@ -36,7 +36,7 @@ about both, pinned by `#guard_msgs`. Each of these fails the build:
   `BSmtLib.Lexicon.Value.Versioned`, as the modules of both import `Lexicon.Value.lean`. -/
 
 /--
-info: 8312 declarations in 459 modules; 87 add to a sibling's type:
+info: 8330 declarations in 460 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
