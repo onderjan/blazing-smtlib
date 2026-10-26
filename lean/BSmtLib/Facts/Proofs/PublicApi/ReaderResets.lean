@@ -14,12 +14,14 @@ import all BSmtLib.Parser
 /-!
 # The script reader after an input it read to the end, and a new one
 
-The script reader over the recording handler, allowing every version, after an input it read to
-the end, and a new script reader over its handler, read the next input alike: the same error, or
-the same result, handler and discarding (`resets_recording`). Their lexers are related, through
-the lexers with the canonical adapter (`Parser.Canon.Through.lexThrough_link`), by one Rust port's
-lexer (`Parser.Canon.Through.lexThrough_zRel`): the reader after the input has the fields of a
-new one but for its storage, a reset parser and a handler not told the version
+`resets_recording`: the script reader over the recording handler, allowing every version, after
+an input it read to the end, reads the next input as a new script reader over its handler does:
+with the same error, or with the same result, handler and discarding.
+
+Their lexers are related, through the lexers with the canonical adapter
+(`Parser.Canon.Through.lexThrough_link`), by one Rust port's lexer
+(`Parser.Canon.Through.lexThrough_zRel`). The reader after the input has the fields of a new one
+but for its storage, a reset parser and a handler not told the version
 (`ReaderAfter.after_state`).
 -/
 

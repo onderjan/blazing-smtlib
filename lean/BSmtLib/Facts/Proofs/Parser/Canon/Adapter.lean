@@ -14,10 +14,10 @@ import all BSmtLib.Token.Cursor
 /-!
 # The parse adapter on cursors that agree
 
-The parse adapter over the recording handler and the script parser, called on two cursors that
-agree from states that are the same up to the views in the parser (`canonA`), gives the same
-answer, cursors that agree, and states that are the same up to the views again
-(`consume_agree`).
+`consume_agree`: the parse adapter over the recording handler and the script parser does alike
+on two cursors that agree, called from states that are the same up to the views in the parser
+(`canonA`). It gives the same answer, cursors that agree, and states that are the same up to the
+views again.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

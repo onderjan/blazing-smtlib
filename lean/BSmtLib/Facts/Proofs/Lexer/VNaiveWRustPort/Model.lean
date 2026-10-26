@@ -10,10 +10,12 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes
 
 The adapter's consumer `Answering C` takes the lexemes handed over one at a time, and answers as the
 consumer `C` of the specification formalism (`BSmtLibSpec`) does. `hand1` states what becomes of one
-lexeme, from what the consumer has done so far (`HandOut`): it goes on (`cont`), with the tokens it
-has taken and the version in force (`Prog`); it has broken at a lexeme and waits for the next one,
-which is trailing input (`wait`); or it has stopped (`stop`), and the rest of the lexemes do not
-matter. While the lexer holds a result (`hd`), the next lexeme is trailing input. A version switch
+lexeme, from what the consumer has done so far (`HandOut`), which is one of:
+- it goes on (`cont`), with the tokens it has taken and the version in force (`Prog`);
+- it has broken at a lexeme and waits for the next one, which is trailing input (`wait`);
+- it has stopped (`stop`), and the rest of the lexemes do not matter.
+
+While the lexer holds a result (`hd`), the next lexeme is trailing input. A version switch
 that changes the lexical rules (between 2.0 and the later versions) stops the hand-over: the lexemes
 after it are lexed again; another switch only changes the version the tokens are reported in.
 

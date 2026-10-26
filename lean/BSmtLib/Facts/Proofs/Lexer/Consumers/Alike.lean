@@ -8,10 +8,12 @@ public import BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
 /-!
 # Lexers that do alike with every consumer of the formalism
 
-`lexing_alike`: two lexers that are constructed related, and whose steps on a slice and at the end
-of the input give the same results and take the same tokens with lexers related again, do the same
-with every consumer of the specification formalism (`BSmtLibSpec`) (`Adapters.lexing` of the two is
-equal).
+`lexing_alike`: two lexers do the same with every consumer of the specification formalism
+(`BSmtLibSpec`), that is, `Adapters.lexing` of the two is equal, if:
+- they are constructed related;
+- their steps on a slice and at the end of the input give the same results and take the same
+  tokens;
+- after a step, the lexers are related again.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
@@ -33,9 +35,9 @@ def StepsAlike {α : Type} (step₁ : ops₁.Lexer consumer → AnswerM (α × o
       Rel ((step₁ a).run taken).1.2 ((step₂ b).run taken).1.2 ∧
       ((step₁ a).run taken).2 = ((step₂ b).run taken).2
 
-/-- Two lexers whose steps on every slice and at the end of the input give the same results with
-lexers related again, and whose related lexers hold the same result, stand alike after the
-same input, take the same tokens and are related again. -/
+/-- Two related lexers stand alike after the same input, take the same tokens and are related
+again. This holds if their steps on every slice and at the end of the input give the same results
+with lexers related again, and related lexers hold the same result. -/
 theorem runInput_alike
     (hslice : ∀ slice, StepsAlike ops₁ ops₂ Rel (fun a => ops₁.lexSliceStep a slice)
       (fun b => ops₂.lexSliceStep b slice))
@@ -101,9 +103,9 @@ theorem lexing_def (ops : LexOps) (consumer : BSmtLibSpec.Lexer.Consumer)
       { taken := r.2, outcome := r.1.1, version := fromVersion (ops.version r.1.2)
         discardedFrom := (ops.discardedFrom r.1.2).map toLocation } := rfl
 
-/-- Lexers related after earlier inputs, the second fed each input as `cut` cuts it: they stay
-related where lexers related give the same outcome on an input and its cut, and related lexers
-when they do not fail, and the constructed lexers are related. -/
+/-- Related lexers stay related through earlier inputs, the second fed each input as `cut` cuts
+it. This holds where related lexers give the same outcome on an input and its cut, and related
+lexers when they do not fail, and where the constructed lexers are related. -/
 theorem foldl_next_rel (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
     (Rel : ops₁.Lexer consumer → ops₂.Lexer consumer → Prop) (version : Version)
     (cut : List BSmtLibSpec.Regex.Chars → List BSmtLibSpec.Regex.Chars)
@@ -136,9 +138,9 @@ theorem foldl_next_rel (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Co
     | failed f => exact hnew
     | _ => exact e2 rfl
 
-/-- Two lexers that are constructed related, and whose steps give the same results with lexers
-related again, do the same with every consumer of the formalism: what the adapter makes of them is
-equal. -/
+/-- Two lexers do the same with every consumer of the formalism, that is, what the adapter makes
+of them is equal, if they are constructed related and their steps give the same results with
+lexers related again. -/
 theorem lexing_alike (ops₁ ops₂ : LexOps)
     (Rel : ∀ consumer : BSmtLibSpec.Lexer.Consumer, ops₁.Lexer consumer → ops₂.Lexer consumer →
     Prop)

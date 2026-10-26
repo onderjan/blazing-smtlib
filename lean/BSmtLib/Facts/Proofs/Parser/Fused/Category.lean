@@ -21,9 +21,14 @@ import all BSmtLib.Lexer.Cursor
 # The fused category steps against the port's
 
 Each category step of the fused reader, on the token's category, gives what the port's step gives
-on the token as the port views it, run on the handler: identifiers, sorts, lists of sorts, sorted
-variables and their lists, signatures, and qualified identifiers in parentheses without `as`. The
-proofs go by the state, then by the token's category and the reserved word it spells.
+on the token as the port views it, run on the handler. The steps are those of:
+- identifiers;
+- sorts and lists of sorts;
+- sorted variables and their lists;
+- signatures;
+- qualified identifiers in parentheses without `as`.
+
+The proofs go by the state, then by the token's category and the reserved word it spells.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Category

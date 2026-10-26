@@ -8,13 +8,16 @@ import all BSmtLib.Lexer.Internal.WRustPort
 /-!
 # The Rust port's loop over a slice, up to a stop of the consumer, with every consumer
 
-`sliceRun_ok`: the loop `lexSliceRun` over a slice, from a lexer state that is the naive lexer's
-pure state at an index, with a batch that holds lexemes, ends as the outcome of the naive lexer's
-run from there says (`SliceOut`): with the batch handed over, in the pure state at the end of
-the slice; with a lexical error where the run fails; or where the consumer stops, with the
-interruption of the stop (`ExitMatches`). It is proved by induction on the bytes left, with
-`lexStep_wp` for each step; after a lexical error the loop hands over the batch as it was left
-(`sliceRun_error`).
+`sliceRun_ok`: the loop `lexSliceRun` over a slice ends as the outcome of the naive lexer's run
+says (`SliceOut`). The loop starts from a lexer state that is the naive lexer's pure state at an
+index, with a batch that holds lexemes, and the run starts from there. The loop ends in one of
+three ways:
+- with the batch handed over, in the pure state at the end of the slice;
+- with a lexical error where the run fails;
+- where the consumer stops, with the interruption of the stop (`ExitMatches`).
+
+It is proved by induction on the bytes left, with `lexStep_wp` for each step. After a lexical
+error the loop hands over the batch as it was left (`sliceRun_error`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Slice

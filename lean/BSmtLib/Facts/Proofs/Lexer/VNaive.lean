@@ -7,8 +7,9 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaive.Streaming
 /-!
 # The naive lexer against the formalism
 
-The proof that the pure run of the naive lexer `Lexer.VNaive`, over slices and then, if the input
-has ended, the end of the input (`VNaive.fedRun`), is correct, in parts:
+The pure run of the naive lexer `Lexer.VNaive` is correct. The pure run (`VNaive.fedRun`) goes
+over the slices and then, if the input has ended, over the end of the input. The proof is in
+parts:
 
 - `VNaive.Run`: the lexing as a pure run over the bytes, whatever the slices, also up to an
   error, and then the end of the input;

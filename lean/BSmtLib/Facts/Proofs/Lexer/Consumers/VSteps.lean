@@ -12,10 +12,11 @@ import all BSmtLib.Span
 /-!
 # The naive lexer's steps with a consumer of the formalism
 
-The naive lexer's steps with the adapter's consumer `Answering consumer`, as functions of the
-lexer state and the tokens taken (`vRun`, `vByte`, `vBytes`): what the consumer does with a
-lexeme handed over alone (`reply`, `consume_single`), the hand-over (`handOverAt_reply`,
-`handOverAt_holding`), and the step on a byte in each state of the lexer.
+This module states the naive lexer's steps with the adapter's consumer `Answering consumer` as
+functions of the lexer state and the tokens taken (`vRun`, `vByte`, `vBytes`). It covers:
+- what the consumer does with a lexeme handed over alone (`reply`, `consume_single`);
+- what the hand-over does (`handOverAt_reply`, `handOverAt_holding`);
+- what the step on a byte does in each state of the lexer.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

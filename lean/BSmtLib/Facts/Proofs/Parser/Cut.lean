@@ -13,16 +13,19 @@ import all BSmtLib.Parser.Script
 /-!
 # What the parser has done before an item
 
-The placement of the calls among the items (`BSmtLibSpec.Parser.Properties.PlacementDetermined`) for
-the library's parser: in a recording run, what the script parser has done before an item arrives,
-and before it is processed, is what the traversal of any valid script that agrees with the input
-up to that item has done (`placement_arrival`, `placement_processing`); and where its input
-stops, it has done what the traversal does before the next item arrives (`placement_prefix`).
+This module proves the placement of the calls among the items
+(`BSmtLibSpec.Parser.Properties.PlacementDetermined`) for the library's parser. In a recording
+run of the script parser:
+- what it has done before an item arrives, and before the item is processed, is what the
+  traversal of any valid script has done, if the input agrees with what a parser receives for
+  the script up to that item (`placement_arrival`, `placement_processing`);
+- where its input stops, it has done what the traversal does before the next item arrives
+  (`placement_prefix`).
 
-The parser's run takes the items one by one (`driveParse_cons`); each item adds its arrival, the
-calls due at its arrival, its processing and silent events (`afterToken_shape`), so the cut
-functions of the specification formalism (`BSmtLibSpec`) pass over the items before the cut alike in
-two runs that share them.
+The parser's run takes the items one by one (`driveParse_cons`). Each item adds its arrival, the
+calls due at its arrival, its processing and silent events (`afterToken_shape`). So the cut
+functions of the specification formalism (`BSmtLibSpec`) pass alike over the items before the
+cut in two runs that share them.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Cut
@@ -659,9 +662,9 @@ theorem recordedRun_arrivals : (items : List Parser.Internal.Input) → NoLayout
     · simp only [List.length_cons]; omega
 
 /--
-What the parser has done before the item at position `k` arrives, on any input that agrees
-with what a parser receives for a valid script before that item, is what the traversal of the
-script has done before it.
+What the parser has done before the item at position `k` arrives is what the traversal of a
+valid script has done before it. This holds on any input that agrees with what a parser receives
+for the script before that item.
 -/
 theorem placement_arrival {version : Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}
@@ -676,10 +679,10 @@ theorem placement_arrival {version : Version} {commands : List Tree.Command}
   simpa [parserRecord, isArrival] using this
 
 /--
-What the parser has done before the item at position `k` is processed, its arrival left out, on
-any input that agrees with what a parser receives for a valid script before that item and has an
-item there that is a `)` where the script's is and only there, is what the traversal of the
-script has done before that item is processed.
+What the parser has done before the item at position `k` is processed, its arrival left out, is
+what the traversal of a valid script has done before that item is processed. This holds on any
+input that agrees with what a parser receives for the script before that item, and has an item
+there that is a `)` where the script's is and only there.
 -/
 theorem placement_processing {version : Version} {commands : List Tree.Command}
     (hscript : Script (Bridge.version version) commands) {inputs : List Parser.Internal.Input}

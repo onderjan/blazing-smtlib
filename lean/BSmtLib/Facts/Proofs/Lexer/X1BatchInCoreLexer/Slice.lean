@@ -11,10 +11,10 @@ import all BSmtLib.Lexer.Internal.WRustPort
 # The loop over a slice of the library's lexer and of `X1BatchInCore`
 
 `lexSliceRun`, the loop of the steps up to the first stop of the consumer, is simulated exactly
-under `coreMap` of the start of the slice, by induction on the bytes left and on whether a
-lexical error was met: each step is simulated by `lexStep_sim` from the position of the lexer's
-base, and after it the base is between the start of the slice and the position returned, so that
-moving the offset on to that position is the same in both lexers (`coreMap_advance`).
+under `coreMap` of the start of the slice. The proof is by induction on the bytes left and on
+whether a lexical error was met. Each step is simulated by `lexStep_sim` from the position of the
+lexer's base. After it the base is between the start of the slice and the position returned, so
+that moving the offset on to that position is the same in both lexers (`coreMap_advance`).
 
 `lexSliceFrom`, the loop over the stops of the consumer, goes back after a stop to the position
 `input.start + resumed`, where `X1BatchInCore` goes back to the index `resumed`.

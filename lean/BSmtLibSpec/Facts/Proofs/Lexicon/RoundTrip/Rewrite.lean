@@ -9,11 +9,13 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Lexical
 
 A concrete reading keeps the gaps of an input and its tokens. Rewriting it (`rewrite`) keeps the
 gaps and writes each token as the syntax token it stands for (`lexForm`), so that only what a
-token stands for decides how it is written. The rewritten input has a tokenisation that stands
-for the same syntax tokens (`rewrite_tokenization`, `rewritePieces_ofToken`); rewritten again,
-it stays as it is (`rewritePieces_rewritePieces`); and it is the input but for 2.0 string
-literals written differently with the same content (`printConcrete_rewritePieces_similar`),
-exactly the input when every token is written back as itself (`printConcrete_rewritePieces_eq`).
+token stands for decides how it is written. The rewritten input:
+- has a tokenisation that stands for the same syntax tokens (`rewrite_tokenization`,
+  `rewritePieces_ofToken`);
+- stays as it is when rewritten again (`rewritePieces_rewritePieces`);
+- is the input but for 2.0 string literals written differently with the same content
+  (`printConcrete_rewritePieces_similar`), and exactly the input when every token is written
+  back as itself (`printConcrete_rewritePieces_eq`).
 
 Not trusted: everything here is proved.
 -/

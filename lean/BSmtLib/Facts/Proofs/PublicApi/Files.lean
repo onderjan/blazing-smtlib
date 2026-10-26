@@ -239,11 +239,12 @@ theorem next_of_read {version next : Lexicon.Version} {command : Tree.Command}
     simp only [Tree.Command.modeAfter, Option.some.injEq, Mode.read.injEq] at h
     exact h.symm
 
-/-- What a reading of a file gives: the input is the part up to its last command's end and what
-follows; the part up to the end is the commands' tokens, each spelled as the version in force
-writes it or, for a 2.0 string literal, spelled otherwise with the same meaning, and exactly
-where no part is read in 2.0, with layout between them; and what follows is layout unless the
-last command is `exit`. -/
+/-- What a reading of a file gives:
+- the input is the part up to its last command's end and what follows;
+- the part up to the end is the commands' tokens with layout between them, each spelled as the
+  version in force writes it or, for a 2.0 string literal, spelled otherwise with the same
+  meaning, and exactly where no part is read in 2.0;
+- what follows is layout unless the last command is `exit`. -/
 theorem spaced_of_reading {version : Lexicon.Version} {offset : Nat} {input : Chars}
     {commands : List Tree.Command} {segments : List (Lexicon.Version × Concrete)} {final : Chars}
     (h : FileReadingFrom version offset input commands segments final) :

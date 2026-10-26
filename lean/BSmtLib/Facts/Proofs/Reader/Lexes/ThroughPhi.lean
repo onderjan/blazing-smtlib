@@ -11,12 +11,13 @@ import all BSmtLib.Lexer
 /-!
 # The parse adapter's errors, against the replaying consumer
 
-A call of the library's lexer from the same state with the stand-in consumer, with `Phi`, with the
-parse adapter and with the adapter's consumer for `replay`, from a state where the stand-in
-consumer and the parse adapter are related as `Param.InvG` says: the parse adapter's call ends as
-the replaying one does, with the same span, the same lexical error, and the parse adapter's error
-the one on which the recording runs over items standing for the tokens the replaying consumer
-reports fail (`sliceStep_replay`, `eofStep_replay`).
+This module compares four calls of the library's lexer from the same state: with the stand-in
+consumer, with `Phi`, with the parse adapter and with the adapter's consumer for `replay`. In
+that state the stand-in consumer and the parse adapter are related as `Param.InvG` says. The
+parse adapter's call then ends as the replaying one does (`sliceStep_replay`, `eofStep_replay`):
+- with the same span and the same lexical error;
+- with, as the parse adapter's error, the one on which the recording runs over items standing
+  for the tokens the replaying consumer reports fail.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.ThroughPhi
@@ -277,11 +278,11 @@ theorem run_answerZ {C : BSmtLibSpec.Lexer.Consumer} {α : Type} (z : BSmtLib.Le
       ((r.1.1.1, Internal.ofParts r.1.2 r.1.1.2 (Internal.held z)), r.2) := by
   rw [Param.Flagged.run_answerM, answering_handler]
 
-/-- The parse adapter's lexer and the one with the adapter's consumer for the replaying
-consumer, fed the same slices and then the end of the input, from lexers related to a lexer with
-the stand-in consumer, and with the same state and related held results: they end alike, the
-parse adapter's error the one on which the recording runs over items standing for the tokens the
-replaying consumer reports fail. -/
+/-- The parse adapter's lexer and the one with the adapter's consumer for the replaying consumer
+end alike when fed the same slices and then the end of the input. The parse adapter's error is
+the one on which the recording runs over items standing for the tokens the replaying consumer
+reports fail. The two start from lexers related to a lexer with the stand-in consumer, with the
+same state and related held results. -/
 theorem through_replay (hnl : NoLayout (scriptConsumer version) (toVersion version)) :
     ∀ (slices : List Regex.Chars) (a : FLexer version) (p : PLexer)
       (z : ZOps.Lexer (replay version)) (taken : List Handed),
@@ -528,10 +529,10 @@ theorem zsSlice_step (slice : ByteSlice) (z₁ : ZOps.Lexer (replay version))
     taken
   exact ⟨hst, hsc, rfl, rfl, htk⟩
 
-/-- The library's lexer with the adapter's consumers for the replaying consumer and for the
-script consumer, fed the same slices and then the end of the input from the same state and
-related held results: the same tokens taken, the same results, and errors alike but for the
-consumer's. -/
+/-- The library's lexer with the adapter's consumer for the replaying consumer and the one with
+the adapter's consumer for the script consumer take the same tokens and give the same results,
+and errors alike but for the consumer's. The two start from the same state and related held
+results, and are fed the same slices and then the end of the input. -/
 theorem replay_script : ∀ (slices : List Regex.Chars) (z₁ : ZOps.Lexer (replay version))
     (z₂ : ZOps.Lexer (scriptConsumer version)) (taken : List Handed),
     Internal.core z₁ = Internal.core z₂ → HeldRel' (ZOps.held z₁) (ZOps.held z₂) →

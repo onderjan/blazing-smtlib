@@ -10,10 +10,12 @@ import all BSmtLib.Span
 /-!
 # The steps of the calls on two consumers
 
-The steps that the lexer's public calls run on a slice (`lexSliceStep`) and at the end of the
-input (`lexEofStep`), on two consumers whose calls are related, and given related recovery
-actions, are related: the same result, with related held results and errors, the same lexer
-state, and the consumers' states related as the relator says.
+The lexer's public calls run a step on a slice (`lexSliceStep`) and a step at the end of the
+input (`lexEofStep`). On two consumers whose calls are related, and given related recovery
+actions, the two runs of each step are related:
+- they give the same result, with related held results and errors;
+- they leave the same lexer state;
+- they leave the consumers' states related as the relator says.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

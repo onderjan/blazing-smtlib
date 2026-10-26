@@ -7,17 +7,20 @@ public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Handed
 /-!
 # The lexer with the batch kept in its state and the library's lexer lex alike
 
-The library's lexer `BSmtLib.Lexer` is the lexer with the batch kept in its state
-`X1BatchInCore` with `USize` positions in the whole array of the slice, where `X1BatchInCore`,
-which runs the code of the Rust port `WRustPort`, has `Nat` indices into the slice; and it has
-the library's forms of what the Rust port writes as Rust does: it throws an error where it finds
-it, reads the byte after a closing quote only once it has found the quote, reads whether the
-consumer takes whitespace and comments where it needs it, and has no locals of the loop of the
-normal state. The two do not share their state type: a state of the library's lexer is one of
-the lexer with the batch kept in its state with its `base`, the position of the byte at the
-lexer's offset, mapped to the index of that position (`X1BatchInCoreLexer.coreMap`). Between the
-calls the base means nothing, so the lexers are related by `X1BatchInCoreLexer.LexerRel`: they
-have the same consumer, and their states are equal once the base is forgotten.
+The library's lexer `BSmtLib.Lexer` is the lexer with the batch kept in its state,
+`X1BatchInCore`, which runs the code of the Rust port `WRustPort`, with two differences:
+- it has `USize` positions in the whole array of the slice, where `X1BatchInCore` has `Nat`
+  indices into the slice;
+- it has the library's forms of what the Rust port writes as Rust does: it throws an error where
+  it finds it, reads the byte after a closing quote only once it has found the quote, reads
+  whether the consumer takes whitespace and comments where it needs it, and has no locals of the
+  loop of the normal state.
+
+The two do not share their state type. A state of the library's lexer maps to one of the lexer
+with the batch kept in its state (`X1BatchInCoreLexer.coreMap`): its `base`, the position of the
+byte at the lexer's offset, is mapped to the index of that position. Between the calls the base
+means nothing, so the lexers are related by `X1BatchInCoreLexer.LexerRel`: they have the same
+consumer, and their states are equal once the base is forgotten.
 
 - `Lexer.X1BatchInCore.new_eq_new_lexer`: the lexer with the batch kept in its state is
   constructed as the library's lexer is, with its state mapped.
@@ -90,10 +93,10 @@ section
 variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [Token.Consume H R E]
   [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
 
-/-- The step of a call on a slice that ends below `USize.size`, run by `run` on related lexers
-(`LexerRel`), gives the same result in the library's lexer and in the lexer with the batch kept
-in its state, and related lexers, also where the call fails: the two runs are the projections
-of one run of such pairs. -/
+/-- The step of a call on a slice that ends below `USize.size` gives the same result in the
+library's lexer and in the lexer with the batch kept in its state, and related lexers, also where
+the call fails. It is run by `run` on related lexers (`LexerRel`), and the two runs are the
+projections of one run of such pairs. -/
 theorem X1BatchInCore.lexSliceStep_sim_lexer (abandon recover : Span.Location → StateT H m Unit)
     {recovery : Type} (l : BSmtLib.Lexer H recovery)
     (x : Lexer.Internal.WRustPort.Lexer H recovery)
@@ -119,9 +122,9 @@ theorem X1BatchInCore.lexEofStep_sim_lexer (abandon recover : Span.Location → 
           recover)) :=
   Top.run_lexEofStep abandon recover l x hlx
 
-/-- The lexer with the batch kept in its state and the library's lexer, with the same consumer,
-the same held result and states equal but for the base, lex a slice that ends below
-`USize.size` alike: the results are equal once the base is forgotten. -/
+/-- The lexer with the batch kept in its state and the library's lexer lex a slice that ends below
+`USize.size` alike: the results are equal once the base is forgotten. The two lexers have the same
+consumer, the same held result, and states equal but for the base. -/
 theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Type}
     [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)
@@ -134,9 +137,9 @@ theorem X1BatchInCore.lexSlice_sim_lexer {recovery : Type}
       Top.resultMap Top.afterErrorMap Top.lexerMap <$> BSmtLib.Lexer.lexSlice l slice :=
   Top.lexSlice_sim l x hh hx hd slice hs
 
-/-- The lexer with the batch kept in its state and the library's lexer, with the same consumer,
-the same held result and states equal but for the base, lex the end of the input alike: the
-results are equal once the base is forgotten. -/
+/-- The lexer with the batch kept in its state and the library's lexer lex the end of the input
+alike: the results are equal once the base is forgotten. The two lexers have the same consumer,
+the same held result, and states equal but for the base. -/
 theorem X1BatchInCore.lexEof_sim_lexer {recovery : Type}
     [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (x : Lexer.Internal.WRustPort.Lexer H recovery) (l : BSmtLib.Lexer H recovery)

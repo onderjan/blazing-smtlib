@@ -11,15 +11,19 @@ public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
 /-!
 # What a correct lexer hands over to a parser
 
-Facts about a lexer that is `Correct`, as a parser of scripts sees what it hands over: what it
-hands over depends only on the input, not on how the input is cut into slices
-(`fed_eq_of_flatten`); every token it hands over stands, for a parser, for the syntax token of
-the token in the version read (`received_handed`); characters whose tokenisation ends with a
-`)` at their end are handed over first whatever follows them (`handed_close_prefix`); a whole
-input that has a tokenisation is handed over with the end of the file (`fed_complete`); and
-whatever it hands over is the start of a tokenisation of an input that agrees with the input up
-to the end of the last token handed over, followed by the end of the file only if the input has
-a tokenisation (`fed_readout`).
+This module gives facts about a lexer that is `Correct`, as a parser of scripts sees what it
+hands over:
+- what it hands over depends only on the input, not on how the input is cut into slices
+  (`fed_eq_of_flatten`);
+- every token it hands over stands, for a parser, for the syntax token of the token in the
+  version read (`received_handed`);
+- characters whose tokenisation ends with a `)` at their end are handed over first whatever
+  follows them (`handed_close_prefix`);
+- a whole input that has a tokenisation is handed over with the end of the file
+  (`fed_complete`);
+- whatever it hands over is the start of a tokenisation of an input that agrees with the input
+  up to the end of the last token handed over, followed by the end of the file only if the input
+  has a tokenisation (`fed_readout`).
 
 Not trusted: everything here is proved.
 -/

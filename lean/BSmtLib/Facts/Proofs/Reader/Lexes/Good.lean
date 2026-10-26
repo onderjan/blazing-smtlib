@@ -72,11 +72,12 @@ theorem dom_of_prefix {version : Lexicon.Version} {commands : List Tree.Command}
   .inl ⟨commands, taken, ending, htakes, hp⟩
 
 /--
-A lexer that does what `Runs` states with the script consumer, the input ended or not, from a
-point where the tokens taken are good and stand for a proper start of what a parser takes, the
-version is the one in force there, every token ready stands for an item of that version, and the
-consumer did not have the rest discarded at the last token taken: the tokens the session takes
-are good.
+A lexer that does what `Runs` states with the script consumer, the input ended or not, takes good
+tokens in its session from a point where:
+- the tokens taken are good and stand for a proper start of what a parser takes;
+- the version is the one in force there;
+- every token ready stands for an item of that version;
+- the consumer did not have the rest discarded at the last token taken.
 -/
 theorem runs_good (hc : Correct feed) {v₀ : Lexicon.Version} {input : Regex.Chars}
     {ended : Bool} {version : Lexicon.Version} {ready : List Handed} {failed : Bool}

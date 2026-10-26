@@ -32,7 +32,7 @@ open BSmtLib.Facts.Proofs.Parser.Category.Steps
 
 set_option hygiene false in
 /-- Splits the answer `a` of a parse: a syntax error of the kind `kind`, the handler's error
-`error`, a wish for more, or the result `result`. -/
+`error`, continuing, or breaking with the result `result`. -/
 macro "answer_cases" a:ident : tactic => `(tactic| (
   rcases $a:ident with e | (_ | result)
   all_goals (try (
@@ -421,8 +421,8 @@ theorem pair_rejects_second {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
       refine congrArg (· <$> calls₂.run) (funext fun e => ?_)
       rcases e with error | ⟨⟩ <;> simp [answer, afterSecond]
 
-/-- The pair on tokens on which its first parser wants more: it wants more, its first parser as
-the first's. -/
+/-- When its first parser continues on the tokens of the cursor, the pair continues, with the
+waiting first parser as its first parser. -/
 theorem pair_waits_first {version : Version} {p₁ : P₁} {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P₁}
     (h : Outcome.Waits version p₁ tokens program after) :
@@ -486,7 +486,7 @@ private theorem pairWith_rejects {version : Version} (b₁ : P₁) (first : R₁
   rcases e with error | ⟨⟩ <;> simp [answer, afterSecond]
 
 /--
-The pair on tokens on which its first parser finishes, and no more: it wants more, as a pair
+When its first parser finishes on exactly the tokens of the cursor, the pair continues, as a pair
 that, on the tokens after, finishes and rejects as its second parser does.
 -/
 theorem pair_waits_between {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
@@ -523,8 +523,9 @@ theorem pair_waits_between {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
       exact absurd hn (Parser.Internal.not_hasNext hnone)
 
 /--
-The pair on tokens on which its first parser finishes and then its second wants more: it wants
-more, as a pair that, on the tokens after, finishes and rejects as the second parser does then.
+When its first parser finishes on the first tokens of the cursor and its second parser continues on
+the rest, the pair continues, as a pair that, on the tokens after, finishes and rejects as the
+second parser does then.
 -/
 theorem pair_waits_second {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
     {tokens₁ tokens₂ : List Parser.Internal.Input} {program₁ : PM H R₁} {α : Type}
@@ -723,7 +724,7 @@ theorem closed_rejects_close {version : Version} {p b : P}
   closed_rejects_of (pair_rejects_second h (closeParen_rejects (H := H) version htoken) hne
     (List.cons_ne_nil _ _))
 
-/-- The closed parser on tokens on which its inner parser wants more. -/
+/-- The closed parser, when its inner parser continues on the tokens of the cursor. -/
 theorem closed_waits_inner {version : Version} {p : P} {tokens : List Parser.Internal.Input}
     {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after) :
@@ -731,8 +732,8 @@ theorem closed_waits_inner {version : Version} {p : P} {tokens : List Parser.Int
       fun a => ClosedParser.new (after a) :=
   closed_waits_of (pair_waits_first h)
 
-/-- The closed parser on its inner value and no more: it wants more, as a parser that finishes
-at a `)` and rejects any other token. -/
+/-- When the cursor holds exactly the tokens of its inner value, the closed parser continues, as
+a parser that finishes at a `)` and rejects any other token. -/
 theorem closed_waits_close {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R}
     (h : Outcome.Finishes version p tokens program b) (hne : tokens ≠ []) :
@@ -775,14 +776,14 @@ theorem opened_rejects_inner {version : Version} {p : P}
     (List.cons_ne_nil _ _) hne)
   simpa [OpenedParser.new] using this
 
-/-- The opened parser on a cursor with no token: it wants more, as it was. -/
+/-- The opened parser on a cursor with no token: it continues, as it was. -/
 theorem opened_waits_open {version : Version} {p : P} :
     Outcome.Waits version (OpenedParser.new (H := H) p) [] (pure () : PM H Unit)
       fun _ => OpenedParser.new p :=
   opened_waits_of (pair_waits_first (openParen_waits (H := H) version))
 
-/-- The opened parser on its `(` and no more: it wants more, as a parser that finishes and
-rejects on the inner tokens as the inner parser. -/
+/-- When the cursor holds exactly its `(`, the opened parser continues, as a parser that finishes
+and rejects on the inner tokens as the inner parser. -/
 theorem opened_waits_after_open {version : Version} {p : P} :
     ∃ after : Unit → OpenedParser H P,
       Outcome.Waits version (OpenedParser.new (H := H) p) [.parenOpen] (pure () : PM H Unit)
@@ -800,7 +801,8 @@ theorem opened_waits_after_open {version : Version} {p : P} :
   have := opened_finishes_of (hfin () h)
   simpa [OpenedParser.new] using this
 
-/-- The opened parser on a `(` and tokens on which its inner parser wants more. -/
+/-- The opened parser, when the cursor holds a `(` and its inner parser continues on the tokens
+after it. -/
 theorem opened_waits_inner {version : Version} {p : P} {tokens : List Parser.Internal.Input}
     {α : Type} {program : PM H α} {after : α → P}
     (h : Outcome.Waits version p tokens program after) (hne : tokens ≠ []) :

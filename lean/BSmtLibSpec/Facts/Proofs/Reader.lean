@@ -7,17 +7,17 @@ public import BSmtLibSpec.Facts.Proofs.Reader.Finishes
 /-!
 # Readers
 
-The calls for the commands of a file determine the file's initial version and commands: the commands
-of a file make a script (`script_of_file`), the first call is the switch to the file's initial
-version, and the calls of a script's recording rebuild the script
-(`Parser.recover_record`).
+The calls for the commands of a file determine the file's initial version and commands:
+- the commands of a file make a script (`script_of_file`);
+- the first call is the switch to the file's initial version;
+- the calls of a script's recording rebuild the script (`Parser.recover_record`).
 
-That a reader which lexes then parses (`BSmtLibSpec.Reader.LexesThenParses`) reads files and
-finishes only on files is `lexesThenParses_reads`. On a file, the lexer hands over the tokens of the
-file's commands, each read in the version in force, and the parser takes what a parser receives
-for the script (`files_runs`). If the reader finishes, the parser has taken what a parser takes
-for a script, as it would otherwise have rejected a token (`finishes_script`), and the tokens it
-took are those of a file with that script (`finishes_file`).
+`lexesThenParses_reads`: a reader that lexes then parses (`BSmtLibSpec.Reader.LexesThenParses`)
+reads files and finishes only on files. On a file, the lexer hands over the tokens of the file's
+commands, each read in the version in force, and the parser takes what a parser receives for the
+script (`files_runs`). If the reader finishes, the parser has taken what a parser takes for a
+script, as it would otherwise have rejected a token (`finishes_script`), and the tokens it took
+are those of a file with that script (`finishes_file`).
 
 Not trusted: this is a check of the specification formalism (`BSmtLibSpec`).
 -/

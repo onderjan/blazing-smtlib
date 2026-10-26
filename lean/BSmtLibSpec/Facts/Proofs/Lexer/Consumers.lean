@@ -7,12 +7,13 @@ public import BSmtLibSpec.Lexer
 /-!
 # A lexer and its consumers
 
-Checks of what `BSmtLibSpec.Lexer` says about a lexer and its consumers: what a lexer does with a
-consumer is determined (`runs_unique`), so a held result, where discarding began, and the
-version in force are each determined by the input and the consumer; locating a token of an input
-read on its own after what came before agrees with locating it in the whole input
-(`locate_after`), so the locations of the input after a version switch are those of the
-whole input; and the collector meets the obligation of every consumer.
+This module checks what `BSmtLibSpec.Lexer` says about a lexer and its consumers:
+- what a lexer does with a consumer is determined (`runs_unique`), so a held result, where
+  discarding began, and the version in force are each determined by the input and the consumer;
+- locating a token of an input read on its own after what came before agrees with locating it
+  in the whole input (`locate_after`), so the locations of the input after a version switch are
+  those of the whole input;
+- the collector meets the obligation of every consumer (`collector_breaksAtEnd`).
 
 Not trusted: everything here is proved.
 -/

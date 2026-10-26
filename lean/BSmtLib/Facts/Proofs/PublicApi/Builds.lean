@@ -13,11 +13,13 @@ version it starts in only by `setVersion`, such a handler is left in the same st
 whose first command does not depend on the version, and after that `check-sat-assuming` of a
 symbol makes the same calls in 2.6 and in 2.7 while the file's commands differ.
 
-The proof: the script reader with a handler whose calls never fail leaves it where the traversal of
-the specification formalism (`BSmtLibSpec`) of the file's commands leaves it, for every handler of
-the formalism it agrees with (`Reader.Handler.Traversal.reader_follows_traversal`); the builder
-agrees with `specBuilder` (`Builder.agrees`), and the traversal with `specBuilder` leaves the
-commands (`BuilderTraversal.script_builds`).
+The proof rests on three facts:
+- the script reader with a handler whose calls never fail leaves it where the traversal of the
+  file's commands, as the specification formalism (`BSmtLibSpec`) defines it, leaves it, for
+  every handler of the formalism it agrees with
+  (`Reader.Handler.Traversal.reader_follows_traversal`);
+- the builder agrees with `specBuilder` (`Builder.agrees`);
+- the traversal with `specBuilder` leaves the commands (`BuilderTraversal.script_builds`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Builds

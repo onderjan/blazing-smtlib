@@ -7,17 +7,21 @@ public import BSmtLib.Facts.Proofs.Lexer.WRustPortX1BatchInCore.Handed
 /-!
 # The Rust port and the lexer with the batch in its state lex alike
 
-The lexer with the batch in its state `X1BatchInCore` is the code of the Rust port `WRustPort`
-over operations of its own (`WRustPort.Ops`): one batch kept in the lexer state and reused from
-slice to slice, where the Rust port makes a fresh batch for every slice, at the end of the input
-and for a token handed over alone, and the line counters read from the lexer state, where the
-Rust port keeps them in locals of its fast path. The two lexers have the same type.
+The lexer with the batch in its state, `X1BatchInCore`, is the code of the Rust port `WRustPort`
+over operations of its own (`WRustPort.Ops`). The operations differ in two ways:
+- `X1BatchInCore` keeps one batch in the lexer state and reuses it from slice to slice, where the
+  Rust port makes a fresh batch for every slice, at the end of the input and for a token handed
+  over alone;
+- `X1BatchInCore` reads the line counters from the lexer state, where the Rust port keeps them in
+  locals of its fast path.
 
-A batch of `X1BatchInCore` keeps the entries of earlier slices beyond its length; the two
-lexers' batches agree (`Simulation.Agree`): the same length, the same entries below it, and the
-same array of contents if they have a token. Two lexer states correspond
-(`WRustPortX1BatchInCore.CoreRel`) when their fields are equal but for the batches, which agree;
-between the calls the batches have no tokens, and two lexers correspond
+The two lexers have the same type.
+
+A batch of `X1BatchInCore` keeps the entries of earlier slices beyond its length. The batches of
+the two lexers agree (`Simulation.Agree`): they have the same length, the same entries below it,
+and the same array of contents if they have a token. Two lexer states correspond
+(`WRustPortX1BatchInCore.CoreRel`) when their fields are equal but for the batches, which agree.
+Between the calls the batches have no tokens, and two lexers correspond
 (`WRustPortX1BatchInCore.LexRel`) when they also have the same consumer.
 
 A consumer may keep a token from an earlier hand-over and read it through a later cursor; it
@@ -100,9 +104,10 @@ theorem WRustPort.opsSim_x1BatchInCore (hcons : ConsumesAlike H m R E) :
         Lexer.Internal.X1BatchInCore.ops Instance.FastRel :=
   Instance.opsSim_rust_x1BatchInCore hcons
 
-/-- The Rust port and the lexer with the batch in its state, with the same consumer, which reads
-the cursors only below the length of their batches, run the step of a call on a slice on lexers
-that correspond to the same result, with lexers that correspond again, also where it fails. -/
+/-- On lexers that correspond, the Rust port and the lexer with the batch in its state run the
+step of a call on a slice to the same result, with lexers that correspond again, also where it
+fails. The two have the same consumer, which reads the cursors only below the length of their
+batches. -/
 theorem WRustPort.run_lexSliceStep_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
     (abandon recover : Span.Location → StateT H m Unit) (slice : ByteSlice)
     (self self' : Lexer.Internal.WRustPort.Lexer H recovery) (h : Calls.LexRel self self') :
@@ -115,10 +120,10 @@ theorem WRustPort.run_lexSliceStep_sim_x1BatchInCore (hcons : ConsumesAlike H m 
   ((WRustPort.run_sim_of_opsSim (WRustPort.opsSim_x1BatchInCore hcons) abandon recover self
     self' h).1 slice)
 
-/-- The Rust port and the lexer with the batch in its state, with the same consumer, which reads
-the cursors only below the length of their batches, run the step of a call at the end of the
-input on lexers that correspond to the same result, with lexers that correspond again, also
-where it fails. -/
+/-- On lexers that correspond, the Rust port and the lexer with the batch in its state run the
+step of a call at the end of the input to the same result, with lexers that correspond again,
+also where it fails. The two have the same consumer, which reads the cursors only below the
+length of their batches. -/
 theorem WRustPort.run_lexEofStep_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
     (abandon recover : Span.Location → StateT H m Unit)
     (self self' : Lexer.Internal.WRustPort.Lexer H recovery) (h : Calls.LexRel self self') :
@@ -157,9 +162,9 @@ variable {H : Type} {m : Type → Type} {R E : Type} [Monad m] [LawfulMonad m] [
   [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
   {recovery : Type}
 
-/-- The Rust port and the lexer with the batch in its state, with the same consumer, which reads
-the cursors only below the length of their batches, lex a slice alike from lexers that
-correspond: the same result, with lexers that correspond again. -/
+/-- From lexers that correspond, the Rust port and the lexer with the batch in its state lex a
+slice alike: the same result, with lexers that correspond again. The two have the same consumer,
+which reads the cursors only below the length of their batches. -/
 theorem WRustPort.lexSlice_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
     [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (w x : Lexer.Internal.WRustPort.Lexer H recovery)
@@ -170,9 +175,9 @@ theorem WRustPort.lexSlice_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
       (Lexer.Internal.X1BatchInCore.Lexer.lexSlice x slice) :=
   Api.lexSlice_couple hcons w x h slice
 
-/-- The Rust port and the lexer with the batch in its state, with the same consumer, which reads
-the cursors only below the length of their batches, lex the end of the input alike from lexers
-that correspond: the same result, with lexers that correspond again. -/
+/-- From lexers that correspond, the Rust port and the lexer with the batch in its state lex the
+end of the input alike: the same result, with lexers that correspond again. The two have the same
+consumer, which reads the cursors only below the length of their batches. -/
 theorem WRustPort.lexEof_sim_x1BatchInCore (hcons : ConsumesAlike H m R E)
     [Lexer.Recovery.Recovers recovery] [Lexer.Recovery.LexerRecovery recovery H m]
     (w x : Lexer.Internal.WRustPort.Lexer H recovery)

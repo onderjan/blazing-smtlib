@@ -16,12 +16,16 @@ import all BSmtLib.Lexer.Internal.VNaive
 
 The collector's run (`collect`) ends as the naive lexer with the concrete collector, fed the cut
 of the slices, ends (`collect_naive`): with the same result, or with an error of the same lexical
-kind and span, that does not go on. That chains the collector's link (`CollectE`), the library's
-lexer against the lexer with the batch in its state (`ChainZE`), that against the Rust port
-(`RunE.runInputE_alike`) and the Rust port against the naive lexer (`Calls.wv_sliceP`), which
-agree on an error exactly where the naive lexer's is lexical, as with the concrete collector it
-always is (`VCollector`). The naive lexer does not tell how its input is cut (`VFlattenE`), so
-neither does the collector's run (`slicing`).
+kind and span, that does not go on. The proof chains four links:
+- the collector's link (`CollectE`);
+- the library's lexer against the lexer with the batch in its state (`ChainZE`);
+- that lexer against the Rust port (`RunE.runInputE_alike`);
+- the Rust port against the naive lexer (`Calls.wv_sliceP`), which agree on an error exactly
+  where the naive lexer's is lexical, as with the concrete collector it always is
+  (`VCollector`).
+
+The naive lexer does not tell how its input is cut (`VFlattenE`), so neither does the collector's
+run (`slicing`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Slicing

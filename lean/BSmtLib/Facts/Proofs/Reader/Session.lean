@@ -7,10 +7,12 @@ public import BSmtLib.Facts.Proofs.Reader.Classify
 /-!
 # A lexer correct with every consumer, with the script consumer, on any input
 
-A lexer that is `BSmtLibSpec.Lexer.CorrectWithConsumers`, fed any slices and then the end of the
-input, with the script consumer, ends as `Classified` says (`lexing_classified`); with the parser
-properties, the parser's recording run on the tokens taken is then the one the specification
-formalism (`BSmtLibSpec`) gives (`lexing_session`):
+`lexing_classified`: a lexer that is `BSmtLibSpec.Lexer.CorrectWithConsumers` ends as
+`Classified` says when its consumer is the script consumer. It is fed any slices and then the end
+of the input.
+
+With the parser properties, the parser's recording run on the tokens taken is then the one the
+specification formalism (`BSmtLibSpec`) gives, in one of four ways (`lexing_session`):
 
 - **finished**: the tokens stand for what a parser takes for a script, and the run has the
   traversal's events (`record`);
@@ -111,9 +113,9 @@ theorem parse_all {version : Lexicon.Version} {commands : List Tree.Command}
   rw [← (record_takes htakes).1, eventsBefore_all]
 
 /--
-A lexer correct with every consumer, fed any slices and then the end of the input, with the
-script consumer: the session and the parser's recording run on the tokens taken end in one of the
-four ways of the module's documentation.
+With a lexer correct with every consumer and the script consumer, the session and the parser's
+recording run on the tokens taken end in one of the four ways of the module's documentation. The
+lexer is fed any slices and then the end of the input.
 -/
 theorem lexing_session (lexing : Lexing) (h : CorrectWithConsumers lexing)
     (version : Lexicon.Version) (slices : List Regex.Chars) :
@@ -242,10 +244,10 @@ theorem lexing_finishes_iff (lexing : Lexing) (h : CorrectWithConsumers lexing)
     exact (lexing_file lexing h version slices hfile).1
 
 /--
-A lexer correct with every consumer, fed slices that do not read as a file and then the end of the
-input, with the script consumer: the session fails, on a declaration that names no supported
-version, at the first token no script continues with, or with a lexical error, as
-`lexing_session` states.
+With a lexer correct with every consumer and the script consumer, the session on slices that do
+not read as a file fails as `lexing_session` states: on a declaration that names no supported
+version, at the first token no script continues with, or with a lexical error. The lexer is fed
+the slices and then the end of the input.
 -/
 theorem lexing_fails (lexing : Lexing) (h : CorrectWithConsumers lexing)
     (version : Lexicon.Version) (slices : List Regex.Chars)

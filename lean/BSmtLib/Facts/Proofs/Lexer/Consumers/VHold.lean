@@ -13,11 +13,14 @@ import all BSmtLib.Lexer.Cursor
 /-!
 # The run from a lexer state, and the naive lexer while it holds a result
 
-The run from any state of the pure run (`streamFromSt`), how a byte steps it, and how it relates
-for the two kinds of consumers (`streamFromSt_plain`) and to what the pure run hands over
-(`fedRun`) from a boundary (`segment_stream`). While the naive lexer holds a result, the first
-lexeme the run finishes is trailing input, and the end of the input returns the result (`hold`);
-while it discards, it drops the bytes (`vBytes_discarding`).
+This module defines the run from any state of the pure run (`streamFromSt`) and proves:
+- how a byte steps it;
+- how it relates for the two kinds of consumers (`streamFromSt_plain`);
+- how it relates to what the pure run hands over (`fedRun`) from a boundary (`segment_stream`).
+
+While the naive lexer holds a result, the first lexeme the run finishes is trailing input, and
+the end of the input returns the result (`hold`). While it discards, it drops the bytes
+(`vBytes_discarding`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.VHold
@@ -263,10 +266,10 @@ def St.weight : St → Nat
   | .idle => 0
   | .token _ => 1
 
-/-- The session of a lexer that holds the result `held` with the tokens `taken`, as the first
-lexeme of the run after it decides: trailing input at its start, or the end of the input, which
-returns the result; with no lexeme, a lexical error if the run fails, and otherwise the result
-held. -/
+/-- The session of a lexer that holds the result `held`, with the tokens `taken`. The first lexeme
+of the run after it decides the session: it is trailing input at its start, or the end of the
+input, which returns the result. With no lexeme, the session is a lexical error if the run fails,
+and otherwise holds the result. -/
 def holdSession (start : BSmtLibSpec.Lexicon.Version) (version : Version)
     (taken : List Handed)
     (held : Span.Located consumer.Result) :

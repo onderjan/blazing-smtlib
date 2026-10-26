@@ -16,10 +16,11 @@ import all BSmtLib.Lexer.Cursor
 
 The adapter's consumer for a consumer of the specification formalism (`BSmtLibSpec`)
 (`Adapters.Answering`) reads the cursors only below the length of their batches
-(`answering_consumesAlike`), so the simulation of the Rust port by the lexer with the batch kept in
-its state holds with it: the steps of the two on a slice and at the end of the input give the same
-results and take the same tokens, from lexers that correspond and with lexers that correspond again,
-and so the adapter makes the same of the two (`lexing_wRustPort_x1BatchInCore`).
+(`answering_consumesAlike`). So the simulation of the Rust port by the lexer with the batch kept
+in its state holds with this consumer: from lexers that correspond, the steps of the two on a
+slice and at the end of the input give the same results, take the same tokens and leave lexers
+that correspond again. So the adapter makes the same of the two
+(`lexing_wRustPort_x1BatchInCore`).
 -/
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.Alike

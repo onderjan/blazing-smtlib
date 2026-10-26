@@ -257,11 +257,11 @@ theorem not_afterExit {v₀ : Lexicon.Version} {commands : List Tree.Command}
 
 /-- The script consumer at a token after tokens that stand for a proper start of what a parser
 takes, at the last of which it did not have the rest discarded, the token standing for an item of
-the version in force: it rejects the token where the
-items with it stand for no start of what a parser takes; it goes on, asking for what `requestsAt`
-says, where they stand for a proper start; it breaks at the end of the input where they stand
-for what a parser takes for a script; and it fails where they stand for commands that a refused
-declaration ends. -/
+the version in force:
+- it rejects the token where the items with it stand for no start of what a parser takes;
+- it goes on, asking for what `requestsAt` says, where they stand for a proper start;
+- it breaks at the end of the input where they stand for what a parser takes for a script;
+- it fails where they stand for commands that a refused declaration ends. -/
 theorem consumer_step {v₀ : Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes v₀ commands taken ending)
     {pre : List Handed} (hpre : pre.map (rcv ∘ itemOf) <+: taken)

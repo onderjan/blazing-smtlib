@@ -8,14 +8,17 @@ public import BSmtLibSpec.Lexer
 /-!
 # Tokenisation across a closing parenthesis
 
-An input whose tokenisation ends with a `)` that ends the input, followed by more characters:
-every tokenisation of the whole starts with the tokens of the first part and goes on with a
-tokenisation of the rest from where the first part ends (`tokenizationFrom_close_prefix`), and
-the tokens of the first part followed by a tokenisation of the rest are one of the whole
-(`tokenizationFrom_close_append`). A parenthesis needs no delimiter, so nothing after it can
-change the tokens before it, and a lexer fed the first part may hand over all its tokens
-(`close_handoverMaximal`). The rest read from any offset is tokenised as on its own, its tokens
-moved (`tokenizationFrom_moveBy`, `tokenizationFrom_moveBy_inv`).
+This module takes an input whose tokenisation ends with a `)` that ends the input, followed by
+more characters:
+- every tokenisation of the whole starts with the tokens of the first part and goes on with a
+  tokenisation of the rest from where the first part ends (`tokenizationFrom_close_prefix`);
+- the tokens of the first part followed by a tokenisation of the rest are one of the whole
+  (`tokenizationFrom_close_append`).
+
+A parenthesis needs no delimiter, so nothing after it can change the tokens before it, and a
+lexer fed the first part may hand over all its tokens (`close_handoverMaximal`). The rest read
+from any offset is tokenised as on its own, its tokens moved (`tokenizationFrom_moveBy`,
+`tokenizationFrom_moveBy_inv`).
 
 Not trusted: everything here is proved.
 -/

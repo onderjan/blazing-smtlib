@@ -10,8 +10,9 @@ import all BSmtLib.Parser.Category.Combinator
 /-!
 # The list combinators with a maximum on a cursor
 
-As the list combinators without a maximum (`Category.Multiple`), value by value; below the
-maximum a token that is not a `)` starts the next value, and at the maximum it is an error.
+The list combinators with a maximum read a list as those without one do (`Category.Multiple`),
+value by value. Below the maximum, a token that is not a `)` starts the next value; at the
+maximum, it is an error.
 
 A loop's turn is read through `turnThen`: what the turn answers when it stops, and a
 continuation when it goes on. Both the first turn and the later ones are read so.
@@ -93,7 +94,7 @@ theorem repeatTurns_turnThen (turn : Internal.Turn H S R E Z m) (origin : Z) (se
     · simp only [map_pure]
       rcases a with (_ | _) | (_ | _) <;> rfl
 
-/-- A loop's first turn on a cursor without a token: it wants more, as it is. -/
+/-- A loop's first turn on a cursor without a token: it continues, as it is. -/
 theorem parseByTurns_end (turn : Internal.Turn H S R E Z m) (self : S) (state : ParseState H)
     {cursor : Z} (hnone : Cursor.next? cursor = none) :
     outcome <$> Internal.parseByTurns turn self state cursor = pure (.waits self) := by
@@ -104,7 +105,7 @@ theorem parseByTurns_end (turn : Internal.Turn H S R E Z m) (self : S) (state : 
   · rename_i h _
     exact absurd h (Parser.Internal.not_hasNext hnone)
 
-/-- A loop's later turn on a cursor without a token: it wants more, as it is. -/
+/-- A loop's later turn on a cursor without a token: it continues, as it is. -/
 theorem repeatTurns_end (turn : Internal.Turn H S R E Z m) (origin : Z) (self : S)
     (state : ParseState H) {cursor : Z} (hc : Cursor.Consumed cursor origin)
     (hnone : Cursor.next? cursor = none) :
@@ -172,8 +173,8 @@ private theorem turn_beyond {version : Version} {p : P} {maximum : Nat} {Z : Typ
   · simp only [pure_bind]
     rfl
 
-/-- What a turn between values below the maximum does on tokens of the inner parser, which do
-not start with `)`: it has the inner parser parse them. -/
+/-- What a turn between values below the maximum does when the tokens do not start with `)`: it has
+the inner parser parse them. -/
 private theorem turn_inner {p : P} {maximum : Nat} {Z : Type} [Cursor Z] {cursor : Z}
     {token : Parser.Internal.Input} {tokens : List Parser.Internal.Input} {version : Version}
     {last : Z} (htakes : Takes version cursor (token :: tokens) last)
@@ -246,8 +247,8 @@ private theorem turn_value {version : Version} {p : P} {maximum : Nat} {Z : Type
   · simp only [answer]
     rw [onOutcome_finished _ _ _ _ (fun _ => hc)]
 
-/-- A turn between values below the maximum on tokens that the inner parser rejects, not
-starting with `)`: the list rejects them. -/
+/-- A turn between values below the maximum, when the tokens do not start with `)` and the inner
+parser rejects them: the list rejects them. -/
 private theorem turn_rejects {version : Version} {p : P} {maximum : Nat} {Z : Type}
     [Cursor Z]
     {cursor next : Z} {tokens : List Parser.Internal.Input} {program : PM H Unit}
@@ -285,8 +286,8 @@ private theorem turn_rejects {version : Version} {p : P} {maximum : Nat} {Z : Ty
     rw [onOutcome_rejected _ _ _ (fun _ => hc)]
     rfl
 
-/-- A turn between values below the maximum on tokens on which the inner parser wants more, not
-starting with `)`: the list wants more, within a value. -/
+/-- A turn between values below the maximum, when the tokens do not start with `)` and the inner
+parser continues on them: the list continues, within a value. -/
 private theorem turn_waits {version : Version} {p : P} {maximum : Nat} {Z : Type} [Cursor Z]
     {cursor final : Z} {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α}
     {after : α → P} (hp : Outcome.Waits version p tokens program after)
@@ -588,10 +589,10 @@ theorem closedMaximum_rejects_inner {version : Version} {p : P} {maximum : Nat}
   results_rejects_inner hvalues #[] (by simpa using hlength) h hfirst
 
 /--
-The closed list parser with a maximum on at most the maximum of values and no more: it wants
-more, as a parser that holds the maximum and the results so far. A maximum set on it applies to
-the values after them: it finishes on as many further values as the maximum leaves and the `)`,
-and rejects a token not `)` after values that reach the maximum.
+When the cursor holds exactly the tokens of its values, at most the maximum, the closed list parser
+with a maximum continues, as a parser that holds the maximum and the results so far. A maximum set
+on it applies to the values after them: it finishes on as many further values as the maximum leaves
+and the `)`, and rejects a token not `)` after values that reach the maximum.
 -/
 theorem closedMaximum_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
@@ -802,11 +803,11 @@ private theorem results_resume_finishes {version : Version} {p q : P} {maximum :
     rcases e with error | others <;> simp [answer, Except.map]
 
 /--
-The closed list parser with a maximum on fewer values than the maximum and then tokens on which
-its inner parser wants more, not starting with `)`: it wants more, as a parser that holds the
-maximum, the results so far and the inner parser within its value. A maximum set on it applies
-to the values after that value; it finishes once the inner parser finishes the value and as many
-further values as the maximum leaves and the `)` follow.
+When the cursor holds fewer values than the maximum and then tokens that do not start with `)`, and
+the inner parser continues on those tokens, the closed list parser with a maximum continues, as a
+parser that holds the maximum, the results so far and the inner parser within its value. A maximum
+set on it applies to the values after that value; it finishes once the inner parser finishes the
+value and as many further values as the maximum leaves and the `)` follow.
 -/
 theorem closedMaximum_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
@@ -1028,7 +1029,7 @@ private theorem paren_waits {version : Version} {q : ClosedMaximumParser H P}
   funext e
   rcases e with (_ | _ | _) | _ <;> rfl
 
-/-- The list parser with a maximum and its own `(` on no token: it wants more, as it is. -/
+/-- The list parser with a maximum and its own `(` on no token: it continues, as it is. -/
 theorem parenMaximum_waits_open {version : Version} {p : P} {maximum : Nat} :
     Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum) [] (pure () : PM H Unit)
       fun _ => ParenMaximumParser.new p maximum := by
@@ -1042,9 +1043,9 @@ theorem parenMaximum_waits_open {version : Version} {p : P} {maximum : Nat} :
     cases heq
 
 /--
-The list parser with a maximum and its own `(` on its `(` and no more: it wants more, as a parser
-that holds the maximum, which a maximum set on it replaces. It finishes on at most the maximum
-of values and the `)`, and rejects a token not `)` after the maximum of values.
+When the cursor holds exactly its `(`, the list parser with a maximum and its own `(` continues, as
+a parser that holds the maximum, which a maximum set on it replaces. It finishes on at most the
+maximum of values and the `)`, and rejects a token not `)` after the maximum of values.
 -/
 theorem parenMaximum_waits_after_open {version : Version} {p : P} :
     ∃ after : Nat → ParenMaximumParser H P,
@@ -1086,9 +1087,9 @@ theorem parenMaximum_waits_after_open {version : Version} {p : P} :
       exact absurd h' (Parser.Internal.not_hasNext hnone)
 
 /--
-The list parser with a maximum and its own `(` on its `(` and at most the maximum of values, at
-least one, and no more: it wants more, as a parser that holds the maximum and the results so
-far. A maximum set on it applies to the values after them.
+When the cursor holds exactly its `(` and its values, at least one and at most the maximum, the
+list parser with a maximum and its own `(` continues, as a parser that holds the maximum and the
+results so far. A maximum set on it applies to the values after them.
 -/
 theorem parenMaximum_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
@@ -1126,11 +1127,11 @@ theorem parenMaximum_waits_between {version : Version} {p : P}
     simpa [ParenMaximumParser.new] using this
 
 /--
-The list parser with a maximum and its own `(` on its `(`, fewer values than the maximum and then
-tokens on which its inner parser wants more, not starting with `)`: it wants more, as a parser
-that holds the maximum, the results so far and the inner parser within its value. A maximum set
-on it applies to the values after that value; it finishes once the inner parser finishes the
-value and as many further values as the maximum leaves and the `)` follow.
+When the cursor holds its `(`, fewer values than the maximum and then tokens that do not start with
+`)`, and the inner parser continues on those tokens, the list parser with a maximum and its own `(`
+continues, as a parser that holds the maximum, the results so far and the inner parser within its
+value. A maximum set on it applies to the values after that value; it finishes once the inner parser
+finishes the value and as many further values as the maximum leaves and the `)` follow.
 -/
 theorem parenMaximum_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)

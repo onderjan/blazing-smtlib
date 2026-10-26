@@ -12,10 +12,11 @@ import all BSmtLib.Lexer.Error
 # What the naive lexer does with the bytes, as the outcome says
 
 `VOut` states what the naive lexer does with bytes, from a lexer state holding a result with the
-tokens taken, as an outcome of the pure run (`outcome`) says: where the run ends, the naive lexer
-ends in the pure run's state; where the run fails, it fails with the lexical error; where the
-consumer stops, it fails, holds the result, discards or starts again after the lexeme of the
-stop (`Restarts`).
+tokens taken, as an outcome of the pure run (`outcome`) says:
+- where the run ends, the naive lexer ends in the pure run's state;
+- where the run fails, it fails with the lexical error;
+- where the consumer stops, it fails, holds the result, discards or starts again after the lexeme
+  of the stop (`Restarts`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VOut

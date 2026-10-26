@@ -13,12 +13,14 @@ import all BSmtLib.Lexer.Error
 /-!
 # The pieces of a slice and their locations
 
-What the Rust port's steps over the pieces of a slice are compared with: the bytes of a piece
-(`bytesOf_size`, `bytesOf_get!`, `stored_last`, `borrowed_last`), the bytes of a run
-(`runEnd_mem`), the location of an index of the slice (`locOf`, `locAt_eq`, `LocAt.afterByte`,
-`LocAt.afterColumns`, `LocAt.lineFeed`), the lexemes of the tokens on one line (`onLine_eq`,
-`borrowedLexeme_eq`), and the naive lexer's steps at the end of a comment and on a run of
-whitespace (`advance_comment_end`, `start_whitespaceRun`).
+The Rust port's steps over the pieces of a slice are compared with:
+- the bytes of a piece (`bytesOf_size`, `bytesOf_get!`, `stored_last`, `borrowed_last`);
+- the bytes of a run (`runEnd_mem`);
+- the location of an index of the slice (`locOf`, `locAt_eq`, `LocAt.afterByte`,
+  `LocAt.afterColumns`, `LocAt.lineFeed`);
+- the lexemes of the tokens on one line (`onLine_eq`, `borrowedLexeme_eq`);
+- the naive lexer's steps at the end of a comment and on a run of whitespace
+  (`advance_comment_end`, `start_whitespaceRun`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure

@@ -70,9 +70,9 @@ def arrivalTick (arrival : σ → Parser.Internal.Input → PM H Unit) (state : 
 def noArrival : σ → Parser.Internal.Input → PM H Unit := fun _ _ => pure ()
 
 /--
-The parser, from the state, over the tokens: each token arrives, the calls due at its arrival
-are made, it is processed, then the step processes it. The result and the tokens after the
-parser's end, or `none` if the tokens run out before the parser ends.
+Runs the parser from the state over the tokens. Each token arrives, the calls due at its arrival
+are made, it is processed, and then the step processes it. Gives the result and the tokens after
+the parser's end, or `none` if the tokens run out before the parser ends.
 -/
 def drive (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step σ ρ)) :
     σ → List Parser.Internal.Input →
@@ -98,8 +98,8 @@ variable [Parser.Internal.ParseByToken P H m (Handler.Error H) R]
 variable (points : Points (StateT H m)) (producer : Producer (StateT H m))
 
 /--
-The parser in the version, from its state, over the tokens: the result and the tokens after
-the parser's end, or `none` if the tokens run out before it ends.
+Runs the parser in the version from its state over the tokens. Gives the result and the tokens
+after the parser's end, or `none` if the tokens run out before it ends.
 -/
 def driveParse : Version → P → List Parser.Internal.Input → PM H (Option
     (R × List Parser.Internal.Input))
@@ -163,9 +163,9 @@ def unrestrictedPosture : VersionPosture :=
 abbrev startEvents (version : Version) : List Event :=
   [.handlerSwitch (Bridge.version version)]
 
-/-- The events of a recording run of the script parser over the items, under the posture that
-restricts nothing, with the initial version, the handler told the version first: what `record` is
-for the traversal. -/
+/-- The events of a recording run of the script parser over the items: what `record` is for the
+traversal. The parser has the posture that restricts nothing and starts in the initial version,
+and the handler is told the version first. -/
 def parserRecord (version : Version) (items : List Parser.Internal.Input) : List Event :=
   recordedRun version (ScriptParser.new unrestrictedPosture) items (startEvents version)
 

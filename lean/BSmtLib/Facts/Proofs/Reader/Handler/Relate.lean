@@ -14,12 +14,13 @@ import all BSmtLib.Facts.Proofs.Reader.Param.Stop
 /-!
 # The link of the stand-in consumer and the parse adapter with any handler that never fails
 
-As `Param.Relate` for the recording handler: the relator `linkRelator` relates computations of
-`Flagged (scriptConsumer version)` and of the parse adapter over a handler whose calls never fail;
-while nothing went wrong and the tokens taken stand for a start of the script, the values are
-related and the adapter stands where the driver over items standing for the tokens leaves it
-(`InvB`, `Loop.At`). Every call of the two on the same cursor is so related (`link_calls`), so
-the lexer's steps on the two are related (`link_consumers`).
+This module proves for any handler whose calls never fail what `Param.Relate` proves for the
+recording handler. The relator `linkRelator` relates computations of
+`Flagged (scriptConsumer version)` and of the parse adapter over such a handler. While nothing
+went wrong and the tokens taken stand for a start of the script, the values are related and the
+adapter stands where the driver over items standing for the tokens leaves it (`InvB`,
+`Loop.At`). Every call of the two on the same cursor is so related (`link_calls`), so the lexer's
+steps on the two are related (`link_consumers`).
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

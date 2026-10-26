@@ -10,12 +10,15 @@ import all BSmtLib.Lexer
 # The adapter's consumer with a record of what went wrong
 
 `Flagged consumer` answers exactly as the adapter's consumer `Answering consumer` does, and keeps
-in its state whether it has answered an error or been handed a cursor in another version than
-the one of the last cursor it gave back (`errored`), and that version (`version`), whether it
-has been called after something went wrong or handed such a cursor (`spoiled`), and whether the
-call at which it went wrong was handed whitespace or a comment (`layout`). The record is
-read by nothing but the proofs: another consumer agrees with this one only while nothing went
-wrong, and at the call where it went wrong if that call was handed a cursor in its version.
+a record in its state:
+- whether it has answered an error or been handed a cursor in another version than the one of
+  the last cursor it gave back (`errored`), and that version (`version`);
+- whether it has been called after something went wrong or handed such a cursor (`spoiled`);
+- whether the call at which it went wrong was handed whitespace or a comment (`layout`).
+
+The record is read by nothing but the proofs: another consumer agrees with this one only while
+nothing went wrong, and at the call where it went wrong if that call was handed a cursor in its
+version.
 
 As both consumers answer alike on every cursor, the library's lexer does with one what it does
 with the other (`lexing_flagged`, from step 1, `lexSliceStep_sim` and `lexEofStep_sim`).

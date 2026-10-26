@@ -23,14 +23,14 @@ import all BSmtLib.Parser.Script
 /-!
 # Each step of the parser is silent in a recording run
 
-The closure of `Quiet.Without` under the operations the steps are built from, applied to each step
-function by the tactic `silent_step`: unfold the step, then take its binds, matches, conditions,
-handler calls and results apart.
+This module applies the closure of `Quiet.Without` under the operations the steps are built
+from to each step function, by the tactic `silent_step`. The tactic unfolds the step, then takes
+its binds, matches, conditions, handler calls and results apart.
 
-Up to the command parser's step, the steps tell the handler only calls, so they hold for every
-`bad` that picks out no call (`Quiet.CallsPass`): they write no token point (`Quiet.Silent`), and
-they tell the handler no version (`Quiet.isSwitch`). The script parser's step also switches the
-handler's version, and is silent (`scriptStep_quiet`).
+Up to the command parser's step, the steps tell the handler only calls, so their lemmas hold for
+every `bad` that picks out no call (`Quiet.CallsPass`): the steps write no token point
+(`Quiet.Silent`), and they tell the handler no version (`Quiet.isSwitch`). The script parser's
+step also switches the handler's version, and is silent (`scriptStep_quiet`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.QuietSteps

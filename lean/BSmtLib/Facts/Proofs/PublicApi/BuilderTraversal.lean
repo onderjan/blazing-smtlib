@@ -8,11 +8,13 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Equations
 /-!
 # The traversal with the builder
 
-The traversal, as the specification formalism (`BSmtLibSpec`) defines it, of a tree with the builder
-(`specBuilder`), with token points and a producer that do nothing, returns the tree itself and
-leaves the state as it is, for sorts, s-expressions, attributes and terms; the traversal of a valid
-command adds the command to the commands built so far; and the traversal of a valid script from the
-state with the version it is read from adds its commands, newest first (`script_builds`).
+The traversal, as the specification formalism (`BSmtLibSpec`) defines it, with the builder
+(`specBuilder`) and with token points and a producer that do nothing:
+- returns the tree itself and leaves the state as it is, for sorts, s-expressions, attributes and
+  terms;
+- adds a valid command to the commands built so far;
+- adds the commands of a valid script, newest first, from the state with the version the script
+  is read from (`script_builds`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.BuilderTraversal

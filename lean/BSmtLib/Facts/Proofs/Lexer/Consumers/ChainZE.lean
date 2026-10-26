@@ -27,10 +27,11 @@ open BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Top
 section
 variable {consumer : BSmtLibSpec.Lexer.Consumer}
 
-/-- `lexChunks` from `p` on the library's lexer, and the calls of `X1BatchInCore` on the chunks
-from `p` on, from lexers with related states, the second holding what the first holds after the
-result held from the chunks before: the two give the same result, take the same tokens, and have
-related states, the second holding then after the first's held result what the chunks gave. -/
+/-- `lexChunks` from `p` on the library's lexer and the calls of `X1BatchInCore` on the chunks
+from `p` on give the same result, take the same tokens and leave related states. They start from
+lexers with related states, where `X1BatchInCore` holds the result `acc` held from the chunks
+before, or else what the library's lexer holds. Where `lexChunks` does not fail, `X1BatchInCore`
+then holds the result it gives, or else what the library's lexer held at the start. -/
 theorem chunks_relE (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.Chars)
     (ended : Bool)
     (p : Nat) :

@@ -10,12 +10,15 @@ import all BSmtLib.Lexer.Internal.VNaive
 /-!
 # The library's lexer with any consumer of the formalism does not tell how its input is cut
 
-The run of the library's lexer with the adapter's consumer for a consumer of the specification
-formalism (`BSmtLibSpec`) ends as the naive lexer fed the cut of the slices ends (`z_naive`): with
-the same tokens taken, results alike as `preciseOf` says, an error that does not go on, a consumer's
-error with the span of the last token taken, and, where it does not fail, discarding from where the
-naive lexer does. The naive lexer does not tell how its input is cut (`VFlattenE`), so neither does
-the library's lexer (`slicing`): the same tokens taken and results alike as `preciseOf` says, so the
+`z_naive`: the run of the library's lexer with the adapter's consumer for a consumer of the
+specification formalism (`BSmtLibSpec`) ends as the naive lexer fed the cut of the slices ends:
+- the two take the same tokens, and their results are alike as `preciseOf` says;
+- an error of the library's lexer does not go on, and a consumer's error has the span of the last
+  token taken;
+- where the library's lexer does not fail, it discards from where the naive lexer does.
+
+The naive lexer does not tell how its input is cut (`VFlattenE`), so neither does the library's
+lexer (`slicing`): it takes the same tokens and gives results alike as `preciseOf` says, so the
 same result, and the same error but for trailing input and the adapter's error `none`.
 -/
 

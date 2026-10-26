@@ -100,9 +100,10 @@ macro "failure_eq" h:term : tactic => `(tactic| (
           BSmtLib.Span.Location.Internal.column_new, true_and, and_true]) <;> omega)
     | rfl))
 
-/-- The lexer state at the index `next` and the tokens taken are, after a step from the naive
-lexer's pure state `st` at `location` at the index `start`, under the version `ver`, with the
-tokens taken `coll` and the lexemes `held`, as the naive lexer's run from there leaves them. -/
+/-- After a step, the lexer state at the index `next` and the tokens taken are as the naive lexer's
+run leaves them. The step and the run start from the naive lexer's pure state `st` at `location`
+at the index `start`, under the version `ver`, with the tokens taken `coll` and the lexemes
+`held`. -/
 def StepPost (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Version)
     (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat) (ver : Version)
     (coll : List Handed) (held : List Lexeme) (next : Nat) (c : WP.WCore) (coll' : List Handed) :
@@ -114,11 +115,12 @@ def StepPost (C : BSmtLibSpec.Lexer.Consumer) (v : Version) (hd : Bool) (iv : Ve
       outcome C hd (pending C hd c.version coll' held')
         (feedFrom v C.concrete input st' location' next)
 
-/-- The step from the naive lexer's pure state `st` at `location` at the index `start`, under
-the version `ver`, with the tokens taken `coll` and the lexemes `held`, interrupted by `e` with
-the lexer state `c` and the tokens taken `coll'`: the naive lexer's run fails with a lexical
-error, and what is left to do is to hand over the lexemes of the batch of the lexer state; or the
-consumer stopped, at the stop `e` is, which leaves the lexer discarding if it makes it discard. -/
+/-- Why a step was interrupted. The step starts from the naive lexer's pure state `st` at
+`location` at the index `start`, under the version `ver`, with the tokens taken `coll` and the
+lexemes `held`, and is interrupted by `e` with the lexer state `c` and the tokens taken `coll'`.
+Either the naive lexer's run fails with a lexical error, and what is left to do is to hand over
+the lexemes of the batch of the lexer state; or the consumer stopped, at the stop `e` is, which
+leaves the lexer discarding if it makes it discard. -/
 def StepFails (C : BSmtLibSpec.Lexer.Consumer) {floor : Option Nat} (v : Version) (hd : Bool)
     (iv : Version) (input : ByteSlice) (st : St) (location : Span.Location) (start : Nat)
     (ver : Version) (coll : List Handed) (held : List Lexeme) (e : WP.Intr C floor)

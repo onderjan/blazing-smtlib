@@ -14,11 +14,13 @@ import all BSmtLib.Lexer.Cursor
 
 `correctWithConsumers_vNaive`: the naive lexer, with the adapter's consumer for every consumer of
 the specification formalism (`BSmtLibSpec`) (`Adapters.lexing VNaive.lexOps`), is
-`BSmtLibSpec.Lexer.CorrectWithConsumers`. What it hands over to the collector of the formalism is
-what its pure run hands over (`lexing_fed_vNaive`, `VNaive.fedRun`), as the collector takes every
-token ready (`runs_collector`); so it is `BSmtLibSpec.Lexer.Correct` with it, which
-`VNaive.fedRun_correct` proves; it handles every consumer that breaks at the end of the input
-(`vNaive_runs`, from `walk`), and the end of the input resets it (`resetsAtEnd_vNaive`).
+`BSmtLibSpec.Lexer.CorrectWithConsumers`. That is:
+- it is `BSmtLibSpec.Lexer.Correct` with the collector of the formalism: what it hands over to
+  the collector is what its pure run hands over (`lexing_fed_vNaive`, `VNaive.fedRun`), as the
+  collector takes every token ready (`runs_collector`), and `VNaive.fedRun_correct` proves the
+  pure run correct;
+- it handles every consumer that breaks at the end of the input (`vNaive_runs`, from `walk`);
+- the end of the input resets it (`resetsAtEnd_vNaive`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.VNaive

@@ -19,14 +19,17 @@ import all BSmtLib.Parser.Adapter
 /-!
 # The script reader after an input it read to the end
 
-The script reader over the recording handler, allowing every version, after an input it read to
-the end: its lexer's fields are those a lexer constructed with the version has after the end of
-the input (`Resets.resetOf`), and its adapter is reset and not told the version
-(`after_state`). The fields come from the lexer with the stand-in consumer, which ends with the
-fields of the reader's lexer (`Reader.Lexes.Through.through_flagged`) and those of the lexer with
-the adapter's consumer (`Reader.Param.Flagged.slice_alikeF`), whose fields the chain of lexers
-gives (`fields_afterC`); the adapter stands where the recording run over the tokens taken leaves
-the parser, which has finished, as the stand-in consumer has.
+`after_state` describes the script reader over the recording handler, allowing every version,
+after an input it read to the end:
+- its lexer's fields are those a lexer constructed with the version has after the end of the
+  input (`Resets.resetOf`);
+- its adapter is reset and not told the version.
+
+The fields come from the lexer with the stand-in consumer, which ends with the fields of the
+reader's lexer (`Reader.Lexes.Through.through_flagged`) and those of the lexer with the adapter's
+consumer (`Reader.Param.Flagged.slice_alikeF`), whose fields the chain of lexers gives
+(`fields_afterC`). The adapter stands where the recording run over the tokens taken leaves the
+parser, which has finished, as the stand-in consumer has.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

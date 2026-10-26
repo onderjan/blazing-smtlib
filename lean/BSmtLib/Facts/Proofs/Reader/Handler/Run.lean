@@ -9,12 +9,13 @@ import all BSmtLib.Lexer
 /-!
 # The library's lexer with the parse adapter over any handler that never fails, call by call
 
-As `Param.Run` for the recording handler: the library's lexer fed with
-`Flagged (scriptConsumer version)` and fed with the parse adapter over a handler whose calls
-never fail are related call by call (`Relate.link_consumers`, and the unary walk where nothing went
-wrong); where the first finishes and the tokens taken stand for a start of the script, the second
-returns a result at the end of the input, and the adapter stands where the driver over items
-standing for the tokens leaves it (`feed_agree`).
+This module proves for any handler whose calls never fail what `Param.Run` proves for the
+recording handler. The library's lexer fed with `Flagged (scriptConsumer version)` and the
+library's lexer fed with the parse adapter over such a handler are related call by call
+(`Relate.link_consumers`, and the unary walk where nothing went wrong). Where the first finishes
+and the tokens taken stand for a start of the script (`feed_agree`):
+- the second returns a result at the end of the input;
+- the adapter stands where the driver over items standing for the tokens leaves it.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Handler.Run

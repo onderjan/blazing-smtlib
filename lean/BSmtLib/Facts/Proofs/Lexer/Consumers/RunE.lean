@@ -115,9 +115,9 @@ section
 variable (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
   (Rel Weak : ops₁.Lexer consumer → ops₂.Lexer consumer → Prop)
 
-/-- A property of a lexer kept by every call on a slice that does not fail, and by keeping a held
-result, such that every failed call from a lexer that has it fails with an error that has `P`:
-the run from a lexer that has it fails, if it does, with an error that has `P`. -/
+/-- The run from a lexer that has the property `Inv` fails, if it does, with an error that has
+`P`. This holds if `Inv` is kept by every call on a slice that does not fail and by keeping a held
+result, and every failed call from a lexer that has `Inv` fails with an error that has `P`. -/
 theorem runInputE_error_inv (ops : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
     (Inv : ops.Lexer consumer → Prop) (P : LexerError (Option consumer.Error) → Prop)
     (hslice : ∀ (slice : BSmtLibSpec.Regex.Chars) a (taken : List Handed), Inv a →
@@ -151,9 +151,9 @@ theorem runInputE_error_inv (ops : LexOps) {consumer : BSmtLibSpec.Lexer.Consume
         (h1 held rfl _) e he
     | error e' => cases he; exact h2 e rfl
 
-/-- Two lexers whose steps give results alike as `g` says, as `StepsAlikeG` says, and whose
-related lexers hold the same result, give results alike as `g` says fed the same slices, take the
-same tokens, and are weakly related, and related if they have not failed. -/
+/-- Two related lexers fed the same slices give results alike as `g` says, take the same tokens,
+and are weakly related, and related if they have not failed. This holds if their steps give
+results alike as `g` says, as `StepsAlikeG` says, and related lexers hold the same result. -/
 theorem runInputE_alikeG {γ : Type} (g : LexerError (Option consumer.Error) → γ)
     (hslice : ∀ slice : BSmtLibSpec.Regex.Chars, StepsAlikeG ops₁ ops₂ Rel Weak g
       (fun a => ops₁.lexSliceStep a slice.toByteArray.toByteSlice)
@@ -243,9 +243,9 @@ theorem stepsAlike_G {β : Type}
   obtain ⟨e1, e2, e3⟩ := h a b taken hr
   exact ⟨by rw [e1], e3, fun _ => e2, e2⟩
 
-/-- Two lexers whose steps give the same results with lexers related again, and whose related
-lexers hold the same result, give the same results fed the same slices, take the same tokens,
-and are related again. -/
+/-- Two related lexers fed the same slices give the same results, take the same tokens, and are
+related again. This holds if their steps give the same results with lexers related again, and
+related lexers hold the same result. -/
 theorem runInputE_alike
     (hslice : ∀ slice : BSmtLibSpec.Regex.Chars, StepsAlike ops₁ ops₂ Rel
       (fun a => ops₁.lexSliceStep a slice.toByteArray.toByteSlice)

@@ -69,11 +69,12 @@ variable (strict loose : Version.VersionPosture) (I : Watch RecAdapter → Prop)
 def Good (w : Watch RecAdapter) : Prop :=
   ScriptParser.Internal.posture w.inner.parser = strict ∧ I w
 
-/-- The relator of the watched adapter and the adapter under `loose`: every value of the first has
-a partner; once something went wrong, it stays so; and from a record where nothing went wrong,
-if nothing goes wrong, the record stays good, the values are related, and the adapter under
-`loose`, run from the watched adapter under `loose`, ends as the watched adapter does, under
-`loose`. -/
+/-- The relator of the watched adapter and the adapter under `loose`:
+- every value of the first has a partner;
+- once something went wrong, it stays so;
+- from a record where nothing went wrong, if nothing goes wrong, the record stays good, the
+  values are related, and the adapter under `loose`, run from the watched adapter under `loose`,
+  ends as the watched adapter does, under `loose`. -/
 def looserRelator : Relator (Watch RecAdapter) WM RecAdapter Id where
   rel Q x y :=
     (∀ w u, ∃ b, Q ((x.run w).run u).1.1 b) ∧

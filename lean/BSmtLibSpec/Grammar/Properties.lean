@@ -16,9 +16,9 @@ proves:
 - a lexer fed a command holds none of its tokens back.
 
 Together with `tokens`, which writes every tree as exactly one sequence of tokens, the first five
-say that, in each version, the valid trees and the sequences of tokens they are written as
-correspond one to one: a tree can be read back from its tokens, and nothing is lost in either
-direction.
+properties below say that, in each version, the valid trees and the sequences of tokens they are
+written as correspond one to one: a tree can be read back from its tokens, and nothing is lost
+in either direction.
 -/
 
 namespace BSmtLibSpec.Grammar.Properties

@@ -200,10 +200,10 @@ theorem map_token_injective : ∀ {xs ys : List Grammar.SyntaxToken},
     simp only [List.map_cons, List.cons.injEq, Received.token.injEq] at h
     rw [h.1, map_token_injective h.2]
 
-/-- Handed tokens without the end-of-file token at the start of what a correct lexer hands over
-from an offset, standing for the tokens of valid commands, the last of which may change
-the mode: the characters from the offset start with those commands, up to the end of the last
-handed token, as a file reads them. -/
+/-- Where handed tokens without the end-of-file token at the start of what a correct lexer hands
+over from an offset stand for the tokens of valid commands, the last of which may change the
+mode, the characters from the offset start with those commands, up to the end of the last handed
+token, as a file reads them. -/
 theorem reading_split (hc : Correct feed) {version : Lexicon.Version} {input : Chars}
     {offset : Nat} (hoff : offset ≤ input.length) {Y : List Handed}
     (hY : Y <+: (segment feed version input true offset).handed)

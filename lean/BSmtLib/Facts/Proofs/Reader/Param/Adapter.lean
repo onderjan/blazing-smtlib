@@ -14,12 +14,14 @@ import all BSmtLib.Parser
 /-!
 # The parse adapter's token against the recording run's
 
-The parse adapter that stops after an action on its producer (`Param.Stop`), as the consumer
-of the reader proofs, has the parser take a token as the recording run of
-the parser's driver does (`Facts.Proofs.Parser.Cut.recAfter`), without the token points and with the
-producer's actions done on its cursor: its handler's log is the recording log with the events
-that are not calls left out (`Erasing`), its parser goes on in the same state, and it acts on its
-cursor as the recording log says the run asked its producer to (`takeOne_rec`).
+`takeOne_rec`: the parse adapter that stops after an action on its producer (`Param.Stop`), the
+consumer of the reader proofs, has the parser take a token as the recording run of the parser's
+driver does (`Facts.Proofs.Parser.Cut.recAfter`), without the token points and with the
+producer's actions done on its cursor:
+- its handler's log is the recording log with the events that are not calls left out
+  (`Erasing`);
+- its parser goes on in the same state;
+- it acts on its cursor as the recording log says the run asked its producer to.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)

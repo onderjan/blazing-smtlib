@@ -86,7 +86,7 @@ theorem single_rejects [Parse P H m (Handler.Error H) ρ]
   simp only [map_pure] at this
   exact this
 
-/-- A parser of a single token, on a cursor with no token: it wants more, as it was. -/
+/-- A parser of a single token, on a cursor with no token: it continues, as it was. -/
 theorem single_waits [Parse P H m (Handler.Error H) ρ]
     (expect : Parser.Internal.Input → PM H ρ) (parser : P)
     (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (state : ParseState H) (cursor : Z),

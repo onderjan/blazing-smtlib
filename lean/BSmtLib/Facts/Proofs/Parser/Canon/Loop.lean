@@ -21,8 +21,8 @@ import all BSmtLib.Parser.Script
 Two cursors that agree (`Batch.CursorAgree`) hold the same tokens, with contents in different
 storage. The script parser views the tokens of each as inputs whose canonicalisations are the
 same (`canon_syntax`), and its steps on canonically equal states and inputs give canonically
-equal results (`Commands`), so its loop over the two cursors from canonically equal parsers gives
-the same answer and log, canonically equal parsers, and cursors that agree again
+equal results (`Commands`). So its loop over the two cursors, from canonically equal parsers,
+gives the same answer and log, canonically equal parsers, and cursors that agree again
 (`parseByToken_agree`).
 -/
 

@@ -11,13 +11,14 @@ import all BSmtLib.Lexer.Internal.VNaive
 /-!
 # The lexers with the collector agree
 
-The lexer with the batch in its state with the collector runs as the Rust port does
-(`collectX1_collectW`), as the two lexers' calls correspond (`Api.lexSlice_couple`). The naive
-lexer with the collector and the Rust port with it each end as the naive lexer with the concrete
-collector, fed the same slices, ends (`collectV_naive`, `collectW_naive`): with the same result,
-or with an error of the same lexical kind, writing down the entries it takes. The naive lexer
-does not tell how its input is cut (`VFlattenE`), and the collector's run ends as it does on the
-cut of the slices (`Slicing.collect_naive`), so the lexers' runs agree (`lexers_agree`).
+`lexers_agree`: the runs of the lexers with the collector agree. The proof rests on three facts:
+- the lexer with the batch in its state with the collector runs as the Rust port does
+  (`collectX1_collectW`), as the two lexers' calls correspond (`Api.lexSlice_couple`);
+- the naive lexer and the Rust port, each with the collector, end as the naive lexer with the
+  concrete collector ends when fed the same slices (`collectV_naive`, `collectW_naive`): with the
+  same result, or with an error of the same lexical kind, writing down the entries it takes;
+- the naive lexer does not tell how its input is cut (`VFlattenE`), and the collector's run ends
+  as it does on the cut of the slices (`Slicing.collect_naive`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Agree

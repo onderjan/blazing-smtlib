@@ -10,10 +10,13 @@ import all BSmtLib.Lexer.Internal.WRustPort
 
 A lexer holds its consumer and its lexer state (`WRustPort.Lexer`); a call runs a step of `Top`
 on them (`Lexer.run`). Lexers with the same consumer and lexer states related by `TopRel`
-correspond (`LexRel`). Run over operations that simulate each other, the step of a call on a
-slice (`lexSliceStep`) or at the end of the input (`lexEofStep`) run on two lexers that correspond
-are the projections of one computation of the same results with lexers that correspond again
-(`MCouple`), whether the call succeeds or fails: `run_lexSliceStep_sim` and `run_lexEofStep_sim`.
+correspond (`LexRel`).
+
+Take two lexers that correspond, and two structures of operations that simulate each other. The
+two runs of the step of a call on a slice (`lexSliceStep`), or of one at the end of the input
+(`lexEofStep`), over these operations are then the projections of one computation of the same
+results with lexers that correspond again (`MCouple`), whether the call succeeds or fails
+(`run_lexSliceStep_sim`, `run_lexEofStep_sim`).
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

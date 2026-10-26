@@ -9,12 +9,14 @@ import all BSmtLib.Parser
 /-!
 # A parser stepped by single tokens, on a cursor, against `driveS`
 
-On a cursor that gives a list of tokens, all in one version, the loop over single tokens
-(`Parser.Internal.parseByToken`) does what `driveS` does on that list, with the token points that
-mark nothing, read as `outcome` reads a parse (`parseByToken_driveS`): the parser it gives back
-when it wants more is the state `driveS` waits in, and where it stops is the cursor after the
-tokens `driveS` consumed. So every `RunsS` lemma about a parser's steps gives `Finishes`, `Waits` or
-`Rejects` of the parser on cursors.
+`parseByToken_driveS`: on a cursor that gives a list of tokens, all in one version, the loop over
+single tokens (`Parser.Internal.parseByToken`) does what `driveS` does on that list, with the
+token points that mark nothing. The loop is read as `outcome` reads a parse:
+- the parser it gives back when it continues is the state `driveS` waits in;
+- where it stops is the cursor after the tokens `driveS` consumed.
+
+So every `RunsS` lemma about a parser's steps gives `Finishes`, `Waits` or `Rejects` of the
+parser on cursors.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.CursorS
@@ -289,7 +291,7 @@ theorem parses_of_runsS [Parse P H m (Handler.Error H) R]
   · simp [afterProgram, convS, answer]
   · simp [afterProgram, convS, answer, advance_takes htakes]
 
-/-- A parser whose steps run over the tokens and stay in a state wants more on every cursor that
+/-- A parser whose steps run over the tokens and stay in a state continues on every cursor that
 has exactly the tokens. -/
 theorem waits_of_runsS [Parse P H m (Handler.Error H) R]
     (hparse : ∀ {Z : Type} [Cursor Z] (parser : P) (parseState : ParseState H) (cursor : Z),

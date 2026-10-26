@@ -11,10 +11,13 @@ import all BSmtLib.Token.Reserved
 /-!
 # Datatype declarations against the traversal
 
-A datatype declaration in either form: `(` ⟨constructor_dec⟩+ `)`, whose start comes at the `(`
-of its first constructor, and `(` `par` `(` ⟨symbol⟩+ `)` `(` ⟨constructor_dec⟩+ `)` `)`, whose
-start comes at the `)` of its parameters. The parser's checks that there are parameters and
-constructors are decided by the length of the programs' values.
+The lemmas follow the parser over a datatype declaration in either form:
+- `(` ⟨constructor_dec⟩+ `)`, whose start comes at the `(` of its first constructor;
+- `(` `par` `(` ⟨symbol⟩+ `)` `(` ⟨constructor_dec⟩+ `)` `)`, whose start comes at the `)` of
+  its parameters.
+
+The parser's checks that there are parameters and constructors are decided by the length of the
+programs' values.
 
 Lists of symbols and of sort declarations hand over only views of their tokens, so their
 programs are the ticks of the tokens, and their values the views.

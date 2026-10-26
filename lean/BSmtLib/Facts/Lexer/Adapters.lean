@@ -180,9 +180,10 @@ def Answering.requests (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.Ba
 
 /--
 Takes the entries of the cursor from the next one on, one at a time, and answers as the
-formalism's consumer does: at each entry, given the entries taken so far and this one, it fails,
-breaks, or goes on, and makes the requests the formalism's consumer makes at it; it stops taking
-at an entry where it asks for a version or for discarding, and when the cursor has no entry left.
+formalism's consumer does. At each entry, given the entries taken so far and this one, it fails,
+breaks or goes on, and makes the requests that the formalism's consumer makes at it. It stops
+taking at an entry where it asks for a version or for discarding, and when the cursor has no
+entry left.
 -/
 def Answering.consume (consumer : BSmtLibSpec.Lexer.Consumer) {batch : Token.BatchTag}
     (cursor : LexerCursor batch) (h : cursor.HasNext) :
@@ -329,9 +330,10 @@ def LexOps.runInput (ops : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
     | (.error error, lexer) => return (.failed (failureOf error), lexer)
 
 /--
-The lexer that the next input is fed to after an earlier input, fed as slices and then the end
-of the input: the lexer the last call gave back, or, if a call failed, a lexer constructed anew
-with the version, as a lexer that stops at its first error is gone after a failed call.
+The lexer that the next input is fed to after an earlier input, which is fed as slices and then
+the end of the input. It is the lexer the last call gave back or, if a call failed, a lexer
+constructed anew with the version, since a lexer that stops at its first error is gone after a
+failed call.
 -/
 def LexOps.next (ops : LexOps) (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version)
     (lexer : ops.Lexer consumer) (input : List BSmtLibSpec.Regex.Chars) : ops.Lexer consumer :=
@@ -341,11 +343,13 @@ def LexOps.next (ops : LexOps) (consumer : BSmtLibSpec.Lexer.Consumer) (version 
 
 /--
 What the lexer has done with a consumer of the formalism, in the formalism's form
-(`BSmtLibSpec.Lexer.Lexing`): constructed with the version, fed each earlier input as slices and
-then the end of the input (`LexOps.next`), and then fed the slices and, if the input has ended,
-the end of the input, with the consumer `Answering consumer`. The entries taken are those the
-consumer has taken in the last input; the version and where the discarding began are the lexer's
-after the last call.
+(`BSmtLibSpec.Lexer.Lexing`).
+
+The lexer has the consumer `Answering consumer`. It is constructed with the version and fed each
+earlier input as slices and then the end of the input (`LexOps.next`). It is then fed the slices
+and, if the input has ended, the end of the input. The entries taken are those the consumer has
+taken in the last input; the version and where the discarding began are the lexer's after the
+last call.
 -/
 def lexing (ops : LexOps) : BSmtLibSpec.Lexer.Lexing := fun consumer version earlier slices ended =>
   let lexer := earlier.foldl (ops.next consumer (toVersion version))

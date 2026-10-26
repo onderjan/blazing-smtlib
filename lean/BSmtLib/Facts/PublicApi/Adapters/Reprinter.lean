@@ -48,10 +48,10 @@ def reader (r : Reprinter) (version : Version) : Reader r.H (ScriptParser r.H) :
   r.readerWith allVersions version
 
 /--
-`r.Reprints`: on every input, in any slices, that the script reader over `r`'s handler, allowing
-every version, reads to the end, the input up to where the reader began to discard it is the
-printed tokens with layout between them, each token as printed or, for a string literal, spelled
-otherwise with the same 2.0 meaning.
+`r.Reprints`: on every input that the script reader over `r`'s handler reads to the end, the
+input up to where the reader began to discard it is the printed tokens with layout between them.
+Each token is as printed or, for a string literal, spelled otherwise with the same 2.0 meaning.
+The reader allows every version and is fed the input in any slices.
 -/
 def Reprints (r : Reprinter) : Prop :=
   ∀ version slices result before after,
@@ -60,9 +60,10 @@ def Reprints (r : Reprinter) : Prop :=
         SameSpellings written (r.print after.handler)
 
 /--
-`r.ReprintsExactly`: on every input, in any slices, that the script reader over `r`'s handler,
-allowing the versions from 2.5 on and started in one of them, reads to the end, the input up to
-where the reader began to discard it is exactly the printed tokens with layout between them.
+`r.ReprintsExactly`: on every input that the script reader over `r`'s handler reads to the end,
+the input up to where the reader began to discard it is exactly the printed tokens with layout
+between them. The reader allows the versions from 2.5 on, starts in one of them and is fed the
+input in any slices.
 -/
 def ReprintsExactly (r : Reprinter) : Prop :=
   ∀ version slices result before after, version ≠ .v2_0 →

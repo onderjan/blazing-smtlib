@@ -470,10 +470,10 @@ theorem eventsBefore_all (events : List Event) :
   simpa [eventsBefore] using this
 
 /--
-A lexer that handles consumers as the formalism states, fed the slices of a file and then the
-end of the input, with the script consumer: it finishes, the consumer having taken what stands for
-what a parser receives for the script; and the recording run of the library's parser on those
-tokens has the traversal's events.
+A lexer that handles consumers as the formalism states finishes on a file with the script
+consumer, the consumer having taken what stands for what a parser receives for the script. The
+recording run of the library's parser on those tokens has the traversal's events. The lexer is
+fed the slices of the file and then the end of the input.
 -/
 theorem lexing_file (lexing : Lexing) (h : CorrectWithConsumers lexing)
     (version : Lexicon.Version) (slices : List Chars) {commands : List Tree.Command}

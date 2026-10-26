@@ -11,12 +11,16 @@ import all BSmtLib.Parser.Adapter
 /-!
 # The library's lexer with the parse adapter on a file
 
-The run of the library's lexer with the stand-in consumer on a file
-(`Facts.Proofs.Reader.Valid.lexing_file`) is the run with `Flagged (scriptConsumer version)`
-(`lexing_flagged`); on it nothing goes wrong and the tokens taken stand for what a parser receives
-for the script, so the run with the parse adapter does not fail, returns a result at the end of the
-input, and leaves the adapter's recording handler with the calls of the traversal
-(`adapter_feed_file`).
+`adapter_feed_file`: the library's lexer with the parse adapter reads a file of commands to its
+end:
+- it does not fail, and returns a result at the end of the input;
+- it leaves the adapter's recording handler with the calls of the traversal.
+
+The lexer is fed the characters of the file cut into any slices and then the end of the input.
+The proof starts from the run of the library's lexer with the stand-in consumer on the file
+(`Facts.Proofs.Reader.Valid.lexing_file`), which is the run with
+`Flagged (scriptConsumer version)` (`lexing_flagged`). On it nothing goes wrong, and the tokens
+taken stand for what a parser receives for the script.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Final
@@ -54,9 +58,9 @@ theorem recRun_nil (version : Lexicon.Version) :
       (.ok (.inl (Bridge.libVersion version, ScriptParser.new unrestrictedPosture)),
         startEvents (Bridge.libVersion version)) := rfl
 
-/-- The library's lexer with the parse adapter, fed a file of commands cut into any slices and
-then the end of the input: it returns a result at the end of the input, and the adapter's
-recording handler has recorded the calls of the traversal of the script, in order. -/
+/-- The library's lexer with the parse adapter returns a result at the end of a file of commands,
+and the adapter's recording handler has then recorded the calls of the traversal of the script, in
+order. The lexer is fed the file cut into any slices and then the end of the input. -/
 theorem adapter_feed_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
     ∃ result lexer,

@@ -91,10 +91,10 @@ theorem habandon₁ (l : Span.Location) :
         Recovery.FailFast l) :=
   rel_pure (L := link) rfl
 
-/-- The naive lexer with the collector fed slices by its public calls, and the naive lexer with
-the adapter's consumer for the concrete collector fed them by the adapter, from lexers with the
-same state and related held results: the collector writes down the entries the other takes, and
-the two end alike. -/
+/-- The naive lexer with the collector and the naive lexer with the adapter's consumer for the
+concrete collector end alike, and the collector writes down the entries the other takes. The
+first is fed slices by its public calls, the second the same slices by the adapter; the two start
+from lexers with the same state and related held results. -/
 theorem collectV_runInputE : ∀ (slices : List ByteList)
     (L₁ : Lexer.Internal.VNaive.Lexer Collector) (L₂ : VOps.Lexer concreteCollector)
     (taken : List Handed), L₁.core = L₂.core → ORel (LocRel link.rr) L₁.held L₂.held →

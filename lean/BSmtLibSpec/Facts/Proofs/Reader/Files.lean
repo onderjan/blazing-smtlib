@@ -8,14 +8,17 @@ public import BSmtLibSpec.Facts.Proofs.Grammar.Files
 /-!
 # A lexer with a parser reads a file
 
-A correct lexer with a parser that follows the traversal as its consumer, fed a file, hands over
-the tokens of the file's commands, each command read in the version in force, and the parser
-takes them, switches the version after each version declaration and has the rest discarded after
-`exit`, and finishes at the end of the input (`files_runs`).
+`files_runs`: a correct lexer, fed a file, with a parser that follows the traversal as its
+consumer:
+- the lexer hands over the tokens of the file's commands, each command read in the version in
+  force;
+- the parser takes them, switches the version after each version declaration and has the rest
+  discarded after `exit`;
+- the run finishes at the end of the input.
 
-The lexer reads the input after a version switch on its own (`BSmtLibSpec.Lexer.segment`);
-until the next switch, the commands it reads are a block whose characters end with a `)`, so the
-lexer has handed their tokens over whatever follows (`command_block`).
+The lexer reads the input after a version switch on its own (`BSmtLibSpec.Lexer.segment`). Until
+the next switch, the commands it reads are a block whose characters end with a `)`, so the lexer
+has handed their tokens over whatever follows (`command_block`).
 
 Not trusted: everything here is proved.
 -/
@@ -328,11 +331,14 @@ theorem drop_split {input rest : Chars} {offset stop : Nat} (hdrop : input.drop 
   exact (List.take_append_drop _ _).symm
 
 /--
-A correct lexer with a parser that follows the traversal as its consumer, fed a file from a point
-between two commands on: the parser has taken the tokens of the commands before, the lexer reads
-from `offset` on in the version in force, and the commands from there to `stop` are a block of
-tokens. Then the lexer hands over the tokens of the rest of the file, and the run finishes with
-the parser having taken what a parser takes for the whole script.
+A correct lexer has as its consumer a parser that follows the traversal, and is fed a file.
+Take a point between two commands where:
+- the parser has taken the tokens of the commands before;
+- the lexer reads from `offset` on in the version in force;
+- the commands from there to `stop` are a block of tokens.
+
+Then the lexer hands over the tokens of the rest of the file, and the run finishes with the
+parser having taken what a parser takes for the whole script.
 -/
 theorem files_runs (hL : Correct lexing.fed) {start : Version} {input : Chars}
     {all : List Tree.Command} (hS : Takes start all (received all) .finished) :

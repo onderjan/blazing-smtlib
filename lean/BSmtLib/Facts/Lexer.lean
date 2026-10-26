@@ -36,8 +36,7 @@ namespace BSmtLib.Facts
 
 /-! ### With every consumer -/
 
-/-- The naive lexer, fed by the adapter with every consumer of the formalism, is correct with
-every consumer. -/
+/-- The naive lexer is correct with every consumer of the formalism when the adapter feeds it. -/
 theorem Lexer.VNaive.correctWithConsumers :
     BSmtLibSpec.Lexer.CorrectWithConsumers (Adapters.lexing Adapters.VNaive.lexOps) :=
   Proofs.Lexer.Consumers.VNaive.correctWithConsumers_vNaive
@@ -48,8 +47,8 @@ info: 'BSmtLib.Facts.Lexer.VNaive.correctWithConsumers' depends on axioms: [prop
 #guard_msgs in
 #print axioms Lexer.VNaive.correctWithConsumers
 
-/-- The Rust port, fed by the adapter with every consumer of the formalism, is correct with
-every consumer: it does with every consumer what the naive lexer does. -/
+/-- The Rust port is correct with every consumer of the formalism when the adapter feeds it. It
+does with every consumer what the naive lexer does. -/
 theorem Lexer.WRustPort.correctWithConsumers :
     BSmtLibSpec.Lexer.CorrectWithConsumers (Adapters.lexing Adapters.WRustPort.lexOps) :=
   Proofs.Lexer.Consumers.Ports.correctWithConsumers_wRustPort
@@ -60,9 +59,8 @@ info: 'BSmtLib.Facts.Lexer.WRustPort.correctWithConsumers' depends on axioms: [p
 #guard_msgs in
 #print axioms Lexer.WRustPort.correctWithConsumers
 
-/-- The lexer with the batch kept in its state, fed by the adapter with every consumer of the
-formalism, is correct with every consumer: it does with every consumer what the Rust port does.
--/
+/-- The lexer with the batch kept in its state is correct with every consumer of the formalism
+when the adapter feeds it. It does with every consumer what the Rust port does. -/
 theorem Lexer.X1BatchInCore.correctWithConsumers :
     BSmtLibSpec.Lexer.CorrectWithConsumers (Adapters.lexing Adapters.X1BatchInCore.lexOps) :=
   Proofs.Lexer.Consumers.Ports.correctWithConsumers_x1BatchInCore
@@ -73,10 +71,10 @@ info: 'BSmtLib.Facts.Lexer.X1BatchInCore.correctWithConsumers' depends on axioms
 #guard_msgs in
 #print axioms Lexer.X1BatchInCore.correctWithConsumers
 
-/-- The library's lexer, fed by the adapter with every consumer of the formalism, is correct
-with every consumer. It does with every consumer what the lexer with the batch kept in its state
-does when each slice too large for the library's positions is cut into chunks; the cutting does
-not matter, as the naive lexer does not tell how its input is cut. -/
+/-- The library's lexer is correct with every consumer of the formalism when the adapter feeds
+it. It does with every consumer what the lexer with the batch kept in its state does when each
+slice too large for the library's positions is cut into chunks. The cutting does not matter, as
+the naive lexer does not tell how its input is cut. -/
 theorem Lexer.correctWithConsumers :
     BSmtLibSpec.Lexer.CorrectWithConsumers (Adapters.lexing Adapters.Lexer.lexOps) :=
   Proofs.Lexer.Consumers.Ports.correctWithConsumers_lexer
@@ -98,8 +96,8 @@ collector of the formalism (`BSmtLibSpec.Lexer.Lexing.fed`). The collector:
 - breaks at the end of the input.
 -/
 
-/-- The naive lexer, fed by the adapter slices and then, if the input has ended, the end of the
-input, with the collector of the formalism, is correct. -/
+/-- The naive lexer is correct with the collector of the formalism. The adapter feeds it slices
+and then, if the input has ended, the end of the input. -/
 theorem Lexer.VNaive.correct :
     BSmtLibSpec.Lexer.Correct (Adapters.lexing Adapters.VNaive.lexOps).fed :=
   Lexer.VNaive.correctWithConsumers.1
@@ -110,8 +108,8 @@ info: 'BSmtLib.Facts.Lexer.VNaive.correct' depends on axioms: [propext, Classica
 #guard_msgs in
 #print axioms Lexer.VNaive.correct
 
-/-- The Rust port, fed by the adapter slices and then, if the input has ended, the end of the
-input, with the collector of the formalism, is correct. -/
+/-- The Rust port is correct with the collector of the formalism. The adapter feeds it slices and
+then, if the input has ended, the end of the input. -/
 theorem Lexer.WRustPort.correct :
     BSmtLibSpec.Lexer.Correct (Adapters.lexing Adapters.WRustPort.lexOps).fed :=
   Lexer.WRustPort.correctWithConsumers.1
@@ -122,8 +120,8 @@ info: 'BSmtLib.Facts.Lexer.WRustPort.correct' depends on axioms: [propext, Class
 #guard_msgs in
 #print axioms Lexer.WRustPort.correct
 
-/-- The lexer with the batch kept in its state, fed by the adapter slices and then, if the input
-has ended, the end of the input, with the collector of the formalism, is correct. -/
+/-- The lexer with the batch kept in its state is correct with the collector of the formalism. The
+adapter feeds it slices and then, if the input has ended, the end of the input. -/
 theorem Lexer.X1BatchInCore.correct :
     BSmtLibSpec.Lexer.Correct (Adapters.lexing Adapters.X1BatchInCore.lexOps).fed :=
   Lexer.X1BatchInCore.correctWithConsumers.1
@@ -134,8 +132,8 @@ info: 'BSmtLib.Facts.Lexer.X1BatchInCore.correct' depends on axioms: [propext, C
 #guard_msgs in
 #print axioms Lexer.X1BatchInCore.correct
 
-/-- The library's lexer, fed by the adapter slices and then, if the input has ended, the end of
-the input, with the collector of the formalism, is correct. -/
+/-- The library's lexer is correct with the collector of the formalism. The adapter feeds it
+slices and then, if the input has ended, the end of the input. -/
 theorem Lexer.correct : BSmtLibSpec.Lexer.Correct (Adapters.lexing Adapters.Lexer.lexOps).fed :=
   Lexer.correctWithConsumers.1
 

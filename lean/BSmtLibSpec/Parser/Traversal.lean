@@ -866,9 +866,9 @@ def command : Tree.Command → Run m ε Unit
 /-! ## The traversal of a script -/
 
 /--
-The switch of a script to the version a declaration names, right after the declaration's `)`,
-given the producer and the number of declarations the script made before it: the check against
-the policy, the producer's switch, which it may refuse, then the handler's switch.
+A script's version switch to the version a declaration names, right after the declaration's `)`:
+the check against the policy, the producer's switch, which it may refuse, then the handler's
+switch. It is given the producer and the number of declarations the script made before it.
 A refusal is rejected as a version the policy does not allow. The new version holds from the
 next command.
 -/
@@ -881,8 +881,8 @@ def switchVersion (producer : Producer m) (policy : VersionPolicy) (declarations
   ExceptT.lift (handler.setVersion version)
 
 /--
-The commands of a script, given the producer and the number of version declarations made
-before them, up to the end of the input, which the parser receives as well. After a version
+The commands of a script up to the end of the input, which the parser receives as well, given
+the producer and the number of version declarations made before them. After a version
 declaration, the script switches the version. After `exit`, the producer discards the rest of
 the input; the parser then receives the end of the input alone. A version declaration that
 names no supported version is rejected after its `)`, as a version that is not supported.
@@ -905,9 +905,9 @@ def commands (producer : Producer m) (policy : VersionPolicy) :
       commands producer policy (declarations + 1) rest
 
 /--
-A script with the initial version, under a version policy, given the producer: the handler's switch
-to that version, before anything else; then its commands, each version declaration followed by
-its check against the policy and the switches.
+A script with the initial version, under a version policy and given the producer. The handler
+switches to that version before anything else; then come the commands, each version declaration
+followed by its check against the policy and the switches.
 -/
 def script (producer : Producer m) (policy : VersionPolicy) (version : Version)
     (commandList : List Tree.Command) : Run m ε Unit := do

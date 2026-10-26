@@ -10,11 +10,13 @@ public import BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Finish
 Between the calls of a lexer, the base of its state means nothing: every call that lexes a slice
 sets it before reading it, the end of the input sets it to zero, and the other steps read only
 the current location, which does not depend on it. So the two lexers are related between calls
-by `Rel`: their states are equal once the base is forgotten (`zb`, `zm`). The steps that run
-between calls (`InnerM`, without interruptions) are related by a coupling (`Coupled`, which is
-`Simulation.ISim` from related states to results related as asked and related states): run from
-related states, they give such results and states and the same consumer, as the values of one run
-of pairs. This module gives the rules by which couplings are built.
+by `Rel`: their states are equal once the base is forgotten (`zb`, `zm`).
+
+The steps that run between calls (`InnerM`, without interruptions) are related by a coupling,
+`Coupled`, which is `Simulation.ISim` from related states to results related as asked and
+related states. Run from related states, two coupled steps give such results and states and the
+same consumer, as the values of one run of pairs. This module gives the rules by which couplings
+are built.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.X1BatchInCoreLexer.Outer

@@ -18,15 +18,19 @@ open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 /-!
 # A handler under a posture is told only versions the posture allows
 
-The handler of the parse adapter is told a version in two places: by the adapter, at the start
-of an input, the version of the cursor it is handed; and by the script parser, the version of a
-declaration its posture let pass. The command parser tells it none
-(`QuietSteps.commandStep_silent` with `Quiet.isSwitch`). The cursor the adapter gives back is in
-the version of the cursor it was handed, or in the version of a declaration the posture let pass.
-So where nothing went wrong, the watched adapter under a posture, handed cursors in versions the
+The handler of the parse adapter is told a version in two places:
+- by the adapter, at the start of an input: the version of the cursor it is handed;
+- by the script parser: the version of a declaration its posture let pass.
+
+The command parser tells it none (`QuietSteps.commandStep_silent` with `Quiet.isSwitch`). The
+cursor the adapter gives back is in the version of the cursor it was handed, or in the version of
+a declaration the posture let pass.
+
+So, where nothing went wrong, the watched adapter under a posture, handed cursors in versions the
 posture allows, tells its handler only such versions and gives back cursors in such versions
-(`keeps_allowed`), and a reader under the posture from a version it allows that reads an input to
-the end ends with a handler told only versions the posture allows (`readThrough_allowed`).
+(`keeps_allowed`). A reader under the posture that starts from a version the posture allows and
+reads an input to the end ends with a handler told only versions the posture allows
+(`readThrough_allowed`).
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
@@ -299,10 +303,10 @@ open BSmtLib.Facts.Proofs.Reader.Param.Split (outN outS resumeOut outN_split_eq 
   resumeOut_of_not)
 open BSmtLib.Facts.Proofs.Parser.HandOver (recording_noHandOver)
 
-/-- A call of the parse adapter under the posture, on a cursor in a version the posture allows,
-from a handler told only such versions, tells its handler only such versions and leaves the
-cursor in such a version, unless it fails: from the call of the adapter that stops, which does so
-(`consume_allowedS`), and the call from where that stopped. -/
+/-- Unless it fails, a call of the parse adapter under the posture tells its handler only versions
+the posture allows and leaves the cursor in such a version. The call is on a cursor in such a
+version, from a handler told only such versions. It is the call of the adapter that stops, which
+does so (`consume_allowedS`), followed by the call from where that stopped. -/
 theorem outN_allowed {strict : Version.VersionPosture} {b : Token.BatchTag} :
     ∀ (n : Nat) (cursor : LexerCursor b) (h : cursor.HasNext) (A : RecAdapter),
       (remaining cursor) < n → postureOf A.parser = strict →

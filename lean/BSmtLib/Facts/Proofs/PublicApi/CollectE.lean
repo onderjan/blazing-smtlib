@@ -12,10 +12,11 @@ import all BSmtLib.Lexer.Cursor
 /-!
 # The collector's run against the adapter's feeding, keeping the error
 
-`collect_runInputE`: the collector's run on slices and the adapter's feeding of the library's
-lexer with the concrete collector (`RunE.runInputE`), from lexers with the same state and related
-held results, take the same entries and end alike: with the same result, or with errors of the
-same lexical kind, span and continuation, or both of the consumer.
+`collect_runInputE` compares two runs of the library's lexer on slices: the collector's run, and
+the adapter's feeding of the lexer with the concrete collector (`RunE.runInputE`). From lexers
+with the same state and related held results, the two take the same entries and end alike: with
+the same result, with errors of the same lexical kind, span and continuation, or with errors both
+of the consumer.
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.CollectE

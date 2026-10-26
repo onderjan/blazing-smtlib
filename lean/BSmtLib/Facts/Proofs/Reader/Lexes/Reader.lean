@@ -16,13 +16,17 @@ with the library's lexer (`Facts.Lexer.correctWithConsumers`), the library's par
 the parser's item for each token (`libItem`, which stands for what the token stands for:
 `libItem_stands`).
 
-The parser as a consumer of the specification formalism (`BSmtLibSpec`) answers as the script
-consumer does (`Param.consumer_agrees`), so the lexer takes the same tokens with both and finishes
-alike (`Param.lexing_congr`); with the script consumer the tokens are good, ended or not
-(`Param.lexing_good`); the lexer hands no whitespace or comment to the adapter's consumer for the
-script consumer (`Param.noLayout`); and so the reader tells its handler the calls of the parser's
-run on the tokens taken, none before the first, and finishes where the lexer with the script
-consumer does (`Param.feed_told`, `Param.calls_of_invG`).
+The proof rests on three facts:
+- the parser as a consumer of the specification formalism (`BSmtLibSpec`) answers as the script
+  consumer does (`Param.consumer_agrees`), so the lexer takes the same tokens with both and
+  finishes alike (`Param.lexing_congr`);
+- with the script consumer the tokens are good, ended or not (`Param.lexing_good`);
+- the lexer hands no whitespace or comment to the adapter's consumer for the script consumer
+  (`Param.noLayout`).
+
+So the reader tells its handler the calls of the parser's run on the tokens taken, none before the
+first, and finishes where the lexer with the script consumer does (`Param.feed_told`,
+`Param.calls_of_invG`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.Reader

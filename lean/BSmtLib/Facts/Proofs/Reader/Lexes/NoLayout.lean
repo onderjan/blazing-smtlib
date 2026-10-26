@@ -11,15 +11,20 @@ import all BSmtLib.Span
 /-!
 # The library's lexer hands no whitespace or comment to a consumer that does not take them
 
-From every state the library's lexer reaches with the adapter's consumer (`Param.Reach`), there
-are states of the lexer with the batch kept in its state, of the Rust port and of the naive lexer
-that correspond to it as the chain of lexers relates them (`ZOK`): the library's lexer and the
-lexer with the batch kept in its state give the same results (`X1BatchInCoreLexer.step_fit`,
-`X1BatchInCoreLexer.run_lexEofStep`), and so do that lexer and the Rust port
-(`WRustPortX1BatchInCore.slice_alike`, `WRustPortX1BatchInCore.eof_alike`). The Rust port, from a
-state that is the naive lexer's, never fails with the adapter's error `none` for a consumer that
-does not take whitespace and comments (`VNaiveWRustPort.slice_step_noNone`,
-`VNaiveWRustPort.eof_step_noNone`), so neither does the library's lexer (`noLayout`).
+`noLayout`: from every state the library's lexer reaches with the adapter's consumer
+(`Param.Reach`), it never fails with the adapter's error `none` for a consumer that does not take
+whitespace and comments.
+
+From every such state, there are states of the lexer with the batch kept in its state, of the
+Rust port and of the naive lexer that correspond to it as the chain of lexers relates them
+(`ZOK`):
+- the library's lexer and the lexer with the batch kept in its state give the same results
+  (`X1BatchInCoreLexer.step_fit`, `X1BatchInCoreLexer.run_lexEofStep`);
+- so do that lexer and the Rust port (`WRustPortX1BatchInCore.slice_alike`,
+  `WRustPortX1BatchInCore.eof_alike`);
+- the Rust port, from a state that is the naive lexer's, never fails with the adapter's error
+  `none` for such a consumer (`VNaiveWRustPort.slice_step_noNone`,
+  `VNaiveWRustPort.eof_step_noNone`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.NoLayout

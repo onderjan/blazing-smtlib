@@ -11,11 +11,14 @@ import all BSmtLib.Parser.Script
 /-!
 # The library's lexer with the parse adapter over any handler that never fails, on a file
 
-As `Param.Final` for the recording handler: fed a file of commands cut into any slices and then
-the end of the input, the library's lexer with the parse adapter over a handler whose calls
-never fail returns a result at the end of the input, and the handler holds what the script
-parser's driver over items standing for what a parser receives for the script leaves it with,
-the driver having finished the script (`adapter_feed_file`).
+This module proves for any handler whose calls never fail what `Param.Final` proves for the
+recording handler. The library's lexer with the parse adapter over such a handler reads a file of
+commands to its end (`adapter_feed_file`):
+- it returns a result at the end of the input;
+- the handler holds what the script parser's driver over items standing for what a parser
+  receives for the script leaves it with, the driver having finished the script.
+
+The lexer is fed the characters of the file cut into any slices and then the end of the input.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Handler.Final
@@ -49,10 +52,10 @@ theorem hRun_nil (version : Lexicon.Version) (init : H) :
       (.ok (.inl (Bridge.libVersion version, ScriptParser.new unrestrictedPosture)),
         ((Handler.setVersion (H := H) (Bridge.libVersion version)).run init).2) := rfl
 
-/-- The library's lexer with the parse adapter over a handler that never fails, fed a file of
-commands cut into any slices and then the end of the input: it returns a result at the end of the
-input, and the handler holds what the driver over items standing for what a parser receives for
-the script leaves it with, the driver having finished the script. -/
+/-- The library's lexer with the parse adapter over a handler that never fails returns a result
+at the end of a file of commands. The handler then holds what the driver over items standing for
+what a parser receives for the script leaves it with, the driver having finished the script. The
+lexer is fed the file cut into any slices and then the end of the input. -/
 theorem adapter_feed_file (version : Lexicon.Version) (slices : List Regex.Chars) (init : H)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
     ∃ result lexer, hFeed (Lexer.new (ParseAdapter.new init (ScriptParser.new unrestrictedPosture))

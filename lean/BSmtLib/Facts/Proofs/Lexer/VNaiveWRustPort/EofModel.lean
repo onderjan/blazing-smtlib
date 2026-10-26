@@ -131,11 +131,11 @@ def stopFailure {C : BSmtLibSpec.Lexer.Consumer} : Stop C → BSmtLibSpec.Lexer.
   | .fail e _ _ => .consumer e
   | _ => .lexical
 
-/-- The result of the end of the input `res`, the version `ver'` in force after it, where the
-lexer discards from `d'` after it and the tokens taken `coll'`, where the consumer has done `h`
-with the lexemes the end of the input finishes and the end-of-file token, a request to discard
-at a finished lexeme made the lexer discard from `d`, and it discarded from `d0` before, at
-`location`. -/
+/-- What the end of the input at `location` gives, as what the consumer did there says: the result
+`res`, the version `ver'` in force after it, where the lexer discards from after it (`d'`), and
+the tokens taken (`coll'`). The consumer has done `h` with the lexemes the end of the input
+finishes and the end-of-file token; a request to discard at a finished lexeme made the lexer
+discard from `d`; and the lexer discarded from `d0` before. -/
 def EofTail (C : BSmtLibSpec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Span.Location)
     (location : Span.Location)
     (res : Except (PFailure C.Error) (ControlFlow (Span.Located C.Result)))
@@ -155,10 +155,10 @@ def EofTail (C : BSmtLibSpec.Lexer.Consumer) (h : HandOut C) (d d0 : Option Span
     | s => res = .error (stopFailure s, none) ∧ ver' = p.ver ∧
         d' = discardsAfter (d.or d0) s.discards ∧ coll' = p.taken
 
-/-- The result of the end of the input `res`, the version `ver'` in force after it, where the
-lexer discards from `d'` after it and the tokens taken `coll'`, as `o`, what the consumer does at
-the end of the input, says, from the tokens `coll` taken under the version `ver`, where the lexer
-discarded from `d0`, at `location`; `fl` is the failure of finishing the token in progress, if it
+/-- What the end of the input at `location` gives, as `o`, what the consumer does there, says: the
+result `res`, the version `ver'` in force after it, where the lexer discards from after it (`d'`),
+and the tokens taken (`coll'`). Before it, the tokens `coll` were taken under the version `ver`,
+and the lexer discarded from `d0`. `fl` is the failure of finishing the token in progress, if it
 fails. -/
 def EofRes (C : BSmtLibSpec.Lexer.Consumer) (o : Option (HandOut C × Option Span.Location))
     (d0 : Option Span.Location) (ver : Version) (coll : List Handed)

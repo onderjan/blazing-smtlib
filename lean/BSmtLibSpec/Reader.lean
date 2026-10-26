@@ -51,16 +51,19 @@ structure RecordingReader where
 /-! ## Reading files -/
 
 /--
-Property: a reader fed a file in any slices, and then the end of the input, tells the handler the
-calls for the file's commands and finishes.
+Property: a reader reads a file to its end: it tells the handler the calls for the file's
+commands, and finishes.
+
+The reader is fed the file in any slices, and then the end of the input.
 -/
 def ReadsFiles (reader : RecordingReader) : Prop :=
   ∀ version slices commands, File version slices.flatten commands →
     reader.read version slices true = (calls version commands, true)
 
 /--
-Property: a reader fed an input in any slices, and then the end of the input, finishes only if
-the input is a file.
+Property: a reader finishes only if its input is a file.
+
+The reader is fed the input in any slices, and then the end of the input.
 -/
 def FinishesOnlyOnFiles (reader : RecordingReader) : Prop :=
   ∀ version slices, (reader.read version slices true).2 = true →

@@ -71,7 +71,7 @@ the tokens that the traversal states.
   - On the tokens of a prefix that nothing of the category continues with, a parser fails with
     the Rust parser's error kind right after the token that nothing continues with, having made
     the calls for what it took before it.
-  - On the tokens of a part of a value, a parser wants more, as a parser that finishes on the
+  - On the tokens of a part of a value, a parser continues, as a parser that finishes on the
     rest.
 -/
 
@@ -160,10 +160,13 @@ info: 'BSmtLib.Facts.Parser.command_follows_traversal' depends on axioms: [prope
 #print axioms command_follows_traversal
 
 /--
-The script parser is run as the parse adapter runs it, with the handler told the version first,
-on the tokens a parser receives for a valid script with the initial version `version`, followed by
-anything. Under the policy of its posture and with the same producer, it makes the traversal's
-calls among the traversal's token points, and finishes at the end of the input, before the rest.
+The script parser makes the traversal's calls among the traversal's token points on the tokens
+that a parser receives for a valid script, followed by anything. It finishes at the end of the
+input, before the rest.
+
+The script is valid in the initial version. The parser is run as the parse adapter runs it, with
+the handler told the version first. The traversal has the policy of the parser's posture and the
+same producer.
 -/
 theorem script_follows_traversal {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
     [Handler.CommandHandler H m] {points : Points (StateT H m)}
@@ -209,9 +212,9 @@ info: 'BSmtLib.Facts.Parser.recording_is_record' depends on axioms: [propext, Cl
 #print axioms recording_is_record
 
 /--
-On any input that agrees with what a parser receives for a valid script before the item at
-position `k`, the parser's recording run has written, before that item arrives, what the
-traversal of the script has.
+Before the item at position `k` arrives, the parser's recording run has written what the
+traversal of a valid script has. This holds on any input that agrees with what a parser receives
+for the script before that position and has no whitespace or comment.
 -/
 theorem placement_before_arrival {version : Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
@@ -231,10 +234,13 @@ info: 'BSmtLib.Facts.Parser.placement_before_arrival' depends on axioms: [propex
 #print axioms placement_before_arrival
 
 /--
-On any input that agrees with what a parser receives for a valid script before the item at
-position `k` and has an item there, the parser's recording run has written, before that item is
-processed and its arrival left out, what the traversal of the script has, where a `)` gets none
-of the calls due at its arrival.
+Before the item at position `k` is processed, the parser's recording run has written what the
+traversal of a valid script has, the item's arrival left out. A `)` there gets none of the calls
+due at its arrival.
+
+This holds on any input that agrees with what a parser receives for the script before that
+position and has no whitespace or comment, where the input has an item at that position and
+the script's items reach it.
 -/
 theorem placement_before_processing {version : Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
@@ -258,9 +264,8 @@ info: 'BSmtLib.Facts.Parser.placement_before_processing' depends on axioms: [pro
 #print axioms placement_before_processing
 
 /--
-Where its input stops before the item at position `k` of what a parser receives for a valid
-script, the parser's recording run has written what the traversal of the script has before that
-item arrives.
+The parser's recording run on what a parser receives for a valid script, stopped before the item
+at position `k`, has written what the traversal of the script has before that item arrives.
 -/
 theorem placement_where_input_stops {version : Version} {commands : List Tree.Command}
     (hscript : Script (Adapters.Bridge.Bridge.version version) commands)
@@ -345,8 +350,8 @@ names a handler-only program and the tokens:
   program and either finishes with its result right after the tokens, as a parser it gives back
   (`Adapters.Outcome.Finishes`), or fails with a syntax error of a given kind right after the
   tokens, having taken exactly them (`Adapters.Outcome.Rejects`).
-- On a cursor that has exactly the tokens, a parser makes the effects of the program and wants
-  more, as a parser that the program's result gives (`Adapters.Outcome.Waits`).
+- On a cursor that has exactly the tokens, a parser makes the effects of the program and
+  continues, as a parser that the program's result gives (`Adapters.Outcome.Waits`).
 - Where the program fails with the handler's error, so does the parser.
 
 The programs are the formalism's traversal with the token points that mark nothing
@@ -354,11 +359,11 @@ The programs are the formalism's traversal with the token points that mark nothi
 has a pure program.
 
 - The parsers of single tokens finish at a token of their kind with its content, reject any
-  other token, and want more on no token, making no call.
+  other token, and continue on no token, making no call.
 - The combinators are stated for any inner parsers: given what the inner parsers do, the pair,
   the closed, opened and parenthesised parsers and the list parsers do the composite, at the
   same places. A value split over two cursors is stated at one split point at a time: the
-  parser wants more after the first part, as a parser that does on the rest what the whole
+  parser continues after the first part, as a parser that does on the rest what the whole
   value asks.
 - The list parsers with a maximum take at most the maximum of values; setting the maximum before
   the first value is the parser with the new maximum, and setting it while the parser waits
@@ -529,7 +534,7 @@ info: 'BSmtLib.Facts.Parser.string_parser_rejects' depends on axioms: [propext, 
 #guard_msgs in
 #print axioms string_parser_rejects
 
-/-- The symbol parser on no token wants more, as it is, making no call. -/
+/-- On no token, the symbol parser continues, making no call, and stays as it is. -/
 theorem symbol_parser_waits :
     Waits version SymbolParser.new [] (pure () : PM H Unit) fun _ => SymbolParser.new := by
   apply Proofs.Parser.Category.Token.symbol_waits <;> assumption
@@ -540,7 +545,7 @@ info: 'BSmtLib.Facts.Parser.symbol_parser_waits' depends on axioms: [propext, Cl
 #guard_msgs in
 #print axioms symbol_parser_waits
 
-/-- The `(` parser on no token wants more, as it is, making no call. -/
+/-- On no token, the `(` parser continues, making no call, and stays as it is. -/
 theorem openParen_parser_waits :
     Waits version OpenParenParser.new [] (pure () : PM H Unit)
       fun _ => OpenParenParser.new := by
@@ -552,7 +557,7 @@ info: 'BSmtLib.Facts.Parser.openParen_parser_waits' depends on axioms: [propext,
 #guard_msgs in
 #print axioms openParen_parser_waits
 
-/-- The `)` parser on no token wants more, as it is, making no call. -/
+/-- On no token, the `)` parser continues, making no call, and stays as it is. -/
 theorem closeParen_parser_waits :
     Waits version CloseParenParser.new [] (pure () : PM H Unit)
       fun _ => CloseParenParser.new := by
@@ -564,7 +569,7 @@ info: 'BSmtLib.Facts.Parser.closeParen_parser_waits' depends on axioms: [propext
 #guard_msgs in
 #print axioms closeParen_parser_waits
 
-/-- The numeral parser on no token wants more, as it is, making no call. -/
+/-- On no token, the numeral parser continues, making no call, and stays as it is. -/
 theorem numeral_parser_waits :
     Waits version NumeralParser.new [] (pure () : PM H Unit) fun _ => NumeralParser.new := by
   apply Proofs.Parser.Category.Token.numeral_waits <;> assumption
@@ -575,7 +580,7 @@ info: 'BSmtLib.Facts.Parser.numeral_parser_waits' depends on axioms: [propext, C
 #guard_msgs in
 #print axioms numeral_parser_waits
 
-/-- The keyword parser on no token wants more, as it is, making no call. -/
+/-- On no token, the keyword parser continues, making no call, and stays as it is. -/
 theorem keyword_parser_waits :
     Waits version KeywordParser.new [] (pure () : PM H Unit) fun _ => KeywordParser.new := by
   apply Proofs.Parser.Category.Token.keyword_waits <;> assumption
@@ -586,7 +591,7 @@ info: 'BSmtLib.Facts.Parser.keyword_parser_waits' depends on axioms: [propext, C
 #guard_msgs in
 #print axioms keyword_parser_waits
 
-/-- The string literal parser on no token wants more, as it is, making no call. -/
+/-- On no token, the string literal parser continues, making no call, and stays as it is. -/
 theorem string_parser_waits :
     Waits version StringParser.new [] (pure () : PM H Unit) fun _ => StringParser.new := by
   apply Proofs.Parser.Category.Token.string_waits <;> assumption
@@ -611,7 +616,10 @@ variable {H P P₁ P₂ R R₁ R₂ : Type} {m : Type → Type} [Monad m] [Lawfu
   [BSmtLib.Parser.Parse P₁ H m (Handler.Error H) R₁]
   [BSmtLib.Parser.Parse P₂ H m (Handler.Error H) R₂]
 
-/-- The pair on the values of its two parsers, one after the other. -/
+/--
+The pair parser finishes on the values of its two parsers, one after the other, with the pair of
+their results.
+-/
 theorem pair_parser_parses {version : Version} {p₁ b₁ : P₁} {p₂ b₂ : P₂}
     {tokens₁ tokens₂ : List Parser.Internal.Input} {program₁ : PM H R₁} {program₂ : PM H R₂}
     (h₁ : Finishes version p₁ tokens₁ program₁ b₁)
@@ -628,7 +636,7 @@ info: 'BSmtLib.Facts.Parser.pair_parser_parses' depends on axioms: [propext, Cla
 #guard_msgs in
 #print axioms pair_parser_parses
 
-/-- The pair rejects where its first parser rejects. -/
+/-- The pair parser rejects where its first parser rejects. -/
 theorem pair_parser_rejects_first {version : Version} {p₁ : P₁} {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {program : PM H Unit} {kind : SyntaxErrorKind}
     (h : Rejects version p₁ tokens program kind) (hne : tokens ≠ []) :
@@ -641,7 +649,7 @@ info: 'BSmtLib.Facts.Parser.pair_parser_rejects_first' depends on axioms: [prope
 #guard_msgs in
 #print axioms pair_parser_rejects_first
 
-/-- The pair rejects where its second parser rejects, after the first finished. -/
+/-- The pair parser rejects where its second parser rejects, after the first finished. -/
 theorem pair_parser_rejects_second {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
     {tokens₁ tokens₂ : List Parser.Internal.Input} {program₁ : PM H R₁} {program₂ : PM H Unit}
     {kind : SyntaxErrorKind}
@@ -658,8 +666,10 @@ info: 'BSmtLib.Facts.Parser.pair_parser_rejects_second' depends on axioms: [prop
 #guard_msgs in
 #print axioms pair_parser_rejects_second
 
-/-- The pair on tokens on which its first parser wants more: it wants more, its first parser as
-the first's. -/
+/--
+When its first parser continues on the tokens of the cursor, the pair parser continues. It then
+holds the waiting first parser and its second parser.
+-/
 theorem pair_parser_waits_first {version : Version} {p₁ : P₁} {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {α : Type} {program : PM H α} {after : α → P₁}
     (h : Waits version p₁ tokens program after) :
@@ -674,8 +684,8 @@ info: 'BSmtLib.Facts.Parser.pair_parser_waits_first' depends on axioms: [propext
 #print axioms pair_parser_waits_first
 
 /--
-The pair on tokens on which its first parser finishes, and no more: it wants more, as a pair
-that, on the tokens after, finishes and rejects as its second parser does.
+When its first parser finishes on exactly the tokens of the cursor, the pair parser continues. On
+the tokens after, it then finishes and rejects as its second parser does.
 -/
 theorem pair_parser_waits_between {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
     {tokens : List Parser.Internal.Input} {program : PM H R₁}
@@ -698,8 +708,9 @@ info: 'BSmtLib.Facts.Parser.pair_parser_waits_between' depends on axioms: [prope
 #print axioms pair_parser_waits_between
 
 /--
-The pair on tokens on which its first parser finishes and then its second wants more: it wants
-more, as a pair that, on the tokens after, finishes and rejects as the second parser does then.
+When its first parser finishes on the first tokens of the cursor and its second parser continues on
+the rest, the pair parser continues. On the tokens after, it then finishes and rejects as the
+waiting second parser does.
 -/
 theorem pair_parser_waits_second {version : Version} {p₁ b₁ : P₁} {p₂ : P₂}
     {tokens₁ tokens₂ : List Parser.Internal.Input} {program₁ : PM H R₁} {α : Type}
@@ -725,7 +736,7 @@ info: 'BSmtLib.Facts.Parser.pair_parser_waits_second' depends on axioms: [propex
 #guard_msgs in
 #print axioms pair_parser_waits_second
 
-/-- The closed parser on the inner value and the `)` after it. -/
+/-- The closed parser finishes on the inner value and the `)` after it, with the inner result. -/
 theorem closed_parser_parses {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Finishes version p tokens program b) (hne : tokens ≠ []) :
@@ -753,7 +764,10 @@ info: 'BSmtLib.Facts.Parser.closed_parser_rejects_inner' depends on axioms: [pro
 #guard_msgs in
 #print axioms closed_parser_rejects_inner
 
-/-- The closed parser on the inner value and a token after it that is not `)`. -/
+/--
+After the inner value, the closed parser rejects a token that is not `)` with
+`expected #[.token .parenClose]`.
+-/
 theorem closed_parser_rejects_close {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R} {token : Parser.Internal.Input}
     (h : Finishes version p tokens program b) (hne : tokens ≠ [])
@@ -768,7 +782,10 @@ info: 'BSmtLib.Facts.Parser.closed_parser_rejects_close' depends on axioms: [pro
 #guard_msgs in
 #print axioms closed_parser_rejects_close
 
-/-- The closed parser on tokens on which its inner parser wants more. -/
+/--
+When its inner parser continues on the tokens of the cursor, the closed parser continues. It then
+holds the waiting inner parser.
+-/
 theorem closed_parser_waits_inner {version : Version} {p : P}
     {tokens : List Parser.Internal.Input}
     {α : Type} {program : PM H α} {after : α → P}
@@ -783,8 +800,11 @@ info: 'BSmtLib.Facts.Parser.closed_parser_waits_inner' depends on axioms: [prope
 #guard_msgs in
 #print axioms closed_parser_waits_inner
 
-/-- The closed parser on its inner value and no more: it wants more, as a parser that finishes
-at a `)` and rejects any other token. -/
+/--
+When the cursor holds exactly the tokens of its inner value, the closed parser continues. It then
+finishes at a `)` with the inner result and rejects any other token with
+`expected #[.token .parenClose]`.
+-/
 theorem closed_parser_waits_close {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R}
     (h : Finishes version p tokens program b) (hne : tokens ≠ []) :
@@ -803,7 +823,7 @@ info: 'BSmtLib.Facts.Parser.closed_parser_waits_close' depends on axioms: [prope
 #guard_msgs in
 #print axioms closed_parser_waits_close
 
-/-- The opened parser on a `(` and the inner value. -/
+/-- The opened parser finishes on a `(` and the inner value, with the inner result. -/
 theorem opened_parser_parses {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Finishes version p tokens program b) (hne : tokens ≠ []) :
@@ -817,7 +837,10 @@ info: 'BSmtLib.Facts.Parser.opened_parser_parses' depends on axioms: [propext, C
 #guard_msgs in
 #print axioms opened_parser_parses
 
-/-- The opened parser on a first token that is not `(`. -/
+/--
+The opened parser rejects a first token that is not `(` with `expected #[.token .parenOpen]`,
+making no call.
+-/
 theorem opened_parser_rejects_open {version : Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Rejects version (OpenedParser.new (H := H) p) [token] (pure () : PM H Unit)
@@ -843,7 +866,7 @@ info: 'BSmtLib.Facts.Parser.opened_parser_rejects_inner' depends on axioms: [pro
 #guard_msgs in
 #print axioms opened_parser_rejects_inner
 
-/-- The opened parser on a cursor with no token: it wants more, as it was. -/
+/-- On no token, the opened parser continues and stays as it is. -/
 theorem opened_parser_waits_open {version : Version} {p : P} :
     Waits version (OpenedParser.new (H := H) p) [] (pure () : PM H Unit)
       fun _ => OpenedParser.new p := by
@@ -855,8 +878,10 @@ info: 'BSmtLib.Facts.Parser.opened_parser_waits_open' depends on axioms: [propex
 #guard_msgs in
 #print axioms opened_parser_waits_open
 
-/-- The opened parser on its `(` and no more: it wants more, as a parser that finishes and
-rejects on the inner tokens as the inner parser. -/
+/--
+When the cursor holds exactly its `(`, the opened parser continues. On the inner tokens, it then
+finishes and rejects as the inner parser does.
+-/
 theorem opened_parser_waits_after_open {version : Version} {p : P} :
     ∃ after : Unit → OpenedParser H P,
       Waits version (OpenedParser.new (H := H) p) [.parenOpen] (pure () : PM H Unit)
@@ -875,7 +900,10 @@ info: 'BSmtLib.Facts.Parser.opened_parser_waits_after_open' depends on axioms: [
 #guard_msgs in
 #print axioms opened_parser_waits_after_open
 
-/-- The opened parser on a `(` and tokens on which its inner parser wants more. -/
+/--
+When the cursor holds a `(` and its inner parser continues on the tokens after it, the opened parser
+continues. On the tokens after, it then finishes and rejects as the waiting inner parser does.
+-/
 theorem opened_parser_waits_inner {version : Version} {p : P}
     {tokens : List Parser.Internal.Input}
     {α : Type} {program : PM H α} {after : α → P}
@@ -896,7 +924,9 @@ info: 'BSmtLib.Facts.Parser.opened_parser_waits_inner' depends on axioms: [prope
 #guard_msgs in
 #print axioms opened_parser_waits_inner
 
-/-- The parenthesised parser on a `(`, the inner value and a `)`. -/
+/--
+The parenthesised parser finishes on a `(`, the inner value and a `)`, with the inner result.
+-/
 theorem paren_parser_parses {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input}
     {program : PM H R} (h : Finishes version p tokens program b) (hne : tokens ≠ []) :
@@ -911,7 +941,10 @@ info: 'BSmtLib.Facts.Parser.paren_parser_parses' depends on axioms: [propext, Cl
 #guard_msgs in
 #print axioms paren_parser_parses
 
-/-- The parenthesised parser on a first token that is not `(`. -/
+/--
+The parenthesised parser rejects a first token that is not `(` with
+`expected #[.token .parenOpen]`, making no call.
+-/
 theorem paren_parser_rejects_open {version : Version} {p : P} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Rejects version (ParenParser.new (H := H) p) [token] (pure () : PM H Unit)
@@ -938,7 +971,10 @@ info: 'BSmtLib.Facts.Parser.paren_parser_rejects_inner' depends on axioms: [prop
 #guard_msgs in
 #print axioms paren_parser_rejects_inner
 
-/-- The parenthesised parser on a `(`, the inner value and a token that is not `)`. -/
+/--
+After a `(` and the inner value, the parenthesised parser rejects a token that is not `)` with
+`expected #[.token .parenClose]`.
+-/
 theorem paren_parser_rejects_close {version : Version} {p b : P}
     {tokens : List Parser.Internal.Input} {program : PM H R} {token : Parser.Internal.Input}
     (h : Finishes version p tokens program b) (hne : tokens ≠ [])
@@ -954,7 +990,10 @@ info: 'BSmtLib.Facts.Parser.paren_parser_rejects_close' depends on axioms: [prop
 #guard_msgs in
 #print axioms paren_parser_rejects_close
 
-/-- The closed list parser on its values and the `)` after them. -/
+/--
+The closed list parser finishes on its values and the `)` after them, with the array of their
+results.
+-/
 theorem closedMultiple_parser_parses {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -971,8 +1010,10 @@ info: 'BSmtLib.Facts.Parser.closedMultiple_parser_parses' depends on axioms: [pr
 #guard_msgs in
 #print axioms closedMultiple_parser_parses
 
-/-- The closed list parser on its values and then tokens that its inner parser rejects, not
-starting with `)`. -/
+/--
+After its values, the closed list parser rejects tokens that its inner parser rejects and that do
+not start with `)`, as the inner parser does.
+-/
 theorem closedMultiple_parser_rejects_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -991,8 +1032,9 @@ info: 'BSmtLib.Facts.Parser.closedMultiple_parser_rejects_inner' depends on axio
 #print axioms closedMultiple_parser_rejects_inner
 
 /--
-The closed list parser on its values and no more: it wants more, as a parser that finishes on
-further values and the `)`, and rejects further values and tokens that its inner parser rejects.
+When the cursor holds exactly the tokens of its values, the closed list parser continues. It then
+finishes on further values and the `)`. After further values, it rejects tokens that its inner
+parser rejects and that do not start with `)`.
 -/
 theorem closedMultiple_parser_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
@@ -1024,9 +1066,9 @@ info: 'BSmtLib.Facts.Parser.closedMultiple_parser_waits_between' depends on axio
 #print axioms closedMultiple_parser_waits_between
 
 /--
-The closed list parser on its values and then tokens on which its inner parser wants more, not
-starting with `)`: it wants more, as a parser that finishes once the inner parser finishes its
-value and further values and the `)` follow.
+When the cursor holds its values and then tokens that do not start with `)`, and its inner parser
+continues on those tokens, the closed list parser continues. It then finishes once the inner parser
+finishes its value and further values and the `)` follow.
 -/
 theorem closedMultiple_parser_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
@@ -1057,7 +1099,10 @@ info: 'BSmtLib.Facts.Parser.closedMultiple_parser_waits_inner' depends on axioms
 #guard_msgs in
 #print axioms closedMultiple_parser_waits_inner
 
-/-- The list parser enclosed in `(` and `)` on a `(`, its values and the `)`. -/
+/--
+The list parser enclosed in `(` and `)` finishes on a `(`, its values and the `)`, with the array
+of their results.
+-/
 theorem parenMultiple_parser_parses {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1074,7 +1119,10 @@ info: 'BSmtLib.Facts.Parser.parenMultiple_parser_parses' depends on axioms: [pro
 #guard_msgs in
 #print axioms parenMultiple_parser_parses
 
-/-- The list parser enclosed in `(` and `)` on a first token that is not `(`. -/
+/--
+The list parser enclosed in `(` and `)` rejects a first token that is not `(` with
+`expected #[.token .parenOpen]`, making no call.
+-/
 theorem parenMultiple_parser_rejects_open {version : Version} {p : P}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
     Rejects version (ParenMultipleParser.new (H := H) p)
@@ -1088,8 +1136,10 @@ info: 'BSmtLib.Facts.Parser.parenMultiple_parser_rejects_open' depends on axioms
 #guard_msgs in
 #print axioms parenMultiple_parser_rejects_open
 
-/-- The list parser enclosed in `(` and `)` on a `(`, values and then tokens that its inner
-parser rejects, not starting with `)`. -/
+/--
+After a `(` and values, the list parser enclosed in `(` and `)` rejects tokens that its inner
+parser rejects and that do not start with `)`, as the inner parser does.
+-/
 theorem parenMultiple_parser_rejects_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1108,8 +1158,10 @@ info: 'BSmtLib.Facts.Parser.parenMultiple_parser_rejects_inner' depends on axiom
 #guard_msgs in
 #print axioms parenMultiple_parser_rejects_inner
 
-/-- The list parser enclosed in `(` and `)` on its `(` and no more: it wants more, as a parser
-that finishes on values and the `)`. -/
+/--
+When the cursor holds exactly its `(`, the list parser enclosed in `(` and `)` continues. It then
+finishes on values and the `)`.
+-/
 theorem parenMultiple_parser_waits_open {version : Version} {p : P} :
     ∃ after : Unit → ParenMultipleParser H P,
       Waits version (ParenMultipleParser.new (H := H) p) [.parenOpen]
@@ -1128,8 +1180,10 @@ info: 'BSmtLib.Facts.Parser.parenMultiple_parser_waits_open' depends on axioms: 
 #guard_msgs in
 #print axioms parenMultiple_parser_waits_open
 
-/-- The list parser enclosed in `(` and `)` on its `(` and values, at least one, and no more:
-it wants more, as a parser that finishes on further values and the `)`. -/
+/--
+When the cursor holds exactly its `(` and at least one value, the list parser enclosed in `(` and
+`)` continues. It then finishes on further values and the `)`.
+-/
 theorem parenMultiple_parser_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1152,8 +1206,10 @@ info: 'BSmtLib.Facts.Parser.parenMultiple_parser_waits_between' depends on axiom
 #guard_msgs in
 #print axioms parenMultiple_parser_waits_between
 
-/-- The closed list parser with a maximum on at most the maximum of values and the `)` after
-them. -/
+/--
+The closed list parser with a maximum finishes on at most the maximum of values and the `)` after
+them, with the array of their results.
+-/
 theorem closedMaximum_parser_parses {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1171,8 +1227,10 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_parses' depends on axioms: [pro
 #guard_msgs in
 #print axioms closedMaximum_parser_parses
 
-/-- The closed list parser with a maximum on the maximum of values and a token after them that
-is not `)`: it rejects that token. -/
+/--
+After the maximum of values, the closed list parser with a maximum rejects a token that is not
+`)` with `expected #[.token .parenClose]`.
+-/
 theorem closedMaximum_parser_rejects_beyond {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1190,8 +1248,10 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_rejects_beyond' depends on axio
 #guard_msgs in
 #print axioms closedMaximum_parser_rejects_beyond
 
-/-- The closed list parser with a maximum on fewer values than the maximum and then tokens that
-its inner parser rejects, not starting with `)`. -/
+/--
+After fewer values than the maximum, the closed list parser with a maximum rejects tokens that its
+inner parser rejects and that do not start with `)`, as the inner parser does.
+-/
 theorem closedMaximum_parser_rejects_inner {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1212,10 +1272,11 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_rejects_inner' depends on axiom
 #print axioms closedMaximum_parser_rejects_inner
 
 /--
-The closed list parser with a maximum on at most the maximum of values and no more: it wants
-more, as a parser that holds the maximum and the results so far. A maximum set on it applies to
-the values after them: it finishes on as many further values as the maximum leaves and the `)`,
-and rejects a token not `)` after values that reach the maximum.
+When the cursor holds exactly the tokens of its values, at most the maximum, the closed list
+parser with a maximum continues.
+It then holds the maximum and the results so far, and a maximum set on it applies to the values
+after them. It finishes on as many further values as the maximum leaves and the `)`, and rejects
+a token that is not `)` after values that reach the maximum.
 -/
 theorem closedMaximum_parser_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
@@ -1251,8 +1312,10 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_waits_between' depends on axiom
 #print axioms closedMaximum_parser_waits_between
 
 omit [Monad m] [LawfulMonad m] in
-/-- Setting the maximum of a closed list parser with a maximum before its first value: the
-parser with the new maximum. -/
+/--
+Setting the maximum of a closed list parser with a maximum before its first value gives the
+parser with the new maximum.
+-/
 theorem closedMaximum_parser_setMaximum_new (p : P) (maximum n : Nat) :
     (ClosedMaximumParser.new (H := H) p maximum).setMaxElements n =
       ClosedMaximumParser.new (H := H) p n := by
@@ -1265,7 +1328,7 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_setMaximum_new' depends on axio
 #print axioms closedMaximum_parser_setMaximum_new
 
 omit [Monad m] [LawfulMonad m] in
-/-- The maximum of a closed list parser with a maximum. -/
+/-- A new closed list parser with a maximum has that maximum. -/
 theorem closedMaximum_parser_maxElements_new (p : P) (maximum : Nat) :
     (ClosedMaximumParser.new (H := H) p maximum).maxElements = maximum := by
   apply Proofs.Parser.Category.Maximum.closedMaximum_maxElements_new <;> assumption
@@ -1276,8 +1339,10 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_maxElements_new' depends on axi
 #guard_msgs in
 #print axioms closedMaximum_parser_maxElements_new
 
-/-- The list parser with a maximum and its own `(` on the `(`, at most the maximum of values
-and the `)`. -/
+/--
+The list parser with a maximum and its own `(` finishes on the `(`, at most the maximum of values
+and the `)`, with the array of their results.
+-/
 theorem parenMaximum_parser_parses {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1295,7 +1360,10 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_parses' depends on axioms: [prop
 #guard_msgs in
 #print axioms parenMaximum_parser_parses
 
-/-- The list parser with a maximum and its own `(` on a first token that is not `(`. -/
+/--
+The list parser with a maximum and its own `(` rejects a first token that is not `(` with
+`expected #[.token .parenOpen]`, making no call.
+-/
 theorem parenMaximum_parser_rejects_open {version : Version} {p : P} {maximum : Nat}
     {token : Parser.Internal.Input} (htoken : token ≠ .parenOpen) :
     Rejects version (ParenMaximumParser.new (H := H) p maximum) [token]
@@ -1308,8 +1376,10 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_rejects_open' depends on axioms:
 #guard_msgs in
 #print axioms parenMaximum_parser_rejects_open
 
-/-- The list parser with a maximum and its own `(` on the `(`, the maximum of values and a token
-after them that is not `)`: it rejects that token. -/
+/--
+After the `(` and the maximum of values, the list parser with a maximum and its own `(` rejects a
+token that is not `)` with `expected #[.token .parenClose]`.
+-/
 theorem parenMaximum_parser_rejects_beyond {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1327,8 +1397,11 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_rejects_beyond' depends on axiom
 #guard_msgs in
 #print axioms parenMaximum_parser_rejects_beyond
 
-/-- The list parser with a maximum and its own `(` on the `(`, fewer values than the maximum and
-then tokens that its inner parser rejects, not starting with `)`. -/
+/--
+After the `(` and fewer values than the maximum, the list parser with a maximum and its own `(`
+rejects tokens that its inner parser rejects and that do not start with `)`, as the inner parser
+does.
+-/
 theorem parenMaximum_parser_rejects_inner {version : Version} {p : P} {maximum : Nat}
     {values : List (List Parser.Internal.Input × PM H R)}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
@@ -1349,8 +1422,10 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_rejects_inner' depends on axioms
 #print axioms parenMaximum_parser_rejects_inner
 
 omit [Monad m] [LawfulMonad m] in
-/-- Setting the maximum of a list parser with a maximum and its own `(` before its `(`: the
-parser with the new maximum. -/
+/--
+Setting the maximum of a list parser with a maximum and its own `(` before its `(` gives the
+parser with the new maximum.
+-/
 theorem parenMaximum_parser_setMaximum_new (p : P) (maximum n : Nat) :
     (ParenMaximumParser.new (H := H) p maximum).setMaxElements n =
       ParenMaximumParser.new (H := H) p n := by
@@ -1363,7 +1438,7 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_setMaximum_new' depends on axiom
 #print axioms parenMaximum_parser_setMaximum_new
 
 omit [Monad m] [LawfulMonad m] in
-/-- The maximum of a list parser with a maximum and its own `(`. -/
+/-- A new list parser with a maximum and its own `(` has that maximum. -/
 theorem parenMaximum_parser_maxElements_new (p : P) (maximum : Nat) :
     (ParenMaximumParser.new (H := H) p maximum).maxElements = maximum := by
   apply Proofs.Parser.Category.Maximum.parenMaximum_maxElements_new <;> assumption
@@ -1375,11 +1450,11 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_maxElements_new' depends on axio
 #print axioms parenMaximum_parser_maxElements_new
 
 /--
-The closed list parser with a maximum on fewer values than the maximum and then tokens on which
-its inner parser wants more, not starting with `)`: it wants more, as a parser that holds the
-maximum, the results so far and the inner parser within its value. A maximum set on it applies
-to the values after that value; it finishes once the inner parser finishes the value and as many
-further values as the maximum leaves and the `)` follow.
+When the cursor holds fewer values than the maximum and then tokens that do not start with `)`, and
+its inner parser continues on those tokens, the closed list parser with a maximum continues. It then
+holds the maximum, the results so far and the inner parser within its value, and a maximum set on it
+applies to the values after that value. It finishes once the inner parser finishes the value and as
+many further values as the maximum leaves and the `)` follow.
 -/
 theorem closedMaximum_parser_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
@@ -1414,7 +1489,7 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_waits_inner' depends on axioms:
 #guard_msgs in
 #print axioms closedMaximum_parser_waits_inner
 
-/-- The list parser with a maximum and its own `(` on no token: it wants more, as it is. -/
+/-- On no token, the list parser with a maximum and its own `(` continues and stays as it is. -/
 theorem parenMaximum_parser_waits_open {version : Version} {p : P} {maximum : Nat} :
     Waits version (ParenMaximumParser.new (H := H) p maximum) [] (pure () : PM H Unit)
       fun _ => ParenMaximumParser.new p maximum := by
@@ -1427,9 +1502,9 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_waits_open' depends on axioms: [
 #print axioms parenMaximum_parser_waits_open
 
 /--
-The list parser with a maximum and its own `(` on its `(` and no more: it wants more, as a parser
-that holds the maximum, which a maximum set on it replaces. It finishes on at most the maximum
-of values and the `)`, and rejects a token not `)` after the maximum of values.
+When the cursor holds exactly its `(`, the list parser with a maximum and its own `(` continues. It
+then holds the maximum, which a maximum set on it replaces. It finishes on at most the maximum of
+values and the `)`, and rejects a token that is not `)` after the maximum of values.
 -/
 theorem parenMaximum_parser_waits_after_open {version : Version} {p : P} :
     ∃ after : Nat → ParenMaximumParser H P,
@@ -1460,9 +1535,11 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_waits_after_open' depends on axi
 #print axioms parenMaximum_parser_waits_after_open
 
 /--
-The list parser with a maximum and its own `(` on its `(` and at most the maximum of values, at
-least one, and no more: it wants more, as a parser that holds the maximum and the results so
-far. A maximum set on it applies to the values after them.
+When the cursor holds exactly its `(` and its values, at least one and at most the maximum, the list
+parser with a maximum and its own `(` continues. It then holds the maximum and the results so far,
+and a maximum set on it applies to the values after them. It finishes on as many further values as
+the maximum leaves and the `)`, and rejects a token that is not `)` after values that reach the
+maximum.
 -/
 theorem parenMaximum_parser_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
@@ -1500,11 +1577,11 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_waits_between' depends on axioms
 #print axioms parenMaximum_parser_waits_between
 
 /--
-The list parser with a maximum and its own `(` on its `(`, fewer values than the maximum and then
-tokens on which its inner parser wants more, not starting with `)`: it wants more, as a parser
-that holds the maximum, the results so far and the inner parser within its value. A maximum set
-on it applies to the values after that value; it finishes once the inner parser finishes the
-value and as many further values as the maximum leaves and the `)` follow.
+When the cursor holds its `(`, fewer values than the maximum and then tokens that do not start with
+`)`, and its inner parser continues on those tokens, the list parser with a maximum and its own `(`
+continues. It then holds the maximum, the results so far and the inner parser within its value, and
+a maximum set on it applies to the values after that value. It finishes once the inner parser
+finishes the value and as many further values as the maximum leaves and the `)` follow.
 -/
 theorem parenMaximum_parser_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)}
@@ -1557,7 +1634,10 @@ variable {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m] [Handler H m]
 variable {version : Version}
 variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
-/-- The identifier parser from its start on the tokens of a valid identifier. -/
+/--
+The identifier parser, from its start, finishes on the tokens of a valid identifier with it,
+through the bridge, making no call.
+-/
 theorem ident_parser_parses {version : Version} (ident : Tree.Identifier)
     (hvalid : ident.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens ident.tokens) :
@@ -1572,7 +1652,10 @@ info: 'BSmtLib.Facts.Parser.ident_parser_parses' depends on axioms: [propext, Cl
 #guard_msgs in
 #print axioms ident_parser_parses
 
-/-- The identifier parser on a first token that is neither a symbol nor `(`. -/
+/--
+The identifier parser rejects a first token that is neither a symbol nor `(` with
+`expected #[.ident]`, making no call.
+-/
 theorem ident_parser_rejects_first {version : Version} {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen) :
     Rejects version IdentParser.new [token] (pure () : PM H Unit) (.expected #[.ident]) := by
@@ -1584,7 +1667,10 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_first' depends on axioms: [prop
 #guard_msgs in
 #print axioms ident_parser_rejects_first
 
-/-- The identifier parser on `(` and a token that is not `_`. -/
+/--
+After `(`, the identifier parser rejects a token that is not `_` with
+`expected #[.reserved (.general .underscore)]`, making no call.
+-/
 theorem ident_parser_rejects_underscore {version : Version} {token : Parser.Internal.Input}
     (htoken : token ≠ .reserved (.general .underscore)) :
     Rejects version IdentParser.new [.parenOpen, token] (pure () : PM H Unit)
@@ -1597,7 +1683,10 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_underscore' depends on axioms: 
 #guard_msgs in
 #print axioms ident_parser_rejects_underscore
 
-/-- The identifier parser on `(` `_` and a token that is not a symbol. -/
+/--
+After `(` `_`, the identifier parser rejects a token that is not a symbol with
+`expected #[.symbol]`, making no call.
+-/
 theorem ident_parser_rejects_symbol {version : Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version IdentParser.new [.parenOpen, .reserved (.general .underscore), token]
@@ -1610,7 +1699,10 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_symbol' depends on axioms: [pro
 #guard_msgs in
 #print axioms ident_parser_rejects_symbol
 
-/-- The identifier parser on `(` `_`, a symbol and `)`, an identifier without indices. -/
+/--
+On `(` `_`, a symbol and `)`, an identifier without indices, the identifier parser rejects the
+`)` with `empty .identIndices`, making no call.
+-/
 theorem ident_parser_rejects_empty {version : Version} (symbol : Lexicon.Value.Symbol) :
     Rejects version IdentParser.new
       [.parenOpen, .reserved (.general .underscore), .symbol symbol, .parenClose]
@@ -1623,8 +1715,10 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_empty' depends on axioms: [prop
 #guard_msgs in
 #print axioms ident_parser_rejects_empty
 
-/-- The identifier parser on `(` `_`, a symbol, valid indices and a token that is
-neither a valid index nor `)`. -/
+/--
+After `(` `_`, a symbol and valid indices, the identifier parser rejects a token that is neither a
+valid index nor `)` with `expected #[.index, .token .parenClose]`, making no call.
+-/
 theorem ident_parser_rejects_index {version : Version} (symbol : Lexicon.Value.Symbol)
     {indices : List Parser.Internal.Input}
     (hindices : ∀ index ∈ indices, (∃ digits, index = .constant (.numeral digits)) ∨
@@ -1644,9 +1738,11 @@ info: 'BSmtLib.Facts.Parser.ident_parser_rejects_index' depends on axioms: [prop
 #guard_msgs in
 #print axioms ident_parser_rejects_index
 
-/-- The sorted variable parser from its start on the tokens of a valid sorted variable: it
-finishes with its symbol, through the bridge, and the handled sort, making the traversal's calls
-for its sort. -/
+/--
+The sorted variable parser, from its start, finishes on the tokens of a valid sorted variable
+with its symbol, through the bridge, and the handled sort. It makes the traversal's calls for its
+sort.
+-/
 theorem sortedVar_parser_parses {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (sortedVar : Tree.SortedVar) (hvalid : sortedVar.Valid (Bridge.version version))
@@ -1664,7 +1760,10 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_parses' depends on axioms: [propext
 #guard_msgs in
 #print axioms sortedVar_parser_parses
 
-/-- The sorted variable parser on a first token that is not `(`. -/
+/--
+The sorted variable parser rejects a first token that is not `(` with
+`expected #[.token .parenOpen]`, making no call.
+-/
 theorem sortedVar_parser_rejects_open {version : Version} {token : Parser.Internal.Input}
     (htoken : token ≠ .parenOpen) :
     Rejects version (SortedVarParser.new (H := H)) [token] (pure () : PM H Unit)
@@ -1677,7 +1776,10 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_open' depends on axioms: [p
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_open
 
-/-- The sorted variable parser on `(` and a token that is not a symbol. -/
+/--
+After `(`, the sorted variable parser rejects a token that is not a symbol with
+`expected #[.symbol]`, making no call.
+-/
 theorem sortedVar_parser_rejects_symbol {version : Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version (SortedVarParser.new (H := H)) [.parenOpen, token] (pure () : PM H Unit)
@@ -1690,8 +1792,10 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_symbol' depends on axioms: 
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_symbol
 
-/-- The sorted variable parser on `(`, a symbol and a token that starts no sort: neither a
-symbol nor `(`. -/
+/--
+After `(` and a symbol, the sorted variable parser rejects a token that starts no sort, neither a
+symbol nor `(`, with `expected #[.sort]`, making no call.
+-/
 theorem sortedVar_parser_rejects_sort {version : Version} (symbol : Lexicon.Value.Symbol)
     {token : Parser.Internal.Input} (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hopen : token ≠ .parenOpen) :
@@ -1705,9 +1809,11 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sort' depends on axioms: [p
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_sort
 
-/-- The sorted variable parser on `(`, a symbol, the tokens of a valid sort and a token that is
-not `)`: it rejects that token with `expected #[.token .parenClose]`, having made the traversal's
-calls for the sort. -/
+/--
+After `(`, a symbol and the tokens of a valid sort, the sorted variable parser rejects a token
+that is not `)` with `expected #[.token .parenClose]`. It has made the traversal's calls for the
+sort.
+-/
 theorem sortedVar_parser_rejects_close {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Lexicon.Value.Symbol) {sort : Tree.«Sort»} (hvalid : sort.Valid (Bridge.version version))
@@ -1725,8 +1831,11 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_close' depends on axioms: [
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_close
 
-/-- The sorted variable parser on `(`, a symbol, `(` and a token that starts no head of a
-sort. -/
+/--
+After `(`, a symbol and `(`, the sorted variable parser rejects a token that starts no head of a
+sort with `expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, making no
+call.
+-/
 theorem sortedVar_parser_rejects_sortInner {version : Version} (symbol : Lexicon.Value.Symbol)
     {token : Parser.Internal.Input} (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hopen : token ≠ .parenOpen) (hunderscore : token ≠ .reserved (.general .underscore)) :
@@ -1741,8 +1850,10 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortInner' depends on axiom
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_sortInner
 
-/-- The sorted variable parser on `(`, a symbol, and `(`, a symbol and `)`: a sort application
-without arguments. -/
+/--
+On `(`, a symbol, and `(`, a symbol and `)`, a sort application without arguments, the sorted
+variable parser rejects the `)` with `empty .sortApplication`, making no call.
+-/
 theorem sortedVar_parser_rejects_sortEmpty {version : Version}
     (symbol head : Lexicon.Value.Symbol) :
     Rejects version (SortedVarParser.new (H := H))
@@ -1756,9 +1867,11 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortEmpty' depends on axiom
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_sortEmpty
 
-/-- The sorted variable parser on `(`, a symbol, `(`, the tokens of a valid identifier and of
-valid sorts and a token that neither starts another argument of the sort nor ends it: it rejects
-that token with `expected #[.sort]`, having made the traversal's calls for the sorts. -/
+/--
+After `(`, a symbol, `(` and the tokens of a valid identifier and of valid sorts, the sorted
+variable parser rejects a token that neither starts another argument of the sort nor ends it.
+It rejects it with `expected #[.sort]`, having made the traversal's calls for the sorts.
+-/
 theorem sortedVar_parser_rejects_sortArgument {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Lexicon.Value.Symbol) {head : Tree.Identifier}
@@ -1780,8 +1893,10 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortArgument' depends on ax
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_sortArgument
 
-/-- The qualified identifier parser on the tokens of a valid identifier, unqualified: it
-finishes with the identifier, through the bridge, and no sort, making no call. -/
+/--
+The qualified identifier parser finishes on the tokens of a valid identifier, unqualified, with
+the identifier, through the bridge, and no sort, making no call.
+-/
 theorem qualifiedIdent_parser_parses_plain {version : Version} (identifier : Tree.Identifier)
     (hvalid : identifier.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens identifier.tokens) :
@@ -1798,9 +1913,11 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_parses_plain' depends on axiom
 #guard_msgs in
 #print axioms qualifiedIdent_parser_parses_plain
 
-/-- The qualified identifier parser on the tokens of a valid identifier qualified by `as` with a
-valid sort: it finishes with the identifier, through the bridge, and the handled sort, making the
-traversal's calls for the sort. -/
+/--
+The qualified identifier parser finishes on the tokens of a valid identifier qualified by `as`
+with a valid sort. It finishes with the identifier, through the bridge, and the handled sort,
+making the traversal's calls for the sort.
+-/
 theorem qualifiedIdent_parser_parses_as {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (identifier : Tree.Identifier) (sort : Tree.«Sort»)
@@ -1821,7 +1938,10 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_parses_as' depends on axioms: 
 #guard_msgs in
 #print axioms qualifiedIdent_parser_parses_as
 
-/-- The qualified identifier parser on a first token that is neither a symbol nor `(`. -/
+/--
+The qualified identifier parser rejects a first token that is neither a symbol nor `(` with
+`expected #[.ident]`, making no call.
+-/
 theorem qualifiedIdent_parser_rejects_first {version : Version}
     {token : Parser.Internal.Input}
     (hsymbol : ∀ symbol, token ≠ .symbol symbol) (hopen : token ≠ .parenOpen) :
@@ -1835,7 +1955,10 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_first' depends on axio
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_first
 
-/-- The qualified identifier parser on `(` and a token that is neither `_` nor `as`. -/
+/--
+After `(`, the qualified identifier parser rejects a token that is neither `_` nor `as` with
+`expected #[.reserved (.general .underscore), .reserved (.general .as)]`, making no call.
+-/
 theorem qualifiedIdent_parser_rejects_opened {version : Version}
     {token : Parser.Internal.Input}
     (hunderscore : token ≠ .reserved (.general .underscore))
@@ -1852,9 +1975,9 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_opened' depends on axi
 #print axioms qualifiedIdent_parser_rejects_opened
 
 /--
-The qualified identifier parser on `(` `as`, the tokens of a valid identifier and of a valid sort,
-and a token that is not `)`: it rejects that token with `expected #[.token .parenClose]`, having
-made the traversal's calls for the sort.
+After `(` `as` and the tokens of a valid identifier and of a valid sort, the qualified identifier
+parser rejects a token that is not `)` with `expected #[.token .parenClose]`. It has made the
+traversal's calls for the sort.
 -/
 theorem qualifiedIdent_parser_rejects_close {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
@@ -1875,8 +1998,11 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_close' depends on axio
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_close
 
-/-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, `(` and a
-token that starts no head of a sort. -/
+/--
+After `(` `as`, the tokens of a valid identifier and `(`, the qualified identifier parser rejects a
+token that starts no head of a sort with
+`expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, making no call.
+-/
 theorem qualifiedIdent_parser_rejects_sortInner {version : Version}
     {identifier : Tree.Identifier}
     (hvalid : identifier.Valid (Bridge.version version))
@@ -1897,8 +2023,11 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortInner' depends on 
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_sortInner
 
-/-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, and `(`, a
-symbol and `)`: a sort application without arguments. -/
+/--
+On `(` `as`, the tokens of a valid identifier, and `(`, a symbol and `)`, a sort application
+without arguments, the qualified identifier parser rejects the `)` with `empty .sortApplication`,
+making no call.
+-/
 theorem qualifiedIdent_parser_rejects_sortEmpty {version : Version}
     {identifier : Tree.Identifier}
     (hvalid : identifier.Valid (Bridge.version version))
@@ -1918,10 +2047,12 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortEmpty' depends on 
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_sortEmpty
 
-/-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, `(`, the
-tokens of a valid identifier and of valid sorts and a token that neither starts another argument
-of the sort nor ends it: it rejects that token with `expected #[.sort]`, having made the traversal's
-calls for the sorts. -/
+/--
+After `(` `as`, the tokens of a valid identifier, `(` and the tokens of a valid identifier and of
+valid sorts, the qualified identifier parser rejects a token that neither starts another argument
+of the sort nor ends it. It rejects it with `expected #[.sort]`, having made the traversal's calls
+for the sorts.
+-/
 theorem qualifiedIdent_parser_rejects_sortArgument {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) {identifier : Tree.Identifier}
@@ -1949,9 +2080,11 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortArgument' depends 
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_sortArgument
 
-/-- The parser of sorted variables in parentheses on the tokens of valid sorted variables in
-parentheses: it finishes with their symbols, through the bridge, and their handled sorts, making
-the traversal's calls for the sorts. -/
+/--
+The parser of sorted variables in parentheses finishes on the tokens of valid sorted variables in
+parentheses with their symbols, through the bridge, and their handled sorts. It makes the
+traversal's calls for the sorts.
+-/
 theorem parenSortedVars_parser_parses (hA : TermAgrees h) (variables : List Tree.SortedVar)
     (hvalid : ∀ variable_ ∈ variables, variable_.Valid (Bridge.version version))
     {tokens : List Parser.Internal.Input}
@@ -1971,8 +2104,10 @@ info: 'BSmtLib.Facts.Parser.parenSortedVars_parser_parses' depends on axioms: [p
 #guard_msgs in
 #print axioms parenSortedVars_parser_parses
 
-/-- The pattern parser from its start on the tokens of a valid pattern: it finishes with it,
-through the bridge, making no call. -/
+/--
+The pattern parser, from its start, finishes on the tokens of a valid pattern with it, through
+the bridge, making no call.
+-/
 theorem pattern_parser_parses {version : Version} (pattern : Tree.Pattern)
     (hvalid : pattern.Valid (Bridge.version version)) {tokens : List Parser.Internal.Input}
     (hs : Stands tokens pattern.tokens) :
@@ -1988,8 +2123,11 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_parses' depends on axioms: [propext, 
 #guard_msgs in
 #print axioms pattern_parser_parses
 
-/-- The pattern parser on a first token that is neither `(` nor a symbol, nor the wildcard `_`
-from 2.7 on; the error names the wildcard from 2.7 on. -/
+/--
+The pattern parser rejects a first token that is neither `(` nor a symbol, nor the wildcard `_`
+from 2.7 on, making no call. The error expects a symbol or `(`, and from 2.7 on also the
+wildcard.
+-/
 theorem pattern_parser_rejects_first {version : Version} {token : Parser.Internal.Input}
     (hopen : token ≠ .parenOpen) (hsymbol : ∀ symbol, token ≠ .symbol symbol)
     (hwildcard : version ≥ .v2_7 → token ≠ .reserved (.general .underscore)) :
@@ -2005,7 +2143,10 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_first' depends on axioms: [pr
 #guard_msgs in
 #print axioms pattern_parser_rejects_first
 
-/-- The pattern parser on `(` and a token that is not a symbol. -/
+/--
+After `(`, the pattern parser rejects a token that is not a symbol with `expected #[.symbol]`,
+making no call.
+-/
 theorem pattern_parser_rejects_constructor {version : Version} {token : Parser.Internal.Input}
     (htoken : ∀ symbol, token ≠ .symbol symbol) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, token] (pure () : PM H Unit)
@@ -2018,8 +2159,10 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_constructor' depends on axiom
 #guard_msgs in
 #print axioms pattern_parser_rejects_constructor
 
-/-- The pattern parser on `(`, a constructor and `)`, a constructor pattern without
-arguments. -/
+/--
+On `(`, a constructor and `)`, a constructor pattern without arguments, the pattern parser
+rejects the `)` with `empty .patternArguments`, making no call.
+-/
 theorem pattern_parser_rejects_empty {version : Version} (constructor : Lexicon.Value.Symbol) :
     Rejects version (PatternParser.new (H := H)) [.parenOpen, .symbol constructor, .parenClose]
       (pure () : PM H Unit) (.empty .patternArguments) := by
@@ -2031,8 +2174,11 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_empty' depends on axioms: [pr
 #guard_msgs in
 #print axioms pattern_parser_rejects_empty
 
-/-- The pattern parser on `(`, a constructor, valid arguments and a token that is
-neither a valid argument nor `)`; the error names the wildcard from 2.7 on. -/
+/--
+After `(`, a constructor and valid arguments, the pattern parser rejects a token that is neither a
+valid argument nor `)`, making no call. The error expects a symbol, and from 2.7 on also the
+wildcard.
+-/
 theorem pattern_parser_rejects_argument {version : Version} (constructor : Lexicon.Value.Symbol)
     {arguments : List Parser.Internal.Input}
     (harguments : ∀ argument ∈ arguments, (∃ symbol, argument = .symbol symbol) ∨
@@ -2053,8 +2199,10 @@ info: 'BSmtLib.Facts.Parser.pattern_parser_rejects_argument' depends on axioms: 
 #guard_msgs in
 #print axioms pattern_parser_rejects_argument
 
-/-- The parser of one attribute from its start on the tokens of a valid attribute and the `)`
-after it: it finishes with the handled attribute, making the traversal's calls. -/
+/--
+The parser of one attribute, from its start, finishes on the tokens of a valid attribute and the
+`)` after it with the handled attribute, making the traversal's calls.
+-/
 theorem closedAttribute_parser_parses {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (attr : Tree.Attribute)
@@ -2074,9 +2222,10 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_parses' depends on axioms: [p
 #guard_msgs in
 #print axioms closedAttribute_parser_parses
 
-/-- The parser of attributes up to a `)` from its start on the tokens of valid attributes, at
-least one, and the `)` after them: it finishes with the handled attributes, making the
-traversal's calls. -/
+/--
+The parser of attributes up to a `)`, from its start, finishes on the tokens of at least one valid
+attribute and the `)` after them with the handled attributes, making the traversal's calls.
+-/
 theorem closedMultipleAttribute_parser_parses {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (first : Tree.Attribute) (rest : List Tree.Attribute)
@@ -2096,8 +2245,10 @@ info: 'BSmtLib.Facts.Parser.closedMultipleAttribute_parser_parses' depends on ax
 #guard_msgs in
 #print axioms closedMultipleAttribute_parser_parses
 
-/-- The parser of attributes up to a `)` from its start on the `)`: it finishes with no
-attribute, making no call. -/
+/--
+The parser of attributes up to a `)`, from its start, finishes on the `)` with no attribute,
+making no call.
+-/
 theorem closedMultipleAttribute_parser_parses_none {version : Version} :
     Finishes version (ClosedMultipleAttributeParser.new (H := H)) [.parenClose]
       (pure #[] : PM H (Array (Handler.Attribute H)))
@@ -2112,8 +2263,11 @@ info: 'BSmtLib.Facts.Parser.closedMultipleAttribute_parser_parses_none' depends 
 #guard_msgs in
 #print axioms closedMultipleAttribute_parser_parses_none
 
-/-- The parser of one attribute on a first token that is not a keyword: no attribute starts
-there, and a `)` would close an empty attribute. -/
+/--
+The parser of one attribute rejects a first token that is not a keyword with
+`expected #[.attribute]`, making no call. No attribute starts there, and a `)` would close an
+empty attribute.
+-/
 theorem closedAttribute_parser_rejects_first {version : Version}
     {token : Parser.Internal.Input}
     (htoken : ∀ name, token ≠ .keyword name) :
@@ -2127,7 +2281,10 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_first' depends on axi
 #guard_msgs in
 #print axioms closedAttribute_parser_rejects_first
 
-/-- The parser of attributes up to a `)` on a first token that is neither a keyword nor `)`. -/
+/--
+The parser of attributes up to a `)` rejects a first token that is neither a keyword nor `)` with
+`expected #[.attribute]`, making no call.
+-/
 theorem closedMultipleAttribute_parser_rejects_first {version : Version}
     {token : Parser.Internal.Input} (htoken : ∀ name, token ≠ .keyword name)
     (hclose : token ≠ .parenClose) :
@@ -2143,8 +2300,10 @@ info: 'BSmtLib.Facts.Parser.closedMultipleAttribute_parser_rejects_first' depend
 #guard_msgs in
 #print axioms closedMultipleAttribute_parser_rejects_first
 
-/-- The parser of one attribute on a keyword and a token that neither starts a value nor ends
-the attribute. -/
+/--
+After a keyword, the parser of one attribute rejects a token that neither starts a value nor ends
+the attribute with `expected #[.attribute]`, making no call.
+-/
 theorem closedAttribute_parser_rejects_value {version : Version}
     (name : BSmtLib.Lexicon.Value.Keyword)
     {token : Parser.Internal.Input}
@@ -2160,8 +2319,10 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_value' depends on axi
 #guard_msgs in
 #print axioms closedAttribute_parser_rejects_value
 
-/-- The parser of attributes up to a `)` on a keyword and a token that neither starts a value
-nor ends the attribute. -/
+/--
+After a keyword, the parser of attributes up to a `)` rejects a token that neither starts a value
+nor ends the attribute with `expected #[.attribute]`, making no call.
+-/
 theorem closedMultipleAttribute_parser_rejects_value {version : Version}
     (name : BSmtLib.Lexicon.Value.Keyword)
     {token : Parser.Internal.Input}
@@ -2179,8 +2340,11 @@ info: 'BSmtLib.Facts.Parser.closedMultipleAttribute_parser_rejects_value' depend
 #guard_msgs in
 #print axioms closedMultipleAttribute_parser_rejects_value
 
-/-- The parser of one attribute on a keyword and a keyword after it: the attribute would be
-followed by another, where its `)` is due. -/
+/--
+After a keyword, the parser of one attribute rejects another keyword with
+`expected #[.token .parenClose]`, making no call: the attribute would be followed by another,
+where its `)` is due.
+-/
 theorem closedAttribute_parser_rejects_keyword {version : Version}
     (name name' : BSmtLib.Lexicon.Value.Keyword) :
     Rejects version (ClosedAttributeParser.new (H := H)) [.keyword name, .keyword name']
@@ -2193,9 +2357,11 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_keyword' depends on a
 #guard_msgs in
 #print axioms closedAttribute_parser_rejects_keyword
 
-/-- The parser of one attribute on the tokens of a valid attribute with a value and a token
-that is not `)`: it rejects that token with `expected #[.token .parenClose]`, having made the
-traversal's calls for the attribute. -/
+/--
+After the tokens of a valid attribute with a value, the parser of one attribute rejects a token
+that is not `)` with `expected #[.token .parenClose]`. It has made the traversal's calls for the
+attribute.
+-/
 theorem closedAttribute_parser_rejects_close {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Chars) (value : Tree.AttributeValue)
@@ -2216,9 +2382,11 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_close' depends on axi
 #guard_msgs in
 #print axioms closedAttribute_parser_rejects_close
 
-/-- The parser of attributes up to a `)` on the tokens of a valid attribute with a value and a
-token that neither starts another attribute nor is `)`: it rejects that token, having made the
-traversal's calls for the attribute. -/
+/--
+After the tokens of a valid attribute with a value, the parser of attributes up to a `)` rejects
+a token that neither starts another attribute nor is `)` with `expected #[.attribute]`. It has
+made the traversal's calls for the attribute.
+-/
 theorem closedMultipleAttribute_parser_rejects_after {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (keyword : BSmtLibSpec.Regex.Chars) (value : Tree.AttributeValue)
@@ -2242,9 +2410,11 @@ info: 'BSmtLib.Facts.Parser.closedMultipleAttribute_parser_rejects_after' depend
 #print axioms closedMultipleAttribute_parser_rejects_after
 
 
-/-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications and a
-token that neither starts another argument nor ends an application: it rejects that token with
-`expected #[.sort]`, having made the traversal's calls for the applications' argument sorts. -/
+/--
+After `(`, a symbol and the tokens of open sort applications, the sorted variable parser rejects a
+token that neither starts another argument nor ends an application. It rejects it with
+`expected #[.sort]`, having made the traversal's calls for the applications' argument sorts.
+-/
 theorem sortedVar_parser_rejects_sortDeepArgument {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Lexicon.Value.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
@@ -2268,10 +2438,12 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortDeepArgument' depends o
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_sortDeepArgument
 
-/-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications, `(` and
-a token that starts no head: it rejects that token with
+/--
+After `(`, a symbol, the tokens of open sort applications and `(`, the sorted variable parser
+rejects a token that starts no head. It rejects it with
 `expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, having made the
-traversal's calls for the applications' argument sorts. -/
+traversal's calls for the applications' argument sorts.
+-/
 theorem sortedVar_parser_rejects_sortDeepInner {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Lexicon.Value.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
@@ -2293,9 +2465,11 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortDeepInner' depends on a
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_sortDeepInner
 
-/-- The sorted variable parser on `(`, a symbol, the tokens of open sort applications, and `(`,
-a symbol and `)`: it rejects the `)` with `empty .sortApplication`, having made the traversal's
-calls for the applications' argument sorts. -/
+/--
+On `(`, a symbol, the tokens of open sort applications, and `(`, a symbol and `)`, the sorted
+variable parser rejects the `)` with `empty .sortApplication`. It has made the traversal's calls
+for the applications' argument sorts.
+-/
 theorem sortedVar_parser_rejects_sortDeepEmpty {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : TermAgrees h)
     (symbol : Lexicon.Value.Symbol) {frames : List (Tree.Identifier × List Tree.«Sort»)}
@@ -2316,10 +2490,12 @@ info: 'BSmtLib.Facts.Parser.sortedVar_parser_rejects_sortDeepEmpty' depends on a
 #guard_msgs in
 #print axioms sortedVar_parser_rejects_sortDeepEmpty
 
-/-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
-applications and a token that neither starts another argument nor ends an application: it
-rejects that token with `expected #[.sort]`, having made the traversal's calls for the applications'
-argument sorts. -/
+/--
+After `(` `as` and the tokens of a valid identifier and of open sort applications, the qualified
+identifier parser rejects a token that neither starts another argument nor ends an application.
+It rejects it with `expected #[.sort]`, having made the traversal's calls for the applications'
+argument sorts.
+-/
 theorem qualifiedIdent_parser_rejects_sortDeepArgument {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) {identifier : Tree.Identifier}
@@ -2346,10 +2522,12 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortDeepArgument' depe
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_sortDeepArgument
 
-/-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
-applications, `(` and a token that starts no head: it rejects that token with
+/--
+After `(` `as`, the tokens of a valid identifier and of open sort applications, and `(`, the
+qualified identifier parser rejects a token that starts no head. It rejects it with
 `expected #[.reserved (.general .underscore), .symbol, .token .parenOpen]`, having made the
-traversal's calls for the applications' argument sorts. -/
+traversal's calls for the applications' argument sorts.
+-/
 theorem qualifiedIdent_parser_rejects_sortDeepInner {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) {identifier : Tree.Identifier}
@@ -2376,9 +2554,11 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortDeepInner' depends
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_sortDeepInner
 
-/-- The qualified identifier parser on `(` `as`, the tokens of a valid identifier, of open sort
-applications, and `(`, a symbol and `)`: it rejects the `)` with `empty .sortApplication`, having
-made the traversal's calls for the applications' argument sorts. -/
+/--
+On `(` `as`, the tokens of a valid identifier and of open sort applications, and `(`, a symbol and
+`)`, the qualified identifier parser rejects the `)` with `empty .sortApplication`. It has made
+the traversal's calls for the applications' argument sorts.
+-/
 theorem qualifiedIdent_parser_rejects_sortDeepEmpty {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) {identifier : Tree.Identifier}
@@ -2405,10 +2585,12 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_rejects_sortDeepEmpty' depends
 #guard_msgs in
 #print axioms qualifiedIdent_parser_rejects_sortDeepEmpty
 
-/-- The qualified identifier parser from its start on the tokens of a valid qualified
-identifier: it finishes with an identifier that is, through the bridge, the one the qualified
-identifier names, plain or qualified by `as` with a sort, and the handled sort if any, making the
-traversal's calls for that sort. -/
+/--
+The qualified identifier parser, from its start, finishes on the tokens of a valid qualified
+identifier. It finishes with the identifier that the qualified identifier names, through the
+bridge, plain or qualified by `as` with a sort, and with the handled sort if any. It makes the
+traversal's calls for that sort.
+-/
 theorem qualifiedIdent_parser_parses {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
     (hA : TermAgrees h) (qualified : Tree.QualIdentifier)
@@ -2431,9 +2613,9 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_parses' depends on axioms: [pr
 #print axioms qualifiedIdent_parser_parses
 
 /--
-The parser of one attribute on a keyword, `(`, the tokens of valid items, of open lists of
-s-expressions and a token that starts no s-expression and does not end a list: it rejects that
-token with `expected #[.sExpr]`, having made the traversal's calls for the items.
+After a keyword, `(` and the tokens of valid items and of open lists of s-expressions, the parser
+of one attribute rejects a token that starts no s-expression and does not end a list. It rejects
+it with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedAttribute_parser_rejects_sExpr {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
@@ -2464,9 +2646,9 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_sExpr' depends on axi
 #print axioms closedAttribute_parser_rejects_sExpr
 
 /--
-The parser of attributes up to a `)` on a keyword, `(`, the tokens of valid items, of open lists
-of s-expressions and a token that starts no s-expression and does not end a list: it rejects that
-token with `expected #[.sExpr]`, having made the traversal's calls for the items.
+After a keyword, `(` and the tokens of valid items and of open lists of s-expressions, the parser
+of attributes up to a `)` rejects a token that starts no s-expression and does not end a list. It
+rejects it with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedMultipleAttribute_parser_rejects_sExpr {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}

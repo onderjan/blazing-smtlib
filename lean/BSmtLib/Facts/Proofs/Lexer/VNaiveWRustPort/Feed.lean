@@ -9,12 +9,12 @@ import all BSmtLib.Lexer.Internal.VNaive
 /-!
 # The naive lexer's pure run over a slice from an index, for every consumer
 
-`feedFrom` is the naive lexer's pure run up to an error `VNaive.lexBytesW` over the bytes of a
+`feedFrom` is the naive lexer's pure run up to an error (`VNaive.lexBytesW`) over the bytes of a
 slice from an index on, for a consumer that takes whitespace and comments if `ws`
-(`feedFrom_toByteSlice`), stated by indices, as the Rust port reads a slice: the state and the
-location after the bytes and the lexemes they finish, or on an error, the lexemes finished before
-it. The lemmas below are about the run over runs of bytes that a mode takes as they are, and
-over the bytes that end a token.
+(`feedFrom_toByteSlice`). It is stated by indices, as the Rust port reads a slice, and gives the
+state and the location after the bytes and the lexemes they finish, or on an error, the lexemes
+finished before it. The lemmas below are about the run over runs of bytes that a mode takes as
+they are, and over the bytes that end a token.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Feed

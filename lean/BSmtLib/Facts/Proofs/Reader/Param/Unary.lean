@@ -33,11 +33,12 @@ open BSmtLib.Lexer
 open BSmtLib.Lexer.Internal (BATCH_CAPACITY Stop Interrupted Failure LexerCore InnerM StepM LexM)
 open BSmtLib.Facts.Lexer.Adapters
 
-/-- A consumer in `StateM σ` with a record of what went wrong: whether it has answered an error
-or been handed a cursor in another version than the one of the last cursor it gave back
-(`errored`), that version (`version`), whether it has been called after something went wrong or
-handed such a cursor (`spoiled`), and whether the call at which it went wrong was handed
-whitespace or a comment and answered the error `none` (`layout`). -/
+/-- A consumer in `StateM σ` with a record of what went wrong:
+- whether it has answered an error or been handed a cursor in another version than the one of
+  the last cursor it gave back (`errored`), and that version (`version`);
+- whether it has been called after something went wrong or handed such a cursor (`spoiled`);
+- whether the call at which it went wrong was handed whitespace or a comment and answered the
+  error `none` (`layout`). -/
 class Watched (F : Type) (σ R E : outParam Type) [Token.Consume F R (Option E)]
     [∀ b, Token.ConsumeFrom F (LexerCursor b) (StateM σ)] where
   /-- Whether something went wrong. -/
@@ -79,10 +80,10 @@ def ConsumerThrow {R E : Type} {floor : Option Nat} {α : Type} (layout : Bool)
     (x : Except (Interrupted R (Option E) floor) α) : Prop :=
   ∃ i, x = .error i ∧ ∃ e, i.result = .error (.consumer e) ∧ (layout = true → e = none)
 
-/-- From a state where nothing went wrong and the versions agree: if nothing went wrong after,
-the versions agree; if the consumer answered an error, the step is interrupted by it with the
-batch empty; and the consumer was neither called after that nor handed a cursor in another
-version. -/
+/-- From a state where nothing went wrong and the versions agree:
+- if nothing went wrong after, the versions agree;
+- if the consumer answered an error, the step is interrupted by it with the batch empty;
+- the consumer was neither called after that nor handed a cursor in another version. -/
 def UL (f : FM F σ floor low α) : Prop :=
   ∀ s fl l, Watched.errored fl = false → s.val.version = Watched.version fl →
     (Watched.errored (frun f s fl l).1.2 = false →

@@ -8,12 +8,17 @@ public import BSmtLibSpec.Grammar.Properties
 /-!
 # Programs that read what a parser receives
 
-A program is what a parser does, written out as data: it receives the next item, possibly with a
-call at its arrival, makes a handler call and goes on with what the handler returned, tells the
-handler the version, has the rest discarded, switches the version, or stops because what it
-received is not what it expected. `Program.run` runs a program on
-items with points, a handler, a producer and a policy, as the traversal runs, taking
-an item for each receipt.
+A program is what a parser does, written out as data. A program:
+- receives the next item, possibly with a call at its arrival;
+- makes a handler call and goes on with what the handler returned;
+- tells the handler the version;
+- has the rest discarded;
+- switches the version;
+- stops because what it received is not what it expected;
+- or ends with its result.
+
+`Program.run` runs a program on items with points, a handler, a producer and a policy, as the
+traversal runs, taking an item for each receipt.
 
 A program decides what to do next only from what it has received and what the handler
 returned, so what it does before the arrival of an item depends only on the items before it.

@@ -30,9 +30,10 @@ every handler, so the traversal can be carried out by a parser that has only the
 -/
 
 /--
-For every handler in a lawful monad, points, producer and policy, the traversal of a
-script makes what `Parser.parseScript` makes run on what a parser receives for the script, given
-fuel larger than ten times the size of the script; whatever follows is left untouched.
+The traversal of a script makes what `Parser.parseScript` makes when run on what a parser
+receives for the script; whatever follows is left untouched. This holds for every handler in a
+lawful monad, points, producer and policy, given fuel larger than ten times the size of the
+script.
 -/
 theorem Parser.script_eq_parse {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
     {values : BSmtLibSpec.Parser.Traversal.Values} (points : BSmtLibSpec.Parser.Traversal.Points m)
@@ -132,9 +133,9 @@ They are checks of the formalism, not properties stated in it.
 -/
 
 /--
-For every handler in a lawful monad, points, producer and policy, what the traversals of
-two valid scripts from the same version have done before the item at position `count` arrives
-is the same when what a parser receives for them agrees before that item.
+The traversals of two valid scripts from the same version have done the same before the item at
+position `count` arrives, when what a parser receives for them agrees before that item. This
+holds for every handler in a lawful monad, points, producer and policy.
 -/
 theorem Parser.cutRunsAgree {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
     {values : BSmtLibSpec.Parser.Traversal.Values} (points : BSmtLibSpec.Parser.Traversal.Points m)
@@ -156,9 +157,9 @@ info: 'BSmtLibSpec.Facts.Parser.cutRunsAgree' depends on axioms: [propext, Class
 #print axioms Parser.cutRunsAgree
 
 /--
-For every handler in a lawful monad, points, producer and policy, what the traversals of
-two valid scripts have done before the item at position `count` arrives is the same when their
-recordings agree before that item: a recording stands for the run with every handler.
+The traversals of two valid scripts have done the same before the item at position `count`
+arrives, when their recordings agree before that item. This holds for every handler in a lawful
+monad, points, producer and policy: a recording stands for the run with every handler.
 -/
 theorem Parser.cutRunsAgreeByRecord {m : Type → Type} [Monad m] [LawfulMonad m] {ε : Type}
     {values : BSmtLibSpec.Parser.Traversal.Values} (points : BSmtLibSpec.Parser.Traversal.Points m)
@@ -182,10 +183,10 @@ info: 'BSmtLibSpec.Facts.Parser.cutRunsAgreeByRecord' depends on axioms: [propex
 #print axioms Parser.cutRunsAgreeByRecord
 
 /--
-For every handler in a lawful monad, points, producer and policy, what the traversals of
-two valid scripts have done when the item at position `count` is rejected, before it is
-processed and without its own arrival, is the same when their recordings agree before the
-processing of that item.
+The traversals of two valid scripts have done the same where the item at position `count` is
+rejected: before that item is processed, and without its own arrival. That holds when their
+recordings agree before the processing of that item, for every handler in a lawful monad,
+points, producer and policy.
 -/
 theorem Parser.processingCutRunsAgreeByRecord {m : Type → Type} [Monad m] [LawfulMonad m]
     {ε : Type} {values : BSmtLibSpec.Parser.Traversal.Values}

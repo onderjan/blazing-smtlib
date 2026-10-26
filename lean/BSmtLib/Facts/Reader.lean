@@ -33,16 +33,16 @@ parts:
 
 ## Files, with the consumer above
 
-The library's lexer, fed the characters of a file cut into any slices and then the end of the
-input, with the consumer above (`library_lexes_file`):
+The library's lexer reads a file to its end with the consumer above (`library_lexes_file`):
 
-- takes the tokens of the commands, switching the version after every version declaration and
+- it takes the tokens of the commands, switching the version after every version declaration and
   discarding after `exit`;
-- returns the parser's result at the end of the input;
-- has handed the parser tokens on which its recording run has the traversal's events.
+- it returns the parser's result at the end of the input;
+- it has handed the parser tokens on which its recording run has the traversal's events.
 
-The proof (`Facts.Proofs.Reader.Valid.lexing_file`) holds for every lexer that is correct with
-every consumer.
+The lexer is fed the characters of the file in any slices and then the end of the input. The
+proof (`Facts.Proofs.Reader.Valid.lexing_file`) holds for every lexer that is correct with every
+consumer.
 
 ## Files, with the parse adapter
 
@@ -101,14 +101,15 @@ open BSmtLib.Facts.Proofs.Reader.Lexes.Reader BSmtLib.Facts.Proofs.Reader.Reader
 open BSmtLib.Facts.Proofs.Reader.Session BSmtLib.Facts.Proofs.Reader.Valid
 
 /--
-The library's lexer, fed the characters of a file of commands cut into any slices and then the
-end of the input, with the initial version `version` and with the library's script parser as a
-consumer in the formalism:
+The library's lexer reads a file to its end with the library's script parser as its consumer:
 
 - the input ends with the parser's result returned;
 - the tokens the parser took stand for what a parser receives for the script, version switches
   and `exit` included;
 - the parser's recording run on them has the traversal's events.
+
+The lexer starts in the file's initial version and is fed the characters of the file in any
+slices and then the end of the input. The parser is a consumer in the formalism.
 -/
 theorem library_lexes_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
@@ -130,10 +131,10 @@ info: 'BSmtLib.Facts.Reader.library_lexes_file' depends on axioms: [propext, Cla
 #print axioms library_lexes_file
 
 /--
-The library's lexer, fed the characters of any input cut into any slices and then the end of the
-input, with the initial version `version` and with the library's script parser as a consumer in
-the formalism, ends in one of four ways. In each, the parser's recording run on the
-tokens taken is as the formalism gives it.
+The library's lexer, with the library's script parser as its consumer, ends in one of four ways.
+In each, the parser's recording run on the tokens taken is as the formalism gives it. The lexer
+is fed the characters of any input in any slices and then the end of the input, from any initial
+version. The parser is a consumer in the formalism.
 
 - The input reads as a file of commands. The input ends with the parser's result returned, the
   tokens taken stand for what a parser receives for the script, and the run has the traversal's
@@ -144,7 +145,7 @@ tokens taken is as the formalism gives it.
 - The last token taken is the first that no script continues with (`RejectsFirstUnviable`); it
   can be an end of the input that comes too early. The parser rejects it. Its run has the
   traversal's events up to that token's processing, so a `)` gets none of the calls due at its
-  arrival, and ends with the processing, with no call at the token.
+  arrival. The run ends with the processing and makes no call at the token.
 - The lexer fails with a lexical error after handing over tokens that stand for a start of what a
   parser takes. The parser waits, with the traversal's events before the next item. Read from the
   end of the last version declaration on, in its version, the input has no tokenisation, and the
@@ -196,13 +197,15 @@ info: 'BSmtLib.Facts.Reader.library_session' depends on axioms: [propext, Classi
 #print axioms library_session
 
 /--
-The library's lexer, fed the characters of an input that does not read as a file, cut into any
-slices, and then the end of the input, with the library's script parser as a consumer in
-the formalism, fails in one of the three ways that `library_session` states:
+The library's lexer fails on an input that does not read as a file, with the library's script
+parser as its consumer. It fails in one of the three ways that `library_session` states:
 
 - on a declaration that names no supported version;
 - at the first token that no script continues with;
 - with a lexical error.
+
+The lexer is fed the characters of the input in any slices and then the end of the input. The
+parser is a consumer in the formalism.
 -/
 theorem library_fails (version : Lexicon.Version) (slices : List Regex.Chars)
     (hnot : ¬ ∃ commands, File version slices.flatten commands) :
@@ -247,9 +250,9 @@ info: 'BSmtLib.Facts.Reader.library_fails' depends on axioms: [propext, Classica
 #print axioms library_fails
 
 /--
-The library's lexer, with the library's script parser as a consumer in the formalism,
-returns the parser's result at the end of an input, however cut into slices, exactly when the input
-reads as a file.
+The library's lexer, with the library's script parser as its consumer, returns the parser's
+result at the end of an input exactly when the input reads as a file. This holds however the
+input is cut into slices. The parser is a consumer in the formalism.
 -/
 theorem library_finishes_iff_file (version : Lexicon.Version) (slices : List Regex.Chars) :
     (Lexer.Adapters.lexing Lexer.Adapters.Lexer.lexOps
@@ -265,14 +268,16 @@ info: 'BSmtLib.Facts.Reader.library_finishes_iff_file' depends on axioms: [prope
 #print axioms library_finishes_iff_file
 
 /--
-The library's lexer with the library's parse adapter as its consumer, over the recording handler
-and the script parser that allows every version, is fed the characters of a file of commands cut
-into any slices, with the initial version `version`, by its public calls (`Param.paFeed`:
-`Lexer.lexSlice` for each slice, then `Lexer.lexEof`). Then:
+The library's lexer parses a file through its public calls, with the library's parse adapter as
+its consumer:
 
 - no call fails;
 - the end of the input returns the parser's result;
 - the handler has recorded the calls of the traversal of the script, in order.
+
+The parse adapter has the recording handler and the script parser that allows every version. The
+lexer starts in the file's initial version and is fed the characters of the file in any slices
+by `Adapters.paFeed`: `Lexer.lexSlice` for each slice, then `Lexer.lexEof`.
 -/
 theorem library_parses_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
@@ -293,9 +298,10 @@ info: 'BSmtLib.Facts.Reader.library_parses_file' depends on axioms: [propext, Cl
 /-! ### The reader -/
 
 /--
-The library's script reader (`Reader.script`), with the recording handler and the posture that
-allows every version, fed a file in any slices by `Reader.readSlice` and then the end of the input
-by `Reader.readEof`, tells the handler the calls for the file's commands and finishes.
+The library's script reader (`Reader.script`) tells the handler the calls for a file's commands
+and finishes. It is fed the file in any slices by `Reader.readSlice` and then the end of the
+input by `Reader.readEof`. It has the recording handler and the posture that allows every
+version.
 -/
 theorem reader_reads_files : BSmtLibSpec.Reader.ReadsFiles Adapters.libraryReader :=
   libraryReader_readsFiles
@@ -307,9 +313,9 @@ info: 'BSmtLib.Facts.Reader.reader_reads_files' depends on axioms: [propext, Cla
 #print axioms reader_reads_files
 
 /--
-The library's script reader (`Reader.script`), with the recording handler and the posture that
-allows every version, fed an input in any slices by `Reader.readSlice` and then the end of the
-input by `Reader.readEof`, finishes only if the input is a file.
+The library's script reader (`Reader.script`) finishes only if its input is a file. It is fed the
+input in any slices by `Reader.readSlice` and then the end of the input by `Reader.readEof`. It
+has the recording handler and the posture that allows every version.
 -/
 theorem reader_finishes_only_on_files : BSmtLibSpec.Reader.FinishesOnlyOnFiles
     Adapters.libraryReader :=

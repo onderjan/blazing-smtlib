@@ -120,7 +120,7 @@ theorem normalSpec_string (v : Version) (input : ByteSlice) (offset base : Nat)
       rw [feedFrom_step hi (byteStep_idle_pending v C.concrete (by rw [hc, h34]; rfl)),
           prep_nil, hc, h34]
     apply WP.wp_ite
-    · -- under version 2.0 the string is left in progress at once
+    · -- in 2.0 the string is left in progress at once
       intro hv2
       unfold Lexer.Internal.WRustPort.leavePending
       apply WP.wp_bind; apply WP.wp_modifyBound

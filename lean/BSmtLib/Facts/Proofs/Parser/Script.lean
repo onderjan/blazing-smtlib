@@ -151,8 +151,8 @@ theorem step_commands (version : Version) (command : Parser.Command.Internal.Com
         token := (rfl)
 
 /--
-The script parser runs as the command parser, with the command
-parser's calls due at a token's arrival, and goes on after the command as its outcome says.
+The script parser runs as the command parser, with the command parser's calls due at a token's
+arrival, and goes on after the command as its outcome says.
 -/
 theorem script_embed (version : Version) (command : Parser.Command.Internal.CommandStateOf H)
     (declarations : Nat) (tokens : List Parser.Internal.Input) :
@@ -439,9 +439,10 @@ section
 variable {H : Type} {m : Type → Type} [Monad m]
 
 /--
-The script parser under a posture, from its start, over what a parser receives for a script with
-the initial version and any rest, with the handler told the version first as the parse adapter
-does, is the formalism's script under the policy of the posture, and finishes before the rest.
+The script parser under a posture, from its start, runs as the formalism's script under the
+policy of the posture, and finishes before the rest. It runs over what a parser receives for a
+script with the initial version, followed by any rest, with the handler told the version first,
+as the parse adapter does.
 -/
 theorem script_correct [Handler.CommandHandler H m] [LawfulMonad m] {points : Points (StateT H m)}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : Agrees h)

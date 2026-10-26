@@ -11,12 +11,15 @@ import all BSmtLib.Parser.Adapter
 /-!
 # The library's lexer with the parse adapter finishes only on files
 
+`adapter_finishes_only_on_files`: the library's lexer with the parse adapter returns a result at
+the end of the input only on a file.
+
 The tokens that the library's lexer takes with the stand-in consumer, after the end of the input,
 are `Good` (`good_of_classified`, from `lexing_classified`): every start of them stands for a start
 of what a parser takes, or for such a start and the first item no script continues with, and the
 stand-in consumer went on at all but the last. So where the run with the parse adapter returns a
 result at the end of the input, the run with the stand-in consumer finishes (`feed_finishes`),
-which it does only on a file (`lexing_finishes_iff`): `adapter_finishes_only_on_files`.
+which it does only on a file (`lexing_finishes_iff`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Param.Only
@@ -109,10 +112,10 @@ theorem good_of_classified
 
 /-! ## Finishing -/
 
-/-- The library's lexer with the parse adapter, over the recording handler and the script parser
-that allows every version, fed the characters of an input cut into any slices, by its public
-calls, and then the end of the input: where the end of the input returns a result, the input reads
-as a file. -/
+/-- Where the library's lexer with the parse adapter, over the recording handler and the script
+parser that allows every version, returns a result at the end of the input, the input reads as a
+file. The lexer is fed the characters of the input cut into any slices, by its public calls, and
+then the end of the input. -/
 theorem adapter_finishes_only_on_files (version : Lexicon.Version) (slices : List Regex.Chars)
     {result : Span.Located Unit} {lexer : PLexer}
     (hfeed : paFeed (Lexer.new recordingAdapter (toVersion version)) slices =

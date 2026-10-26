@@ -9,7 +9,7 @@ public import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
 /-!
 # Simulation of one lexer's steps by another's
 
-The framework in which the links between the lexers of the chain are proved, in parts:
+The links between the lexers of the chain are proved in a framework of these parts:
 
 - `Simulation.Steps`: the steps of the lexers, an exception over the lexer's state over the
   consumer's, and their simulation by a map of the states, from every state (`Sim`) or under

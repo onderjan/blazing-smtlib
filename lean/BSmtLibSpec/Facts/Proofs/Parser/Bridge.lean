@@ -7,14 +7,17 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Placement
 /-!
 # Every handler's run is placed as the recording's
 
-A cut run (`cutRun`) is the traversal of a script with any handler, points and producer,
-stopped when a given item arrives: its points count the items that arrive and stop the run at
-the arrival of the item at the given position, so nothing after it happens; a processing-cut run
-(`processingCutRun`) stops before the processing of that item instead, after the calls due at its
-arrival but without passing the arrival itself on. The cut runs of two
-valid scripts are equal when what a parser receives for them agrees before that item
-(`cutRun_eq`), and so when their recordings agree before that item (`cutRun_eq_of_record`); and
-likewise for processing-cut runs (`processingCutRun_eq`, `processingCutRun_eq_of_record`).
+A cut run (`cutRun`) is the traversal of a script with any handler, points and producer, stopped
+when a given item arrives. Its points count the items that arrive and stop the run at the
+arrival of the item at the given position, so nothing after it happens. A processing-cut run
+(`processingCutRun`) stops before the processing of that item instead: after the calls due at
+its arrival, but without passing the arrival itself on.
+
+The cut runs of two valid scripts from the same version are equal when what a parser receives
+for them agrees before that item (`cutRun_eq`). So the cut runs of two valid scripts are equal
+when their recordings agree before that item (`cutRun_eq_of_record`). The same holds for
+processing-cut runs, with recordings that agree before the processing of that item
+(`processingCutRun_eq`, `processingCutRun_eq_of_record`).
 
 The proof: the traversal is `parseScript` run on the items (`Parser.Simulation`), and a program
 run with the counting points does before the cut only what the items before the cut tell it.

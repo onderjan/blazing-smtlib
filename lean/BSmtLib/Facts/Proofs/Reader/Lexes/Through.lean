@@ -10,11 +10,13 @@ import all BSmtLib.Reader
 /-!
 # The reader after an input it read to the end
 
-The reader over the lexer with the parse adapter, fed an input to its end by its public calls,
-and the lexer with the stand-in consumer `Flagged (scriptConsumer version)` fed the same, from
-related lexers: where the reader does not fail, the lexer with the stand-in consumer does not
-fail either, ends with the fields of the reader's lexer, and the parse adapter stands where the
-recording run over the tokens that lexer took leaves the parser (`through_flagged`).
+`through_flagged` runs two things from related lexers, each fed an input to its end by its public
+calls: the reader over the lexer with the parse adapter, and the lexer with the stand-in consumer
+`Flagged (scriptConsumer version)`. Where the reader does not fail:
+- the lexer with the stand-in consumer does not fail either;
+- it ends with the fields of the reader's lexer;
+- the parse adapter stands where the recording run over the tokens that lexer took leaves the
+  parser.
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.Through
@@ -41,12 +43,13 @@ open BSmtLib.Facts.PublicApi.Adapters (ByteList feed readThrough)
 
 variable {version : Lexicon.Version}
 
-/-- The end of the input, after which the tokens taken with the first consumer are `Good`, from
-a state the lexer reaches: where it does not fail with the first consumer, it does not with the
-parse adapter, returns a result exactly where it does with the first, ends with the fields it ends
-with with the first, nothing having gone wrong with the first, and the parse adapter then
-stands where the recording run over the tokens taken leaves the parser; where it fails, it fails
-with the parse adapter, which stands there too. -/
+/-- The end of the input from a state the lexer reaches, after which the tokens taken with the
+first consumer are `Good`:
+- where it does not fail with the first consumer, nothing has gone wrong with the first; with the
+  parse adapter, it does not fail either, returns a result exactly where it does with the first,
+  and ends with the fields it ends with with the first; the parse adapter then stands where the
+  recording run over the tokens taken leaves the parser;
+- where it fails, it fails with the parse adapter, which stands there too. -/
 theorem eof_stepC (hnl : NoLayout (scriptConsumer version) (toVersion version))
     (a : FLexer version) (p : PLexer) (taken : List Handed)
     (hI : InvF version a p taken)

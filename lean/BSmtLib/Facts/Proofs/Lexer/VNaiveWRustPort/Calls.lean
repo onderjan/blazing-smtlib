@@ -16,14 +16,19 @@ import all BSmtLib.Lexer.Error
 
 `lexing_wRustPort_vNaive`: what the adapter makes of the Rust port `WRustPort` with every consumer
 of the specification formalism (`BSmtLibSpec`) is what it makes of the naive lexer
-(`Adapters.lexing`). Between two calls the Rust port's lexer state corresponds to the naive lexer's
-(`CR`): the same version and holding, and the naive lexer's pure state at its location, or both
-discard from the same location. A call on a slice (`slice_step`) lexes it by the loop over its stops
-(`loop`, via `inner_loop`) or discards it, where both lexers stay; a call at the end of the input
-(`eof_step`) gives what both do there (`eofRes_unique`). The calls give results the formalism does
-not tell apart (`CallAlike`), which is what `lexing_alikeF` needs. With a consumer that does not
-take whitespace and comments, the Rust port's calls never fail with the adapter's error `none`,
-which the adapter's consumer answers when it is handed one (`slice_step_noNone`, `eof_step_noNone`).
+(`Adapters.lexing`).
+
+Between two calls the Rust port's lexer state corresponds to the naive lexer's (`CR`): they have
+the same version and holding, and either the state is the naive lexer's pure state at its
+location, or both discard from the same location. The calls give results the formalism does not
+tell apart (`CallAlike`), which is what `lexing_alikeF` needs:
+- a call on a slice (`slice_step`) lexes it by the loop over its stops (`loop`, via
+  `inner_loop`) or discards it, where both lexers stay;
+- a call at the end of the input (`eof_step`) gives what both do there (`eofRes_unique`).
+
+With a consumer that does not take whitespace and comments, the Rust port's calls never fail with
+the adapter's error `none`, which the adapter's consumer answers when it is handed one
+(`slice_step_noNone`, `eof_step_noNone`).
 -/
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
@@ -239,9 +244,9 @@ theorem slice_step (c : WP.WCore) (n : Core) (bytes : List UInt8) (taken : List 
     unfold discardedOf
     rw [b2]
 
-/-- A call of the Rust port that lexes a slice, from a state that is the naive lexer's, with a
-consumer that does not take whitespace and comments, does not fail with the adapter's error
-`none`: the consumer is handed no whitespace or comment. -/
+/-- With a consumer that does not take whitespace and comments, a call of the Rust port that lexes
+a slice from a state that is the naive lexer's does not fail with the adapter's error `none`: the
+consumer is handed no whitespace or comment. -/
 theorem slice_step_noNone (c : WP.WCore) (n : Core) (bytes : List UInt8) (taken : List Handed)
     (h : CR C c n) (hc : C.concrete = false) :
     ∀ e, (runIA (Lexer.Internal.WRustPort.lexSliceStep (H := Answering C) (m := AnswerM)
@@ -391,8 +396,8 @@ theorem eof_step (c : WP.WCore) (n : Core) (taken : List Handed) (h : CR C c n) 
         hkeep.initial.trans h.initial, rfl, fun e he => by cases he⟩
       rw [hcur]
 
-/-- A call of the Rust port at the end of the input, from a state that is the naive lexer's, with
-a consumer that does not take whitespace and comments, does not fail with the adapter's error
+/-- With a consumer that does not take whitespace and comments, a call of the Rust port at the end
+of the input from a state that is the naive lexer's does not fail with the adapter's error
 `none`: the consumer is handed no whitespace or comment. -/
 theorem eof_step_noNone (c : WP.WCore) (n : Core) (taken : List Handed) (h : CR C c n)
     (hc : C.concrete = false) :

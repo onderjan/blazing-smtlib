@@ -10,8 +10,8 @@ import all BSmtLib.Span
 /-!
 # Facts about the bytes and locations of the naive lexer
 
-The byte classes of `VNaive` as the classes of character codes of the specification formalism
-(`BSmtLibSpec`) and its checks, and the locations the lexer computes byte by byte as the formalism's
+The byte classes of `VNaive` are the classes of character codes of the specification formalism
+(`BSmtLibSpec`) and its checks. The locations the lexer computes byte by byte are the formalism's
 `locate`.
 -/
 

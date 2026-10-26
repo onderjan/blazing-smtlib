@@ -16,10 +16,16 @@ import all BSmtLib.Token.Reserved
 /-!
 # What the parts of commands can still take
 
-Symbols as list elements, sort declarations, propositional literals, signatures and function
-declarations, constructors, datatype declarations, and the bodies of recursive functions.
+This module gives the remainders of the parsers of these parts of commands:
+- symbols as list elements;
+- sort declarations;
+- propositional literals;
+- signatures and function declarations;
+- constructors;
+- datatype declarations;
+- the bodies of recursive functions.
 
-The literal parser runs the term parser beside a shape of the literal; a state is one that its
+The literal parser runs the term parser beside a shape of the literal. A state is one that its
 input can lead to only where the two agree (`LiteralSync`), and only such a state has remainders.
 -/
 

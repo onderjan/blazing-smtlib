@@ -126,10 +126,10 @@ meta def findBlankLemma (name : String) : MetaM (Option Name) := do
     let lemma := m ++ Name.mkSimple name
     if env.contains lemma then some lemma else none
 
-/-- Relates the two sides of a `BSim` goal that call the same step by the step's lemma: for a
-function `f`, `f_blank`, or `T_step_blank` for `T.step` and `T.Internal.step`, and for a step
-given as an argument, the hypothesis about it; the walk proves the equations between the
-arguments after. -/
+/-- Relates the two sides of a `BSim` goal that call the same step by the step's lemma. For a
+function `f`, the lemma is `f_blank`, or `T_step_blank` for `T.step` and `T.Internal.step`; for
+a step given as an argument, it is the hypothesis about it. The walk proves the equations
+between the arguments after. -/
 syntax "blank_sub" : tactic
 
 open Lean Meta Elab Tactic in

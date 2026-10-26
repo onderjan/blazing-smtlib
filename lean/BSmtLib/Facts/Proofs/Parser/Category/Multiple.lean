@@ -299,7 +299,7 @@ private theorem first_close {version : Version} {p : P} {Z : Type} [Cursor Z]
       ofSyntax_parenClose htoken]
     simp [outcome, ClosedMultipleParser.new]
 
-/-- Between values, the end of the cursor: the loop wants more, as it is. -/
+/-- Between values, the end of the cursor: the loop continues, as it is. -/
 private theorem loop_end {p : P} {Z : Type} [Cursor Z] {origin last : Z} (items : Array R)
     (state : ParseState H) (hc : Cursor.Consumed last origin)
     (hnone : Cursor.next? last = none) :
@@ -349,8 +349,8 @@ private theorem loop_rejects {version : Version} {p : P} {Z : Type} [Cursor Z]
         rw [onOutcome_rejected _ _ _ (fun _ => hcf)]
         simp [outcomeAny, answer]
 
-/-- Between values, the inner parser wants more on tokens that do not start with `)`: the loop
-wants more, as the inner parser, within a value. -/
+/-- Between values, when the tokens do not start with `)` and the inner parser continues on them,
+the loop continues, as the inner parser, within a value. -/
 private theorem loop_waits {version : Version} {p : P} {Z : Type} [Cursor Z]
     {origin last final : Z} {tokens : List Parser.Internal.Input} {α : Type}
     {program : PM H α} {after : α → P} (h : Outcome.Waits version p tokens program after)
@@ -687,8 +687,9 @@ theorem closedMultiple_rejects_inner {version : Version} {p : P}
   items_rejects hvalues h hfirst #[]
 
 /--
-The closed list parser on its values and no more: it wants more, as a parser that finishes on
-further values and the `)`, and rejects further values and tokens that its inner parser rejects.
+When the cursor holds exactly the tokens of its values, the closed list parser continues, as a
+parser that finishes on further values and the `)`, and rejects further values and tokens that
+its inner parser rejects.
 -/
 theorem closedMultiple_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
@@ -714,9 +715,9 @@ theorem closedMultiple_waits_between {version : Version} {p : P}
     simpa using this
 
 /--
-The closed list parser on its values and then tokens on which its inner parser wants more, not
-starting with `)`: it wants more, as a parser that finishes once the inner parser finishes its
-value and further values and the `)` follow.
+When the cursor holds its values and then tokens that do not start with `)`, and its inner parser
+continues on those tokens, the closed list parser continues, as a parser that finishes once the
+inner parser finishes its value and further values and the `)` follow.
 -/
 theorem closedMultiple_waits_inner {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
@@ -802,8 +803,8 @@ theorem parenMultiple_rejects_inner {version : Version} {p : P}
   obtain ⟨token, tokens', rfl, _⟩ := hfirst
   simp
 
-/-- The list parser enclosed in `(` and `)` on its `(` and no more: it wants more, as a parser
-that finishes on values and the `)`. -/
+/-- When the cursor holds exactly its `(`, the list parser enclosed in `(` and `)` continues, as a
+parser that finishes on values and the `)`. -/
 theorem parenMultiple_waits_open {version : Version} {p : P} :
     ∃ after : Unit → ParenMultipleParser H P,
       Outcome.Waits version (ParenMultipleParser.new (H := H) p)
@@ -818,8 +819,8 @@ theorem parenMultiple_waits_open {version : Version} {p : P} :
   exact ⟨fun a => ⟨after a⟩, wraps_waits parenMultiple_wraps hwaits,
     fun hv => wraps_finishes parenMultiple_wraps (hfin (closedMultiple_parses hv))⟩
 
-/-- The list parser enclosed in `(` and `)` on its `(` and values, at least one, and no more:
-it wants more, as a parser that finishes on further values and the `)`. -/
+/-- When the cursor holds exactly its `(` and its values, at least one, the list parser enclosed
+in `(` and `)` continues, as a parser that finishes on further values and the `)`. -/
 theorem parenMultiple_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hne : values ≠ []) :

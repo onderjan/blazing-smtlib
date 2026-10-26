@@ -12,9 +12,10 @@ import all BSmtLib.Lexer
 The library's lexer lexes a slice whose end is not below `USize.size` chunk by chunk
 (`Internal.lexChunks`): it copies each chunk into an array of its own and lexes it as a slice of
 its own, as `lexSliceStep` lexes a slice that ends below `USize.size` (`Internal.lexSliceFitting`).
+
 This module cuts a slice into the chunks that `lexChunks` lexes (`cut`), and every slice of a
-list that is too large (`cutAll`), with the same bytes (`flatten_cutAll`); and it states a chunk
-as `lexChunks` makes it as the slice of the bytes of the chunk, which ends below `USize.size`
+list that is too large (`cutAll`), with the same bytes (`flatten_cutAll`). It also states a chunk
+as `lexChunks` makes it: the slice of the bytes of the chunk, which ends below `USize.size`
 (`chunk_eq`, `chunk_stop_lt`).
 -/
 

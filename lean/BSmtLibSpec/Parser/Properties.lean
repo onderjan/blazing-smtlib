@@ -226,11 +226,13 @@ inductive Ending where
 
 /--
 `Takes version commands items ending`: with the initial version `version`, a parser takes the
-items for the commands, and then ends as `ending` says. Either the commands are a script, the
-items what a parser receives for it (`received`), and the parser finishes; or the commands are
-valid up to a version declaration that names no supported version, which ends them, the items
-are their tokens up to that declaration's `)`, and the parser fails there with
-`unsupportedVersion`.
+items for the commands, and then ends as `ending` says. There are two cases:
+
+- the commands are a script, the items are what a parser receives for it (`received`), and the
+  parser finishes;
+- the commands are valid up to a version declaration that names no supported version, which ends
+  them; the items are their tokens up to that declaration's `)`, and the parser fails there with
+  `unsupportedVersion`.
 
 Standard: 2.7 §3.11 Scripts. Readings M1, M2 and M3, as `Tree.Command.modeAfter`.
 -/
@@ -270,9 +272,9 @@ def versionAt (version : Version) : List Tree.Command → Nat → Version
 
 /--
 A parser as its recording runs show it. It takes items of its own type, each of which stands for
-a token or the end of the input (`stands`); from the initial version and the items it is
-given, it records the events of its run, with a handler, token points and a producer that write
-them down as in `record`, and ends as `Ending` says.
+a token or the end of the input (`stands`). From the initial version and the items it is given,
+it records the events of its run and ends as `Ending` says. The handler, the token points and the
+producer of the run write the events down as in `record`.
 -/
 structure RecordingParser where
   Item : Type

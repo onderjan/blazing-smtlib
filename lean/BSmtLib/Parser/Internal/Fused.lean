@@ -399,9 +399,9 @@ def step {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : N
 
 /--
 Hands `cursor`, which has a token, to the handler's parser of a non-standard command's payload,
-and hands it the cursor again while it wants more and tokens are left, as the loop over single
+and hands it the cursor again while it continues and tokens are left, as the loop over single
 tokens does (`Parser.Script.ScriptParser.Internal.handOver?`): the loop's result if the parser
-failed or wants more, else the cursor after the command's `)`, with the handler. The cursors
+failed or continues, else the cursor after the command's `)`, with the handler. The cursors
 given back come from `base`, which comes from `origin`.
 -/
 def handOver {batch : BatchTag} (posture : VersionPosture) (origin base : LexerCursor batch) (h : H)

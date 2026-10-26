@@ -37,10 +37,10 @@ theorem eofResult_w {α : Type} (held : Option (Span.Located α))
 
 abbrev WOps := BSmtLib.Facts.Lexer.Adapters.WRustPort.lexOps
 
-/-- The Rust port with the collector fed slices by its public calls, and the Rust port with the
-adapter's consumer for the concrete collector fed them by the adapter, from lexers with the same
-state and related held results: the collector writes down the entries the other takes, and the
-two end alike. -/
+/-- The Rust port with the collector and the Rust port with the adapter's consumer for the
+concrete collector end alike, and the collector writes down the entries the other takes. The
+first is fed slices by its public calls, the second the same slices by the adapter; the two start
+from lexers with the same state and related held results. -/
 theorem collectW_runInputE : ∀ (slices : List ByteList)
     (L₁ : Lexer.Internal.WRustPort.Lexer Collector)
     (L₂ : Lexer.Internal.WRustPort.Lexer (Answering concreteCollector))

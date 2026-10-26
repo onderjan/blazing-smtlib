@@ -41,7 +41,7 @@ open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Delimiters
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.Legacy
 open BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Tables.TextRuns BSmtLib.Lexer.Internal.VNaive
 
-/-! ## The naive lexer in a string under version 2.0 -/
+/-! ## The naive lexer in a string in 2.0 -/
 
 theorem isLegacyRun_ne (c : UInt8) (h : isLegacyRun c = true) : c ≠ 10 :=
   isLegacyStringRun_ne c (by simp only [isLegacyRun, Bool.and_eq_true] at h; exact h.1)
@@ -93,7 +93,7 @@ section
 variable {floor : Option Nat} {low : Nat}
 variable {C : BSmtLibSpec.Lexer.Consumer} {hd : Bool} {iv : Version}
 
-/-- What the loop of a string under version 2.0 keeps, from the index `consumed`: if the lexer
+/-- What the loop of a string in 2.0 keeps, from the index `consumed`: if the lexer
 state is in the string from `tokenStart`, and the naive lexer's run from the step's index
 `start0` is its run from the string `q` at `consumed`, then the loop ends the step as the naive
 lexer does. -/

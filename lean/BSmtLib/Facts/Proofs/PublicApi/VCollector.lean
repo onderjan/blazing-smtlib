@@ -84,8 +84,8 @@ theorem lexemes_noEof (v : Version) (st : St) (location : Span.Location) (bs : L
   rcases lexBytesF v true st location bs with ⟨ls, f⟩ | ⟨st', loc', ls⟩ <;> exact id
 
 /-- The naive lexer with the concrete collector, fed bytes from a lexer state that is the pure
-run's state and holds no result: it goes on, holding none, in a pure state again, or fails with
-a lexical error other than trailing input. -/
+run's state and holds no result, goes on, holding none, in a pure state again, or fails with a
+lexical error other than trailing input. -/
 theorem vBytes_cc (core : Core) (st : St) (hact : core.activity = st.activity)
     (hh : core.holding = false) (bs : List UInt8) (taken : List Handed) :
     ((vBytes concreteCollector core none bs taken).1.1 = .ok none ∧

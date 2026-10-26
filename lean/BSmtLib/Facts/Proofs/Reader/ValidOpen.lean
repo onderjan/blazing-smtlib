@@ -9,10 +9,13 @@ public import BSmtLibSpec.Facts.Proofs.Grammar.Files
 /-!
 # From characters to the calls of the traversal, before the end of the input
 
-Any lexer correct with every consumer, with the script consumer, fed a file without the end of
-the input, goes through the file's readings as it does with the end (`runs_group_open`, the
-analogue of `Valid.runs_group`), except that `exit` leaves it discarding from the end of its `)`,
-and no end of file is handed over, so with no `exit` it waits or has failed, and does not discard.
+`runs_group_open`: any lexer correct with every consumer goes through the readings of a file with
+the script consumer before the end of the input as it does with the end (`Valid.runs_group`),
+with two differences:
+- `exit` leaves it discarding from the end of its `)`;
+- no end of file is handed over, so with no `exit` it waits or has failed, and does not discard.
+
+The lexer is fed the file without the end of the input.
 -/
 
 open BSmtLib.Facts.Proofs.Reader.Consumer BSmtLib.Facts.Proofs.Reader.Feed

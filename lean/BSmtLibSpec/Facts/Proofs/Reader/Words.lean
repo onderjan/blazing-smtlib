@@ -9,9 +9,9 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
 /-!
 # The reserved words that a parser takes
 
-Every reserved word among the items that a parser takes for commands, a script's or those that a
-declaration of a version that is not supported ends, is reserved in 2.7, which reserves the
-words that every version reserves (`takes_reserved`).
+`takes_reserved`: 2.7 reserves every reserved word among the items that a parser takes for
+commands, a script's or those that a declaration of a version that is not supported ends. 2.7
+reserves the words that every version reserves.
 
 The tokens of a tree hold a reserved word only as one of the fixed words of its productions,
 all of which 2.7 reserves, or as a reserved s-expression, which a valid tree has only with a

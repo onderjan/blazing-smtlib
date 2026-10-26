@@ -8,11 +8,14 @@ import all BSmtLib.Parser
 /-!
 # A parser stepped by single tokens, on a cursor: the pieces
 
-Cursors that give a list of tokens (`Takes`, `Reads`), the token points that mark nothing, and
-the relation of a parser to its steps (`Simulates`): it is no more than a state of the steps, no
-call is due at a token's arrival, it never acts on the cursor, and it goes back to its initial
-state when it finishes. The loop over single tokens against those steps is in
-`Category.CursorS`.
+This module gives the pieces for running a parser stepped by single tokens on a cursor:
+- cursors that give a list of tokens (`Takes`, `Reads`);
+- the token points that mark nothing;
+- the relation of a parser to its steps (`Simulates`): the parser is no more than a state of the
+  steps, no call is due at a token's arrival, it never acts on the cursor, and it goes back to
+  its initial state when it finishes.
+
+The loop over single tokens against those steps is in `Category.CursorS`.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Cursor

@@ -19,12 +19,15 @@ conditions on positions and the contents to those on indices (`Positions` and th
 and the helpers to theirs (`Core` to `Steps`).
 
 The Rust port's code that `X1BatchInCore` runs differs from the library's lexer in form only:
-its locals are empty and whether the consumer takes whitespace and comments is a value, so both
-are read away first; it computes whether a token of the fast path is emitted as Rust does
-(`emit_eq`); it throws the errors it forms; and it reads a window of two bytes after a string
-literal's run where the library's lexer reads the byte after the closing quote only once it has
-found the quote, which finds the string closed alike (`closedN_window`, `closedN_none`). Where
-the first lexer's code comes first in the goal and would be split first,
+- its locals are empty and whether the consumer takes whitespace and comments is a value, so both
+  are read away first;
+- it computes whether a token of the fast path is emitted as Rust does (`emit_eq`);
+- it throws the errors it forms;
+- it reads a window of two bytes after a string literal's run where the library's lexer reads the
+  byte after the closing quote only once it has found the quote, which finds the string closed
+  alike (`closedN_window`, `closedN_none`).
+
+Where the first lexer's code comes first in the goal and would be split first,
 `Simulation.SimF.hide_left` names it, so that the second lexer's dependent match is split first.
 `lexNormal_sim` is the entry to the loop from the lexer's base.
 -/

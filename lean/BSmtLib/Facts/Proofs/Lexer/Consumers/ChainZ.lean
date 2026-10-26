@@ -10,16 +10,19 @@ import all BSmtLib.Lexer.Internal.WRustPort
 /-!
 # The library's lexer and `X1BatchInCore` with every consumer of the formalism
 
-The steps of the library's lexer and of `X1BatchInCore` on a slice that ends below `USize.size`,
-from lexers with related states, give the same results and take the same tokens, also where they
-hold different results (`step_fit`). A slice that does not end below `USize.size` the library's
-lexer lexes in chunks (`lexChunks`), keeping the results it holds from them aside until the end
-of the slice; `X1BatchInCore`, fed the chunks one after another by the adapter, holds each as it
-comes (`chunks_rel`). So the library's lexer fed slices by the adapter does what `X1BatchInCore`
-does fed their cut (`runInput_cut`): the two take the same tokens and stand alike, and are related
-where they do not fail; where they fail, they may hold different results, and the adapter goes on
-with a new lexer after a failed input. So the adapter makes of the library's lexer what it makes
-of `X1BatchInCore` fed each input cut (`lexing_cut`).
+`lexing_cut`: the adapter makes of the library's lexer what it makes of `X1BatchInCore` fed each
+input cut. The proof goes in three steps:
+- On a slice that ends below `USize.size`, the steps of the library's lexer and of
+  `X1BatchInCore`, from lexers with related states, give the same results and take the same
+  tokens, also where they hold different results (`step_fit`).
+- The library's lexer lexes a slice that does not end below `USize.size` in chunks
+  (`lexChunks`) and keeps the results it holds from them aside until the end of the slice;
+  `X1BatchInCore`, fed the chunks one after another by the adapter, holds each as it comes
+  (`chunks_rel`).
+- So the library's lexer fed slices by the adapter does what `X1BatchInCore` does fed their cut
+  (`runInput_cut`): the two take the same tokens and stand alike, and are related where they do
+  not fail. Where they fail, they may hold different results, but the adapter goes on with a
+  new lexer after a failed input.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.ChainZ
@@ -161,10 +164,11 @@ theorem run_lexChunks_ge (l : Lexer.lexOps.Lexer consumer) (s : BSmtLibSpec.Rege
   rw [BSmtLib.Lexer.Internal.lexChunks, dite_eq_right_of_eq_false (eq_false hp')]
   rfl
 
-/-- `lexChunks` from `p` on the library's lexer, and the calls of `X1BatchInCore` on the chunks
-from `p` on, from lexers with related states, the second holding what the first holds after the
-result held from the chunks before: the two give the same result, take the same tokens, and have
-related states, the second holding then after the first's held result what the chunks gave. -/
+/-- `lexChunks` from `p` on the library's lexer and the calls of `X1BatchInCore` on the chunks
+from `p` on give the same result, take the same tokens and leave related states. They start from
+lexers with related states, where `X1BatchInCore` holds the result `acc` held from the chunks
+before, or else what the library's lexer holds. Where `lexChunks` does not fail, `X1BatchInCore`
+then holds the result it gives, or else what the library's lexer held at the start. -/
 theorem chunks_rel (s : BSmtLibSpec.Regex.Chars) (rest : List BSmtLibSpec.Regex.Chars)
     (ended : Bool)
     (p : Nat) :

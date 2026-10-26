@@ -15,12 +15,15 @@ import all BSmtLib.Span
 /-!
 # Runs and bytes of a slice, cursors and contents
 
-What the Rust port's run scans are compared with: the end of a run of bytes that pass a test
-(`runEnd`), the bytes of a slice between two indices (`bytesOf`), the location after a run of
-bytes other than line feeds (`afterColumns`), and the byte classes of the runs that a token in
-progress takes as they are. The naive lexer's step `advance` takes each byte of such a run as it
-is (`advance_*_run`), and its step `start` starts the tokens of the fast paths as stated by
-`start_symbol`, `start_space` and `start_quoted`.
+The Rust port's run scans are compared with:
+- the end of a run of bytes that pass a test (`runEnd`);
+- the bytes of a slice between two indices (`bytesOf`);
+- the location after a run of bytes other than line feeds (`afterColumns`);
+- the byte classes of the runs that a token in progress takes as they are.
+
+The naive lexer's step `advance` takes each byte of such a run as it is (`advance_*_run`), and its
+step `start` starts the tokens of the fast paths as stated by `start_symbol`, `start_space` and
+`start_quoted`.
 
 A step of a cursor keeps its batch and its requests (`intoBatch_next`, `version_next`,
 `discard_next`, `relex_next`), and the lookup of reserved words reads only the bytes of a content
@@ -185,12 +188,12 @@ but the line feed. -/
 def isQuotedRun (c : UInt8) : Bool :=
   isTextByte c && c != byte! '|' && c != byte! '\\' && c != byte! '\n'
 
-/-- Whether the byte is a part of a string from version 2.5 on that is not acted on: any byte
+/-- Whether the byte is a part of a string from 2.5 on that is not acted on: any byte
 of its content but the quote and the line feed. -/
 def isStringRun (c : UInt8) : Bool :=
   isTextByte c && c != byte! '"' && c != byte! '\n'
 
-/-- Whether the byte is a part of a string under version 2.0 that is not acted on: any byte of
+/-- Whether the byte is a part of a string in 2.0 that is not acted on: any byte of
 its content but the quote, the backslash and the line feed. -/
 def isLegacyStringRun (c : UInt8) : Bool :=
   isTextByte c && c != byte! '"' && c != byte! '\\' && c != byte! '\n'

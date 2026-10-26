@@ -7,16 +7,19 @@ public import BSmtLibSpec.Facts.Proofs.Reader.Commands
 /-!
 # A lexer with a parser finishes only on a file
 
-A correct lexer with a parser that follows the traversal and rejects the first item that no
-script continues with as its consumer finishes only when the parser has taken what a parser
-takes for a script (`finishes_script`): as long as the parser continues, the items it took stand
-for a strict start of what a parser takes for commands, as it would otherwise have rejected an
-item or finished; the lexer hands over only words that the version in force reserves, which is the
-version the traversal has switched to, and after the parser has asked for the discarding, as
-the traversal does after `exit`, nothing but the end of the file (`viable_step`). The tokens the
-parser took are then those of a file with that script, each command read in the version in force
-(`finishes_file`): the lexer has handed them over from a readout of the input after the last switch
-(`next_command`).
+The run of a correct lexer finishes only when its consumer, a parser, has taken what a parser
+takes for a script (`finishes_script`). The parser follows the traversal and rejects the first
+item that no script continues with. The proof rests on three facts:
+- as long as the parser continues, the items it took stand for a strict start of what a parser
+  takes for commands, as it would otherwise have rejected an item or finished;
+- the lexer hands over only words that the version in force reserves, which is the version the
+  traversal has switched to;
+- after the parser has asked for the discarding, as the traversal does after `exit`, the lexer
+  hands over nothing but the end of the file (`viable_step`).
+
+The tokens the parser took are then those of a file with that script, each command read in the
+version in force (`finishes_file`): the lexer has handed them over from a readout of the input
+after the last switch (`next_command`).
 
 Not trusted: everything here is proved.
 -/
@@ -123,9 +126,9 @@ variable (hF : FollowsTheTraversal parser) (hR : RejectsFirstUnviable parser)
 
 include hF hR hI in
 /-- A parser that continues on tokens that stand for a strict start of what a parser takes
-rejects the next token, or the tokens with it are a start of what a parser takes, when the next
-token stands for the end of the input wherever the traversal has asked for the discarding before
-it. -/
+rejects the next token, or the tokens with it are a start of what a parser takes. This holds
+when the next token stands for an item that a lexer can hand over in the version in force, and
+for the end of the input wherever the traversal has asked for the discarding before it. -/
 theorem viable_step {start : Version} {commands : List Tree.Command}
     {all : List Traversal.Received} {ending : Ending} (ht : Takes start commands all ending)
     {taken : List Handed} {handed : Handed} {received : Traversal.Received}
@@ -227,11 +230,13 @@ theorem foldVersion_of_takes {start : Version} {commands : List Tree.Command}
 
 include hF hR hI in
 /--
-A correct lexer with a parser that follows the traversal and rejects the first item that no
-script continues with as its consumer, from a point where the parser has taken tokens that stand
-for a strict start of what a parser takes, the lexer is in the version the parser switched to,
-and every token ready stands for an item of that version: if the run finishes, the parser has
-taken what a parser takes for a script.
+A correct lexer has as its consumer a parser that follows the traversal and rejects the first
+item that no script continues with. The parser has taken what a parser takes for a script if
+the run finishes from a point where:
+- the parser has taken tokens that stand for a strict start of what a parser takes;
+- the parser has asked for no discarding after the last of them;
+- the lexer is in the version the parser switched to;
+- every token ready stands for an item of that version.
 -/
 theorem finishes_script (hL : Correct lexing.fed) {start : Version} {input : Chars} :
     ∀ {version ready failed taken session},
@@ -523,11 +528,12 @@ theorem next_command {start : Version} {input : Chars} {all : List Tree.Command}
 
 include hF hI in
 /--
-A correct lexer with a parser that follows the traversal as its consumer, which takes what a
-parser takes for a script: from a point between two commands, where the parser has taken the
-tokens of the commands before, the lexer reads from `offset` on in the version in force, and the
-commands from there to `stop` are a block of the tokens it has handed over, the rest of the input
-from `stop` on is a file with the rest of the commands.
+A correct lexer has as its consumer a parser that follows the traversal and takes what a parser
+takes for a script. The rest of the input from `stop` on is a file with the rest of the commands
+if, at a point between two commands:
+- the parser has taken the tokens of the commands before;
+- the lexer reads from `offset` on in the version in force;
+- the commands from there to `stop` are a block of the tokens it has handed over.
 -/
 theorem finishes_file (hL : Correct lexing.fed) {start : Version} {input : Chars}
     {all : List Tree.Command}

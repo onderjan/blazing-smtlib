@@ -158,11 +158,12 @@ theorem cause_ne_of_alike {ε : Type} {α β : Type} {Q : α → β → Prop}
   match x, h with
   | .error e', h => rw [← Param.Flagged.cause_eq h.1]; exact hx e' rfl
 
-/-- A call on a slice, after which the tokens taken with the first consumer are `Good`, from a
-state the lexer reaches: where it does not fail with the first consumer, it does not with the
-parse adapter, the lexers are again related and the state is reached; where it fails, it fails
-with the parse adapter, which then stands where the recording run over the tokens taken leaves
-the parser. -/
+/-- A call on a slice from a state the lexer reaches, after which the tokens taken with the first
+consumer are `Good`:
+- where it does not fail with the first consumer, it does not fail with the parse adapter, the
+  lexers are again related and the state is reached;
+- where it fails, it fails with the parse adapter, which then stands where the recording run over
+  the tokens taken leaves the parser. -/
 theorem slice_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
     (slice : ByteSlice) (hslice : ∃ bytes : Regex.Chars, slice = bytes.toByteArray.toByteSlice)
     (a : FLexer version) (p : PLexer) (taken : List Handed)
@@ -257,11 +258,12 @@ theorem slice_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version)
       · exact absurd (he₁ h hl) (hnone e rfl)
       · exact hinv''
 
-/-- The end of the input, after which the tokens taken with the first consumer are `Good`, from
-a state the lexer reaches: where it does not fail with the first consumer, it does not with the
-parse adapter, returns a result exactly where it does with the first, and the parse adapter then
-stands where the recording run over the tokens taken leaves the parser; where it fails, it fails
-with the parse adapter, which stands there too. -/
+/-- The end of the input from a state the lexer reaches, after which the tokens taken with the
+first consumer are `Good`:
+- where it does not fail with the first consumer, it does not fail with the parse adapter and
+  returns a result exactly where it does with the first; the parse adapter then stands where the
+  recording run over the tokens taken leaves the parser;
+- where it fails, it fails with the parse adapter, which stands there too. -/
 theorem eof_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
     (a : FLexer version) (p : PLexer) (taken : List Handed)
     (hI : InvF version a p taken)
@@ -428,12 +430,12 @@ theorem runInput_extendsT :
         (Param.Flagged.flaggedOps.withHeld a' (held.or (Param.Flagged.flaggedOps.held a'))) taken'
       exact ⟨more ++ more', by rw [hmore', hmore, List.append_assoc]⟩
 
-/-- The reader over the lexer with the parse adapter, and the lexer with the first consumer,
-fed the same slices, and then the end of the input if it has ended, from related lexers and a
-state the lexer reaches, the tokens taken with the first consumer being good: the reader's
-handler holds, in order, what the parse adapter's handler holds where it stands where the
-recording run over the tokens taken leaves the parser, and the reader finishes exactly where the
-first lexer does. -/
+/-- The reader over the lexer with the parse adapter and the lexer with the first consumer start
+from related lexers and a state the lexer reaches. They are fed the same slices, and then the
+end of the input if it has ended. Where the tokens taken with the first consumer are good:
+- the reader's handler holds, in order, what the parse adapter's handler holds where it stands
+  where the recording run over the tokens taken leaves the parser;
+- the reader finishes exactly where the first lexer does. -/
 theorem feed_told (hnl : NoLayout (scriptConsumer version) (toVersion version)) :
     ∀ (ended : Bool) (slices : List Regex.Chars) (a : FLexer version) (p : PLexer)
       (taken : List Handed), InvF version a p taken →

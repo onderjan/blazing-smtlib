@@ -16,11 +16,14 @@ import all BSmtLib.Parser.Adapter
 # The script parser's loop, blanked
 
 The script parser's step asks its loop for actions on the cursor, whose resumptions run in the
-parser's monad; with a handler whose calls never fail and with the blank handler, from blanked
-parsers, the step asks for the same actions with resumptions related by `BSim` (`step_blank`).
-So the loop of the reader proofs' adapter (`Param.Stop`) takes the same tokens with the two,
-stops at the same token with the same answer, its errors blanked, and the same cursor, and leaves
-blanked parsers (`takeOne_blank`, `rest_blank`).
+parser's monad. With a handler whose calls never fail and with the blank handler, from blanked
+parsers, the step asks for the same actions, with resumptions related by `BSim` (`step_blank`).
+
+So the loop of the reader proofs' adapter (`Param.Stop`) does alike with the two handlers
+(`takeOne_blank`, `rest_blank`):
+- it takes the same tokens;
+- it stops at the same token with the same answer, its errors blanked, and the same cursor;
+- it leaves blanked parsers.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

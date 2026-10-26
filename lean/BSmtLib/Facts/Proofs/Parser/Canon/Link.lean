@@ -9,10 +9,10 @@ import all BSmtLib.Parser.Adapter
 /-!
 # The parse adapter and the canonical adapter
 
-The library's lexer with the parse adapter and with the canonical adapter, from states whose
-canonicalisations agree, hand over alike: the same answers and cursors, and states whose
-canonicalisations agree again (`consumers`). So the steps of its calls relate as
-`Reader.Param.Calls` says.
+The library's lexer hands over alike with the parse adapter and with the canonical adapter,
+from states whose canonicalisations agree (`consumers`): the two runs give the same answers and
+cursors, and leave states whose canonicalisations agree again. So the steps of the lexer's calls
+relate as `Reader.Param.Calls` says.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Link

@@ -11,12 +11,13 @@ import all BSmtLib.Parser.Command.Internal.Datatype
 /-!
 # Lists of elements against the traversal
 
-`ListState.step` runs an inner parser for each element of a list up to a `)`. Given what the inner
-parser does on one element (`ElementRuns`: from its initial state it reads the element's tokens with
-a program whose value, through a bridge, is that of the specification formalism (`BSmtLibSpec`), and
-ends with it), the list parser reads the tokens of the elements with the programs one after another,
-collecting the values. A program's values are lists of a known length (`HasLength`), so that the
-list parser's checks of the number of elements are decided by it.
+`ListState.step` runs an inner parser for each element of a list up to a `)`. `ElementRuns`
+states what the inner parser does on one element: from its initial state, it reads the element's
+tokens with a program whose value, through a bridge, is that of the specification formalism
+(`BSmtLibSpec`), and ends with it. Given that, the list parser reads the tokens of the elements
+with the programs one after another, collecting the values. A program's values are lists of a
+known length (`HasLength`), so that the list parser's checks of the number of elements are
+decided by it.
 
 The first token of each element is taken from the state between elements, which steps on it as
 the inner parser's initial state does (`Runs.first`), since it is no `)`.

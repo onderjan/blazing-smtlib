@@ -61,8 +61,8 @@ info: 'BSmtLibSpec.Facts.Lexer.handoverMaximal_existsUnique' depends on axioms: 
 #guard_msgs in
 #print axioms Lexer.handoverMaximal_existsUnique
 
-/-- A lexer that is `Correct` is `Sequential`: fed more slices, or the end of the input, it has
-handed over what it had and possibly more, and once it has failed, it stays failed. -/
+/-- A lexer that is `Correct` is `Sequential`. When it is fed more slices or the end of the input,
+it has handed over what it had and possibly more. Once it has failed, it stays failed. -/
 theorem Lexer.sequential {feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed}
     (h : BSmtLibSpec.Lexer.Correct feed) :
     ∀ version slices more, BSmtLibSpec.Lexer.Sequential feed version slices more :=
@@ -74,9 +74,9 @@ info: 'BSmtLibSpec.Facts.Lexer.sequential' depends on axioms: [propext, Classica
 #guard_msgs in
 #print axioms Lexer.sequential
 
-/-- A lexer that is `Correct` is `WholeInputCorrect`: fed slices and then the end of the input,
-it has not failed and has handed over the tokens of the tokenisation of the input followed by
-the end-of-file token exactly when the input has a tokenisation. -/
+/-- A lexer that is `Correct` is `WholeInputCorrect`. It has not failed and has handed over the
+tokens of the tokenisation of the input, followed by the end-of-file token, exactly when the
+input has a tokenisation. The lexer is fed slices and then the end of the input. -/
 theorem Lexer.wholeInputCorrect
     {feed : Lexicon.Version → List Regex.Chars → Bool → BSmtLibSpec.Lexer.Fed}
     (h : BSmtLibSpec.Lexer.Correct feed) :

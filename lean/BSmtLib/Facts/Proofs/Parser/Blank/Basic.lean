@@ -11,13 +11,16 @@ import all BSmtLib.Parser
 # The handler's values blanked
 
 A step of the parser passes the handler's values on, from the handler's results into its state
-and back into the handler's calls, and never looks at them; it branches only on its tokens, on
-the parts of its state that are no values of the handler, and on whether a call failed. So a
-handler whose calls never fail (`NoFails`) is, for the parser's control, the handler `Shell`,
-whose state and values are all `()`: the step run with the handler gives what the step run with
-`Shell` on the state with every value of the handler replaced by `()` gives, with the values
-replaced (`BSim`). Lean does not give that free theorem, so it is proved for each step from how
-it is built, by the closure lemmas below.
+and back into the handler's calls, and never looks at them. It branches only on:
+- its tokens;
+- the parts of its state that are no values of the handler;
+- whether a call failed.
+
+So, for the parser's control, a handler whose calls never fail (`NoFails`) is the handler
+`Shell`, whose state and values are all `()`. `BSim` states this of a step: the step run with
+`Shell` on the state with every value of the handler replaced by `()` gives what the step run
+with the handler gives, with the values replaced. Lean does not give that free theorem, so it is
+proved for each step from how it is built, by the closure lemmas below.
 
 Two handlers whose calls never fail therefore run the parser alike: the same answers, the same
 cursors, the same failures, and states that are the same up to the values.

@@ -53,12 +53,13 @@ open BSmtLib.Span (Located)
 /-! ## Reprinting -/
 
 /--
-There is a handler told contents only, with a printer, such that on every input that the script
-reader over the handler reads to the end, in any slices, printing what the handler was told, with
-layout between the tokens, gives back the input up to where the reader began to discard it:
+There is a handler told contents only, with a printer, that gives back what the script reader
+over it reads. On every input that the reader reads to the end, in any slices, printing what the
+handler was told, with layout between the tokens, gives back the input up to where the reader
+began to discard it:
 
-- on every input, but for the spelling of string literals in 2.0, which may come back as another
-  literal that stands for the same bytes;
+- where the reader allows every version, but for the spelling of string literals in 2.0, which
+  may come back as another literal that stands for the same bytes;
 - exactly, where the reader allows only the versions from 2.5 on and starts in one of them.
 -/
 theorem reprinting : ∃ r : Reprinter, r.Reprints ∧ r.ReprintsExactly :=
@@ -74,10 +75,13 @@ info: 'BSmtLib.Facts.PublicApi.reprinting' depends on axioms: [propext, Classica
 /-! ## Lossless lexing -/
 
 /--
-The library's lexer, with a consumer that takes every token, whitespace and comments included,
-fed an input in any slices and then the end of the input, hands over tokens whose spans cover the
-input without a gap or an overlap, ending with the end of the input; or, at an error, tokens that
-cover the input from its start up to at most where the error is.
+The library's lexer hands over tokens whose spans cover the input without a gap or an overlap:
+
+- the whole input, ending with the end of the input, where no error occurs;
+- the input from its start up to at most where the error is, at an error.
+
+Its consumer takes every token, whitespace and comments included. The lexer is fed the input in
+any slices and then the end of the input.
 -/
 theorem lexing_lossless (version : Version) (slices : List ByteList) :
     match collect version slices with
@@ -108,9 +112,9 @@ info: 'BSmtLib.Facts.PublicApi.lexing_slicing' depends on axioms: [propext, Clas
 #print axioms lexing_slicing
 
 /--
-There is a handler told contents only, with a printer, as in `reprinting`, such that the script
-reader over the handler ends the same way, with the same printed tokens and the same location
-where it began to discard, however the input is cut into slices.
+There is a handler told contents only, with a printer as in `reprinting`, over which the script
+reader ends the same way however the input is cut into slices. The reader ends with the same
+printed tokens and the same location where it began to discard.
 -/
 theorem reading_slicing :
     ∃ r : Reprinter, r.Reprints ∧
@@ -128,12 +132,14 @@ info: 'BSmtLib.Facts.PublicApi.reading_slicing' depends on axioms: [propext, Cla
 /-! ## Composition and reset -/
 
 /--
-The library's lexer, with a consumer that takes every token: an input that it lexes to the end
-with a `)` as its last token is lexed as a prefix of every input it starts. For the longer input:
+The library's lexer lexes an input as a prefix of every input it starts, if it lexes the input to
+the end with a `)` as its last token. For the longer input:
 
 - its tokens are those of the prefix but the end of the input, and then the tokens of the rest as
   the rest alone has them, moved by the length of the prefix;
 - it ends as the rest does.
+
+The lexer's consumer takes every token.
 -/
 theorem lexing_composes (version : Version) (first rest : ByteList) (result : Option (Located Unit))
     (entries : List Entry) (h : collect version [first] = (.ok result, entries))
@@ -150,8 +156,8 @@ info: 'BSmtLib.Facts.PublicApi.lexing_composes' depends on axioms: [propext, Cla
 #print axioms lexing_composes
 
 /--
-The library's lexer, with a consumer that takes every token: after the end of an input, it lexes
-the next input as a new lexer created with the version does.
+After it has lexed an input to the end without an error, the library's lexer lexes the next input
+as a new lexer created with the version does. Its consumer takes every token.
 -/
 theorem lexing_resets (version : Version) (first : List ByteList) (log : List Entry)
     (result : Option (Located Unit)) (lexer : Lexer Collector)
@@ -168,9 +174,9 @@ info: 'BSmtLib.Facts.PublicApi.lexing_resets' depends on axioms: [propext, Class
 #print axioms lexing_resets
 
 /--
-There is a handler told contents only, with a printer, as in `reprinting`, such that the script
-reader over the handler, after it read an input to the end, reads the next input as a new
-script reader over its handler does.
+There is a handler told contents only, with a printer as in `reprinting`, over which the script
+reader is reset by the end of an input. After it read an input to the end, the reader reads the
+next input as a new script reader over its handler does.
 -/
 theorem reading_resets :
     ∃ r : Reprinter, r.Reprints ∧
@@ -191,9 +197,9 @@ info: 'BSmtLib.Facts.PublicApi.reading_resets' depends on axioms: [propext, Clas
 
 /--
 The naive lexer, the Rust port, the lexer with the batch kept in its state and the library's
-lexer, each with a consumer that takes every token, hand over the same tokens and end the same
-way, failing with errors of the same cause, on every input in any slices. Where an error is
-located is not compared.
+lexer hand over the same tokens and end the same way. They fail with errors of the same cause;
+where an error is located is not compared. Each has a consumer that takes every token and is fed
+the same input in the same slices, whatever they are.
 -/
 theorem lexers_agree (version : Version) (slices : List ByteList) :
     causeOnly (collectV version slices) = causeOnly (collect version slices) ∧
@@ -210,10 +216,11 @@ info: 'BSmtLib.Facts.PublicApi.lexers_agree' depends on axioms: [propext, Classi
 /-! ## Building the commands -/
 
 /--
-There is a handler told contents only, whose state is the version in force and a list of commands
-of the formalism, and whose sorts, s-expressions, attributes and terms are those of the
-formalism, such that the script reader over it, with the initial version and no commands, reads
-every file to the end and builds the file's commands.
+There is a handler told contents only over which the script reader builds the commands of every
+file. The handler's state is the version in force and a list of commands of the formalism. Its
+sorts, s-expressions, attributes and terms are those of the formalism. The reader starts in the
+file's initial version, with the handler holding that version and no commands; it reads the file
+to the end and leaves the file's commands in the handler.
 -/
 theorem builds_commands :
     ∃ inst : ContentHandler (BSmtLibSpec.Lexicon.Version × List BSmtLibSpec.Grammar.Tree.Command),

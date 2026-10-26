@@ -9,11 +9,14 @@ import all BSmtLib.Token.Reserved
 /-!
 # The command parser against the traversal
 
-From before a command, over the tokens of any command valid in the parser's version whose mode
-the calls due at a token's arrival between that token's arrival and its processing, and
-the calls due at the first token's arrival between that token's arrival and its processing, and
-ends with the command's outcome. A version declaration is a `set-info` that ends with the
-version it declares: the command parser switches nothing, as the traversal's command does not.
+`command_runs`: from before a command, the command parser reads the tokens of the command with
+the traversal's effects and ends with the command's outcome. This holds for any command that is
+valid in the parser's version and for which `Tree.Command.modeAfter` gives a mode, which it does
+not for a declaration of a version that is not supported. The calls due at a token's arrival are
+made between that token's arrival and its processing.
+
+A version declaration is a `set-info` that ends with the version it declares: the command parser
+switches nothing, as the traversal's command does not.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Command

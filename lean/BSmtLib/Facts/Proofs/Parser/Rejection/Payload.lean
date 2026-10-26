@@ -12,11 +12,11 @@ import all BSmtLib.Parser.Command.Internal.Standard
 /-!
 # The steps of the payload parser advance
 
-Each state of the payload parser, its step against its remainders. A step that finishes the
-command, with the command parser's outcome, takes the command's `)` as the last item before what
-follows the command as the outcome says (`cmdFin`). Only the `)` of a version declaration that
-names no supported version fails with a rejection of a version declaration, and that `)` is the
-last item before what follows a refused declaration (`CmdFailure`).
+For each state of the payload parser, its step is proved against its remainders. A step that
+finishes the command, with the command parser's outcome, takes the command's `)` as the last item
+before what follows the command as the outcome says (`cmdFin`). Only the `)` of a version
+declaration that names no supported version fails with a rejection of a version declaration, and
+that `)` is the last item before what follows a refused declaration (`CmdFailure`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Rejection.Payload

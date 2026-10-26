@@ -452,9 +452,11 @@ termination_by slice.size - position
 decreasing_by simp only [Internal.CHUNK_SIZE] at *; omega
 
 /-- On a slice, the step of the public call, run while nothing went wrong and with the versions
-agreeing: if nothing went wrong after, the versions agree; if the consumer answered an error, the
-call fails, with the error `none` if the consumer was handed whitespace or a comment there; the
-consumer is not spoiled by it. -/
+agreeing:
+- if nothing went wrong after, the versions agree;
+- if the consumer answered an error, the call fails, with the error `none` if the consumer was
+  handed whitespace or a comment there;
+- the consumer is not spoiled by it. -/
 theorem lexSliceStep_flag (slice : ByteSlice) (c : LexerCore) (fl : F) (l)
     (he : Watched.errored fl = false) (hv : c.version = Watched.version fl) :
     StepOk LexerError.cause (Watched.spoiled fl) (irun (Internal.lexSliceStep

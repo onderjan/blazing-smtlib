@@ -17,7 +17,7 @@ nothing else:
 
 - `scriptConsumer`: the library's script parser as a consumer in the formalism, each token
   a lexer hands over read as the parser's token that stands for it (`itemOf`).
-- `Param.recordingAdapter` and `Param.paFeed`: the library's parse adapter with the recording
+- `recordingAdapter` and `paFeed`: the library's parse adapter with the recording
   handler, and the library's lexer with it fed by its public calls.
 - `libraryReader`: the library's script reader as a recording reader in the formalism.
 
@@ -49,8 +49,8 @@ and the script parser with the posture that allows every version. -/
 def recordingAdapter : RecAdapter :=
   ParseAdapter.new [] (ScriptParser.new unrestrictedPosture)
 
-/-- The library's lexer with the parse adapter, fed the slices and then the end of the input by
-its public calls: the result at the end of the input and the lexer, or the first error. -/
+/-- Feeds the library's lexer with the parse adapter the slices and then the end of the input by
+its public calls. Gives the result at the end of the input and the lexer, or the first error. -/
 def paFeed (lexer : PLexer) :
     List Regex.Chars →
       Except (LexerError (Parser.ParseError Unit)) (Option (Span.Located Unit) × PLexer)
@@ -156,8 +156,8 @@ allows every version, starting in the version. -/
 def readerOf (version : Lexicon.Version) : RecReader :=
   Reader.script [] unrestrictedPosture (toVersion version)
 
-/-- The reader fed the slices by `Reader.readSlice`, and then the end of the input by
-`Reader.readEof` if the input has ended: the calls its handler holds afterwards, in order, and
+/-- Feeds the reader the slices by `Reader.readSlice`, and then, if the input has ended, the end
+of the input by `Reader.readEof`. Gives the calls its handler holds afterwards, in order, and
 whether the end of the input returned a result. Where a call fails, the handler is the one the
 failure carries. -/
 def readerRun : RecReader → List Regex.Chars → Bool → List Event × Bool

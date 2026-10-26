@@ -12,15 +12,15 @@ import all BSmtLib.Reader
 /-!
 # Where the reader began to discard
 
-The reader's lexer, after the slices and before the end of the input, has the fields of the
-library's lexer with the script consumer of the end-to-end proofs fed the same slices
-(`feed_core`), so it began to discard where that lexer's session, the input not ended, says
-(`reader_discardedFrom`). Facts about the library, from the end-to-end proofs.
+`reader_discardedFrom`: the reader, fed slices without the end of the input, began to discard
+where the library's lexer with the script consumer of the end-to-end proofs began to discard, fed
+the same slices without the end of the input. After the slices, the reader's lexer has the fields
+of that lexer (`feed_core`). These are facts about the library, from the end-to-end proofs.
 
-Any lexer correct with every consumer, with the script consumer, fed a file without the end of
-the input, goes through the file's readings (`Reader.ValidOpen.runs_group_open`), so with no
-`exit` it does not discard, and with `exit` it discards from the end of its `)`
-(`open_session_discard`).
+`open_session_discard`: any lexer correct with every consumer, with the script consumer, fed a
+file without the end of the input, goes through the file's readings
+(`Reader.ValidOpen.runs_group_open`). So with no `exit` it does not discard, and with `exit` it
+discards from the end of its `)`.
 -/
 
 open BSmtLib.Facts.Proofs.Reader.Consumer BSmtLib.Facts.Proofs.Reader.Feed

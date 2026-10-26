@@ -88,8 +88,8 @@ section
 
 variable {H P E R : Type} [Parse P H Id E R] [Handler H Id]
 
-/-- The reader fed the slices in order by `Reader.readSlice`: the reader after the last, or the
-first failure. -/
+/-- Feeds the reader the slices in order by `Reader.readSlice`. Gives the reader after the last,
+or the first failure. -/
 def feed (reader : Reader H P) : List ByteList → Except (Reader.ReadFailure H P) (Reader H P)
   | [] => .ok reader
   | slice :: slices =>
@@ -97,9 +97,9 @@ def feed (reader : Reader H P) : List ByteList → Except (Reader.ReadFailure H 
     | .ok reader => feed reader slices
     | .error failure => .error failure
 
-/-- The reader fed the slices by `Reader.readSlice` and then the end of the input by
-`Reader.readEof`: the result, the reader before the end of the input, and the reader after it;
-or the first failure. -/
+/-- Feeds the reader the slices by `Reader.readSlice` and then the end of the input by
+`Reader.readEof`. Gives the result, the reader before the end of the input, and the reader after
+it; or the first failure. -/
 def readThrough (reader : Reader H P) (slices : List ByteList) :
     Except (Reader.ReadFailure H P) (Option (Span.Located R) × Reader H P × Reader H P) :=
   match feed reader slices with
@@ -145,8 +145,8 @@ instance {batch : Token.BatchTag} : Token.ConsumeFrom Collector
     let flow : ControlFlow Unit := if category == .endOfFile then .break () else .continue
     return (.ok flow, next)
 
-/-- The lexer with the collector fed the slices by `Lexer.lexSlice` and then the end of the
-input by `Lexer.lexEof`: the result and the lexer after the end of the input, or the first
+/-- Feeds the lexer with the collector the slices by `Lexer.lexSlice` and then the end of the
+input by `Lexer.lexEof`. Gives the result and the lexer after the end of the input, or the first
 error. -/
 def collectWith (lexer : Lexer Collector) :
     List ByteList → CollectM (Except (LexerError Empty)
@@ -165,9 +165,9 @@ def resultOf {ε α β : Type} : Except ε (α × β) → Except ε α
   | .ok (result, _) => .ok result
   | .error error => .error error
 
-/-- The library's lexer with the collector, created with the version, fed the slices by
-`Lexer.lexSlice` and then the end of the input by `Lexer.lexEof`: the result or the first error,
-and the entries written down. -/
+/-- Creates the library's lexer with the collector and the version, and feeds it the slices by
+`Lexer.lexSlice` and then the end of the input by `Lexer.lexEof`. Gives the result or the first
+error, and the entries written down. -/
 def collect (version : Version) (slices : List ByteList) :
     Except (LexerError Empty) (Option (Span.Located Unit)) × List Entry :=
   (resultOf <$> collectWith (Lexer.new Collector.mk version) slices).run []

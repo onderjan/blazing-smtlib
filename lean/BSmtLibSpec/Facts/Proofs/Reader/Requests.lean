@@ -8,12 +8,13 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Bridge
 /-!
 # What the traversal asks of its producer
 
-The requests that the traversal of commands makes of its producer after the item at a position
-of what a parser takes for them (`requestsAt`): a version switch or the discarding, after
-the `)` of a version declaration or of `exit`, and nothing anywhere else
-(`requestsAfterLast_record`). Where it has asked for the discarding before an item, it asked for
-it after the item before that one (`discard_record`). Folding the switches over the positions gives
-the version in force at each position (`foldVersion_requestsAt`).
+`requestsAt` gives the requests that the traversal of commands makes of its producer after the
+item at a position of what a parser takes for them: a version switch after the `)` of a version
+declaration, the discarding after the `)` of `exit`, and nothing anywhere else. These are the
+requests of the recording run (`requestsAfterLast_record`). Where the traversal has asked for
+the discarding before an item, it asked for it after the item before that one
+(`discard_record`). Folding the switches over the positions gives the version in force at each
+position (`foldVersion_requestsAt`).
 
 Not trusted: everything here is proved.
 -/

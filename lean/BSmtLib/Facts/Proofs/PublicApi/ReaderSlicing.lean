@@ -13,17 +13,21 @@ import all BSmtLib.Parser.Adapter
 /-!
 # The script reader does not tell how its input is cut
 
-The script reader over the recording handler, allowing every version, ends the same way however
-its input is cut into slices (`slicing_recording`). Its lexer ends as the library's lexer with the
-adapter's consumer for the replaying consumer does (`Reader.Lexes.ThroughPhi.through_replay`):
-alike results, and an error on which the recording run over items standing for the tokens taken
-fails where that lexer's consumer fails. That lexer does not tell how its input is cut
-(`SlicingC.slicing`), as it never ends on trailing input: it ends as the lexer with the adapter's
-consumer for the script consumer does (`Reader.Lexes.ThroughPhi.replay_script`), which ends as
-`Reader.Session.Classified` says. Where the reader does not fail, its handler is the log of the
-recording run over items standing for the tokens taken (`Reader.Lexes.Through.through_flagged`),
-the same tokens however the input is cut, and it began to discard where the lexer with the
-script consumer, the input not ended, did (`Discard.reader_discardedFrom`).
+`slicing_recording`: the script reader over the recording handler, allowing every version, ends
+the same way however its input is cut into slices.
+
+Its lexer ends as the library's lexer with the adapter's consumer for the replaying consumer does
+(`Reader.Lexes.ThroughPhi.through_replay`): with alike results, and with an error on which the
+recording run over items standing for the tokens taken fails where that lexer's consumer fails.
+That lexer does not tell how its input is cut (`SlicingC.slicing`), as it never ends on trailing
+input: it ends as the lexer with the adapter's consumer for the script consumer does
+(`Reader.Lexes.ThroughPhi.replay_script`), which ends as `Reader.Session.Classified` says.
+
+Where the reader does not fail:
+- its handler is the log of the recording run over items standing for the tokens taken
+  (`Reader.Lexes.Through.through_flagged`), the same tokens however the input is cut;
+- it began to discard where the lexer with the script consumer did, fed the input without its
+  end (`Discard.reader_discardedFrom`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.ReaderSlicing
@@ -225,10 +229,10 @@ theorem input_facts (version : BSmtLibSpec.Lexicon.Version) (slices : List ByteL
     rfl
   · exact h₂
 
-/-- The script reader over the recording handler that read an input to its end: its handler is
-the one the recording run over items standing for the tokens that the library's lexer with the
-adapter's consumer for the script consumer takes leaves, and it began to discard where that lexer,
-the input not ended, did. -/
+/-- After the script reader over the recording handler has read an input to its end, its handler
+is the one left by the recording run over items standing for the tokens that the library's lexer
+with the adapter's consumer for the script consumer takes. The reader began to discard where that
+lexer did, fed the input without its end. -/
 theorem after_facts (version : BSmtLibSpec.Lexicon.Version) (slices : List ByteList)
     {result : Option (Span.Located Unit)} {before after : RecReader}
     (h : readThrough (readerOf version) slices = .ok (result, before, after)) :

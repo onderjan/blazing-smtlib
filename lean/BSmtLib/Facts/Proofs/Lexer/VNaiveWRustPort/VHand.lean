@@ -11,11 +11,12 @@ import all BSmtLib.Span
 
 The naive lexer hands each lexeme over alone (`VNaive.handOverAt`). With the adapter's consumer
 for `C`, what it does is what `hand1` says the consumer does with the lexeme, from the tokens
-taken and the version and holding of the lexer state (`handOverAt_hand1`): where the consumer
-goes on, the naive lexer goes on under the version the consumer is in; where it waits after a
-break, or breaks with a switch to other lexical rules, the naive lexer holds the result; where it
-has the rest discarded, the naive lexer discards; where it fails or the lexeme is trailing
-input, the naive lexer fails.
+taken and the version and holding of the lexer state (`handOverAt_hand1`):
+- where the consumer goes on, the naive lexer goes on under the version the consumer is in;
+- where it waits after a break, or breaks with a switch to other lexical rules, the naive lexer
+  holds the result;
+- where it has the rest discarded, the naive lexer discards;
+- where it fails or the lexeme is trailing input, the naive lexer fails.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.VHand

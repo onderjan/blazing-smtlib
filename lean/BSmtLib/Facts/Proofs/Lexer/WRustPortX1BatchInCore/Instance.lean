@@ -16,8 +16,8 @@ import all BSmtLib.Lexer.Cursor
 The operations of the Rust port (`WRustPort.Rust.ops`) and of the lexer with the batch in its
 state (`X1BatchInCore.ops`) simulate each other (`opsSim_rust_x1BatchInCore`), for every consumer
 that reads the cursors it is handed only below the length of their batches (`ConsumesAlike`).
-The hand-overs are shown alike in `HandOver` and `Flush`; here the batch held by the loop of the
-normal state and the locals of its fast path.
+The hand-overs are shown alike in `HandOver` and `Flush`; this module shows the batch held by the
+loop of the normal state and the locals of its fast path alike.
 
 The Rust port keeps the line and the line start in locals (`FastState`), which it loads from
 its state and stores back, and from which its fast path makes the spans; the other lexer has no

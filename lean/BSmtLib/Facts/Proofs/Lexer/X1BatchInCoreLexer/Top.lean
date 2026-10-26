@@ -10,10 +10,10 @@ import all BSmtLib.Lexer.Internal.X1BatchInCore
 /-!
 # The library's lexer and `X1BatchInCore`, call by call
 
-For lexers with the same consumer whose states are related (`LexerRel`), `lexSlice` and `lexEof`
-of `X1BatchInCore` give, with the base forgotten, what those of the library's lexer give, mapped
-to `X1BatchInCore` with the base forgotten; in every lawful monad, for every consumer, with and
-without recovery. The calls run their steps on the parts of the lexer, so this follows from the
+`lexSlice` and `lexEof` of `X1BatchInCore` give what those of the library's lexer give, mapped to
+`X1BatchInCore`, both with the base forgotten. This holds for lexers with the same consumer whose
+states are related (`LexerRel`), in every lawful monad, for every consumer, with and without
+recovery. The calls run their steps on the parts of the lexer, so this follows from the
 couplings of the steps (`Calls`). So do the steps of the calls themselves, run by `run`, which
 gives back the lexer also after a failed call (`run_lexSliceStep`, `run_lexEofStep`).
 -/

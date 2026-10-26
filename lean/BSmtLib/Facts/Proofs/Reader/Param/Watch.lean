@@ -7,13 +7,15 @@ public import BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
 /-!
 # Any consumer with a record of what went wrong
 
-`Watch C` answers exactly as the consumer `C` does, its errors wrapped in `some`, and keeps in its
-state, beside the state of `C`, the record that `Flagged` keeps for the adapter's consumer:
-whether it has answered an error or been handed a cursor in another version than the one of the
-last cursor it gave back (`errored`), that version (`version`), whether it has been called after
-something went wrong or handed such a cursor (`spoiled`), and whether the call at which it went
-wrong was handed whitespace or a comment (`layout`, which stays `false`, as `C` answers no error
-`none`). The record is read by nothing but the proofs.
+`Watch C` answers exactly as the consumer `C` does, its errors wrapped in `some`. Beside the state
+of `C`, it keeps in its state the record that `Flagged` keeps for the adapter's consumer:
+- whether it has answered an error or been handed a cursor in another version than the one of
+  the last cursor it gave back (`errored`), and that version (`version`);
+- whether it has been called after something went wrong or handed such a cursor (`spoiled`);
+- whether the call at which it went wrong was handed whitespace or a comment (`layout`, which
+  stays `false`, as `C` answers no error `none`).
+
+The record is read by nothing but the proofs.
 
 `C` runs in `Id`; `Watch C` runs in `StateM Unit`, a state monad as the unary walk asks for. It
 keeps its record as the walk's consumers do (`Unary.Watched`), so a call of the library's lexer

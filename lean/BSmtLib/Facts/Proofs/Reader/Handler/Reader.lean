@@ -99,11 +99,11 @@ theorem readThrough_of_hFeed : ∀ (slices : List Regex.Chars) (lexer : HLexer H
 /-- The posture that allows every version, by its two names. -/
 theorem allVersions_eq : allVersions = unrestrictedPosture := rfl
 
-/-- The script reader with a handler whose calls never fail, from the handler, allowing every
-version, fed a file of commands, with the initial version, in any slices and then the end of the
-input: it reads to the end with a result, and its handler holds what the script parser's driver
-over items standing for what a parser receives for the script leaves it with, the driver having
-finished the script. -/
+/-- The script reader with a handler whose calls never fail reads a file of commands to the end
+with a result. Its handler then holds what the script parser's driver over items standing for
+what a parser receives for the script leaves it with, the driver having finished the script.
+The reader starts from the handler in the version the file is read in, allowing every version,
+and is fed the file in any slices and then the end of the input. -/
 theorem reader_reads_file [NoFails H] (version : Lexicon.Version) (slices : List Regex.Chars)
     (init : H) {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
     ∃ result before after,

@@ -9,15 +9,15 @@ public import BSmtLibSpec.Facts.Proofs.Reader.Requests
 /-!
 # A parser as a lexer's consumer
 
-What a parser that follows the traversal answers as a lexer's consumer, on tokens that stand for
-the start of what a parser takes for commands (`parse_of_takes`): its run is the traversal's,
-cut before the next item, so it continues, breaks at the end of the input, and asks for the
+A parser that follows the traversal is a lexer's consumer. On tokens that stand for the start of
+what a parser takes for commands, its run is the traversal's, cut before the next item
+(`parse_of_takes`). So the parser continues, breaks at the end of the input, and asks for the
 switch and the discarding that the traversal asks for after the `)` of a command
 (`answer_of_takes`, `switchTo_of_takes`, `discards_of_takes`).
 
 A parser is told only what a token stands for. To apply what is known of a parser on a whole
 script, the tokens handed over so far are completed by tokens that stand for the rest of the
-script (`handedFor`); each item a parser takes is one that a lexer can hand over in 2.7, by
+script (`handedFor`). Each item a parser takes is one that a lexer can hand over in 2.7, by
 `takes_reserved`.
 
 Not trusted: everything here is proved.

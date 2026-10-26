@@ -13,12 +13,16 @@ import all BSmtLib.Span
 /-!
 # The Rust port's hand-overs of batches and tokens, with every consumer
 
-The hand-over of the batch of the lexer state (`flushBatch_wp`), of the batch the loop of the
-normal state holds when it is full (`flushHeld_wp`, `pushFast_wp`, `pushBorrowed_wp`), of a token
-whose content is in the lexer's token content (`sinkStoredAt_wp`, `sinkStored_wp`), and of the
-end-of-file token (`sinkEof_wp`): if the consumer goes on, the lexer state keeps its `key` and
-the consumer is where `pending` says; if it stops, the interruption is where it stops
-(`Stops`), and the lexer state is left as `StopState` says.
+This module states the Rust port's hand-overs:
+- of the batch of the lexer state (`flushBatch_wp`);
+- of the batch the loop of the normal state holds when it is full (`flushHeld_wp`, `pushFast_wp`,
+  `pushBorrowed_wp`);
+- of a token whose content is in the lexer's token content (`sinkStoredAt_wp`, `sinkStored_wp`);
+- of the end-of-file token (`sinkEof_wp`).
+
+In each, if the consumer goes on, the lexer state keeps its `key` and the consumer is where
+`pending` says. If it stops, the interruption is where it stops (`Stops`), and the lexer state is
+left as `StopState` says.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Push

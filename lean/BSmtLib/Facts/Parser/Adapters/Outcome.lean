@@ -7,7 +7,7 @@ public import BSmtLib.Facts.Parser.Adapters.Cursor
 /-!
 # What a parse of a cursor does
 
-A parse of a cursor answers with its result, a wish for more tokens or a failure, and gives back
+A parse of a cursor breaks with its result, continues or fails, and gives back
 the parser and the cursor. `outcome` reads all of it but:
 
 - the parse state, which holds nothing;
@@ -15,16 +15,18 @@ the parser and the cursor. `outcome` reads all of it but:
   parser does not promise.
 
 - `HandlerOnly program`: the program fails, if it does, with the handler's error only.
-- `Finishes version parser tokens program back`: on every cursor that has the tokens first and
-  then anything read in the version, the parser makes the effects of the program and finishes
-  with its result right after the tokens, as the parser `back`; it fails where the program fails.
-- `Waits version parser tokens program after`: on every cursor that has exactly the tokens, all
-  read in the version, the parser makes the effects of the program and wants more tokens, as the
-  parser `after` gives with the program's result; it fails where the program fails.
-- `Rejects version parser tokens program kind`: on every cursor that has the tokens first and
-  then anything read in the version, the parser makes the effects of the program and then fails
-  with a syntax error of the kind, having taken exactly the tokens; it fails where the program
-  fails.
+- `Finishes version parser tokens program back`: the parser finishes right after the tokens with
+  the program's result, as the parser `back`. That holds on every cursor that has the tokens
+  first and then anything read in the version. The parser makes the effects of the program and
+  fails where the program fails.
+- `Waits version parser tokens program after`: the parser takes the tokens and continues, as the
+  parser that `after` gives with the program's result. That holds on every cursor that has exactly
+  the tokens, all read in the version. The parser makes the effects of the program and fails
+  where the program fails.
+- `Rejects version parser tokens program kind`: the parser takes exactly the tokens and fails with
+  a syntax error of the kind. That holds on every cursor that has the tokens first and then
+  anything read in the version. The parser first makes the effects of the program and fails where
+  the program fails.
 
 The program of each is handler-only, so that a syntax error of the parse is the one the statement
 names, at the token it names.
@@ -44,7 +46,7 @@ open BSmtLib.Facts.Parser.Adapters.Cursor (Takes Reads)
 inductive Outcome (R P Z E : Type) where
   /-- It finished with the result, back as the parser, at the cursor. -/
   | finished (result : R) (parser : P) (next : Z)
-  /-- It took every token and wants more, as the parser. -/
+  /-- It took every token and continues, as the parser. -/
   | waits (parser : P)
   /-- It failed with a syntax error of the kind, at the cursor. -/
   | rejected (kind : SyntaxErrorKind) (next : Z)
@@ -90,10 +92,10 @@ def answer {α Z : Type} (onResult : α → Outcome R P Z E) (next : Z) :
 variable [Parse P H m E R]
 
 /--
-`Finishes version parser tokens program back`: on every cursor that has the tokens first and then
-any tokens, all read in the version, the parser makes the effects of the handler-only program and
-finishes with its result right after the tokens, as the parser `back`; it fails where the program
-fails.
+`Finishes version parser tokens program back`: the parser finishes right after the tokens with the
+result of the handler-only program, as the parser `back`. That holds on every cursor that has the
+tokens first and then any tokens, all read in the version. The parser makes the effects of the
+program and fails where the program fails.
 -/
 def Finishes (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) R) (back : P) : Prop :=
@@ -105,10 +107,10 @@ def Finishes (version : Version) (parser : P) (tokens : List Parser.Internal.Inp
       answer (fun result => .finished result back next) next <$> program.run
 
 /--
-`Waits version parser tokens program after`: on every cursor that has exactly the tokens, all
-read in the version, the parser makes the effects of the handler-only program and wants more
-tokens, as the parser that `after` gives with the program's result; it fails where the program
-fails.
+`Waits version parser tokens program after`: the parser takes the tokens and continues, as the
+parser that `after` gives with the result of the handler-only program. That holds on every cursor
+that has exactly the tokens, all read in the version. The parser makes the effects of the program
+and fails where the program fails.
 -/
 def Waits {α : Type} (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) α) (after : α → P) : Prop :=
@@ -119,10 +121,10 @@ def Waits {α : Type} (version : Version) (parser : P) (tokens : List Parser.Int
       answer (fun result => .waits (after result)) last <$> program.run
 
 /--
-`Rejects version parser tokens program kind`: on every cursor that has the tokens first and then
-any tokens, all read in the version, the parser makes the effects of the handler-only program
-and then fails with a syntax error of the kind, having taken exactly the tokens; it fails where
-the program fails.
+`Rejects version parser tokens program kind`: the parser takes exactly the tokens and fails with a
+syntax error of the kind. That holds on every cursor that has the tokens first and then any
+tokens, all read in the version. The parser first makes the effects of the handler-only program
+and fails where the program fails.
 -/
 def Rejects (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
     (program : ExceptT (ParseErrorCause E) (StateT H m) Unit) (kind : SyntaxErrorKind) : Prop :=

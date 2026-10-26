@@ -68,7 +68,7 @@ macro "fits_tac" : tactic =>
     | exact fits_push (fits_clear _) _
     | exact fits_empty)
 
-/-- The run of the Rust port over a string under version 2.0. -/
+/-- The run of the Rust port over a string in 2.0. -/
 theorem runEndAll_legacy (s : ByteSlice) (i : Nat) :
     Lexer.Internal.WRustPort.Slice.runEndAll s i (RUN_STRING_PLAIN ||| RUN_QUOTED_PLAIN) =
       runEnd s isLegacyRun i :=

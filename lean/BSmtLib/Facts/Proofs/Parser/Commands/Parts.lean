@@ -12,10 +12,13 @@ import all BSmtLib.Parser.Command.Internal.Function
 /-!
 # Signatures, function declarations and constructors against the traversal
 
-The parts of commands that a sorted-variable list sits in: a function signature (its
-parameters), a function declaration (a signature in parentheses) and a datatype constructor (its
-selectors, read as sorted variables). Each lemma gives the program the parser runs, whose value,
-through the bridge, is the traversal's.
+The lemmas cover the parts of commands that a sorted-variable list sits in:
+- a function signature (its parameters);
+- a function declaration (a signature in parentheses);
+- a datatype constructor (its selectors, read as sorted variables).
+
+Each lemma gives the program the parser runs, whose value, through the bridge, is the
+traversal's.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Commands.Parts

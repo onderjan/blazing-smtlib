@@ -10,12 +10,14 @@ import all BSmtLib.Lexer.Cursor
 
 /-!
 # What follows a boundary
-The run from a boundary for a consumer that takes whitespace and comments, and the layout the
-specification formalism (`BSmtLibSpec`) gives there (`BSmtLibSpec.Lexer.layoutFrom`,
-`stream_layout`): either the formalism gives none, and the first lexeme of the run, if any, is a
-token; or the first lexeme is whitespace or a comment from the boundary, which is the first piece
-the formalism gives; or the layout there is not complete yet, and the run has finished nothing and
-not failed.
+
+`stream_layout` relates the run from a boundary for a consumer that takes whitespace and comments
+to the layout the specification formalism (`BSmtLibSpec`) gives there
+(`BSmtLibSpec.Lexer.layoutFrom`). One of three cases holds:
+- the formalism gives no layout, and the first lexeme of the run, if any, is a token;
+- the first lexeme is whitespace or a comment from the boundary, and it is the first piece the
+  formalism gives;
+- the layout there is not complete yet, and the run has finished nothing and not failed.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.Boundary
@@ -383,11 +385,12 @@ theorem dropWhile_split {p : UInt8 → Bool} {a t : List UInt8} {d : UInt8}
   | nil => simp [hd]
   | cons x a ih => simp [ha x (by simp), ih fun y hy => ha y (by simp [hy])]
 
-/-- The run from a boundary for a consumer that takes whitespace and comments, and the layout the
-formalism gives there: either the formalism gives none, and the first lexeme of the run, if any, is
-a token; or the first lexeme is whitespace or a comment, the first piece the formalism gives, after
-which the formalism goes on from its end; or the layout there is not complete yet, and the run has
-finished nothing and not failed. -/
+/-- The run from a boundary for a consumer that takes whitespace and comments, against the layout
+the formalism gives there. One of three cases holds:
+- the formalism gives none, and the first lexeme of the run, if any, is a token;
+- the first lexeme is whitespace or a comment and the first piece the formalism gives, after
+  which the formalism goes on from its end;
+- the layout there is not complete yet, and the run has finished nothing and not failed. -/
 theorem stream_layout (version : Version) (input : List UInt8) (ended : Bool) (o : Nat) :
     (BSmtLibSpec.Lexer.layoutFrom input ended o = [] ∧
       ∀ l ∈ (stream version true input ended o).1.head?, (Taken l)) ∨

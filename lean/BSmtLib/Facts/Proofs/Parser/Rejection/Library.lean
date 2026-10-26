@@ -17,17 +17,21 @@ import all BSmtLib.Token.Reserved
 /-!
 # The library's parser as a recording parser
 
-The library's script parser, run by its driver in a recording run under the posture that
-restricts nothing, as a `BSmtLibSpec.Parser.Properties.RecordingParser`: its items are the parser's
-tokens other than whitespace and comments, each standing for what `Bridge.received` says, and its
-run ends as its result says: waiting where the items run out, finished, failed on a version
-declaration, or rejected with any other cause.
+`libraryParser` (an adapter, in `Adapters.Run`) is the library's script parser as a
+`BSmtLibSpec.Parser.Properties.RecordingParser`. Its driver runs it in a recording run under the
+posture that restricts nothing. Its items are the parser's tokens other than whitespace and
+comments, each standing for what `Bridge.received` says. Its run ends as its result says:
+waiting where the items run out, finished, failed on a version declaration, or rejected with any
+other cause.
 
 The two properties of where a parser rejects its input are proved from the two sides proved
-before: on what a parser takes, the parser does what the traversal does (`parserRecord_takes`,
-`parserResult_takes`), and every item the parser takes keeps what it has taken viable
-(`script_runs`, `recAfter_post`); that what a parser takes for some commands is no proper start
-of what it takes for others (`takes_prefix`) ties the two together.
+before:
+- on what a parser takes, the parser does what the traversal does (`parserRecord_takes`,
+  `parserResult_takes`);
+- every item the parser takes keeps what it has taken viable (`script_runs`, `recAfter_post`).
+
+That what a parser takes for some commands is no proper start of what it takes for others
+(`takes_prefix`) ties the two together.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Rejection.Library

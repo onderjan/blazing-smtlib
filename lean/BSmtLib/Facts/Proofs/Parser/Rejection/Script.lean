@@ -12,10 +12,13 @@ import all BSmtLib.Parser.Script
 
 The script parser runs the command parser on one command after another. What it has taken is
 the commands it completed, a chain of valid commands each read in the version the ones before it
-leave (`Chain`), and the items of the command it is in. The command parser's remainders are taken
-with two kinds of continuations: what a parser takes for the rest of a script (`scriptFollows`),
-which says that the items so far are the start of what a parser takes; and one item that marks how
-the command ends (`markers`), from which a completed command is read back exactly.
+leave (`Chain`), and the items of the command it is in.
+
+The command parser's remainders are taken with two kinds of continuations:
+- what a parser takes for the rest of a script (`scriptFollows`), which says that the items so
+  far are the start of what a parser takes;
+- one item that marks how the command ends (`markers`), from which a completed command is read
+  back exactly.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Rejection.Script

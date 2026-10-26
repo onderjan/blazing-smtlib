@@ -8,22 +8,27 @@ import all BSmtLib.Lexer.Internal.Helpers
 /-!
 # The Rust port's state against the naive lexer's pure state
 
-The correspondence of the Rust port's lexer state with the naive lexer's pure state, for a
-consumer that takes whitespace and comments if `ws`, while the Rust port lexes under a version
-with the lexical rules of `v`, holds a result if `hd`, and was created with the version `iv`.
+This module states the correspondence of the Rust port's lexer state with the naive lexer's pure
+state. It is stated for a consumer that takes whitespace and comments if `ws`, while the Rust
+port lexes under a version with the lexical rules of `v`, holds a result if `hd`, and was created
+with the version `iv`.
 
 - `Fixed`: the version has the lexical rules of `v`, the lexer does not recover, does not
   discard, holds a result exactly if `hd`, is not recovering, and was created with `iv`.
 - `TokenAgreesNoWs`: a lexer state other than `normal` and `whitespace` is a token in progress,
-  which starts at `start`, with the content `content`, in the mode that the state stands for under
-  the version: `numeralOrDecimal` is a numeral, which is the single digit `0` exactly when the
-  content is; `fraction` is a fraction, with a digit after the dot exactly when the content does
-  not end with the dot; `baseSelection` is the `#`; `hexadecimal` and `binary` are the digits of
-  the base; `stringLiteral`, `stringLiteralDoubleQuote` and `stringLiteralBackslashEscape` are a
-  string, a string and its quote, and (under version 2.0 only) a string and its backslash, in the
-  modes of version 2.0 or of the later versions; `simpleSymbol`, `quotedSymbol`, `keyword` and
-  `quotedSymbolClosed` are the modes of their names; `comment` is a comment, whose content is not
-  compared.
+  which starts at `start`, with the content `content`, in the mode that the state stands for
+  under the version:
+  - `numeralOrDecimal` is a numeral, which is the single digit `0` exactly when the content is;
+  - `fraction` is a fraction, with a digit after the dot exactly when the content does not end
+    with the dot;
+  - `baseSelection` is the `#`;
+  - `hexadecimal` and `binary` are the digits of the base;
+  - `stringLiteral`, `stringLiteralDoubleQuote` and `stringLiteralBackslashEscape` are a string,
+    a string and its quote, and (in 2.0 only) a string and its backslash, in the modes of 2.0 or
+    of the later versions;
+  - `simpleSymbol`, `quotedSymbol`, `keyword` and `quotedSymbolClosed` are the modes of their
+    names;
+  - `comment` is a comment, whose content is not compared.
 - `TokenAgrees`, `StAgrees`: as `TokenAgreesNoWs`, and in addition for a consumer that takes
   whitespace and comments: `whitespace` is whitespace, with its content, and `comment` keeps the
   content. The lexer state `normal` is `St.idle`; any other state is a token in progress, with the

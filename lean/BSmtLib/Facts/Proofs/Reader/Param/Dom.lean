@@ -161,10 +161,10 @@ theorem parse_viable {version : Lexicon.Version} {commands : List Tree.Command}
     exact List.prefix_iff_eq_take.mp hpre
   rw [parse_items htakes hst (by rw [hl]; exact hpre.length_le), hl]
 
-/-- The library's parser's run on items that stand for a start of what a parser takes that does not
-end with `exit`, followed by the first item that no script continues with, one that a lexer can
-hand over in the version in force: it rejects that item, having made the traversal's calls
-before the item's processing, and asks nothing of its producer after it. -/
+/-- The library's parser's run rejects the first item that no script continues with, having made
+the traversal's calls before the item's processing, and asks nothing of its producer after it.
+The run is on items that stand for a start of what a parser takes that does not end with `exit`,
+followed by that item, one that a lexer can hand over in the version in force. -/
 theorem obs_first_unviable {version : Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes version commands taken ending)
     {pre : List Received} {last : Received} (hpre : pre <+: taken)

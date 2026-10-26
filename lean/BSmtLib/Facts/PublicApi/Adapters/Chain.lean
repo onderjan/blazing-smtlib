@@ -20,8 +20,8 @@ namespace BSmtLib.Facts.PublicApi.Adapters.Chain
 
 open BSmtLib.Lexer.Error
 
-/-- A lexer with the collector, given by its calls, fed the slices by its call for a slice and
-then the end of the input by its call for the end: the result or the first error. -/
+/-- Feeds a lexer with the collector, given by its calls, the slices by its call for a slice and
+then the end of the input by its call for the end. Gives the result or the first error. -/
 def collectBy {L A B : Type}
     (lexSlice : L → ByteSlice → CollectM (Except (LexerError Empty × A) L))
     (lexEof : L → CollectM (Except (LexerError Empty × B) (Option (Span.Located Unit) × L)))

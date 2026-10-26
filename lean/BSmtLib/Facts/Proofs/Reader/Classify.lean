@@ -8,8 +8,8 @@ public import BSmtLib.Facts.Proofs.Reader.Split
 /-!
 # How a session with the script consumer ends, on any input
 
-A lexer that does what `BSmtLibSpec.Lexer.Runs` states with the script consumer, fed any input and
-then the end of the input, ends in one of four ways (`runs_classified`):
+`runs_classified`: a lexer that does what `BSmtLibSpec.Lexer.Runs` states with the script
+consumer ends in one of four ways when fed any input and then the end of the input:
 
 - **finished**: the tokens it handed over stand for what a parser takes for a script, and the
   input reads as a file of that script's commands (`BSmtLibSpec.Grammar.File`);
@@ -347,12 +347,14 @@ def Classified (feed : Lexicon.Version → List Regex.Chars → Bool → Fed)
           segment feed session.version input true offset = ⟨current, true⟩)
 
 /--
-A lexer that does what `Runs` states with the script consumer, after the end of the input, from a
-point where the tokens taken stand for a proper start of what a parser takes, the version is the
-one in force there, the tokens ready are the rest of what the lexer hands over from where the
-last version declaration ended, the readings before are as `Hist` states, and the consumer did
-not have the rest discarded at the last token taken: the session ends as
-`Classified` says.
+A lexer that does what `Runs` states with the script consumer, after the end of the input, ends
+its session as `Classified` says from a point where:
+- the tokens taken stand for a proper start of what a parser takes;
+- the version is the one in force there;
+- the tokens ready are the rest of what the lexer hands over from where the last version
+  declaration ended;
+- the readings before are as `Hist` states;
+- the consumer did not have the rest discarded at the last token taken.
 -/
 theorem runs_classified (hc : Correct feed) {v₀ : Lexicon.Version} {input : Regex.Chars}
     {version : Lexicon.Version} {ready : List Handed} {failed : Bool} {pre : List Handed}
