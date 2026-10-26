@@ -14,9 +14,9 @@ for, in the version in force, with the gaps of the reading between them; then wh
 last command, its whitespace or the unparsed rest after `exit`, as it is (`reproduce`).
 
 The reproduction is the input but for the spelling of 2.0 string literals that stand for the same
-content (`reproduce_similar`); it is the input exactly when no 2.0 string literal has a lone
-backslash (`reproduce_eq`); and a reproduced input is a file with the same commands, which
-reproduces exactly (`reproduce_reproduce`).
+content (`reproduce_similar`); it is the input when no 2.0 string literal has a lone backslash
+(`reproduce_eq`); and a reproduced input is a file with the same commands, which reproduces as
+itself (`reproduce_reading`).
 
 Not trusted: everything here is proved.
 -/

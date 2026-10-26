@@ -360,7 +360,7 @@ def lexing (ops : LexOps) : BSmtLibSpec.Lexer.Lexing := fun consumer version ear
 
 /-! ## The lexers -/
 
-/-- The naive lexer `Lexer.VNaive`. -/
+/-- The naive lexer `Lexer.Internal.VNaive`. -/
 def VNaive.lexOps : LexOps where
   Lexer consumer := Lexer.Internal.VNaive.Lexer (Answering consumer)
   AfterError consumer := Lexer.Internal.VNaive.Lexer.AfterError
@@ -385,7 +385,7 @@ def VNaive.lexOps : LexOps where
   version := Lexer.Internal.VNaive.Lexer.version
   discardedFrom := Lexer.Internal.VNaive.Lexer.discardedFrom
 
-/-- The Rust lexer ported to Lean `Lexer.WRustPort`. -/
+/-- The Rust lexer ported to Lean `Lexer.Internal.WRustPort`. -/
 def WRustPort.lexOps : LexOps where
   Lexer consumer := Lexer.Internal.WRustPort.Lexer (Answering consumer)
   AfterError consumer := Lexer.Internal.WRustPort.Lexer.AfterError
@@ -408,8 +408,8 @@ def WRustPort.lexOps : LexOps where
   version := Lexer.Internal.WRustPort.Lexer.version
   discardedFrom := Lexer.Internal.WRustPort.Lexer.discardedFrom
 
-/-- The lexer with the batch kept in its state `Lexer.X1BatchInCore`, which has the type of the
-Rust lexer ported to Lean and lexes by functions of its own. -/
+/-- The lexer with the batch kept in its state `Lexer.Internal.X1BatchInCore`, which has the type of
+the Rust lexer ported to Lean and lexes by functions of its own. -/
 def X1BatchInCore.lexOps : LexOps where
   Lexer consumer := Lexer.Internal.WRustPort.Lexer (Answering consumer)
   AfterError consumer := Lexer.Internal.WRustPort.Lexer.AfterError

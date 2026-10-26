@@ -155,8 +155,8 @@ def ofConstructor {S : Type} (c : Lexicon.Value.Symbol × Grammar.Multiple.Sorte
 open Content
 
 /--
-A handler of commands that is told contents only: the calls of `Parser.Handler` and
-`Parser.CommandHandler`, in `Id`, with every view replaced by its content and every array by a
+A handler of commands that is told contents only: the calls of `Handler` and
+`CommandHandler`, in `Id`, with every view replaced by its content and every array by a
 list.
 -/
 class ContentHandler (C : Type) where

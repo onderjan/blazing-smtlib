@@ -12,11 +12,11 @@ import all BSmtLib.Parser
 `drive` (an adapter) tells what a parser's steps do over a list of tokens, but not where a step
 failed, nor in which state the parser is when the tokens run out. `driveS` keeps both: it ends
 waiting in a state at the end of the tokens, done with a result and the tokens after, rejected
-with a syntax error and the tokens after the token whose step raised it, or failed with the
-handler's error. `RunsS` is `Runs` for `driveS`: its programs are handler-only (they make calls
-and fail with the handler's error only), so that a syntax error is where the continuation raises
-it. Its rules are those of `Runs`, and the lemmas about the parsers' steps are proved again with
-them in the modules beside this one.
+with a syntax error or a version error and the tokens after the token whose step raised it, or
+failed with the handler's error. `RunsS` is `Runs` for `driveS`: its programs are handler-only
+(they make calls and fail with the handler's error only), so that a syntax error is where the
+continuation raises it. Its rules are those of `Runs`, and the lemmas about the parsers' steps are
+proved again with them in the modules beside this one.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Steps

@@ -15,8 +15,9 @@ the values are related and the adapter stands where the recording run over items
 the tokens leaves the parser (`InvB`). Every call of the stand-in consumer and of the adapter that
 stops after an action on its cursor (`Param.Stop`) on the same cursor is so related
 (`link_calls`), and the lexer's handovers to that adapter and to the parse adapter are the same
-(`Split.script_handOver_eq`), so step 1 relates the library's lexer's steps on the stand-in
-consumer and the parse adapter (`link_consumers`).
+(`Split.script_handOver_eq`), so the lexer's steps on two consumers (`Calls.lexSliceStep_sim`,
+`Calls.lexEofStep_sim`) relate the library's lexer's steps on the stand-in consumer and the parse
+adapter (`link_consumers`).
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

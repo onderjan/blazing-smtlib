@@ -50,9 +50,9 @@ With the library's parse adapter (`Parser.ParseAdapter`) as the lexer's consumer
 proved on files, from two facts:
 
 - the library's lexer depends on its consumer only through each call's answer and cursor
-  (`Param.lexSliceStep_sim`, `Param.lexEofStep_sim`);
+  (`Param.Calls.lexSliceStep_sim`, `Param.Calls.lexEofStep_sim`);
 - on the tokens of a script, the parse adapter with the recording handler answers as the
-  consumer above does (`Param.feed_agree`).
+  consumer above does (`Param.Run.feed_agree`).
 
 So the lexer's public calls, and the library's reader built on them, tell the handler the
 traversal's calls on a file and finish (`library_parses_file`, `reader_reads_files`).
@@ -60,7 +60,7 @@ traversal's calls on a file and finish (`library_parses_file`, `reader_reads_fil
 ## Every input
 
 On every input, the parse adapter and the consumer above are related too
-(`Param.link_consumersG`), as long as the tokens taken stand for one of:
+(`Param.Failing.link_consumersG`), as long as the tokens taken stand for one of:
 
 - a start of what a parser takes;
 - such a start, followed by the first item that no script continues with.
@@ -74,8 +74,8 @@ on files (`reader_finishes_only_on_files`).
 The relation goes on after the call at which the consumer above fails: the parse adapter then
 stands where the parser's recording run over the tokens taken leaves it. That holds because the
 library's lexer hands no whitespace or comment to a consumer that does not take them
-(`Param.noLayout`, from the chain of lexers). The library's parser, as a consumer of the
-formalism, answers as the consumer above does (`Param.consumer_agrees`). So on every input,
+(`Lexes.NoLayout.noLayout`, from the chain of lexers). The library's parser, as a consumer of the
+formalism, answers as the consumer above does (`Lexes.Requests.consumer_agrees`). So on every input,
 ended or not, the reader (`reader_lexes_then_parses`):
 
 - tells the handler the parser's calls on the tokens the lexer hands over, and nothing before the
@@ -330,12 +330,16 @@ info: 'BSmtLib.Facts.Reader.reader_finishes_only_on_files' depends on axioms: [p
 /--
 The library's script reader (`Reader.script`), with the recording handler and the posture that
 allows every version, is fed an input in any slices by `Reader.readSlice` and then, if the input
-has ended, the end of the input by `Reader.readEof`. It does what the library's lexer, which is
-correct with every consumer, does with the library's script parser as its consumer:
+has ended, the end of the input by `Reader.readEof`. It does what a lexer that is correct with
+every consumer does with a parser that follows the traversal and rejects the first item that no
+script continues with, as its consumer:
 
 - it tells the handler the parser's calls on the tokens the lexer hands over, and nothing before
   the first token;
 - it finishes exactly where the lexer does.
+
+The statement says that such a lexer and parser exist; the proof takes the library's lexer and
+the library's script parser for them (`libraryReader_lexesThenParses`).
 -/
 theorem reader_lexes_then_parses : BSmtLibSpec.Reader.LexesThenParses Adapters.libraryReader :=
   libraryReader_lexesThenParses

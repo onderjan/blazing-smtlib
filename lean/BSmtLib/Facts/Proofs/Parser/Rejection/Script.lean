@@ -703,10 +703,12 @@ def RunFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received)
   Benign e ∨ e = .version .unsupported ∧ ∃ j commands, j < items.length ∧
     Takes start commands (pre ++ (items.take (j + 1)).map rcv) (.failed .unsupportedVersion)
 
-/-- The script parser's run over items goes on in a state that says what it has taken, where
-each item's reserved words are reserved by the version in force there, as every reading of the
-items before it says; or it finishes, or fails, at an item after which a parser takes no
-more. -/
+/-- The script parser's run over items, from a state that says what it has taken, where no item
+is whitespace or a comment, each item's reserved words are reserved by the version in force
+there, as every reading of the items before it says, and every item after `exit` is the end of
+the input: the run goes on in a state that says what it has taken, or finishes at an item after
+which a script ends, or fails. It fails without rejecting a version declaration, or by rejecting
+a declaration that names no supported version at an item after which a parser takes no more. -/
 theorem script_runs (start : BSmtLibSpec.Lexicon.Version) :
     ∀ (items : List Parser.Internal.Input) (pre : List Received) (version : Version)
       (parser : ScriptParser (List Event)), ScriptInv start pre version parser →

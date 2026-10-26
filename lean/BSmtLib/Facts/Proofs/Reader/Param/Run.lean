@@ -9,7 +9,8 @@ import all BSmtLib.Lexer
 # The library's lexer with the parse adapter, call by call
 
 The library's lexer fed with `Flagged (scriptConsumer version)` and fed with the parse adapter
-(`RecAdapter`) are related call by call: by step 1 on the link of the two consumers
+(`RecAdapter`) are related call by call: by the lexer's steps on two consumers
+(`Calls.lexSliceStep_sim`, `Calls.lexEofStep_sim`) on the link of the two consumers
 (`link_consumers`), and, where nothing went wrong, by the unary walk (`lexSliceStep_flag`,
 `lexEofStep_flag`). `Inv` is what holds between the two lexers between the calls: the same
 fields and held result, nothing gone wrong with the first, and the adapter where the recording

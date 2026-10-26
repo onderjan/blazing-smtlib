@@ -12,7 +12,7 @@ On the input of a file of commands, a lexer that handles consumers as `BSmtLibSp
 states, given the script consumer, goes through the readings of the file: the consumer takes every
 token of every command, goes on at each, switches the version after each version declaration, has
 the rest discarded after `exit`, and breaks at the end of the input, which the lexer then returns
-(`runs_file`). So the tokens the consumer takes stand for what a parser receives for the
+(`runs_group`). So the tokens the consumer takes stand for what a parser receives for the
 script.
 -/
 

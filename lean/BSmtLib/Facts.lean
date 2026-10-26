@@ -16,7 +16,8 @@ What the library satisfies, one module for each part:
   - the lexers (`Facts.Lexer`);
   - the parsers (`Facts.Parser`);
   - the readers (`Facts.Reader`);
-- stated without the formalism: the public API (`Facts.PublicApi`).
+- stated with the public API rather than the formalism: the mainline theorems below, and the
+  others in `Facts.PublicApi`.
 
 Each part states its theorems, each followed by the axioms its proof uses, and checks the
 adapters that its statements are made with. The proofs are below `Facts.Proofs`.
@@ -26,15 +27,16 @@ adapters that its statements are made with. The proofs are below `Facts.Proofs`.
 The main theorems about the public API are stated here; `Facts.PublicApi` states the others:
 
 - the lexer's tokens cover the input without a gap or an overlap (`lexing_lossless`);
-- the lexer and the script reader do not depend on how the input is cut into slices
-  (`lexing_slicing`, `reading_slicing`);
-- what the script reader is told can be printed back as the input (`reprinting`);
+- the lexer does not depend on how the input is cut into slices (`lexing_slicing`), and neither
+  does what the script reader tells a handler that sees contents only (`reading_slicing`);
+- what the script reader tells such a handler can be printed back as the input, up to where the
+  reader began to discard it (`reprinting`);
 - the lexers of the chain hand over the same tokens as the library's lexer and fail with errors
   of the same cause (`lexers_agree`).
 
 They are stated as those of `Facts.PublicApi` are, with the names a user writes, bytes, lists and
 the small definitions below `BSmtLib.Facts.PublicApi.Adapters`, and checked in the same way at
-the end.
+the end. `lexers_agree` also names the lexers of the chain, which it compares.
 -/
 
 namespace BSmtLib.Facts
@@ -54,6 +56,9 @@ began to discard it:
 - where the reader allows every version, but for the spelling of string literals in 2.0, which
   may come back as another literal that stands for the same bytes;
 - exactly, where the reader allows only the versions from 2.5 on and starts in one of them.
+
+A handler told contents only fails on a command that is not standard (`ContentHandler`), so the
+reader does not read an input with such a command to the end, and the theorem says nothing of it.
 -/
 theorem reprinting : ∃ r : Reprinter, r.Reprints ∧ r.ReprintsExactly :=
   ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,

@@ -10,9 +10,10 @@ import all BSmtLib.Lexer
 # The library's lexer with the parse adapter finishes only where the stand-in consumer does
 
 The library's lexer fed with `Flagged (scriptConsumer version)` and fed with the parse adapter
-are related call by call by step 1 on `linkLinkG` (`link_consumersG`), on every run whose tokens
-are `Good`, and, while nothing went wrong, by the unary walk (`lexSliceStep_flag`,
-`lexEofStep_flag`), which keeps the consumer from being spoiled. So where a call fails with the
+are related call by call by the lexer's steps on two consumers (`Calls.lexSliceStep_sim`,
+`Calls.lexEofStep_sim`) on `linkLinkG` (`link_consumersG`), on every run whose tokens are `Good`,
+and, while nothing went wrong, by the unary walk (`lexSliceStep_flag`, `lexEofStep_flag`), which
+keeps the consumer from being spoiled. So where a call fails with the
 first consumer, it fails with the parse adapter too; where the end of the input returns no result
 with the first, it returns none with the second (`feed_finishes`).
 -/

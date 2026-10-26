@@ -22,10 +22,10 @@ keeps its record as the walk's consumers do (`Unary.Watched`), so a call of the 
 whose watched consumer answered an error fails (`UnaryCalls.lexSliceStep_flag`,
 `UnaryCalls.lexEofStep_flag`).
 
-`Watch C` answers as `C` does, its errors wrapped in `some`, and its record holds the state of
-`C`; so the library's lexer with `Watch C` and with `C` are related call by call (`innerLink`, by
-`Param.lexSliceStep_sim` and `Param.lexEofStep_sim`): the same results, the errors wrapped, the
-same lexer state, and the state of `C` in the record.
+`Watch C` answers as `C` does, its errors wrapped in `some`, and its record holds the state of `C`;
+so the library's lexer with `Watch C` and with `C` are related call by call (`innerLink`, by
+`Param.Calls.lexSliceStep_sim` and `Param.Calls.lexEofStep_sim`): the same results, the errors
+wrapped, the same lexer state, and the state of `C` in the record.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

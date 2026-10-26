@@ -21,7 +21,8 @@ nothing went wrong, and at the call where it went wrong if that call was handed 
 version.
 
 As both consumers answer alike on every cursor, the library's lexer does with one what it does
-with the other (`lexing_flagged`, from step 1, `lexSliceStep_sim` and `lexEofStep_sim`).
+with the other (`lexing_flagged`, from the lexer's steps on two consumers,
+`Calls.lexSliceStep_sim` and `Calls.lexEofStep_sim`).
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

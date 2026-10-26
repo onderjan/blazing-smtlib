@@ -16,7 +16,8 @@ import all BSmtLib.Lexer.Internal.WRustPort
 `lexStep_wp`: the step `lexStep` keeps the correspondence with the naive lexer's pure run
 (`StepPre` to `StepPost`, or `StepFails`), in every state of the lexer: the normal state by
 `lexNormal_wp`, a token in progress by its arm followed by `afterStep_wp`. The state
-`whitespace` is never reached, as the adapter's consumer does not take whitespace.
+`whitespace`, which only a consumer that takes whitespace reaches, has its arm too
+(`arm_whitespace`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.LexStep

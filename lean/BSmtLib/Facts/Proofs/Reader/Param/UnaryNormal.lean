@@ -9,7 +9,7 @@ import all BSmtLib.Lexer
 # The facts about `UL` for the steps of the lexer
 
 Every function of the lexer above the handover, taken apart by `usim`; the recursive ones by
-recursion on what they recurse on, as in step 1.
+recursion on what they recurse on, as on two consumers (`Normal`).
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

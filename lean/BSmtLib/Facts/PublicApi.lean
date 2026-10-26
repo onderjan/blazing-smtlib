@@ -17,9 +17,9 @@ public import BSmtLib.Facts.Proofs.PublicApi.Builds
 @[expose] public section
 
 /-!
-# What holds without the formalism
+# What holds of the public API
 
-Theorems about the library's public API whose statements rest on almost nothing:
+Theorems about the library's public API whose statements rest on little beyond it:
 
 - the names a user writes (`BSmtLib.Lexer`, `BSmtLib.Reader`, the handler classes, …);
 - bytes and lists;
@@ -28,8 +28,11 @@ Theorems about the library's public API whose statements rest on almost nothing:
 The mainline theorems among them are stated in `BSmtLib.Facts`, with the same adapters; this
 module states the others.
 
-The proofs may go through the specification formalism (`BSmtLibSpec`) and the other facts; the
-statements do not.
+One statement here names more: `builds_commands` builds the command trees of the specification
+formalism (`BSmtLibSpec`), so it names them and the formalism's versions. In `BSmtLib.Facts`,
+`lexers_agree` names the lexers of the chain, which it compares. The other statements name nothing
+of the formalism and none of the library's internals. The proofs go through both, and through the
+other facts.
 
 A theorem that claims a handler or a printer to exist says what it does and not how:
 the witness is not trusted. Where several properties of one witness are claimed, they are claimed
@@ -57,11 +60,12 @@ open BSmtLib.Span (Located)
 
 /--
 The library's lexer lexes an input as a prefix of every input it starts, if it lexes the input to
-the end with a `)` as its last token. For the longer input:
+the end and its last token before the end of the input is a `)`, with no whitespace or comment
+after it. For the longer input:
 
 - its tokens are those of the prefix but the end of the input, and then the tokens of the rest as
   the rest alone has them, moved by the length of the prefix;
-- it ends as the rest does.
+- it fails exactly when the rest alone fails.
 
 The lexer's consumer takes every token.
 -/

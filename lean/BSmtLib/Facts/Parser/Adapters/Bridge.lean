@@ -12,7 +12,7 @@ public import BSmtLibSpec.Grammar.Properties
 
 The parser hands over views of bytes and arrays; the traversal of the specification formalism
 (`BSmtLibSpec`) hands over characters and lists. The functions here turn the one into the other, and
-`Agrees` says that a handler of the library (an instance of `Parser.CommandHandler`) answers each
+`Agrees` says that a handler of the library (an instance of `CommandHandler`) answers each
 call as a handler of the formalism answers the same call with the values turned into the
 formalism's: the link between the library's handler class and the formalism's handler structure. The
 theorems about the parser are stated for such a pair, so they hold for every library handler that

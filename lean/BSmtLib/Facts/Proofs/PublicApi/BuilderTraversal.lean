@@ -13,8 +13,8 @@ The traversal, as the specification formalism (`BSmtLibSpec`) defines it, with t
 - returns the tree itself and leaves the state as it is, for sorts, s-expressions, attributes and
   terms;
 - adds a valid command to the commands built so far;
-- adds the commands of a valid script, newest first, from the state with the version the script
-  is read from (`script_builds`).
+- from a state with any version and no commands, builds the commands of a valid script, newest
+  first (`script_builds`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.BuilderTraversal

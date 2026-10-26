@@ -21,8 +21,8 @@ The walk is over any consumer that keeps a record of what went wrong (`Watched`)
 So a call of the lexer whose consumer answered an error fails (`lexSliceStep_flag`,
 `lexEofStep_flag`): a call that does not fail has a consumer that answered no error and was
 handed cursors in the version it asked for. The facts are proved for each function of the lexer
-from how it is built, as in step 1, by the rules below and the tactic `usim`. The consumer enters
-only where the lexer calls it, in `flushCursor`, through `Watched.call`.
+from how it is built, as on two consumers (`Walk`), by the rules below and the tactic `usim`. The
+consumer enters only where the lexer calls it, in `flushCursor`, through `Watched.call`.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

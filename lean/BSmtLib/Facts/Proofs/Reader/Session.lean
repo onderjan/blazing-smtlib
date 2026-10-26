@@ -19,10 +19,10 @@ specification formalism (`BSmtLibSpec`) gives, in one of four ways (`lexing_sess
 - **refused**: they stand for commands that a declaration naming no supported version ends, the
   run has the traversal's events, the last of which is the call of that `set-info`, and fails
   with `unsupportedVersion`;
-- **rejected**: the run rejects the last token, the first that no script continues with, having
-  made the traversal's events before its processing, where a `)` gets none of the calls due at
-  its arrival, and no call at it (`RejectsFirstUnviable`);
-  an end of the input that comes too early is such a token;
+- **rejected**: the run rejects the last item taken, the first that no script continues with,
+  which is a token or an end of the input that comes too early; the run has made the traversal's
+  events before its processing, where a `)` gets none of the calls due at its arrival, and its
+  processing makes no call, so it is the last event of the run (`RejectsFirstUnviable`);
 - **lexical**: the run waits, having made the traversal's events before the next item; the lexer
   failed as `BSmtLibSpec.Lexer` states on the input read from where the last version declaration
   ended, in its version: that input has no tokenisation, and the tokens taken from it are those

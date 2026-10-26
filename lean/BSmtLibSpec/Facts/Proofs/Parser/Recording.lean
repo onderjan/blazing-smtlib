@@ -8,10 +8,10 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Program
 # Programs in a recording run
 
 What a program writes down in a recording run (`BSmtLibSpec.Parser.Properties.record`), as a list
-computed from the program and its items (`trace`), and that what it has written down before the
-arrival of an item, or before its processing, depends only on the items before it
-(`eventsBefore_trace`, `eventsBeforeProcessing_trace`): a program decides what to do next only from
-what it has received.
+computed from the program and its items (`trace`): the run writes down that list
+(`runRecording_state`), and a run that succeeds has received the items it took, each arriving and
+then processed, in order (`trace_items`). What the list shows before an item is in `Placement`
+(`eventsBefore_trace`, `eventsBeforeProcessing_trace`).
 
 Not trusted: everything here is proved.
 -/

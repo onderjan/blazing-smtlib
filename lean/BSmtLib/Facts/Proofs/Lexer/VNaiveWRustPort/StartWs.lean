@@ -105,9 +105,9 @@ structure SameLine (s c : WP.WCore) : Prop where
   batch : c.batch = s.batch
 
 /-- What `startWhitespaceFrom` from the index `«end»` keeps, for whitespace started at `index`
-at `location` from the lexer state `s` with the tokens taken `coll` and the batch of the lexemes
-`held` the loop holds: the lexer state `s1` it runs in is `s` but for the line, and the naive
-lexer's run from `index` is, at `«end»`, the whitespace in progress at `locE`. -/
+at `location` from the lexer state `s` with the tokens taken `coll` and the batch `batch` the
+loop holds: the lexer state `s1` it runs in is `s` but for the line, and the naive lexer's run
+from `index` is, at `«end»`, the whitespace in progress at `locE`. -/
 def WsStartSpec (C : BSmtLibSpec.Lexer.Consumer) (v : Version)
     (input : ByteSlice) (offset base index : Nat) (start : Span.Location)
     (batch : Token.Internal.TokenBatch)

@@ -7,11 +7,17 @@ public import BSmtLib
 /-!
 # The small definitions of the theorems about the public API
 
-The theorems of `BSmtLib.Facts.PublicApi` are stated with the library's public API, bytes, lists,
-and the definitions below, and nothing else: no definition of the specification formalism
-(`BSmtLibSpec`) and none of the library's internals. Each definition here is a few lines and states
-its rule in its docstring; a reader of the theorems reads these and the public API, and nothing
-more.
+The theorems about the public API (`BSmtLib.Facts`, `BSmtLib.Facts.PublicApi`) are stated with the
+library's public API, bytes, lists and the definitions below. The definitions of this module name
+nothing of the specification formalism (`BSmtLibSpec`) and none of the library's internals. Two
+submodules do, for the two theorems that name more:
+
+- `Builder` names the formalism's versions, for `builds_commands`, which builds the formalism's
+  command trees;
+- `Chain` names the lexers of the chain, for `lexers_agree`, which compares them.
+
+Each definition is a few lines and states its rule in its docstring. A reader of the theorems
+reads these, the public API and, for those two theorems, what they name.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

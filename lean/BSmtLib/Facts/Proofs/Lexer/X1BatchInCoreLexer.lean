@@ -17,14 +17,14 @@ The library's lexer `BSmtLib.Lexer` is the lexer with the batch kept in its stat
   loop of the normal state.
 
 The two do not share their state type. A state of the library's lexer maps to one of the lexer
-with the batch kept in its state (`X1BatchInCoreLexer.coreMap`): its `base`, the position of the
-byte at the lexer's offset, is mapped to the index of that position. Between the calls the base
-means nothing, so the lexers are related by `X1BatchInCoreLexer.LexerRel`: they have the same
-consumer, and their states are equal once the base is forgotten.
+with the batch kept in its state (`X1BatchInCoreLexer.Core.coreMap`): its `base`, the position of
+the byte at the lexer's offset, is mapped to the index of that position. Between the calls the
+base means nothing, so the lexers are related by `X1BatchInCoreLexer.Top.LexerRel`: they have the
+same consumer and the same held result, and their states are equal once the base is forgotten.
 
-- `Lexer.X1BatchInCore.new_eq_new_lexer`: the lexer with the batch kept in its state is
+- `X1BatchInCore.new_eq_new_lexer`: the lexer with the batch kept in its state is
   constructed as the library's lexer is, with its state mapped.
-- `Lexer.X1BatchInCore.lexSliceStep_sim_lexer` and `Lexer.X1BatchInCore.lexEofStep_sim_lexer`:
+- `X1BatchInCore.lexSliceStep_sim_lexer` and `X1BatchInCore.lexEofStep_sim_lexer`:
   for every consumer, in every lawful monad, with and without recovery, the step of a call on a
   slice, and on the end of the input, run on related lexers by `run`, gives the same result and
   related lexers, also where the call fails. For a slice, this holds where its end is below
@@ -41,9 +41,9 @@ The proof, in parts:
 - `X1BatchInCoreLexer.Positions`: the reads and the run scans at a position are those at its
   index;
 - `X1BatchInCoreLexer.Core`, `HandOver`, `Finish`, `Batch`, `Whitespace`: the helpers of the
-  steps, simulated (`Simulation.SimP`) under `coreMap` of the start of the slice, from the states
-  with a given base, with the errors of the library's lexer thrown where the Rust port's are
-  formed and then thrown;
+  steps, simulated (`Simulation.Steps.SimP`) under `coreMap` of the start of the slice, from the
+  states with a given base, with the errors of the library's lexer thrown where the Rust port's
+  are formed and then thrown;
 - `X1BatchInCoreLexer.Steps` and `X1BatchInCoreLexer.Normal`: the steps per state and the loop of
   the normal state, each by induction on the bytes left where it loops;
 - `X1BatchInCoreLexer.Step`: the step of the loop over a slice, which leaves the base between the
