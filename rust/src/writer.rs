@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-/// Determines why writing a token has failed.
+/// Why writing has failed (I/O error or writing impossibility).
 #[derive(Debug)]
 pub enum SmtWriteErrorCause {
     /// Writing to the writer failed.
@@ -22,7 +22,7 @@ pub enum SmtWriteErrorCause {
     NotInVersion(SmtReserved),
 }
 
-/// An error that ended writing a token.
+/// Error that forced writing to stop.
 #[derive(Debug)]
 pub struct SmtWriteError(SmtWriteErrorCause);
 
@@ -79,7 +79,7 @@ impl Error for SmtWriteError {
     }
 }
 
-/// How a writer lays out the tokens it writes.
+/// How tokens are laid out by the writer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SmtWriteStyle {
     /// Writes tokens on a single line, as far as comments allow.
@@ -133,7 +133,7 @@ pub enum SmtWriteStyle {
     Layout,
 }
 
-/// How a writer writes: the version it writes in and its style.
+/// Writer configuration (version in force and writing style).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtWriterConfig {
     version: SmtVersion,
@@ -165,7 +165,7 @@ impl SmtWriterConfig {
     }
 }
 
-/// Writes tokens as SMT-LIB text, in the version and the style of its configuration.
+/// Writes nodes or tokens as SMT-LIB text.
 #[derive(Debug)]
 pub struct SmtWriter<W: Write> {
     writer: W,

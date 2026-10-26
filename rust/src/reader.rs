@@ -33,7 +33,7 @@ use crate::{
 };
 use crate::{SmtVersion, SmtVersionPosture, span::SmtLocation};
 
-/// Determines why reading has failed.
+/// Why reading has failed (I/O, lexical, syntax, version, or handler error).
 #[derive(Debug)]
 pub enum SmtReadErrorCause<E> {
     /// Reading from a file or a buffered reader failed.
@@ -52,7 +52,7 @@ pub enum SmtReadErrorCause<E> {
     Handler(E),
 }
 
-/// An error that ended reading, including its span.
+/// Error that forced reading to stop.
 #[derive(Debug)]
 pub struct SmtReadError<E> {
     cause: SmtReadErrorCause<E>,
@@ -149,7 +149,7 @@ impl<E> From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E> {
     }
 }
 
-/// Reads the SMT-LIB file at `path`, delivering its content to `handler`.
+/// Reads an SMT-LIB script from a file, delivering it to a handler.
 ///
 /// This is a convenience function over [`SmtReader`]: the parser
 /// is dropped after reading, so its resources cannot be preserved
@@ -167,8 +167,7 @@ pub fn read_smt_file<H: SmtCommandHandler>(
         .map(|_| ())
 }
 
-/// Reads SMT-LIB input from `buf_reader`, delivering its content
-/// to `handler`.
+/// Reads an SMT-LIB script from a buffered reader, delivering it to a handler.
 ///
 /// The input is considered to end when the buffered reader returns
 /// a zero-length buffer.
@@ -189,7 +188,7 @@ pub fn read_smt<H: SmtCommandHandler>(
         .map(|_| ())
 }
 
-/// Streams SMT-LIB input from bytes to a [`SmtCommandHandler`].
+/// Reads SMT-LIB input, delivering it to a handler.
 ///
 /// A reader owns its lexer, its parser, and the parser resources, and borrows
 /// the handler. Any parser can be used, and a convenience method

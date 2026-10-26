@@ -12,6 +12,7 @@ use crate::{
     token::SmtCommandNameReserved,
 };
 
+/// A handler of SMT-LIB nodes (sorts, terms, etc.).
 pub trait SmtHandler {
     type Error;
 
@@ -156,6 +157,7 @@ pub trait SmtHandler {
     ) -> Result<Self::Term, Self::Error>;
 }
 
+/// A handler of SMT-LIB commands.
 pub trait SmtCommandHandler: SmtHandler {
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
@@ -456,7 +458,9 @@ pub trait SmtCommandHandler: SmtHandler {
     ) -> Result<(), Self::Error>;
 }
 
-/// Error of a [`SmtPartialCommandHandler`].
+/// Error of a partial command handler (unsupported command or handler error).
+///
+/// Unsupported commands come in two varieties: standard and nonstandard.
 #[derive(Debug, Clone)]
 pub enum SmtPartialCommandError<E> {
     /// The handler does not implement the standard command.
@@ -512,7 +516,7 @@ fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCom
     Err(SmtPartialCommandError::Unsupported(command))
 }
 
-/// A command handler that implements only the commands it supports.
+/// A handler of a partial subset of SMT-LIB commands.
 ///
 /// Every command it does not implement fails with
 /// [`SmtPartialCommandError::Unsupported`] naming the command, or with
@@ -935,9 +939,18 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
     }
 }
 
+/// A handler that checks compliance with SMT-LIB syntax.
+///
+/// This handler quietly swallows all standard categories and commands.
+/// It does not allow any non-standard commands, failing with
+/// [`SmtNonstandardCommandError`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SmtSyntaxChecker;
 
+/// Error encountering a non-standard command.
+///
+/// Used by [`SmtSyntaxChecker`], which does not
+/// support non-standard commands.
 #[derive(Debug, Clone)]
 pub struct SmtNonstandardCommandError(SmtSymbolBuf);
 

@@ -1,6 +1,6 @@
 use crate::lexicon::SmtDecimal;
 
-/// Version of the SMT-LIB standard.
+/// Version of the SMT-LIB standard (2.0, 2.5, 2.6, or 2.7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub enum SmtVersion {
     V2_0,
@@ -34,6 +34,7 @@ impl SmtVersion {
     }
 }
 
+/// Version posture (allowed SMT-LIB versions and maximal number of their declarations).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtVersionPosture {
     allowed: Vec<SmtVersion>,
@@ -56,6 +57,7 @@ impl Default for SmtVersionPosture {
     }
 }
 
+/// Version posture builder.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtVersionPostureBuilder {
     allowed: Vec<SmtVersion>,
