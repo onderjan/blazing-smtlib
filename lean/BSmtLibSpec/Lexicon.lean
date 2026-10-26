@@ -7,13 +7,10 @@ public import BSmtLibSpec.Regex
 /-!
 # Lexicon
 
-The lexicon of SMT-LIB as the standard defines it, in the versions 2.0, 2.5, 2.6 and 2.7: the
-characters, the lexical tokens of each version and the categories they are built from, in the
-order the standard defines them. How an input is broken into a sequence of tokens is in
-`Lexicon.Tokenization`. It depends on no implementation.
+The lexicon of SMT-LIB: characters, categories used to build lexical tokens, and
+the lexical tokens themselves, in the order the standard defines them.
 
-Each definition states the rule it formalises. Where the standard is silent or contradicts
-itself, the definition says so and which reading it takes.
+`Lexicon.Tokenization` specifies how the input is broken into a sequence of tokens.
 -/
 
 namespace BSmtLibSpec.Lexicon
@@ -21,7 +18,7 @@ namespace BSmtLibSpec.Lexicon
 open Regex
 
 /--
-The versions of the standard.
+A version of the SMT-LIB standard.
 
 Standard: the versions 2.0, 2.5, 2.6 and 2.7 of the SMT-LIB standard.
 -/
@@ -39,6 +36,18 @@ def Version.upTo : Version → List Version
   | .v2_6 => [.v2_0, .v2_5, .v2_6]
   | .v2_7 => [.v2_0, .v2_5, .v2_6, .v2_7]
 
+/--
+Whether a character sequence is allowed as a source file in the given version.
+
+Standard: 2.0 §3.1: SMT-LIB source files consist of ASCII characters. From 2.5 on, §3.1
+lifts this limit.
+
+Reading L8: We consider this a rule on the input, not the lexicon.
+-/
+def SourceFile : Version → Chars → Prop
+  | .v2_0, input => ∀ c ∈ input, c.toNat < 128
+  | _, _ => True
+
 /-! ## Characters -/
 
 /--
@@ -49,26 +58,11 @@ Standard: 2.7 §3.1 White Space Characters; App. B ⟨white_space_char⟩.
 def whiteSpaceChar : Regex := altAll [code 9, code 10, code 13, code 32]
 
 /--
-The input is a source file of the version: in 2.0, every character of it is from 0 to 127;
-from 2.5 on, any input is.
-
-Standard: 2.0 §3.1: SMT-LIB source files consist of ASCII characters. From 2.5 on, §3.1
-lifts this limit.
-
-This is a rule on the input, not on the lexicon: the lexicon allows characters from 128 on
-alike in every version, so a 2.0 input that breaks this rule may still have a tokenisation. Where
-2.0 App. B says printable ASCII characters, its printable characters on an input that keeps
-this rule are meant.
--/
-def SourceFile : Version → Chars → Prop
-  | .v2_0, input => ∀ c ∈ input, c.toNat < 128
-  | _, _ => True
-
-/--
-⟨printable_char⟩: a character from 32 to 126, or from 128 on. In 2.0, the characters from 128
-on are excluded by `SourceFile`, not here.
+⟨printable_char⟩: a character from 32 to 126, or from 128 on.
 
 Standard: 2.7 §3.1 Printable Characters; App. B ⟨printable_char⟩.
+
+Reading L8: In 2.0, the characters from 128 on are excluded by `SourceFile`, not here.
 -/
 def printableChar : Regex := alt (range 32 126) (range 128 255)
 
@@ -82,8 +76,10 @@ def digit : Regex := range 48 57
 /--
 ⟨letter⟩: a character from 65 to 90 (`A` to `Z`) or from 97 to 122 (`a` to `z`).
 
-Standard: 2.7 §3.1 Letters; App. B ⟨letter⟩. Reading L3: 2.5 App. B writes ⟨letter⟩ as `A |
-··· | A | a | ··· | z`; this follows §3.1, which gives 65 to 90.
+Standard: 2.7 §3.1 Letters; App. B ⟨letter⟩.
+
+Reading L3: 2.5 App. B writes ⟨letter⟩ as `A | ··· | A | a | ··· | z`; this
+follows §3.1, which gives 65 to 90.
 -/
 def letter : Regex := alt (range 65 90) (range 97 122)
 
@@ -206,8 +202,8 @@ def unescape20 : Chars → Chars
 /--
 The reserved words each version adds to the basic set; no version removes one.
 
-Standard: §3.1 Reserved words of each version, given as what each version adds;
-`BSmtLibSpec.Facts.Lexicon` proves them equal to the standard's full lists.
+Standard: §3.1 Reserved words and App. B of each version, here given as lists of
+additions.
 -/
 def addedBasicReservedWords : Version → List String
   | .v2_0 => ["par", "NUMERAL", "DECIMAL", "STRING", "_", "!", "as", "let", "forall", "exists"]
@@ -225,11 +221,11 @@ def basicReservedWords (version : Version) : List String :=
 
 /--
 The command names each version adds to the scripting language; no version removes one.
-`define-funs-rec` is a command from 2.5 on, although the standard's own lists of reserved
-command names leave it out.
 
-Standard: App. B Reserved Words, the command names of each version, given as what each version
-adds. Reading L6: `define-funs-rec` is included from 2.5 on.
+Standard: §3.1 Reserved Words and App. B of each version, here given as lists of
+additions.
+
+Reading L6: `define-funs-rec` is included from 2.5 on.
 -/
 def addedCommandNames : Version → List String
   | .v2_0 => ["assert", "check-sat", "declare-sort", "declare-fun", "define-sort",
@@ -287,12 +283,13 @@ def quotedSymbol : Regex :=
 
 /--
 ⟨keyword⟩: `:` followed by a non-empty sequence of letters, digits and the characters of
-`symbolPunctuation`, as 2.0 states it. From 2.5 on the standard writes `:⟨simple_symbol⟩`,
-which read literally would forbid a keyword to start with a digit or to name a reserved
-word; its own example `:56` shows that the characters of simple symbols are meant, so the
-2.0 rule is taken for every version. In every version, `:` alone is not a keyword.
+`symbolPunctuation`, as 2.0 states it.
 
-Reading L5: 2.0 §3.1 Keywords and 2.0 App. B ⟨keyword⟩, for every version.
+Standard: 2.0 §3.1 Keywords and 2.0 App. B ⟨keyword⟩ (used for every version as per Reading L5).
+
+Reading L5: From 2.5 on, the standard specifies the production
+`:⟨simple_symbol⟩`, which read literally would forbid a keyword to start with a
+digit or to name a reserved word. We use the 2.0 production.
 -/
 def keyword : Regex := seq (lit ":") (plus (altAll [letter, digit, symbolPunctuation]))
 
@@ -317,7 +314,7 @@ inductive Category where
   deriving DecidableEq, Repr
 
 /--
-The expression of each kind of token in the version.
+The regular expression for a token category.
 
 Standard: 2.7 §3.1, as `Category`.
 -/
@@ -335,10 +332,11 @@ def categoryRegex (version : Version) : Category → Regex
   | .reserved => reserved version
 
 /--
-A token of an input: its kind, the offset of its first character, and its characters.
+A token of an input.
 
-Standard: 2.7 §3.1 lexical tokens; the offset and the characters are how the spec records a
-token.
+Standard: 2.7 §3.1 lexical tokens.
+
+Formalism: we record the token using its category, offset, and text (not its content).
 -/
 structure Token where
   category : Category
@@ -347,13 +345,17 @@ structure Token where
   deriving DecidableEq, Repr
 
 /--
-The content of a token: what a string literal stands for, the name of a quoted symbol
-without its bars, a keyword without its colon, the digits of a hexadecimal or binary without
-`#x` or `#b`, and otherwise the characters of the token.
+The token content.
+
+The content is what the token stands for: a string literal without the enclosing
+quotes and escapes, the name of a quoted symbol without its bars, a keyword
+without its colon, the digits of a hexadecimal or binary without `#x` or `#b`,
+and otherwise the characters of the token.
 
 Standard: 2.7 §3.1 String literals and Symbols, for what a string literal and a quoted symbol
-stand for. Dropping the colon of a keyword and the `#x` and `#b` of a hexadecimal and a binary
-is a convention of the spec.
+stand for.
+
+Formalism: we drop the colon of a keyword and `#x` or `#b` of a hexadecimal or binary token.
 -/
 def Token.content (version : Version) (token : Token) : Chars :=
   match token.category with

@@ -65,12 +65,13 @@ a reader behave, of which the standard says little; their definitions carry no t
 - **Reading:** our decision how to read the standard
   when it is silent, ambiguous, or seemingly contradictory.
 
-Additionally, we use the following comment with a defined meaning:
+Additionally, we use the following comments with a defined meaning:
 
 - **Property:** a proposition that can be proved about the formalised reading
   or an implementation against the formalised reading. Properties are devised
   by us to formalise expectations about the implementation behaviour under SMT-LIB,
   and to form correctness theorems.
+- **Formalism:** our decision on how to formalise the given item.
 
 ## List of readings
 
