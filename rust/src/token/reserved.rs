@@ -1,6 +1,6 @@
 use crate::SmtVersion;
 
-/// Reserved words in SMT-LIB2, including standard command names.
+/// A reserved word in SMT-LIB (general or a command name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtReserved {
     General(SmtGeneralReserved),
@@ -52,7 +52,7 @@ macro_rules! reserved_words {
 }
 
 reserved_words! {
-    /// General reserved words of the SMT-LIB2 grammar.
+    /// A general reserved word in SMT-LIB.
     General: SmtGeneralReserved {
         Binary = "BINARY",
         Decimal = "DECIMAL",
@@ -69,7 +69,7 @@ reserved_words! {
         Match = "match",
         Par = "par",
     }
-    /// Reserved words naming standard SMT-LIB2 commands.
+    /// A reserved word naming a standard SMT-LIB command.
     ///
     /// Standard SMT-LIB2 commands are reserved words.
     CommandName: SmtCommandNameReserved {
@@ -109,7 +109,7 @@ reserved_words! {
 }
 
 impl SmtReserved {
-    /// The version that made the word reserved.
+    /// Returns the version that made the word reserved.
     const fn since(self) -> SmtVersion {
         match self {
             // SMT-LIB 2.7: lambda terms, sort parameters, constant definitions
@@ -139,7 +139,7 @@ impl SmtReserved {
         }
     }
 
-    /// Whether the word is reserved in the version.
+    /// Whether the word is reserved in the given version.
     #[inline]
     pub fn is_in_version(&self, version: SmtVersion) -> bool {
         version >= self.since()
@@ -192,7 +192,7 @@ static RESERVED_TABLE: [(&[u8], SmtReserved, SmtVersion); RESERVED_SLOTS] = {
 };
 
 impl SmtReserved {
-    /// The reserved word that the symbol spells in the version, if any.
+    /// Returns the reserved word that the symbol spells in the version, if any.
     #[inline]
     pub fn from_bytes(symbol: &[u8], version: SmtVersion) -> Option<SmtReserved> {
         // make sure that the symbol is not an empty word,

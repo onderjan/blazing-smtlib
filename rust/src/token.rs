@@ -15,6 +15,11 @@ mod reserved;
 
 pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved};
 
+/// The category of a token.
+///
+/// The category does not differentiate between versions:
+/// both simple tokens and reserved words are categorised
+/// as an unquoted symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtTokenCategory {
     ParenOpen,
@@ -34,6 +39,7 @@ pub enum SmtTokenCategory {
     EndOfFile,
 }
 
+/// A view of a syntax token.
 #[derive(Debug, Clone, Copy)]
 pub enum SmtToken<'a> {
     ParenOpen,
@@ -184,7 +190,7 @@ impl<'a> SmtToken<'a> {
     }
 }
 
-/// An owned token, from which [`SmtToken`] is viewed.
+/// An owned syntax token.
 #[derive(Debug, Clone)]
 pub enum SmtTokenBuf {
     ParenOpen,
@@ -379,7 +385,7 @@ impl fmt::Debug for SmtTokensBuf {
     }
 }
 
-/// Producer refused to switch to a requested version.
+/// The cursor refused to switch to a requested version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtVersionRefused;
 
@@ -392,6 +398,12 @@ impl fmt::Display for SmtVersionRefused {
 impl Error for SmtVersionRefused {}
 
 /// A sequential producer of tokens.
+///
+/// The cursor can choose the type of tokens to produce, which allows a
+/// non-generic consumer to access more information from the token. However, the
+/// tokens must implement [`Copy`], be viewable as syntax tokens using
+/// [`SmtCursor::syntax`], and should be implemented as small views for good
+/// performance.
 pub trait SmtCursor {
     /// The user type of the token.
     ///
@@ -402,7 +414,7 @@ pub trait SmtCursor {
     /// Lookahead window, set to `()` if not implementing [`SmtCursor::attempt`].
     type Lookahead: SmtLookahead<Self::Token>;
 
-    /// Views the user token as a library token under the version in force.
+    /// Views the user token as a syntax token under the version in force.
     fn syntax<'t>(&self, token: &'t Self::Token) -> SmtToken<'t>;
 
     /// Consumes the next token (if any).
@@ -410,11 +422,11 @@ pub trait SmtCursor {
 
     /// Returns the next token (if any) without consuming it.
     ///
-    /// Peeking must return [`Option::Some`] containing
-    /// the next token that would be consumed if there
-    /// is some such token waiting.
+    /// Peeking must return [`Option::Some`] containing the next token that
+    /// would be consumed if there is some such token waiting.
     ///
-    /// Do not forget to consume the token later if it should be taken.
+    /// The caller must not forget to consume the token later if it should be
+    /// taken.
     fn peek(&self) -> Option<Self::Token>;
 
     /// Returns whether the producer has no tokens left to consume.
@@ -542,7 +554,7 @@ impl<'a, Z: SmtCursor> SmtCursor for SingleTokenCursor<'a, Z> {
     }
 }
 
-/// A cursor over a dynamic array of tokens.
+/// A cursor over a dynamic array of syntax tokens.
 ///
 /// The cursor is consumed under a given version: it accepts a request
 /// for that version and refuses a switch to any other. If the consumer
