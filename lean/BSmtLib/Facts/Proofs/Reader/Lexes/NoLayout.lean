@@ -224,7 +224,7 @@ theorem zok_of_reach (hc : C.concrete = false) {version : Version}
 end
 
 /-- The library's lexer hands no whitespace or comment to the adapter's consumer for a consumer
-of the spec that does not take them. -/
+of the formalism that does not take them. -/
 theorem noLayout (C : BSmtLibSpec.Lexer.Consumer) (hc : C.concrete = false)
     (version : Version) :
     NoLayout C version :=

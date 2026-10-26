@@ -16,7 +16,7 @@ of that call's fragment. A command made of several calls waits in `Pending` unti
 The handler's version switch changes the version in force, which tells the literals of
 2.5 and 2.6 from terms in `check-sat-assuming`.
 
-Not trusted: this is a check of the specification.
+Not trusted: this is a check of the specification formalism (`BSmtLibSpec`).
 -/
 
 namespace BSmtLibSpec.Facts.Proofs.Parser.Recovery

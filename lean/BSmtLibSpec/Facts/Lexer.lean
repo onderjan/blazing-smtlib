@@ -17,9 +17,9 @@ public import BSmtLibSpec.Facts.Proofs.Lexer.Consumers
   - what a lexer does with a consumer is determined;
   - the input after a version switch is located as in the whole input.
 
-Each theorem below proves a property of the specification, from the modules imported above.
-Each is followed by the axioms its proof uses: only those of Lean's standard library, no
-`sorry` and no axiom of its own. The build fails if that changes.
+Each theorem below proves a property of the specification formalism (`BSmtLibSpec`), from the
+modules imported above. Each is followed by the axioms its proof uses: only those of Lean's standard
+library, no `sorry` and no axiom of its own. The build fails if that changes.
 -/
 
 namespace BSmtLibSpec.Facts

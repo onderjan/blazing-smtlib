@@ -19,15 +19,19 @@ Lean derives (`BSmtLib.Facts.Naming.subject`). Theorems and instances need neith
 theorems, and an instance is the counterpart of a trait implementation, which has no name. The
 library is the modules below `BSmtLib` outside `BSmtLib.Facts`.
 
-The Lean name of a Rust item follows from its path: the modules become the namespaces, each
-written in upper camel case (`parser::category::term` is `BSmtLib.Parser.Category.Term`); a type
-loses the prefix `Smt`, so that a view takes the plain name and an owned type keeps its suffix `Buf`
-(`lexicon::value::SmtSymbol` is `BSmtLib.Lexicon.Value.Symbol`, `lexicon::value::SmtSymbolBuf`
-is `BSmtLib.Lexicon.Value.SymbolBuf`); a type named like its module is the module's own name
-(`lexer::SmtLexer` is `BSmtLib.Lexer`); a function or method is written in lower camel case, with
-`?` for a result that may be absent (`from_decimal` may be `fromDecimal?`, as `peek` may be
-`peek?`, and a suffix `_opt` becomes the `?`), and with the Lean names of the Rust types it names
-(`to_u32` is `toUInt32`, `into_vec` is `intoByteArray`).
+The Lean name of a Rust item follows from its path:
+
+- The modules become the namespaces, each written in upper camel case (`parser::category::term`
+  is `BSmtLib.Parser.Category.Term`).
+- A type loses the prefix `Smt`, so that a view takes the plain name and an owned type keeps its
+  suffix `Buf` (`lexicon::value::SmtSymbol` is `BSmtLib.Lexicon.Value.Symbol`,
+  `lexicon::value::SmtSymbolBuf` is `BSmtLib.Lexicon.Value.SymbolBuf`).
+- A type named like its module is the module's own name (`lexer::SmtLexer` is `BSmtLib.Lexer`).
+- A function or method is written in lower camel case:
+  - with `?` for a result that may be absent (`from_decimal` may be `fromDecimal?`, as `peek` may
+    be `peek?`, and a suffix `_opt` becomes the `?`);
+  - with the Lean names of the Rust types it names (`to_u32` is `toUInt32`, `into_vec` is
+    `intoByteArray`).
 
 A `LEAN:` comment counts for a declaration when it is in the declaration's header (between its
 documentation comment and its name), or is the block comment right above the paragraph (the lines
@@ -37,16 +41,19 @@ has the macro's use as its header.
 `#counterparts` lists the public names that have a reason and no counterpart, and fails with an
 error for each public name that has neither.
 
-It checks the other direction too. Every public item of the Rust crate has a public Lean
-counterpart, but a method of a trait implementation, which the trait's implementation stands
-for: a method `x_mut` may be the function `modifyX`, which returns the value with its part
-changed, and a method `into_x` the reader `x`, as Lean values are not moved out of. Every trait
-implementation of a public type has an instance of the trait's class for the type's counterpart,
-if the trait has a class (`stdClasses` for the traits of the standard library). The counterpart of
-a structure with private fields has private constructors only. An item that fails one of these
-checks has an entry with a reason in `BSmtLib.Facts.RustOnly.reasons`; `#counterparts` lists the
-entries, and fails with an error for each item that fails a check without one, and for each entry
-that no item needs.
+It checks the other direction too:
+
+- Every public item of the Rust crate has a public Lean counterpart, but a method of a trait
+  implementation, which the trait's implementation stands for. A method `x_mut` may be the
+  function `modifyX`, which returns the value with its part changed, and a method `into_x` the
+  reader `x`, as Lean values are not moved out of.
+- Every trait implementation of a public type has an instance of the trait's class for the type's
+  counterpart, if the trait has a class (`stdClasses` for the traits of the standard library).
+- The counterpart of a structure with private fields has private constructors only.
+
+An item that fails one of these checks has an entry with a reason in
+`BSmtLib.Facts.RustOnly.reasons`. `#counterparts` lists the entries, and fails with an error for
+each item that fails a check without one, and for each entry that no item needs.
 
 This module is a tool of the facts, not a part of any of them, and not trusted.
 -/

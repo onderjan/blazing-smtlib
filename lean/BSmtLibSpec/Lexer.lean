@@ -352,16 +352,16 @@ def WholeInputCorrect (feed : Version → List Chars → Bool → Fed) (version 
       handed = tokens.map (·.handed version input) ++ [endOfFile input]
 
 
-/-! ## About the specification
+/-! ## About the formalism
 
-A property of the specification alone, which `BSmtLibSpec.Facts.Lexicon` proves.
+A property of the formalism alone, which `BSmtLibSpec.Facts.Lexicon` proves.
 -/
 
 /--
 Property: characters whose tokenisation ends with a `)` at their end are handed over whole, and
 the characters followed by more are tokenised as the two parts read on their own.
 
-This is a property of the specification alone. A command ends with a `)`, which needs no
+This is a property of the formalism alone. A command ends with a `)`, which needs no
 delimiter, so its end is a point where reading can stop and start again, possibly in another
 version: a lexer fed the command holds nothing of it back, and the input after it is tokenised
 as an input of its own, its tokens moved by the length of what came before.

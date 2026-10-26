@@ -15,14 +15,15 @@ import all BSmtLib.Lexer.Cursor
 /-!
 # The Rust port's loop over the stops in a slice, against the naive lexer
 
-`loop`: the Rust port's loop over a slice with the consumer's stops (`lexSliceFrom`), from a
-lexer state that is the naive lexer's pure state at an index, gives what the naive lexer fed the
-bytes from there gives (`LoopRel`): the same tokens taken, the same result, or failures the spec
-does not tell apart, none with the adapter's error `none` for a consumer that does not take
-whitespace and comments, and lexer states that correspond (`LoopOk`). Each run of the loop up to a
-stop (`sliceRun_ok`) and the naive lexer (`vBytes_out`) do what the same outcome of the pure run
-says; at a relex or a break, the Rust port resumes after the lexeme, where the naive lexer starts
-again (`Restarts`), and the loop goes on by induction on the bytes left after the floor.
+`loop`: the Rust port's loop over a slice with the consumer's stops (`lexSliceFrom`), from a lexer
+state that is the naive lexer's pure state at an index, gives what the naive lexer fed the bytes
+from there gives (`LoopRel`): the same tokens taken, the same result, or failures the specification
+formalism (`BSmtLibSpec`) does not tell apart, none with the adapter's error `none` for a consumer
+that does not take whitespace and comments, and lexer states that correspond (`LoopOk`). Each run of
+the loop up to a stop (`sliceRun_ok`) and the naive lexer (`vBytes_out`) do what the same outcome of
+the pure run says; at a relex or a break, the Rust port resumes after the lexeme, where the naive
+lexer starts again (`Restarts`), and the loop goes on by induction on the bytes left after the
+floor.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Loop

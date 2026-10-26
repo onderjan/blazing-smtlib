@@ -11,12 +11,12 @@ import all BSmtLib.Parser.Command.Internal.Datatype
 /-!
 # Lists of elements against the traversal
 
-`ListState.step` runs an inner parser for each element of a list up to a `)`. Given what the
-inner parser does on one element (`ElementRuns`: from its initial state it reads the element's
-tokens with a program whose value, through a bridge, is the spec's, and ends with it), the list
-parser reads the tokens of the elements with the programs one after another, collecting the
-values. A program's values are lists of a known length (`HasLength`), so that the list parser's
-checks of the number of elements are decided by it.
+`ListState.step` runs an inner parser for each element of a list up to a `)`. Given what the inner
+parser does on one element (`ElementRuns`: from its initial state it reads the element's tokens with
+a program whose value, through a bridge, is that of the specification formalism (`BSmtLibSpec`), and
+ends with it), the list parser reads the tokens of the elements with the programs one after another,
+collecting the values. A program's values are lists of a known length (`HasLength`), so that the
+list parser's checks of the number of elements are decided by it.
 
 The first token of each element is taken from the state between elements, which steps on it as
 the inner parser's initial state does (`Runs.first`), since it is no `)`.
@@ -151,10 +151,10 @@ theorem Runs.of_bind_pure {τ α : Type} {step : τ → Parser.Internal.Input �
 /-! ## Elements -/
 
 /--
-The inner parser reads an element whose value stands for the spec's through `bridge`: for every
+The inner parser reads an element whose value stands for the formalism's through `bridge`: for every
 element valid as `valid` says, the tokens that stand for its tokens start with a token other
 than `)`, and from the initial state the inner parser reads them with a program whose values,
-bridged, are the spec program's.
+bridged, are the formalism program's.
 -/
 def ElementRuns (points : Points (StateT H m)) (inner : σ → Parser.Internal.Input → PM H
     (Parser.Internal.Step σ ρ)) (init : σ)

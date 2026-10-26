@@ -69,7 +69,7 @@ def eofOut (hd ws : Bool) (ver : Version) (coll : List Handed) (st : St)
 
 end
 
-/-- The spec's failure for the cause of an error and its span. -/
+/-- The formalism's failure for the cause of an error and its span. -/
 def causeFailure {ε : Type} (cause : LexerErrorCause (Option ε)) (span : Span) :
     BSmtLibSpec.Lexer.Failure ε :=
   failureOf (LexerError.Internal.new cause span none)
@@ -87,7 +87,7 @@ theorem causeFailure_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
   rw [this]
   rfl
 
-/-- A failure as precisely as the lexers agree on it: the spec's failure and, for a lexical
+/-- A failure as precisely as the lexers agree on it: the formalism's failure and, for a lexical
 error other than trailing input, its kind and span. -/
 abbrev PFailure (ε : Type) := BSmtLibSpec.Lexer.Failure ε × Option (LexicalErrorKind × Span)
 
@@ -121,11 +121,11 @@ theorem preciseFailure_trailing {ε : Type} {span : Span} :
 theorem preciseFailure_consumer {ε : Type} {o : Option ε} {span : Span} :
     preciseFailure (.consumer o) span = (causeFailure (.consumer o) span, none) := (rfl)
 
-/-- The precise failure gives the spec's failure. -/
+/-- The precise failure gives the formalism's failure. -/
 theorem preciseOf_fst {ε : Type} (e : LexerError (Option ε)) : (preciseOf e).1 = failureOf e :=
   (rfl)
 
-/-- The spec's failure at a stop of the consumer that fails the lexer. -/
+/-- The formalism's failure at a stop of the consumer that fails the lexer. -/
 def stopFailure {C : BSmtLibSpec.Lexer.Consumer} : Stop C → BSmtLibSpec.Lexer.Failure C.Error
   | .trailing l => .trailing (toLocation l.start)
   | .fail e _ _ => .consumer e

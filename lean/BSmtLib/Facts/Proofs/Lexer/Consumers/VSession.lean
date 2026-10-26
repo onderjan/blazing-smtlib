@@ -9,7 +9,7 @@ import all BSmtLib.Lexer.Error
 @[expose] public section
 
 /-!
-# What the adapter makes of the naive lexer with a consumer of the spec
+# What the adapter makes of the naive lexer with a consumer of the formalism
 
 The adapter's feeding of the naive lexer with the consumer `Answering consumer`
 (`Adapters.lexing VNaive.lexOps`) is the loop over the bytes of the slices, whatever they are cut
@@ -235,7 +235,7 @@ def discardedOf (core : Core) : Option Span.Location :=
   | .discarding start => some start
   | _ => none
 
-/-- The session of the naive lexer, in the spec's form: the tokens taken, where it stands, and
+/-- The session of the naive lexer, in the formalism's form: the tokens taken, where it stands, and
 its version and discarding. -/
 def sessionOf (taken : List Handed) (outcome : BSmtLibSpec.Lexer.Outcome consumer.Result
     consumer.Error)

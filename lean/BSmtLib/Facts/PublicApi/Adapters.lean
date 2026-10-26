@@ -8,9 +8,10 @@ public import BSmtLib
 # The small definitions of the theorems about the public API
 
 The theorems of `BSmtLib.Facts.PublicApi` are stated with the library's public API, bytes, lists,
-and the definitions below, and nothing else: no definition of the specification and none of the
-library's internals. Each definition here is a few lines and states its rule in its docstring; a
-reader of the theorems reads these and the public API, and nothing more.
+and the definitions below, and nothing else: no definition of the specification formalism
+(`BSmtLibSpec`) and none of the library's internals. Each definition here is a few lines and states
+its rule in its docstring; a reader of the theorems reads these and the public API, and nothing
+more.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

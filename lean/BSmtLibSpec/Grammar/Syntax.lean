@@ -20,7 +20,7 @@ when it is the `tokens` of a tree of that category that is `Valid` in that versi
 `IsCommand`). A tree is written the same in every version; only `Valid` depends on the version.
 
 How each production is written is the standard's; the trees and the split into `tokens` and
-`Valid` are how this specification records it.
+`Valid` are how the specification formalism (`BSmtLibSpec`) records it.
 -/
 
 namespace BSmtLibSpec.Grammar

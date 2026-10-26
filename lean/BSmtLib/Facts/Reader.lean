@@ -14,49 +14,73 @@ public import BSmtLib.Facts.Proofs.Reader.Lexes.Reader
 # From characters to the calls of the traversal
 
 The composition of the lexer proofs (`BSmtLib.Facts.Lexer`) with the parser proofs
-(`BSmtLib.Facts.Parser`) at the level of the specification.
+(`BSmtLib.Facts.Parser`) at the level of the specification formalism (`BSmtLibSpec`). It joins three
+parts:
 
-- The consumer: `Adapters.scriptConsumer version` is the library's script parser as a consumer of
-  the lexer spec (`BSmtLibSpec.Lexer.Consumer`): after each token it answers as the parser's
-  recording run (`Rejection.libraryParser`) on the tokens taken so far ends, each token read as the
-  parser's token that stands for it, and it asks for the version switch and the discarding
-  that the run asks of its producer after the last token's processing.
+- The consumer: `Adapters.scriptConsumer version` is the library's script parser as a consumer in
+  the formalism (`BSmtLibSpec.Lexer.Consumer`). It reads each token as the parser's
+  token that stands for it, and after each token:
+  - it answers as the parser's recording run (`Rejection.libraryParser`) on the tokens taken so
+    far ends;
+  - it asks for the version switch and the discarding that the run asks of its producer after
+    the last token's processing.
 - The lexer: `Facts.Lexer.correctWithConsumers` states that the library's lexer, fed by the
-  adapter with every consumer of the spec, does what `BSmtLibSpec.Lexer.Runs` states, relative to
-  what it hands over to the collector, which is `BSmtLibSpec.Lexer.Correct`.
+  adapter with every consumer of the formalism, does what `BSmtLibSpec.Lexer.Runs` states.
+  That is stated relative to what the lexer hands over to the collector, which
+  `BSmtLibSpec.Lexer.Correct` states.
 - The file: `BSmtLibSpec.Grammar.File` reads the characters of a file as commands, each in the
   version in force, from its version declarations on (Reading M1) up to `exit` (Reading M2).
 
-So the library's lexer, fed the characters of a file cut into any slices and then the end of the
-input, with that consumer, takes the tokens of the commands, switching the version after every
-version declaration and discarding after `exit`, and returns the parser's result at the end of the
-input; and the parser's recording run on what the lexer handed it is the traversal's
-(`library_lexes_file`). The proof (`Facts.Proofs.Reader.Valid.lexing_file`) holds for every lexer
-that is correct with every consumer.
+## Files, with the consumer above
+
+The library's lexer, fed the characters of a file cut into any slices and then the end of the
+input, with the consumer above (`library_lexes_file`):
+
+- takes the tokens of the commands, switching the version after every version declaration and
+  discarding after `exit`;
+- returns the parser's result at the end of the input;
+- has handed the parser tokens on which its recording run has the traversal's events.
+
+The proof (`Facts.Proofs.Reader.Valid.lexing_file`) holds for every lexer that is correct with
+every consumer.
+
+## Files, with the parse adapter
 
 With the library's parse adapter (`Parser.ParseAdapter`) as the lexer's consumer, the same is
-proved on files: the library's lexer depends on its consumer only through each call's answer and
-cursor (`Param.lexSliceStep_sim`, `Param.lexEofStep_sim`), and on the tokens of a script the
-parse adapter with the recording handler answers as the consumer above does
-(`Param.feed_agree`); so the lexer's public calls, and the library's reader built on them, tell
-the handler the traversal's calls on a file and finish (`library_parses_file`,
-`reader_reads_files`).
+proved on files, from two facts:
 
-On every input, the parse adapter and the consumer above are related too, as long as the tokens
-taken stand for a start of what a parser takes or for such a start and the first item that no
-script continues with (`Param.link_consumersG`): where the consumer above fails at a token, the
-parse adapter fails at it too, at whitespace or a comment because no parser takes it. As the
-lexer with the consumer above takes only such tokens, the lexer with the parse adapter returns a
-result at the end of the input only where the lexer with the consumer above does, which is only
-on a file; and so the reader finishes only on files (`reader_finishes_only_on_files`).
+- the library's lexer depends on its consumer only through each call's answer and cursor
+  (`Param.lexSliceStep_sim`, `Param.lexEofStep_sim`);
+- on the tokens of a script, the parse adapter with the recording handler answers as the
+  consumer above does (`Param.feed_agree`).
+
+So the lexer's public calls, and the library's reader built on them, tell the handler the
+traversal's calls on a file and finish (`library_parses_file`, `reader_reads_files`).
+
+## Every input
+
+On every input, the parse adapter and the consumer above are related too
+(`Param.link_consumersG`), as long as the tokens taken stand for one of:
+
+- a start of what a parser takes;
+- such a start, followed by the first item that no script continues with.
+
+Where the consumer above fails at a token, the parse adapter fails at it too; at whitespace or a
+comment, it fails because no parser takes them. The lexer with the consumer above takes only such
+tokens. So the lexer with the parse adapter returns a result at the end of the input only where
+the lexer with the consumer above does, which is only on a file; and so the reader finishes only
+on files (`reader_finishes_only_on_files`).
 
 The relation goes on after the call at which the consumer above fails: the parse adapter then
-stands where the parser's recording run over the tokens taken leaves it, as the library's lexer
-hands no whitespace or comment to a consumer that does not take them (`Param.noLayout`, from the
-chain of lexers). The library's parser, as a consumer of the specification, answers as the
-consumer above does (`Param.consumer_agrees`). So on every input, ended or not, the reader tells
-the handler the parser's calls on the tokens the lexer hands over, nothing before the first, and
-finishes where the lexer does (`reader_lexes_then_parses`).
+stands where the parser's recording run over the tokens taken leaves it. That holds because the
+library's lexer hands no whitespace or comment to a consumer that does not take them
+(`Param.noLayout`, from the chain of lexers). The library's parser, as a consumer of the
+formalism, answers as the consumer above does (`Param.consumer_agrees`). So on every input,
+ended or not, the reader (`reader_lexes_then_parses`):
+
+- tells the handler the parser's calls on the tokens the lexer hands over, and nothing before the
+  first;
+- finishes where the lexer does.
 -/
 
 /-!
@@ -77,11 +101,14 @@ open BSmtLib.Facts.Proofs.Reader.Lexes.Reader BSmtLib.Facts.Proofs.Reader.Reader
 open BSmtLib.Facts.Proofs.Reader.Session BSmtLib.Facts.Proofs.Reader.Valid
 
 /--
-The library's lexer, fed the characters of a file of commands, with the initial version, cut into
-any slices, and then the end of the input, with the library's script parser as a consumer of the
-lexer spec: the input ends with the parser's result returned; the tokens the parser took stand for
-what a parser receives for the script, version switches and `exit` included; and the parser's
-recording run on them has the traversal's events.
+The library's lexer, fed the characters of a file of commands cut into any slices and then the
+end of the input, with the initial version `version` and with the library's script parser as a
+consumer in the formalism:
+
+- the input ends with the parser's result returned;
+- the tokens the parser took stand for what a parser receives for the script, version switches
+  and `exit` included;
+- the parser's recording run on them has the traversal's events.
 -/
 theorem library_lexes_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
@@ -103,25 +130,25 @@ info: 'BSmtLib.Facts.Reader.library_lexes_file' depends on axioms: [propext, Cla
 #print axioms library_lexes_file
 
 /--
-The library's lexer, fed the characters of any input, with the initial version, cut into any slices,
-and then the end of the input, with the library's script parser as a consumer of the lexer spec,
-ends in one of four ways, with the parser's recording run on the tokens taken as the specification
-gives it:
+The library's lexer, fed the characters of any input cut into any slices and then the end of the
+input, with the initial version `version` and with the library's script parser as a consumer in
+the formalism, ends in one of four ways. In each, the parser's recording run on the
+tokens taken is as the formalism gives it.
 
-- the input reads as a file of commands; the input ends with the parser's result returned, the
+- The input reads as a file of commands. The input ends with the parser's result returned, the
   tokens taken stand for what a parser receives for the script, and the run has the traversal's
-  events and finishes;
-- the tokens taken stand for commands that a declaration naming no supported version ends; the
-  parser fails there with `unsupportedVersion`, its run having the traversal's events, the last of
-  which is the call of that `set-info`;
-- the last token taken is the first that no script continues with (`RejectsFirstUnviable`), an end
-  of the input that comes too early among them; the parser rejects it, having made the
-  traversal's events before its processing, where a `)` gets none of the calls due at its
-  arrival, and no call at it;
-- the lexer fails with a lexical error after handing over tokens that stand for a start of what a
-  parser takes, the parser waiting with the traversal's events before the next item: read from
-  the end of the last version declaration on, in its version, the input has no tokenisation, and
-  the tokens taken from there are those maximal to hand over on its longest viable start
+  events and finishes.
+- The tokens taken stand for commands that a declaration naming no supported version ends. The
+  parser fails there with `unsupportedVersion`. Its run has the traversal's events, the last of
+  which is the call for that declaration.
+- The last token taken is the first that no script continues with (`RejectsFirstUnviable`); it
+  can be an end of the input that comes too early. The parser rejects it. Its run has the
+  traversal's events up to that token's processing, so a `)` gets none of the calls due at its
+  arrival, and ends with the processing, with no call at the token.
+- The lexer fails with a lexical error after handing over tokens that stand for a start of what a
+  parser takes. The parser waits, with the traversal's events before the next item. Read from the
+  end of the last version declaration on, in its version, the input has no tokenisation, and the
+  tokens taken from there are those maximal to hand over on its longest viable start
   (`BSmtLibSpec.Lexer.Correct`).
 -/
 theorem library_session (version : Lexicon.Version) (slices : List Regex.Chars) :
@@ -170,9 +197,12 @@ info: 'BSmtLib.Facts.Reader.library_session' depends on axioms: [propext, Classi
 
 /--
 The library's lexer, fed the characters of an input that does not read as a file, cut into any
-slices, and then the end of the input, with the library's script parser as a consumer of the
-lexer spec: the session fails, on a declaration that names no supported version, at the first
-token that no script continues with, or with a lexical error, as `library_session` states.
+slices, and then the end of the input, with the library's script parser as a consumer in
+the formalism, fails in one of the three ways that `library_session` states:
+
+- on a declaration that names no supported version;
+- at the first token that no script continues with;
+- with a lexical error.
 -/
 theorem library_fails (version : Lexicon.Version) (slices : List Regex.Chars)
     (hnot : ¬ ∃ commands, File version slices.flatten commands) :
@@ -217,9 +247,9 @@ info: 'BSmtLib.Facts.Reader.library_fails' depends on axioms: [propext, Classica
 #print axioms library_fails
 
 /--
-The library's lexer, with the library's script parser as a consumer of the lexer spec, returns the
-parser's result at the end of an input, however cut into slices, exactly when the input reads as a
-file.
+The library's lexer, with the library's script parser as a consumer in the formalism,
+returns the parser's result at the end of an input, however cut into slices, exactly when the input
+reads as a file.
 -/
 theorem library_finishes_iff_file (version : Lexicon.Version) (slices : List Regex.Chars) :
     (Lexer.Adapters.lexing Lexer.Adapters.Lexer.lexOps
@@ -236,10 +266,13 @@ info: 'BSmtLib.Facts.Reader.library_finishes_iff_file' depends on axioms: [prope
 
 /--
 The library's lexer with the library's parse adapter as its consumer, over the recording handler
-and the script parser that allows every version, fed the characters of a file of commands, with
-the initial version, cut into any slices, by its public calls (`Param.paFeed`: `Lexer.lexSlice` for
-each slice, then `Lexer.lexEof`): no call fails, the end of the input returns the parser's
-result, and the handler has recorded the calls of the traversal of the script, in order.
+and the script parser that allows every version, is fed the characters of a file of commands cut
+into any slices, with the initial version `version`, by its public calls (`Param.paFeed`:
+`Lexer.lexSlice` for each slice, then `Lexer.lexEof`). Then:
+
+- no call fails;
+- the end of the input returns the parser's result;
+- the handler has recorded the calls of the traversal of the script, in order.
 -/
 theorem library_parses_file (version : Lexicon.Version) (slices : List Regex.Chars)
     {commands : List Tree.Command} (hfile : File version slices.flatten commands) :
@@ -290,11 +323,13 @@ info: 'BSmtLib.Facts.Reader.reader_finishes_only_on_files' depends on axioms: [p
 
 /--
 The library's script reader (`Reader.script`), with the recording handler and the posture that
-allows every version, fed an input in any slices by `Reader.readSlice` and then, if the input has
-ended, the end of the input by `Reader.readEof`, does what the library's lexer, which is correct
-with every consumer, does with the library's script parser as its consumer: it tells the handler
-the parser's calls on the tokens the lexer hands over, nothing before the first token, and
-finishes exactly where the lexer does.
+allows every version, is fed an input in any slices by `Reader.readSlice` and then, if the input
+has ended, the end of the input by `Reader.readEof`. It does what the library's lexer, which is
+correct with every consumer, does with the library's script parser as its consumer:
+
+- it tells the handler the parser's calls on the tokens the lexer hands over, and nothing before
+  the first token;
+- it finishes exactly where the lexer does.
 -/
 theorem reader_lexes_then_parses : BSmtLibSpec.Reader.LexesThenParses Adapters.libraryReader :=
   libraryReader_lexesThenParses
@@ -307,13 +342,17 @@ info: 'BSmtLib.Facts.Reader.reader_lexes_then_parses' depends on axioms: [propex
 
 /-! ## What is trusted
 
-A reader of the theorems above trusts the specification (`BSmtLibSpec`), the statements in this
-file, and the definitions in `BSmtLib.Facts.Reader.Adapters`, `BSmtLib.Facts.Parser.Adapters` and
-`BSmtLib.Facts.Lexer.Adapters`, which put the lexer, the parser, the parse adapter and the reader
-into the spec's shapes: the adapters. Everything else Lean checks. The check below lists the
-adapters, every definition that the statements of the theorems in this file rest on outside the
-specification, the library and Lean (`BSmtLib.Facts.Trusted`), and fails the build if one of them is
-declared outside those modules.
+A reader of the theorems above trusts:
+
+- the formalism (`BSmtLibSpec`);
+- the statements in this file;
+- the adapters: the definitions in `BSmtLib.Facts.Reader.Adapters`, `BSmtLib.Facts.Parser.Adapters`
+  and `BSmtLib.Facts.Lexer.Adapters`, which put the lexer, the parser, the parse adapter and the
+  reader into the formalism's shapes.
+
+Everything else Lean checks. The check below (`BSmtLib.Facts.Trusted`) lists the adapters: every
+definition that the statements of the theorems in this file rest on, outside the formalism,
+the library and Lean. It fails the build if one of them is declared outside those modules.
 -/
 
 /--

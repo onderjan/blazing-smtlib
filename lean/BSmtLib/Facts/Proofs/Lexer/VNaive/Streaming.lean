@@ -13,7 +13,7 @@ the input has ended, the end of the input (`fedRun`), has the property `BSmtLibS
 
 `fedRun` is what the pure run over the bytes of the slices and then the end of the input gives,
 also up to an error (`fedRun_eq_run`, `fedOf_isSome`), and the lexeme of a token is in the form
-in which the spec hands the token over (`lexemeHanded_token`).
+in which the specification formalism (`BSmtLibSpec`) hands the token over (`lexemeHanded_token`).
 
 Before the end of the input (`correct_unended`): when the run gets through the bytes, they are
 viable, as some bytes complete them to an input that the run finishes (`runFrom_completes`),
@@ -98,7 +98,7 @@ theorem toTokenType_lexCategory (category : Category) :
     toTokenType (lexCategory category) = some category.type := by
   cases category <;> rfl
 
-/-- The consumer records the lexeme of a token of the input as the spec hands it over. -/
+/-- The consumer records the lexeme of a token of the input as the formalism hands it over. -/
 theorem lexemeHanded_token {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
     {token : BSmtLibSpec.Lexicon.Token} (hr : categoryRegex version token.category token.text)
     (hb : token.offset + token.text.length ≤ input.length) :
@@ -143,7 +143,7 @@ theorem lexemeHanded_eof (version : Version) (input : Chars) :
   rfl
 
 /-- The consumer records the lexemes of tokens of the input and the end-of-file lexeme as the
-spec hands them over. -/
+formalism hands them over. -/
 theorem handedAll_of {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
     (tokens : List BSmtLibSpec.Lexicon.Token)
     (h : ∀ token ∈ tokens, categoryRegex version token.category token.text ∧
@@ -160,7 +160,7 @@ theorem handedAll_of {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
     simp [List.mapM_cons, lexemeHanded_token hr hb, ih']
 
 /-- The consumer records the lexemes of the tokens of a tokenisation and the end-of-file
-lexeme as the spec hands them over. -/
+lexeme as the formalism hands them over. -/
 theorem handedAll_tokens {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
     {tokens : List BSmtLibSpec.Lexicon.Token} (h : Tokenization version input tokens) :
     handedAll (toVersion version)
@@ -279,7 +279,7 @@ theorem handed_append {version : BSmtLibSpec.Lexicon.Version} {start more : Char
         (show token.offset ≤ start.length by omega),
     BSmtLibSpec.Facts.Proofs.Lexer.StreamingFacts.locate_append h]
 
-/-- The consumer records the lexemes of tokens of the input as the spec hands them over. -/
+/-- The consumer records the lexemes of tokens of the input as the formalism hands them over. -/
 theorem handedAll_map {version : BSmtLibSpec.Lexicon.Version} {input : Chars}
     (tokens : List BSmtLibSpec.Lexicon.Token)
     (h : ∀ token ∈ tokens, categoryRegex version token.category token.text ∧

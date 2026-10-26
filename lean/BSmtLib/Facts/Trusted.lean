@@ -7,31 +7,39 @@ public meta import Lean
 /-!
 # The trusted adapters of the root theorems
 
-A root theorem of a proof library is stated with the specification (`BSmtLibSpec`), the library,
-Lean, and definitions of the proof libraries that put the library into the specification's
-shapes: the adapters. A theorem stated with a wrong adapter is a theorem about the wrong thing,
-so the adapters are trusted together with the specification and the statements.
+A root theorem of a proof library is stated with the specification formalism (`BSmtLibSpec`), the
+library, Lean, and definitions of the proof libraries that put the library into the formalism's
+shapes: the adapters. A theorem stated with a wrong adapter is a theorem about the wrong thing, so
+the adapters are trusted together with the formalism and the statements.
 
-`#adapters` computes that set from the environment. Starting from the constants in the statements
-of the theorems declared in the current module, it follows the types and the bodies of the
-definitions it reaches, the constructors of the inductive types and structures, and the types of
-everything, and stops at the constants of the specification, of the library, of the lexers of the
-chain and of Lean. Every other constant it reaches is an adapter. A theorem reached in a body is a
-proof and is not followed: only what a statement means is trusted. A module sees an imported
+`#adapters` computes that set from the environment. It starts from the constants in the
+statements of the theorems declared in the current module, and follows:
+
+- the types and the bodies of the definitions it reaches;
+- the constructors of the inductive types and structures;
+- the types of everything.
+
+It stops at the constants of the formalism, of the library, of the lexers of the chain and of
+Lean. Every other constant it reaches is an adapter. A theorem reached in a body is a proof and is
+not followed: only what a statement means is trusted. A module sees an imported
 definition whose body its module does not expose without the body, and does not see a private
 declaration of another module at all; the walk cannot follow such a constant, so it fails on it
 instead of passing over it.
 
 The lexers of the chain (`BSmtLib.Lexer.Internal.VNaive`, `WRustPort` and `X1BatchInCore`) are
 what the root theorems of `BSmtLib.Facts.Lexer` are about, as the library is what the others are
-about: a theorem says that its subject meets the specification, so its subject need not be
+about: a theorem says that its subject meets the formalism, so its subject need not be
 trusted.
 
 `#trusts` is the same walk for theorems stated with the library's public API rather than the
-specification (`BSmtLib.Facts.PublicApi`): for each theorem it lists the small definitions its
-statement reaches, and every constant of the specification, of the library's internals, of the
-lexers of the chain or of another module that it names, so that a statement that rests on more
-than its small definitions and the public API shows so in the pinned list.
+formalism (`BSmtLib.Facts.PublicApi`). For each theorem, it lists:
+
+- the small definitions its statement reaches;
+- every constant of the formalism, of the library's internals, of the lexers of the chain or
+  of another module that the statement names.
+
+So a statement that rests on more than its small definitions and the public API shows so in the
+pinned list.
 
 This module is a tool of the proof libraries, not a part of any of them, and not trusted: it only
 lists, and `#guard_msgs` around it pins the list.
@@ -45,15 +53,15 @@ open Lean Elab Command
 inductive Side where
   /-- Lean's standard library. -/
   | lean
-  /-- The trusted specification: `BSmtLibSpec` and the modules below it, but for
+  /-- The trusted formalism: `BSmtLibSpec` and the modules below it, but for
   `BSmtLibSpec.Facts`. -/
   | spec
   /-- The library: `BSmtLib` and the modules below it that are none of the others. -/
   | library
-  /-- The lexers of the chain from the specification to the library's lexer:
+  /-- The lexers of the chain from the formalism to the library's lexer:
   `BSmtLib.Lexer.Internal.VNaive`, `WRustPort` and `X1BatchInCore`, and the modules below them. -/
   | chain
-  /-- Everything else: the facts about the library and about the specification, this tool. -/
+  /-- Everything else: the facts about the library and about the formalism, this tool. -/
   | other
   deriving BEq
 
@@ -117,7 +125,7 @@ structure Unseen where
   reachedFrom : Name
 
 /-- The adapters reached from the constants `roots`, each paired with the constant it is in, and
-the constants reached that are neither of the specification, the library, the chain nor Lean
+the constants reached that are neither of the formalism, the library, the chain nor Lean
 and whose meaning the walk cannot read. -/
 def adaptersFrom (env : Environment) (roots : Array (Name × Name)) :
     MetaM (Array Adapter × Array Unseen) := do
@@ -164,7 +172,7 @@ def sortNames (names : Array Name) : Array Name :=
 `#adapters within M₁ M₂ …` lists the adapters of the theorems declared in the current module,
 the declarations of their own (`declared`), grouped by the module that declares them; and fails
 with an error for each adapter, of its own or derived, declared in a module that is none of
-`M₁ M₂ …` and below none of them, and for each constant it reaches outside the specification,
+`M₁ M₂ …` and below none of them, and for each constant it reaches outside the formalism,
 the library, the chain and Lean that it cannot read: one the environment does not hold or holds
 without its body.
 -/
@@ -208,7 +216,7 @@ def internal (name : Name) : Bool :=
 structure Reached where
   /-- The small definitions: the adapters of the modules given to `#trusts`. -/
   small : Array Name := #[]
-  /-- The constants of the specification. -/
+  /-- The constants of the formalism. -/
   spec : Array Name := #[]
   /-- The library's internals. -/
   internals : Array Name := #[]
@@ -220,7 +228,7 @@ structure Reached where
   unseen : Array Unseen := #[]
 
 /-- What the constants `roots` rest on, the small definitions being those declared in the
-modules `small` and below them; a small definition or another constant outside the specification,
+modules `small` and below them; a small definition or another constant outside the formalism,
 the library, the chain and Lean that it cannot read is reported in `unseen`. -/
 def reach (env : Environment) (small : Array Name) (thm : Name) (roots : Array Name) :
     MetaM Reached := do
@@ -281,10 +289,10 @@ def line (label : String) (strip : Array Name) (names : Array Name) : Option Str
 their names, what its statement rests on beside Lean and the library's public API: the small
 definitions it reaches, those declared in the modules `M₁ M₂ …` and below them, shown without
 their module's path, whose types and bodies it follows as `#adapters` follows adapters; and the
-constants of the specification, of the library's internals (a name with a component `Internal`,
+constants of the formalism, of the library's internals (a name with a component `Internal`,
 or a private name), of the lexers of the chain and of other modules that its statement or a
 small definition names; and fails with an error for each small definition whose body it cannot
-read and for each constant outside the specification, the library, the chain and Lean that the
+read and for each constant outside the formalism, the library, the chain and Lean that the
 environment does not hold.
 -/
 syntax (name := trustsCmd) "#trusts" " within" (ppSpace ident)+ : command

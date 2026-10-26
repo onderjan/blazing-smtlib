@@ -7,12 +7,12 @@ public import BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
 /-!
 # Feeding a lexer slices, keeping its error
 
-`LexOps.runInput` gives where the lexer stands in the spec's form, which keeps of an error only
-its `failureOf`. `runInputE` feeds the lexer the same way and gives the error itself, or the
-result the lexer holds at the end: the held one, or after the end of the input the one it gives
-there. Two lexers whose steps give results alike as a `g` says give results alike as `g` says
-fed the same slices (`runInputE_alikeG`); with steps that give the same results, the same results
-(`runInputE_alike`).
+`LexOps.runInput` gives where the lexer stands in the form of the specification formalism
+(`BSmtLibSpec`), which keeps of an error only its `failureOf`. `runInputE` feeds the lexer the same
+way and gives the error itself, or the result the lexer holds at the end: the held one, or after the
+end of the input the one it gives there. Two lexers whose steps give results alike as a `g` says
+give results alike as `g` says fed the same slices (`runInputE_alikeG`); with steps that give the
+same results, the same results (`runInputE_alike`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.RunE
@@ -66,7 +66,7 @@ theorem runInputE_nil_true (ops : LexOps) (lexer : ops.Lexer consumer) (t : List
 theorem runInputE_nil_false (ops : LexOps) (lexer : ops.Lexer consumer) (t : List Handed) :
     (runInputE ops lexer false []).run t = ((.ok (ops.held lexer), lexer), t) := rfl
 
-/-- Where the lexer stands in the spec's form, after the result or the error of `runInputE`. -/
+/-- Where the lexer stands in the formalism's form, after the result or the error of `runInputE`. -/
 def outcomeOf (ended : Bool) :
     Except (LexerError (Option consumer.Error)) (Option (Span.Located consumer.Result)) →
       BSmtLibSpec.Lexer.Outcome consumer.Result consumer.Error
@@ -76,7 +76,7 @@ def outcomeOf (ended : Bool) :
     else .holding held.value (toLocation held.location)
   | .ok none => .running
 
-/-- `LexOps.runInput` is `runInputE` with the result in the spec's form. -/
+/-- `LexOps.runInput` is `runInputE` with the result in the formalism's form. -/
 theorem runInput_eq (ops : LexOps) (ended : Bool) : ∀ (slices : List BSmtLibSpec.Regex.Chars)
     (lexer : ops.Lexer consumer) (t : List Handed),
     (ops.runInput lexer ended slices).run t =

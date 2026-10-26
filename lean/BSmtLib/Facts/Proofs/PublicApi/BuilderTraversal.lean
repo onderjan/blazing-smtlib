@@ -8,11 +8,11 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Equations
 /-!
 # The traversal with the builder
 
-The specification's traversal of a tree with the builder (`specBuilder`), with token points and
-a producer that do nothing, returns the tree itself and leaves the state as it is, for sorts,
-s-expressions, attributes and terms; the traversal of a valid command adds the command to the
-commands built so far; and the traversal of a valid script from the state with the version it is
-read from adds its commands, newest first (`script_builds`).
+The traversal, as the specification formalism (`BSmtLibSpec`) defines it, of a tree with the builder
+(`specBuilder`), with token points and a producer that do nothing, returns the tree itself and
+leaves the state as it is, for sorts, s-expressions, attributes and terms; the traversal of a valid
+command adds the command to the commands built so far; and the traversal of a valid script from the
+state with the version it is read from adds its commands, newest first (`script_builds`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.BuilderTraversal
@@ -78,7 +78,7 @@ theorem yields_call {returns : Traversal.Returns} (request : Traversal.Call tree
 
 /-! ## Sorts, s-expressions and attributes -/
 
-/-- The builder as the specification's handler. -/
+/-- The builder as the formalism's handler. -/
 abbrev B : Traversal.Handler (StateT State Id) Unit treeValues := specBuilder
 
 theorem sort_yields : ∀ n (t : Tree.Sort) (s : State), sizeOf t < n →

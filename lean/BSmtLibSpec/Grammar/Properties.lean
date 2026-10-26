@@ -8,7 +8,8 @@ public import BSmtLibSpec.Lexer
 /-!
 # Properties of the grammar
 
-Properties of the specification alone, which `BSmtLibSpec.Facts.Grammar` proves:
+Properties of the specification formalism (`BSmtLibSpec`) alone, which `BSmtLibSpec.Facts.Grammar`
+proves:
 
 - each sequence of tokens is at most one tree;
 - each file is at most one sequence of commands;

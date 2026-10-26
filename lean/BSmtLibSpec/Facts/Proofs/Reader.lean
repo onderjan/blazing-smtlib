@@ -19,7 +19,7 @@ for the script (`files_runs`). If the reader finishes, the parser has taken what
 for a script, as it would otherwise have rejected a token (`finishes_script`), and the tokens it
 took are those of a file with that script (`finishes_file`).
 
-Not trusted: this is a check of the specification.
+Not trusted: this is a check of the specification formalism (`BSmtLibSpec`).
 -/
 
 namespace BSmtLibSpec.Facts.Proofs.Reader

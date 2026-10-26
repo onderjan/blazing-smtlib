@@ -13,11 +13,12 @@ import all BSmtLib.Lexer.Cursor
 /-!
 # The pure run of the naive lexer
 
-The naive lexer of `VNaive` lexes an input by a pure step over one byte at a time, and hands
-each finished token over to its consumer in a monad. This module states the lexing as a pure run
-over the bytes, also up to an error (`lexBytes`), followed by the end of the input (`endStep`;
-`run` for the whole input), and what the run hands over in the spec's form (`fedOf`, `fedRun`),
-with each lexeme in the form the adapter records it in (`lexemeHanded`, `toHanded_batch`).
+The naive lexer of `VNaive` lexes an input by a pure step over one byte at a time, and hands each
+finished token over to its consumer in a monad. This module states the lexing as a pure run over the
+bytes, also up to an error (`lexBytes`), followed by the end of the input (`endStep`; `run` for the
+whole input), and what the run hands over in the form of the specification formalism (`BSmtLibSpec`)
+(`fedOf`, `fedRun`), with each lexeme in the form the adapter records it in (`lexemeHanded`,
+`toHanded_batch`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaive.Run
@@ -157,7 +158,7 @@ def runFrom (version : Version) (st : St) (location : Span.Location) (bytes : Li
 def run (version : Version) (bytes : List UInt8) : Option (List Lexeme) :=
   runFrom version .idle Span.Location.initial bytes
 
-/-- The lexeme in the spec's form, as the adapter records it (`toHanded`) when it is handed
+/-- The lexeme in the formalism's form, as the adapter records it (`toHanded`) when it is handed
 over alone in a cursor under the version (see `toHanded_batch`); none for whitespace and
 comments. -/
 def lexemeHanded (version : Version) (l : Lexeme) : Option BSmtLibSpec.Lexer.Handed :=
@@ -205,7 +206,8 @@ theorem toHanded_batch (version : Version) (l : Lexeme) (h : l.Valid) :
   cases hc : l.category <;> simp [toTokenType, toReservedKind]
   cases Token.Reserved.fromBytes? l.content.toByteSlice version <;> rfl
 
-/-- The lexeme in the spec's form as a piece of layout, as the adapter records it (`toLayout`). -/
+/-- The lexeme in the formalism's form as a piece of layout, as the adapter records it (`toLayout`).
+-/
 def lexemeLayout (l : Lexeme) : BSmtLibSpec.Lexer.Handed :=
   { type := if l.category == .comment then .comment else .whitespace
     start := toLocation l.start
@@ -289,9 +291,9 @@ theorem runFrom_append (version : Version) (st : St) (location : Span.Location)
       simp only [Option.map_some, Option.bind_some]
       cases endStep st'' location'' <;> simp [List.append_assoc]
 
-/-! ## The lexemes in the spec's form -/
+/-! ## The lexemes in the formalism's form -/
 
-/-- The lexemes in the spec's form, or none if one of them is whitespace or a comment. -/
+/-- The lexemes in the formalism's form, or none if one of them is whitespace or a comment. -/
 def handedAll (version : Version) (ls : List Lexeme) : Option
     (List BSmtLibSpec.Lexer.Handed) :=
   ls.mapM (lexemeHanded version)
@@ -322,7 +324,7 @@ theorem id_bind {α β : Type} (x : α) (f : α → Id β) : (x >>= f : Id β) =
 /-! ## The slices and the end of the input -/
 
 /-- The lexemes of the pure run over the bytes and then, if the input has ended and the run has
-not failed, of the end of the input, in the spec's form, and whether the run failed; none if a
+not failed, of the end of the input, in the formalism's form, and whether the run failed; none if a
 lexeme is whitespace or a comment. -/
 def fedOf (version : Version) (ended : Bool) :
     Except (List Lexeme) (St × Span.Location × List Lexeme) → Option

@@ -12,14 +12,14 @@ import all BSmtLib.Lexer.Cursor
 @[expose] public section
 
 /-!
-# The Rust port and `X1BatchInCore` with every consumer of the spec
+# The Rust port and `X1BatchInCore` with every consumer of the formalism
 
-The adapter's consumer for a consumer of the spec (`Adapters.Answering`) reads the cursors only
-below the length of their batches (`answering_consumesAlike`), so the simulation of the Rust port
-by the lexer with the batch kept in its state holds with it: the steps of the two on a slice and
-at the end of the input give the same results and take the same tokens, from lexers that
-correspond and with lexers that correspond again, and so the adapter makes the same of the two
-(`lexing_wRustPort_x1BatchInCore`).
+The adapter's consumer for a consumer of the specification formalism (`BSmtLibSpec`)
+(`Adapters.Answering`) reads the cursors only below the length of their batches
+(`answering_consumesAlike`), so the simulation of the Rust port by the lexer with the batch kept in
+its state holds with it: the steps of the two on a slice and at the end of the input give the same
+results and take the same tokens, from lexers that correspond and with lexers that correspond again,
+and so the adapter makes the same of the two (`lexing_wRustPort_x1BatchInCore`).
 -/
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
@@ -140,8 +140,8 @@ namespace BSmtLib.Facts.Proofs.Lexer.Consumers.ChainX1
 
 variable {g g' : Token.BatchTag}
 
-/-- The adapter's consumer for a consumer of the spec reads the cursors only below the length of
-their batches: on cursors that agree it takes the same tokens and gives cursors that agree. -/
+/-- The adapter's consumer for a consumer of the formalism reads the cursors only below the length
+of their batches: on cursors that agree it takes the same tokens and gives cursors that agree. -/
 theorem answering_consume_agree (consumer : BSmtLibSpec.Lexer.Consumer) : ∀ (n : Nat)
     (c : LexerCursor g) (d : LexerCursor g') (hc : c.HasNext) (hd : d.HasNext),
     (remaining c) = n → CursorAgree c d → ∀ taken : List BSmtLibSpec.Lexer.Handed,
@@ -186,8 +186,8 @@ theorem answering_consume_agree (consumer : BSmtLibSpec.Lexer.Consumer) : ∀ (n
           simp only [hn', hd', dite_false]
           exact ⟨rfl, hag, rfl⟩
 
-/-- The adapter's consumer for a consumer of the spec reads the cursors only below the length of
-their batches. -/
+/-- The adapter's consumer for a consumer of the formalism reads the cursors only below the length
+of their batches. -/
 theorem answering_consumesAlike (consumer : BSmtLibSpec.Lexer.Consumer) :
     ConsumesAlike (Answering consumer) AnswerM consumer.Result (Option consumer.Error) := by
   intro _ _ c d hc hd h s
@@ -230,7 +230,7 @@ theorem eof_alike (consumer : BSmtLibSpec.Lexer.Consumer) :
   exact ⟨hr.1, hr.2, ht⟩
 
 /-- The Rust lexer ported to Lean and the lexer with the batch kept in its state do the same with
-every consumer of the spec. -/
+every consumer of the formalism. -/
 theorem lexing_wRustPort_x1BatchInCore :
     lexing WRustPort.lexOps = lexing X1BatchInCore.lexOps :=
   lexing_alike _ _ (fun _ => LexRel) (fun _ version => new_rel _ version) slice_alike eof_alike

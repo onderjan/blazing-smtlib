@@ -7,10 +7,10 @@ public import BSmtLibSpec.Lexicon.Properties
 /-!
 # The reserved words as the standard lists them
 
-Each version of the standard lists its reserved words in full. These lists are transcribed
-here and checked against the spec, which builds the reserved words of each version from what
-the version adds. Not trusted: the lists are a second transcription, and the theorems show
-that the two agree.
+Each version of the standard lists its reserved words in full. These lists are transcribed here and
+checked against the specification formalism (`BSmtLibSpec`), which builds the reserved words of each
+version from what the version adds. Not trusted: the lists are a second transcription, and the
+theorems show that the two agree.
 -/
 
 namespace BSmtLibSpec.Facts.Proofs.Lexicon.Reserved

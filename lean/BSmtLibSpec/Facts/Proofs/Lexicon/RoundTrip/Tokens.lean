@@ -9,11 +9,11 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
 
 Two ways back from lexicon tokens to characters.
 
-- The concrete printer writes an input back exactly. The spec's tokens do not record the
-  characters between them, whitespace and comments, so the concrete reading of an input is its
-  tokenisation together with these gaps, which `readConcrete` takes from the input at the
-  offsets of the tokens. `Gap` and `Concrete` are the only places that know how gaps are
-  represented.
+- The concrete printer writes an input back exactly. The tokens of the specification formalism
+  (`BSmtLibSpec`) do not record the characters between them, whitespace and comments, so the
+  concrete reading of an input is its tokenisation together with these gaps, which `readConcrete`
+  takes from the input at the offsets of the tokens. `Gap` and `Concrete` are the only places that
+  know how gaps are represented.
 - The canonical layout writes each token's characters with the gap given by `separator`
   between two tokens, nothing before the first and a line feed after the last. It is the
   concrete printer with every gap replaced by its separator and the final one by `finalGap`.
@@ -31,7 +31,7 @@ open BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
 /-! ## Concrete readings -/
 
 /-- The characters between two tokens, before the first or after the last: whitespace and
-comments, which the spec's tokens do not record. -/
+comments, which the formalism's tokens do not record. -/
 abbrev Gap := Chars
 
 /-- A concrete reading of an input: each token with the gap before it, and the gap after the

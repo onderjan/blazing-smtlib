@@ -9,10 +9,10 @@ public import BSmtLibSpec.Facts.Reader
 @[expose] public section
 
 /-!
-# Checks of the specification
+# Checks of the formalism
 
-Proofs that the specification means what it says. They are not part of the specification and
-are not trusted.
+Proofs that the specification formalism (`BSmtLibSpec`) means what it says. They are not part of the
+formalism and are not trusted.
 
 - Examples:
   - the standard's own examples and lists, of the lexicon and of the grammar;

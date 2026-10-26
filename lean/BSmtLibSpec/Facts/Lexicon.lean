@@ -20,9 +20,9 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip
 - Reserved words: the reserved words that each version adds make up the standard's full lists,
   each word once.
 
-Each theorem below proves a property of the specification, from the modules imported above.
-Each is followed by the axioms its proof uses: only those of Lean's standard library, no
-`sorry` and no axiom of its own. The build fails if that changes.
+Each theorem below proves a property of the specification formalism (`BSmtLibSpec`), from the
+modules imported above. Each is followed by the axioms its proof uses: only those of Lean's standard
+library, no `sorry` and no axiom of its own. The build fails if that changes.
 -/
 
 namespace BSmtLibSpec.Facts

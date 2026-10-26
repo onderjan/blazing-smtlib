@@ -10,15 +10,15 @@ import all BSmtLib.Lexer.Cursor
 @[expose] public section
 
 /-!
-# The naive lexer with every consumer of the spec
+# The naive lexer with every consumer of the formalism
 
-`correctWithConsumers_vNaive`: the naive lexer, with the adapter's consumer for every consumer
-of the spec (`Adapters.lexing VNaive.lexOps`), is `BSmtLibSpec.Lexer.CorrectWithConsumers`. What it
-hands over to the collector of the spec is what its pure run hands over (`lexing_fed_vNaive`,
-`VNaive.fedRun`), as the collector takes every token ready (`runs_collector`); so it is
-`BSmtLibSpec.Lexer.Correct` with it, which `VNaive.fedRun_correct` proves; it handles every consumer
-that breaks at the end of the input (`vNaive_runs`, from `walk`), and the end of the input
-resets it (`resetsAtEnd_vNaive`).
+`correctWithConsumers_vNaive`: the naive lexer, with the adapter's consumer for every consumer of
+the specification formalism (`BSmtLibSpec`) (`Adapters.lexing VNaive.lexOps`), is
+`BSmtLibSpec.Lexer.CorrectWithConsumers`. What it hands over to the collector of the formalism is
+what its pure run hands over (`lexing_fed_vNaive`, `VNaive.fedRun`), as the collector takes every
+token ready (`runs_collector`); so it is `BSmtLibSpec.Lexer.Correct` with it, which
+`VNaive.fedRun_correct` proves; it handles every consumer that breaks at the end of the input
+(`vNaive_runs`, from `walk`), and the end of the input resets it (`resetsAtEnd_vNaive`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.VNaive
@@ -170,7 +170,7 @@ theorem streamFrom_collectorReady (version : Version) (ended : Bool)
             · simp at hl'; subst hl'; exact hl
 
 /-- What the naive lexer has done with a consumer that breaks at the end of the input, on its
-first input, is what `Runs` states, from the entries ready as the spec gives them from what the
+first input, is what `Runs` states, from the entries ready as the formalism gives them from what the
 pure run hands over (`fedRun`). -/
 theorem vNaive_runs (consumer : BSmtLibSpec.Lexer.Consumer) (hb : consumer.BreaksAtEnd)
     (version : BSmtLibSpec.Lexicon.Version) (slices : List BSmtLibSpec.Regex.Chars) (ended : Bool) :
@@ -189,7 +189,7 @@ theorem vNaive_runs (consumer : BSmtLibSpec.Lexer.Consumer) (hb : consumer.Break
   rw [hseg]
   simpa [stream, streamFrom_eq] using hw
 
-/-- The naive lexer hands over to the collector of the spec what its pure run hands over. -/
+/-- The naive lexer hands over to the collector of the formalism what its pure run hands over. -/
 theorem lexing_fed_vNaive : BSmtLibSpec.Lexer.Lexing.fed (lexing VNaive.lexOps) = fedRun := by
   funext version slices ended
   have hr := vNaive_runs BSmtLibSpec.Lexer.collector
@@ -212,7 +212,7 @@ theorem lexing_fed_vNaive : BSmtLibSpec.Lexer.Lexing.fed (lexing VNaive.lexOps) 
     (by rw [List.flatten_singleton]; exact hr')
   rw [e1, e2]
 
-/-- The naive lexer is correct with every consumer of the spec. -/
+/-- The naive lexer is correct with every consumer of the formalism. -/
 theorem correctWithConsumers_vNaive :
     BSmtLibSpec.Lexer.CorrectWithConsumers (lexing VNaive.lexOps) := by
   refine ⟨?_, fun consumer version slices ended hb => ?_, resetsAtEnd_vNaive⟩

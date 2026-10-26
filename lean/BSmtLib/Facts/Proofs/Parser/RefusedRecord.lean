@@ -12,9 +12,9 @@ import all BSmtLib.Parser.Script
 On what a parser takes for commands (`Takes`), the parser's recording run writes what `record`
 writes for them, as on a script; where a declaration that names no supported version ends the
 commands, both fail after it. The recording run with the library's handler, whose errors are in
-`Unit`, makes the records of the recording run of the spec, whose handler cannot fail: command
-by command, each run is the other with its errors mapped (`command_U`), as the runs of
-`BSmtLibSpec.Facts.Proofs.Parser.Simulation`'s reader of a command are.
+`Unit`, makes the records of the recording run of the specification formalism (`BSmtLibSpec`), whose
+handler cannot fail: command by command, each run is the other with its errors mapped (`command_U`),
+as the runs of `BSmtLibSpec.Facts.Proofs.Parser.Simulation`'s reader of a command are.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.RefusedRecord
@@ -36,7 +36,7 @@ theorem bind_unit_cancel {ε σ β : Type} {x y : ExceptT ε (StateM σ) Unit} (
   simp only [bind_assoc, pure_bind] at this
   simpa only [bind_pure_unit] using this
 
-/-- A valid command's recording run with the library's handler is the spec's, its errors
+/-- A valid command's recording run with the library's handler is the formalism's, its errors
 mapped. -/
 theorem command_U {version : BSmtLibSpec.Lexicon.Version} {command : Tree.Command}
     (hvalid : command.Valid version) :
@@ -55,8 +55,8 @@ theorem command_U {version : BSmtLibSpec.Lexicon.Version} {command : Tree.Comman
   simp only [adapt_pure] at hA
   exact bind_unit_cancel _ hA
 
-/-- The recording run with the library's handler of what a parser takes is the spec's, its errors
-mapped. -/
+/-- The recording run with the library's handler of what a parser takes is the formalism's, its
+errors mapped. -/
 theorem commands_U {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending) :
     ∀ (declarations : Nat),
@@ -93,8 +93,8 @@ theorem commands_U {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.C
       adapt_bind]
     simp [mapCause]
 
-/-- The recording run with the library's handler of a script with the initial version is the spec's,
-its errors mapped. -/
+/-- The recording run with the library's handler of a script with the initial version is the
+formalism's, its errors mapped. -/
 theorem script_U {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
     {taken : List Received} {ending : Ending} (htakes : Takes start commands taken ending)
     (version : BSmtLibSpec.Lexicon.Version) :

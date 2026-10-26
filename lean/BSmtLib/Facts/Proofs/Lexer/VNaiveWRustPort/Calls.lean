@@ -14,16 +14,16 @@ import all BSmtLib.Lexer.Error
 /-!
 # The Rust port with every consumer, against the naive lexer
 
-`lexing_wRustPort_vNaive`: what the adapter makes of the Rust port `WRustPort` with every
-consumer of the spec is what it makes of the naive lexer (`Adapters.lexing`). Between two calls
-the Rust port's lexer state corresponds to the naive lexer's (`CR`): the same version and
-holding, and the naive lexer's pure state at its location, or both discard from the same
-location. A call on a slice (`slice_step`) lexes it by the loop over its stops (`loop`, via
-`inner_loop`) or discards it, where both lexers stay; a call at the end of the input (`eof_step`)
-gives what both do there (`eofRes_unique`). The calls give results the spec does not tell apart
-(`CallAlike`), which is what `lexing_alikeF` needs. With a consumer that does not take whitespace
-and comments, the Rust port's calls never fail with the adapter's error `none`, which the
-adapter's consumer answers when it is handed one (`slice_step_noNone`, `eof_step_noNone`).
+`lexing_wRustPort_vNaive`: what the adapter makes of the Rust port `WRustPort` with every consumer
+of the specification formalism (`BSmtLibSpec`) is what it makes of the naive lexer
+(`Adapters.lexing`). Between two calls the Rust port's lexer state corresponds to the naive lexer's
+(`CR`): the same version and holding, and the naive lexer's pure state at its location, or both
+discard from the same location. A call on a slice (`slice_step`) lexes it by the loop over its stops
+(`loop`, via `inner_loop`) or discards it, where both lexers stay; a call at the end of the input
+(`eof_step`) gives what both do there (`eofRes_unique`). The calls give results the formalism does
+not tell apart (`CallAlike`), which is what `lexing_alikeF` needs. With a consumer that does not
+take whitespace and comments, the Rust port's calls never fail with the adapter's error `none`,
+which the adapter's consumer answers when it is handed one (`slice_step_noNone`, `eof_step_noNone`).
 -/
 
 open BSmtLib.Facts.Lexer.Adapters BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
@@ -609,7 +609,7 @@ theorem wv_eof (C : BSmtLibSpec.Lexer.Consumer) :
       VNaive.lexOps.lexEofStep :=
   (wv_eofP C).toF _ _ _ _ Prod.fst preciseOf_fst
 
-/-- The Rust port does with every consumer of the spec what the naive lexer does. -/
+/-- The Rust port does with every consumer of the formalism what the naive lexer does. -/
 theorem lexing_wRustPort_vNaive : lexing WRustPort.lexOps = lexing VNaive.lexOps :=
   lexing_alikeF _ _ WVRel WVWeak wvRel_new wv_slice wv_eof (fun _ _ _ h => h.1)
     (fun _ _ _ _ h => ⟨rfl, h.2⟩) (fun _ _ _ h => ⟨h.2.version, cr_weak h.2⟩)

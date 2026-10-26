@@ -15,13 +15,13 @@ namespace BSmtLibSpec.Lexicon.Properties
 
 open Regex (Chars)
 
-/-! ## About the specification -/
+/-! ## About the formalism -/
 
 /--
 Property: every input has at most one tokenisation.
 
-This is a property of the specification alone. `BSmtLibSpec.Facts.Lexicon` proves it as
-`Lexicon.unique`. If it did not hold, the specification would let one input stand for two
+This is a property of the formalism alone. `BSmtLibSpec.Facts.Lexicon` proves it as
+`Lexicon.unique`. If it did not hold, the formalism would let one input stand for two
 different sequences of tokens, and no lexer could hand over the right one.
 -/
 def Unique : Prop :=
@@ -53,7 +53,7 @@ def Determined (version : Version) (start : Chars) (tokens : List Token) : Prop 
 Property: characters read from any offset, in any version, are tokenised as they are on their
 own, their tokens moved to that offset.
 
-This is a property of the specification alone. Where reading stops and starts again, possibly
+This is a property of the formalism alone. Where reading stops and starts again, possibly
 in another version, the characters after the stop are read as an input of their own; without
 this property, where they stand in the whole input could change their tokens.
 -/

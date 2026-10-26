@@ -17,7 +17,7 @@ naive lexer's pure run over the input joined, whitespace and comments included, 
 categories and offsets; and it fails exactly where the pure run does. It rests on the collector
 against the adapter's consumer (`Collector.collect_lexing`), the library's lexer against the
 naive one (`Consumers.Ports.lexing_lexer_vNaive`), and what the naive lexer does with a consumer
-of the spec (`Consumers.VNaive.vNaive_runs`).
+of the specification formalism (`BSmtLibSpec`) (`Consumers.VNaive.vNaive_runs`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Lexing

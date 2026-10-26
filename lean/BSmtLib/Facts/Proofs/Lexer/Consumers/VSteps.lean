@@ -10,7 +10,7 @@ import all BSmtLib.Span
 @[expose] public section
 
 /-!
-# The naive lexer's steps with a consumer of the spec
+# The naive lexer's steps with a consumer of the formalism
 
 The naive lexer's steps with the adapter's consumer `Answering consumer`, as functions of the
 lexer state and the tokens taken (`vRun`, `vByte`, `vBytes`): what the consumer does with a

@@ -142,8 +142,8 @@ open BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
 open BSmtLib.Facts.Proofs.Reader.Param.Link (toVersion_eq_libVersion)
 open BSmtLib.Facts.Proofs.Reader.Param.Final (recRun_nil)
 
-/-- The library's lexer with the adapter's consumer for a consumer of the spec, constructed with
-the version, fed the slices and, if the input has ended, the end of the input. -/
+/-- The library's lexer with the adapter's consumer for a consumer of the formalism, constructed
+with the version, fed the slices and, if the input has ended, the end of the input. -/
 abbrev zRun (C : BSmtLibSpec.Lexer.Consumer) (version : BSmtLibSpec.Lexicon.Version)
     (ended : Bool) (slices : List BSmtLibSpec.Regex.Chars) :=
   (runInputE ZOps (ZOps.new C {} (toVersion version)) ended slices).run []

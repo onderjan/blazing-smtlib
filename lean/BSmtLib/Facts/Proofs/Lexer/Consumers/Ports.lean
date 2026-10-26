@@ -10,11 +10,12 @@ public import BSmtLib.Facts.Proofs.Lexer.Consumers.VFlatten
 /-!
 # The ports with every consumer
 
-The Rust port `WRustPort` (`VNaiveWRustPort.lexing_wRustPort_vNaive`), the lexer with the batch
-in its state `X1BatchInCore` (`lexing_wRustPort_x1BatchInCore`) and the library's lexer
-(`lexing_cut`, with `lexing_flatten` of the naive lexer, as the library's lexer cuts slices into
-chunks) do with every consumer of the spec what the naive lexer does (`Adapters.lexing`), so each
-is `BSmtLibSpec.Lexer.CorrectWithConsumers` as the naive lexer is (`correctWithConsumers_vNaive`).
+The Rust port `WRustPort` (`VNaiveWRustPort.lexing_wRustPort_vNaive`), the lexer with the batch in
+its state `X1BatchInCore` (`lexing_wRustPort_x1BatchInCore`) and the library's lexer (`lexing_cut`,
+with `lexing_flatten` of the naive lexer, as the library's lexer cuts slices into chunks) do with
+every consumer of the specification formalism (`BSmtLibSpec`) what the naive lexer does
+(`Adapters.lexing`), so each is `BSmtLibSpec.Lexer.CorrectWithConsumers` as the naive lexer is
+(`correctWithConsumers_vNaive`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.Ports

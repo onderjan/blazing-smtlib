@@ -11,13 +11,13 @@ import all BSmtLib.Facts.Parser.Adapters.Bridge
 /-!
 # A handler that builds the commands
 
-`builder` is a handler told contents only whose values are the specification's trees and whose
-state is the version in force and the commands built so far, newest first. Each call builds the
-tree it is told of from the trees of its parts; a command's last call adds the command, and a
-command whose parts come in several calls (a definition, a datatype declaration) is kept at the
-head of the list and completed by its later calls. `answer` is what it does with a call of the
-specification, `specBuilder` the specification's handler that does it, and the library handler
-agrees with it (`agrees`). None of its calls fails (`noFails`).
+`builder` is a handler told contents only whose values are the trees of the specification formalism
+(`BSmtLibSpec`) and whose state is the version in force and the commands built so far, newest first.
+Each call builds the tree it is told of from the trees of its parts; a command's last call adds the
+command, and a command whose parts come in several calls (a definition, a datatype declaration) is
+kept at the head of the list and completed by its later calls. `answer` is what it does with a call
+of the formalism, `specBuilder` the formalism's handler that does it, and the library handler agrees
+with it (`agrees`). None of its calls fails (`noFails`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Builder
@@ -34,7 +34,7 @@ inductive Scope where
   | variables (variables : List Tree.SortedVar)
   | none
 
-/-- The builder's values: the specification's trees. -/
+/-- The builder's values: the formalism's trees. -/
 abbrev treeValues : Traversal.Values := ⟨Tree.SExpr, Tree.Attribute, Tree.Sort, Tree.Term, Scope⟩
 
 /-- The builder's state: the version in force, and the commands built so far, newest first. -/
@@ -197,7 +197,7 @@ def answer : {returns : Traversal.Returns} → Traversal.Call treeValues returns
   | .term, .endMatch t cs => pure (.match t cs)
   | .nothing, request => modify fun (version, built) => (version, command version built request)
 
-/-- The builder as a handler of the specification. -/
+/-- The builder as a handler of the formalism. -/
 def specBuilder : BSmtLibSpec.Parser.Traversal.Handler (StateT State Id) Unit treeValues where
   call request := ExceptT.lift (answer request)
   setVersion version := modify fun (_, built) => (version, built)
@@ -244,13 +244,13 @@ def patternT : Content.Pattern → Tree.Pattern
 def pairsT {α : Type} (items : List (Content.Symbol × α)) : List (Tree.Symbol × α) :=
   items.map fun (s, a) => (symbolT s, a)
 
-/-- The specification's node of a term node told by its contents. -/
+/-- The formalism's node of a term node told by its contents. -/
 def termNodeT : Content.TermNode Tree.Sort Tree.Term → Traversal.TermNode treeValues
   | .constant c => .constant (constantT c)
   | .identifier i s => .identifier (identifierT i) s
   | .application i s args => .application (identifierT i) s args
 
-/-- The specification's node of an s-expression node. -/
+/-- The formalism's node of an s-expression node. -/
 def sExprNodeT : Content.SExprNode Tree.SExpr → Traversal.SExprNode treeValues
   | .constant c => .constant (constantT c)
   | .symbol s => .symbol (symbolT s)
@@ -258,28 +258,28 @@ def sExprNodeT : Content.SExprNode Tree.SExpr → Traversal.SExprNode treeValues
   | .keyword k => .keyword k
   | .list items => .list items
 
-/-- The specification's node of an attribute value node. -/
+/-- The formalism's node of an attribute value node. -/
 def attributeValueNodeT : Content.AttributeValueNode Tree.SExpr →
     Traversal.AttributeValueNode treeValues
   | .constant c => .constant (constantT c)
   | .symbol s => .symbol (symbolT s)
   | .list items => .list items
 
-/-- The specification's signature. -/
+/-- The formalism's signature. -/
 def signatureT (sig : Content.Signature Tree.Sort) : Traversal.Signature treeValues :=
   ⟨symbolT sig.symbol, pairsT sig.parameters, sig.result⟩
 
-/-- The specification's constructor. -/
+/-- The formalism's constructor. -/
 def constructorT (c : Content.Constructor Tree.Sort) : Traversal.Constructor treeValues :=
   ⟨symbolT c.symbol, pairsT c.selectors⟩
 
-/-- A call of the builder, as the specification's. -/
+/-- A call of the builder, as the formalism's. -/
 abbrev ask {returns : Traversal.Returns} (request : Traversal.Call treeValues returns) :
     ExceptT Unit (StateM State) (treeValues.of returns) :=
   ExceptT.lift (answer request)
 
 open BSmtLib.Facts.Parser.Adapters.Bridge in
-/-- The builder told contents only: each call is `answer` on the specification's call for it. -/
+/-- The builder told contents only: each call is `answer` on the formalism's call for it. -/
 instance builder : Content.ContentHandler State where
   Error := Unit
   SExpr := Tree.SExpr
@@ -349,7 +349,7 @@ instance builder : Content.ContentHandler State where
 
 end
 
-/-! ## The builder agrees with the specification's -/
+/-! ## The builder agrees with the formalism's -/
 
 section
 

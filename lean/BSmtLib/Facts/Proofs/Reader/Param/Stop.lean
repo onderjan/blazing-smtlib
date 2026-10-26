@@ -40,8 +40,8 @@ variable {Z : Type} [Token.Cursor Z]
 
 /--
 Has the parser take the token, taken from `cursor` and leaving `next`: its arrival, its step, and
-what the step asks of the producer, after which the handover stops. A refused switch of the
-version fails with `VersionErrorKind.unsupported`.
+what the step asks of the producer, after which the handover stops. A refused version switch fails
+with `VersionErrorKind.unsupported`.
 -/
 def takeOne (parser : P) (cursor : Z) (token : Token.Cursor.Token Z) (next : Z)
     (consumed : Token.Cursor.Consumed next cursor) :

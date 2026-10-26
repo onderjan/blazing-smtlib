@@ -11,18 +11,19 @@ public import BSmtLib.Facts.Parser.Adapters
 # The adapters of the composition
 
 The definitions that the root theorems of `BSmtLib.Facts.Reader` are stated with, beside the
-specification, the library, and the adapters of the lexer proofs (`BSmtLib.Facts.Lexer.Adapters`)
-and of the parser proofs (`BSmtLib.Facts.Parser.Adapters`), and nothing else:
+specification formalism (`BSmtLibSpec`), the library, and the adapters of the lexer proofs
+(`BSmtLib.Facts.Lexer.Adapters`) and of the parser proofs (`BSmtLib.Facts.Parser.Adapters`), and
+nothing else:
 
-- `scriptConsumer`: the library's script parser as a consumer of the lexer spec, each token a
-  lexer hands over read as the parser's token that stands for it (`itemOf`).
+- `scriptConsumer`: the library's script parser as a consumer in the formalism, each token
+  a lexer hands over read as the parser's token that stands for it (`itemOf`).
 - `Param.recordingAdapter` and `Param.paFeed`: the library's parse adapter with the recording
   handler, and the library's lexer with it fed by its public calls.
-- `libraryReader`: the library's script reader as a recording reader of the reader spec.
+- `libraryReader`: the library's script reader as a recording reader in the formalism.
 
 A theorem stated with a wrong adapter is a theorem about the wrong thing, so these definitions are
-trusted: they are to be read with the specification. `#adapters` in `BSmtLib.Facts.Reader` checks
-that the root theorems need no other definition outside the specification, the library, the
+trusted: they are to be read with the formalism. `#adapters` in `BSmtLib.Facts.Reader` checks
+that the root theorems need no other definition outside the formalism, the library, the
 lexers of the chain and Lean.
 -/
 
@@ -123,9 +124,9 @@ def answerOf (atEnd : Bool) : Ending → Answer Unit ScriptError
 library's parser does not do; that makes the consumer's obligation at the end of the input hold
 by its definition. -/
 /--
-The library's script parser, with the initial version, as a consumer of the lexer spec: after each
-token it answers as the parser's recording run on the tokens taken so far ends, and asks for the
-switch and the discarding that run asks for after the last token's processing.
+The library's script parser, with the initial version, as a consumer in the formalism:
+after each token it answers as the parser's recording run on the tokens taken so far ends, and asks
+for the switch and the discarding that run asks for after the last token's processing.
 -/
 def scriptConsumer (version : Lexicon.Version) : Consumer where
   Result := Unit

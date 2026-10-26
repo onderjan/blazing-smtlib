@@ -133,7 +133,7 @@ end
 theorem cause_eq {ε : Type} {a b : LexerErrorCause ε} (h : CauseRel (· = ·) a b) : a = b := by
   rcases a with a | a <;> rcases b with b | b <;> first | exact absurd h id | cases h; rfl
 
-/-- Lexer errors related as `LexErrRel (· = ·)` are the same to the spec. -/
+/-- Lexer errors related as `LexErrRel (· = ·)` are the same to the formalism. -/
 theorem failureOf_eq_of_rel {ε : Type} {a b : LexerError (Option ε)}
     (h : LexErrRel (· = ·) a b) : failureOf a = failureOf b := by
   unfold failureOf
@@ -164,7 +164,7 @@ theorem eofRel_eq {ε α : Type} {a b : Except (LexerError (Option ε)) (Control
 /-! ## The two lexers as the adapter feeds them -/
 
 /-- The library's lexer with the consumer `Flagged consumer`, which starts with nothing gone
-wrong, for every consumer of the spec. -/
+wrong, for every consumer of the formalism. -/
 def flaggedOps : LexOps where
   Lexer consumer := BSmtLib.Lexer (Flagged consumer)
   AfterError consumer := BSmtLib.Lexer.AfterError (Flagged consumer) Lexer.Recovery.FailFast
@@ -266,7 +266,7 @@ theorem eof_alikeF (consumer : BSmtLibSpec.Lexer.Consumer) :
   exact ⟨eofRel_eq hr, ht, fun _ => ⟨hc, hab.2⟩, hc⟩
 
 /-- The library's lexer does with `Flagged consumer` what it does with `Answering consumer`, for
-every consumer of the spec. -/
+every consumer of the formalism. -/
 theorem lexing_flagged : lexing Lexer.lexOps = lexing flaggedOps :=
   lexing_alikeF Lexer.lexOps flaggedOps AlikeLexers
       (fun _ a b => Internal.core a = Internal.core b)

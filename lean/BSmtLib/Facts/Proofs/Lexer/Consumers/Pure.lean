@@ -249,8 +249,8 @@ theorem locAfter_offset' (bytes : List UInt8) : (locAfter bytes).offset = bytes.
     rw [List.reverse_cons, locAfter_concat, afterByte_offset, ih]
     simp
 
-/-- A location moved by the location after `before` is, in the spec's form, the spec's location
-read after `before`. -/
+/-- A location moved by the location after `before` is, in the formalism's form, the formalism's
+location read after `before`. -/
 theorem toLocation_shift (before : List UInt8) (location : Span.Location) :
     toLocation (locShift (locAfter before) location) = (toLocation location).after before := by
   have h := toLocation_locAfter before

@@ -11,10 +11,11 @@ import all BSmtLib.Version
 /-!
 # What the modes of the naive lexer stand for
 
-`ModeInv` relates the mode of a token in progress and its content to the characters of the
-token so far, and `LexemeIs` relates a finished lexeme to a token of the spec. The lemmas
-`start_sound`, `advance_sound` and `finish_sound` show that each part of the pure step keeps
-the relation, and that a lexeme it finishes is a token of the spec's `categoryRegex`.
+`ModeInv` relates the mode of a token in progress and its content to the characters of the token so
+far, and `LexemeIs` relates a finished lexeme to a token of the specification formalism
+(`BSmtLibSpec`). The lemmas `start_sound`, `advance_sound` and `finish_sound` show that each part of
+the pure step keeps the relation, and that a lexeme it finishes is a token of the formalism's
+`categoryRegex`.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaive.Modes
@@ -173,7 +174,7 @@ theorem zeros_numeral {ds : Chars} (hne : ds ≠ []) (h : ∀ x ∈ ds, IsDigit 
 
 /-! ## The relation -/
 
-/-- The category of the lexer for a kind of token of the spec. -/
+/-- The category of the lexer for a kind of token of the formalism. -/
 def lexCategory : Category → Token.TokenCategory
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
@@ -229,7 +230,7 @@ def ModeInv (version : BSmtLibSpec.Lexicon.Version) : Mode → Chars → Chars �
   | .comment, text, _ => ∃ b, text = 59 :: b ∧ ∀ x ∈ b, ¬ LineBreak x.toNat
   | .whitespace, _, _ => False
 
-/-- What a byte with no token in progress does, as the spec sees it. -/
+/-- What a byte with no token in progress does, as the formalism sees it. -/
 def StartSound (version : BSmtLibSpec.Lexicon.Version) (location : Span.Location) (c : UInt8) :
     Started → Prop
   | .idle => whiteSpaceChar [c]
@@ -239,7 +240,7 @@ def StartSound (version : BSmtLibSpec.Lexicon.Version) (location : Span.Location
       LexemeIs version category location (location.afterByte c) [c] l
   | .error _ => True
 
-/-- What a byte does to a token in progress with the characters `text`, as the spec sees
+/-- What a byte does to a token in progress with the characters `text`, as the formalism sees
 it. -/
 def AdvanceSound (version : BSmtLibSpec.Lexicon.Version) (p : Pending) (text : Chars)
     (location : Span.Location) (c : UInt8) : Advanced → Prop
@@ -251,7 +252,7 @@ def AdvanceSound (version : BSmtLibSpec.Lexicon.Version) (p : Pending) (text : C
   | .error _ => True
 
 /-- What the end of the input does to a token in progress with the characters `text`, as the
-spec sees it. -/
+formalism sees it. -/
 def FinishSound (version : BSmtLibSpec.Lexicon.Version) (p : Pending) (text : Chars)
     (location : Span.Location) : Finished → Prop
   | .none => commentAtEnd text
@@ -734,7 +735,7 @@ theorem advance_comment {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {t
       exact fun h => hl ((lineBreak_iff c).mpr h)
 
 /-- A byte keeps the relation of the token in progress, and a lexeme it finishes is a token of
-the spec. -/
+the formalism. -/
 theorem advance_sound {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     (location : Span.Location) (c : UInt8)
     (h : ModeInv version p.mode text p.content.data.toList) :
@@ -758,7 +759,7 @@ theorem advance_sound {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {tex
 
 
 /-- The end of the input keeps the relation of the token in progress: a lexeme it finishes is
-a token of the spec, and a comment it ends runs to the end of the input. -/
+a token of the formalism, and a comment it ends runs to the end of the input. -/
 theorem finish_sound {version : BSmtLibSpec.Lexicon.Version} {p : Pending} {text : Chars}
     (location : Span.Location) (h : ModeInv version p.mode text p.content.data.toList) :
     FinishSound version p text location (finish false p location) := by

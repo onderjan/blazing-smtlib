@@ -10,9 +10,9 @@ public import BSmtLibSpec.Facts.Proofs.Reader
 - The calls on a file determine the file.
 - A reader that lexes then parses reads files, and finishes only on files.
 
-Each theorem below proves a property of the specification, from the modules imported above.
-Each is followed by the axioms its proof uses: only those of Lean's standard library, no
-`sorry` and no axiom of its own. The build fails if that changes.
+Each theorem below proves a property of the specification formalism (`BSmtLibSpec`), from the
+modules imported above. Each is followed by the axioms its proof uses: only those of Lean's standard
+library, no `sorry` and no axiom of its own. The build fails if that changes.
 -/
 
 namespace BSmtLibSpec.Facts

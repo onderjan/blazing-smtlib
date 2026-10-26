@@ -8,9 +8,11 @@ public import BSmtLib.Facts.Parser.Adapters.Cursor
 # What a parse of a cursor does
 
 A parse of a cursor answers with its result, a wish for more tokens or a failure, and gives back
-the parser and the cursor. `outcome` reads all of it but the parse state, which holds nothing,
-and where and in which state a parser stopped that failed with the handler's error, which the
-parser does not promise.
+the parser and the cursor. `outcome` reads all of it but:
+
+- the parse state, which holds nothing;
+- where and in which state a parser stopped that failed with the handler's error, which the
+  parser does not promise.
 
 - `HandlerOnly program`: the program fails, if it does, with the handler's error only.
 - `Finishes version parser tokens program back`: on every cursor that has the tokens first and
@@ -29,7 +31,7 @@ names, at the token it names.
 
 These definitions are adapters: the root theorems of `BSmtLib.Facts.Parser` about the category
 parsers and the combinators are stated with them, so they are trusted, and are to be read with
-the spec.
+the specification formalism (`BSmtLibSpec`).
 -/
 
 namespace BSmtLib.Facts.Parser.Adapters.Outcome

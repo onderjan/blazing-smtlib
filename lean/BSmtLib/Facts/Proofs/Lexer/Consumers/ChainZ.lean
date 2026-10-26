@@ -8,7 +8,7 @@ import all BSmtLib.Lexer.Internal.WRustPort
 @[expose] public section
 
 /-!
-# The library's lexer and `X1BatchInCore` with every consumer of the spec
+# The library's lexer and `X1BatchInCore` with every consumer of the formalism
 
 The steps of the library's lexer and of `X1BatchInCore` on a slice that ends below `USize.size`,
 from lexers with related states, give the same results and take the same tokens, also where they
@@ -383,7 +383,7 @@ theorem LooseRel.discardedFrom {l : Lexer.lexOps.Lexer consumer}
 
 end
 
-/-- The library's lexer does with every consumer of the spec what `X1BatchInCore` does fed each
+/-- The library's lexer does with every consumer of the formalism what `X1BatchInCore` does fed each
 input cut: every slice too large for the positions of the library's lexer cut into chunks that
 are not. -/
 theorem lexing_cut (consumer : BSmtLibSpec.Lexer.Consumer) (version : BSmtLibSpec.Lexicon.Version)

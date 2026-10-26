@@ -5,13 +5,13 @@ public import BSmtLib.Facts.Proofs.Reader.Param.Phi
 @[expose] public section
 
 /-!
-# The stand-in consumer that reports the tokens it took, as a consumer of the spec
+# The stand-in consumer that reports the tokens it took, as a consumer of the formalism
 
-`replay version` is the script consumer of the spec with, as its error, the tokens taken where it
-fails. The adapter's consumer for it takes the tokens as the script consumer's does, and fails
-where that fails, with the tokens taken (`answering_replay`). `Phi version` and it are related
-call by call (`consumersR`): the same values, and where `Phi version` fails reporting the tokens
-taken, the other fails with them.
+`replay version` is the script consumer of the specification formalism (`BSmtLibSpec`) with, as its
+error, the tokens taken where it fails. The adapter's consumer for it takes the tokens as the script
+consumer's does, and fails where that fails, with the tokens taken (`answering_replay`). `Phi
+version` and it are related call by call (`consumersR`): the same values, and where `Phi version`
+fails reporting the tokens taken, the other fails with them.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor)

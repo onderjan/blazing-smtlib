@@ -20,8 +20,8 @@ identifier from the state after their word (`_` or `as`), patterns, and sorted v
 and as a list. None of them has a stack of its own; each lemma reads one part and ends.
 
 A part whose value the parser holds as its own syntax (an identifier, a pattern, a symbol) is
-related to the spec's through the bridge: the lemma gives the parser's value, and says that the
-bridge maps it to the tree's.
+related to its counterpart in the specification formalism (`BSmtLibSpec`) through the bridge: the
+lemma gives the parser's value, and says that the bridge maps it to the tree's.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.TermParts
@@ -43,7 +43,7 @@ open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Facts.Proofs.Parser.Tokens.Stand
 open BSmtLibSpec.Parser
 open BSmtLibSpec.Parser.Traversal
 
-/-- The sorted variables as the spec hands them over, from the parser's. -/
+/-- The sorted variables as the formalism hands them over, from the parser's. -/
 def Bridge.specPairs {S : Type} (variables : List (Lexicon.Value.Symbol × S)) :
     List (Tree.Symbol × S) :=
   variables.map fun (symbol, sort) => (Bridge.symbol symbol, sort)

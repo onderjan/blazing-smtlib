@@ -9,9 +9,10 @@ import all BSmtLib.Token.Reserved
 /-!
 # Reserved words
 
-`fromBytes_kind`: the library's lookup of reserved words, `Reserved.fromBytes?`, finds exactly
-the reserved words of the spec in each version, with the kind the spec gives them. The lookup
-reads the table `Reserved.Internal.reservedTable`, whose entries the kernel checks one by one.
+`fromBytes_kind`: the library's lookup of reserved words, `Reserved.fromBytes?`, finds exactly the
+reserved words of the specification formalism (`BSmtLibSpec`) in each version, with the kind the
+formalism gives them. The lookup reads the table `Reserved.Internal.reservedTable`, whose entries
+the kernel checks one by one.
 -/
 
 open BSmtLibSpec.Facts.Proofs.Lexicon.Unique
@@ -23,11 +24,11 @@ open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes (toByteArray_toByteSlice toByte
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
 
-/-- The kind of reserved word of the spec for a reserved word of the library. -/
+/-- The kind of reserved word of the formalism for a reserved word of the library. -/
 def reservedKindOf (word : Token.Reserved) : ReservedKind :=
   if word.isCommandName then .command else .general
 
-/-- The kind of reserved word the spec gives the characters in the version, if they are one. -/
+/-- The kind of reserved word the formalism gives the characters in the version, if they are one. -/
 def specReservedKind (version : BSmtLibSpec.Lexicon.Version)
     (x : List UInt8) : Option ReservedKind :=
   if x ∈ (basicReservedWords version).map chars then some .general

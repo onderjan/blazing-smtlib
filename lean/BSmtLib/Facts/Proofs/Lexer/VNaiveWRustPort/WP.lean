@@ -6,14 +6,14 @@ import all BSmtLib.Lexer.Internal.WRustPort
 @[expose] public section
 
 /-!
-# Weakest preconditions in the Rust port's monad, with a consumer of the spec
+# Weakest preconditions in the Rust port's monad, with a consumer of the formalism
 
-The Rust port `WRustPort` runs its steps in `LexM`: interruptions as exceptions, over the
-bounded lexer state, over the consumer's state. With the adapter's consumer `Answering C` for a
-consumer `C` of the spec, which has no state of its own and whose monad `AnswerM` keeps the tokens
-it has taken, running a step from a state and the tokens taken gives one result. `WP x s coll Q
-QE` says that the result satisfies `Q` if the step returns, and `QE` if it is interrupted, with
-the interruption; the lemmas below take a step apart along the code.
+The Rust port `WRustPort` runs its steps in `LexM`: interruptions as exceptions, over the bounded
+lexer state, over the consumer's state. With the adapter's consumer `Answering C` for a consumer `C`
+of the specification formalism (`BSmtLibSpec`), which has no state of its own and whose monad
+`AnswerM` keeps the tokens it has taken, running a step from a state and the tokens taken gives one
+result. `WP x s coll Q QE` says that the result satisfies `Q` if the step returns, and `QE` if it is
+interrupted, with the interruption; the lemmas below take a step apart along the code.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort

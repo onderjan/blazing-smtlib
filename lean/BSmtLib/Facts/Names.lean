@@ -13,21 +13,27 @@ public import BSmtLib.Facts.Counterparts
 /-!
 # The naming rule, the re-exports and the Rust counterparts, checked
 
-The checks of `BSmtLib.Facts.Naming`, `BSmtLib.Facts.Reexports` and `BSmtLib.Facts.Counterparts`
-on the library, the lexers of the chain, the specification and the facts about both, pinned by
-`#guard_msgs`: a declaration added in the wrong place, a stale or missing re-export, a name that
-resolves elsewhere than it did, or a public name of the library with neither a Rust counterpart
-nor a `LEAN:` reason fails the build.
+The checks of `BSmtLib.Facts.Naming`, `BSmtLib.Facts.Reexports` and `BSmtLib.Facts.Counterparts` on
+the library, the lexers of the chain, the specification formalism (`BSmtLibSpec`) and the facts
+about both, pinned by `#guard_msgs`. Each of these fails the build:
+
+- a declaration added in the wrong place;
+- a stale or missing re-export;
+- a name that resolves elsewhere than it did;
+- a public name of the library with neither a Rust counterpart nor a `LEAN:` reason.
 -/
 
-/-! The naming rule, with its exceptions: the view of the cursor's token as a token,
-`Token.fromLexerToken`, declared in `BSmtLib.Lexer.Cursor`, and the token's `intoOwned`, declared
-in `BSmtLib.Token.TokenBuf`, as both modules import `Token.lean`; the constructor of the error of
-writing a token, declared in `Token.lean`, as the token's `writeSmt` returns the error and
-`Writer.lean` imports `Token.lean`; the stand-in of Rust's `BufReader`, declared in
-`BSmtLib.Reader.BufRead`, which the lexer imports, as the reader's module imports the lexer's;
-and the functions of the symbol that name the version and `Reserved`, declared in
-`BSmtLib.Lexicon.Value.Versioned`, as the modules of both import `Lexicon.Value.lean`. -/
+/-! The naming rule, with its exceptions:
+
+- the view of the cursor's token as a token, `Token.fromLexerToken`, declared in
+  `BSmtLib.Lexer.Cursor`, and the token's `intoOwned`, declared in `BSmtLib.Token.TokenBuf`, as
+  both modules import `Token.lean`;
+- the constructor of the error of writing a token, declared in `Token.lean`, as the token's
+  `writeSmt` returns the error and `Writer.lean` imports `Token.lean`;
+- the stand-in of Rust's `BufReader`, declared in `BSmtLib.Reader.BufRead`, which the lexer
+  imports, as the reader's module imports the lexer's;
+- the functions of the symbol that name the version and `Reserved`, declared in
+  `BSmtLib.Lexicon.Value.Versioned`, as the modules of both import `Lexicon.Value.lean`. -/
 
 /--
 info: 8308 declarations in 459 modules; 87 add to a sibling's type:
@@ -500,11 +506,14 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Parser.CommandOutcome
   BSmtLib.Parser.ScriptParser
 
-/-! The Rust counterparts: every public name of the library has one among the public items of
-the Rust crate (`BSmtLib.Facts.RustItems`, generated from its documentation), or a `LEAN:` reason
-at its declaration; the names with a reason are listed. The other way round, every public item
-of the Rust crate, trait implementation and structure with private fields has its Lean
-counterpart, or a reason in `BSmtLib.Facts.RustOnly`; the items with a reason are listed. -/
+/-! The Rust counterparts:
+
+- Every public name of the library has one among the public items of the Rust crate
+  (`BSmtLib.Facts.RustItems`, generated from its documentation), or a `LEAN:` reason at its
+  declaration; the names with a reason are listed.
+- The other way round, every public item of the Rust crate, trait implementation and structure
+  with private fields has its Lean counterpart, or a reason in `BSmtLib.Facts.RustOnly`; the items
+  with a reason are listed. -/
 
 /--
 info: 551 public names with a Rust counterpart; 88 with a `LEAN:` reason instead:

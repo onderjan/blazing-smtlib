@@ -23,7 +23,7 @@ namespace Tree
 /--
 A symbol: its name, and whether it was written quoted. The quoting is kept so that a symbol is
 written as it was read, not for identity: two symbols with the same name are the same symbol,
-and wherever this specification compares symbols or matches a symbol, it compares names.
+and wherever this formalism compares symbols or matches a symbol, it compares names.
 
 Standard: 2.7 §3.1 Symbols: a simple symbol and its quoted form are the same symbol.
 -/

@@ -10,13 +10,13 @@ import all BSmtLib.Lexer.Cursor
 /-!
 # The entries ready from a boundary
 
-What the spec says is ready for a consumer from a boundary of the input
-(`BSmtLibSpec.Lexer.readyFrom`): the tokens of the pure run from the boundary on, read on its own,
-and for a consumer that takes whitespace and comments also the layout the spec gives around them, is
-what the run from the boundary with whitespace and comments hands over as the consumer is handed
-it (`ready_stream`). After a lexeme other than the end of file, the run goes on as the run from
-the boundary at its end (`stream_restart`); the end of file is the run's last lexeme, at the end
-of the input (`stream_eof_head`).
+What the specification formalism (`BSmtLibSpec`) says is ready for a consumer from a boundary of the
+input (`BSmtLibSpec.Lexer.readyFrom`): the tokens of the pure run from the boundary on, read on its
+own, and for a consumer that takes whitespace and comments also the layout the formalism gives
+around them, is what the run from the boundary with whitespace and comments hands over as the
+consumer is handed it (`ready_stream`). After a lexeme other than the end of file, the run goes on
+as the run from the boundary at its end (`stream_restart`); the end of file is the run's last
+lexeme, at the end of the input (`stream_eof_head`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.Ready

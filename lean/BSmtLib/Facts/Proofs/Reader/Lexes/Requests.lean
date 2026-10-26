@@ -5,14 +5,13 @@ public import BSmtLib.Facts.Proofs.Reader.Param.Link
 @[expose] public section
 
 /-!
-# The parser as a consumer of the specification, and the script consumer
+# The parser as a consumer of the formalism, and the script consumer
 
-After each item, the library's parser asks its producer for at most one thing: a switch of the
-version or discarding (`recAfter_single`). So what its run asked for after its last item is read
-alike whether the first request or the last one counts (`requests_parse`), and the parser as a
-consumer of the lexer specification (`BSmtLibSpec.Reader.consumer`, with the item
-`libItem` for each token) answers and asks as the script consumer `scriptConsumer` does
-(`consumer_agrees`).
+After each item, the library's parser asks its producer for at most one thing: a version switch or
+discarding (`recAfter_single`). So what its run asked for after its last item is read alike whether
+the first request or the last one counts (`requests_parse`), and the parser as a consumer in the
+specification formalism (`BSmtLibSpec`), `BSmtLibSpec.Reader.consumer` with the item `libItem` for
+each token, answers and asks as the script consumer `scriptConsumer` does (`consumer_agrees`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.Requests
@@ -285,11 +284,11 @@ theorem requests_parse (version : Lexicon.Version) (items : List LibItem) :
 
 /-! ## The two consumers -/
 
-/-- The library's parser as a consumer of the lexer specification. -/
+/-- The library's parser as a consumer in the formalism. -/
 abbrev specConsumer (version : Lexicon.Version) : BSmtLibSpec.Lexer.Consumer :=
   Reader.consumer libraryParser libItem version
 
-/-- Two consumers of the lexer specification that answer alike: the same kind of answer, the
+/-- Two consumers in the formalism that answer alike: the same kind of answer, the
 same switch and discarding, and both take whitespace and comments or neither. -/
 structure AnswersAlike (c₁ c₂ : BSmtLibSpec.Lexer.Consumer) : Prop where
   concrete : c₁.concrete = c₂.concrete
@@ -302,7 +301,7 @@ structure AnswersAlike (c₁ c₂ : BSmtLibSpec.Lexer.Consumer) : Prop where
   brk' : ∀ taken r, c₂.answer taken = .break r → ∃ r', c₁.answer taken = .break r'
   cont' : ∀ taken, c₂.answer taken = .continue → c₁.answer taken = .continue
 
-/-- The script consumer and the library's parser as a consumer of the specification answer
+/-- The script consumer and the library's parser as a consumer of the formalism answer
 alike. -/
 theorem consumer_agrees (version : Lexicon.Version) :
     AnswersAlike (scriptConsumer version) (specConsumer version) := by

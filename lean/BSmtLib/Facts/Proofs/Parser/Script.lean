@@ -19,12 +19,12 @@ parser's lemma (`command_runs`) and composes it over a script.
 - `script_embed`: the script parser steps as the command parser, with
   the command parser's calls due at a token's arrival, and goes on after each command as the
   command's outcome says (`scriptAfter`).
-- `check_policyOf`, `switch_eq`: the posture's check of a version declaration is the policy's
-  check of the spec, through `policyOf`; with the producer's and the handler's switches, it is
-  the spec's `switchVersion`.
+- `check_policyOf`, `switch_eq`: the posture's check of a version declaration is the policy's check
+  of the specification formalism (`BSmtLibSpec`), through `policyOf`; with the producer's and the
+  handler's switches, it is the formalism's `switchVersion`.
 - `commands_runs`: by induction over `Script`, the script parser before a
-  command reads what a parser receives for the commands, with the effects of the spec's
-  `commands`; with the handler told the version first, the spec's `script` (`script_correct`).
+  command reads what a parser receives for the commands, with the effects of the formalism's
+  `commands`; with the handler told the version first, the formalism's `script` (`script_correct`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Script
@@ -302,7 +302,7 @@ variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /--
 The posture's check of a version declaration, the producer's switch and the handler's, as the
-script parser makes them, are the spec's switch to the version under the policy of the posture.
+script parser makes them, are the formalism's switch to the version under the policy of the posture.
 -/
 theorem switch_eq (hA : Agrees h) (producer : Producer (StateT H m)) (posture : VersionPosture)
     (declarations : Nat) (declared : Version) {β : Type} (k : PM H β) :
@@ -348,7 +348,7 @@ theorem step_endOfInput (posture : VersionPosture) (version : Version)
       pure (.done ()) := by
   simp [Parser.Internal.ParseByToken.step, ScriptParser.Internal.step, commandStep]
 
-/-- Tokens whose spec items are one item stand for it. -/
+/-- Tokens whose items in the formalism are one item stand for it. -/
 theorem map_received_split {inputs : List Parser.Internal.Input} {items : List Received}
     {tokens : List BSmtLibSpec.Grammar.SyntaxToken}
     (hs : inputs.map Bridge.received = (tokens.map Received.token ++ items).map some) :
@@ -370,7 +370,7 @@ theorem map_received_endOfInput {inputs : List Parser.Internal.Input}
 
 /--
 The script parser under the posture before a command, over what a parser receives for the
-commands of a script and any rest: the spec's commands under the policy of the posture.
+commands of a script and any rest: the formalism's commands under the policy of the posture.
 -/
 theorem commands_runs (hA : Agrees h) (producer : Producer (StateT H m))
     (posture : VersionPosture) {start : BSmtLibSpec.Lexicon.Version} {commands : List Tree.Command}
@@ -441,7 +441,7 @@ variable {H : Type} {m : Type → Type} [Monad m]
 /--
 The script parser under a posture, from its start, over what a parser receives for a script with
 the initial version and any rest, with the handler told the version first as the parse adapter
-does, is the spec's script under the policy of the posture, and finishes before the rest.
+does, is the formalism's script under the policy of the posture, and finishes before the rest.
 -/
 theorem script_correct [Handler.CommandHandler H m] [LawfulMonad m] {points : Points (StateT H m)}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)} (hA : Agrees h)

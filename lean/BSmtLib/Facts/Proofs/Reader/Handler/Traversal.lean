@@ -9,12 +9,13 @@ import all BSmtLib.Facts.Parser.Adapters.Run
 /-!
 # The script reader with any handler that never fails makes the traversal's calls
 
-The driver's run over items standing for what a parser receives for a valid script is the
-specification's traversal of the script (`Facts.Parser.script_follows_traversal`), with token
-points and a producer that do nothing, for every spec handler the library handler agrees with
-(`hRun_traversal`). So the script reader with a handler whose calls never fail, fed a file in
-any slices, reads to the end with a result and leaves its handler where the traversal of the
-file's commands leaves it (`reader_follows_traversal`).
+The driver's run over items standing for what a parser receives for a valid script is the traversal
+of the specification formalism (`BSmtLibSpec`) of the script
+(`Facts.Parser.script_follows_traversal`), with token points and a producer that do nothing, for
+every handler of the formalism the library handler agrees with (`hRun_traversal`). So the script
+reader with a handler whose calls never fail, fed a file in any slices, reads to the end with a
+result and leaves its handler where the traversal of the file's commands leaves it
+(`reader_follows_traversal`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Handler.Traversal
@@ -45,9 +46,9 @@ theorem received_items {items : List LibItem} {commands : List Tree.Command}
   exact Proofs.Parser.Rejection.Script.received_rcv item.property
 
 /-- Where the driver's run over items standing for what a parser receives for a valid script ends
-the script, the traversal of the script from the same handler, with token points and a producer
-that do nothing, does not fail and leaves the handler where the run does, for every spec handler
-the library handler agrees with. -/
+the script, the traversal of the script from the same handler, with token points and a producer that
+do nothing, does not fail and leaves the handler where the run does, for every handler of the
+formalism the library handler agrees with. -/
 theorem hRun_traversal
     {h : Traversal.Handler (StateT H Id) (Handler.Error H) (valuesOf H)}
     (hA : BSmtLib.Facts.Parser.Adapters.Bridge.Agrees h)
@@ -95,7 +96,7 @@ theorem hRun_traversal
 version, fed a file of commands, with the initial version, in any slices and then the end of the
 input: it reads to the end with a result, and the traversal of the file's commands from the same
 handler, with token points and a producer that do nothing, does not fail and leaves the handler
-the reader leaves, for every spec handler the library handler agrees with. -/
+the reader leaves, for every handler of the formalism the library handler agrees with. -/
 theorem reader_follows_traversal [NoFails H]
     {h : Traversal.Handler (StateT H Id) (Handler.Error H) (valuesOf H)}
     (hA : BSmtLib.Facts.Parser.Adapters.Bridge.Agrees h) (version : Lexicon.Version)

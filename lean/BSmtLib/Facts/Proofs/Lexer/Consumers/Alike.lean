@@ -6,11 +6,12 @@ public import BSmtLib.Facts.Proofs.Lexer.Simulation.Couple
 @[expose] public section
 
 /-!
-# Lexers that do alike with every consumer of the spec
+# Lexers that do alike with every consumer of the formalism
 
-`lexing_alike`: two lexers that are constructed related, and whose steps on a slice and at the
-end of the input give the same results and take the same tokens with lexers related again, do
-the same with every consumer of the spec (`Adapters.lexing` of the two is equal).
+`lexing_alike`: two lexers that are constructed related, and whose steps on a slice and at the end
+of the input give the same results and take the same tokens with lexers related again, do the same
+with every consumer of the specification formalism (`BSmtLibSpec`) (`Adapters.lexing` of the two is
+equal).
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
@@ -136,7 +137,7 @@ theorem foldl_next_rel (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Co
     | _ => exact e2 rfl
 
 /-- Two lexers that are constructed related, and whose steps give the same results with lexers
-related again, do the same with every consumer of the spec: what the adapter makes of them is
+related again, do the same with every consumer of the formalism: what the adapter makes of them is
 equal. -/
 theorem lexing_alike (ops₁ ops₂ : LexOps)
     (Rel : ∀ consumer : BSmtLibSpec.Lexer.Consumer, ops₁.Lexer consumer → ops₂.Lexer consumer →

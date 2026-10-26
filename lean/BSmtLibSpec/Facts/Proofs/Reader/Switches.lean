@@ -12,7 +12,7 @@ The traversal of a script tells its handler the version of each version declarat
 declaration (`Traversal.switchVersion`); so the calls for a file's commands hold the switch to
 each version a command declares (`handlerSwitch_mem_calls`).
 
-A fact of the specification.
+A fact of the specification formalism (`BSmtLibSpec`).
 -/
 
 namespace BSmtLibSpec.Facts.Proofs.Reader.Switches

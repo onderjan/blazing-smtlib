@@ -16,13 +16,13 @@ with the library's lexer (`Facts.Lexer.correctWithConsumers`), the library's par
 the parser's item for each token (`libItem`, which stands for what the token stands for:
 `libItem_stands`).
 
-The parser as a consumer of the specification answers as the script consumer does
-(`Param.consumer_agrees`), so the lexer takes the same tokens with both and finishes alike
-(`Param.lexing_congr`); with the script consumer the tokens are good, ended or not
-(`Param.lexing_good`); the lexer hands no whitespace or comment to the adapter's consumer for
-the script consumer (`Param.noLayout`); and so the reader tells its handler the calls of the
-parser's run on the tokens taken, none before the first, and finishes where the lexer with the
-script consumer does (`Param.feed_told`, `Param.calls_of_invG`).
+The parser as a consumer of the specification formalism (`BSmtLibSpec`) answers as the script
+consumer does (`Param.consumer_agrees`), so the lexer takes the same tokens with both and finishes
+alike (`Param.lexing_congr`); with the script consumer the tokens are good, ended or not
+(`Param.lexing_good`); the lexer hands no whitespace or comment to the adapter's consumer for the
+script consumer (`Param.noLayout`); and so the reader tells its handler the calls of the parser's
+run on the tokens taken, none before the first, and finishes where the lexer with the script
+consumer does (`Param.feed_told`, `Param.calls_of_invG`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Reader.Lexes.Reader
@@ -103,7 +103,7 @@ theorem libItem_stands (handed : Handed) (received : Received) (version : Lexico
       obtain ⟨r, hr⟩ := Option.isSome_iff_exists.mp (decodeReserved_isSome version s hs)
       simp only [itemOf, hr, rcv, Bridge.received, Option.getD_some, decodeReserved_spec hr]
 
-/-- The library's parser as a consumer of the specification never continues at the end of the
+/-- The library's parser as a consumer of the formalism never continues at the end of the
 input. -/
 theorem specConsumer_breaksAtEnd (version : Lexicon.Version) :
     (specConsumer version).BreaksAtEnd := by

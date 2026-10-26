@@ -5,13 +5,14 @@ public import BSmtLib.Facts.Proofs.Lexer.Consumers.Alike
 @[expose] public section
 
 /-!
-# Lexers that do alike with every consumer of the spec, up to how they fail
+# Lexers that do alike with every consumer of the formalism, up to how they fail
 
-`lexing_alikeF`: two lexers that are constructed related, and whose steps on a slice and at the
-end of the input give results the spec does not tell apart (the same, or errors with the same
-`failureOf`) and take the same tokens, with lexers related again when they do not fail and
-weakly related always, do the same with every consumer of the spec. The weak relation is what
-the adapter reads from a lexer after a failed call: its version and where it discards from.
+`lexing_alikeF`: two lexers that are constructed related, and whose steps on a slice and at the end
+of the input give results the specification formalism (`BSmtLibSpec`) does not tell apart (the same,
+or errors with the same `failureOf`) and take the same tokens, with lexers related again when they
+do not fail and weakly related always, do the same with every consumer of the formalism. The weak
+relation is what the adapter reads from a lexer after a failed call: its version and where it
+discards from.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
@@ -23,7 +24,7 @@ section
 variable (ops₁ ops₂ : LexOps) {consumer : BSmtLibSpec.Lexer.Consumer}
   (Rel Weak : ops₁.Lexer consumer → ops₂.Lexer consumer → Prop)
 
-/-- Steps that give results the spec does not tell apart, the same tokens taken, lexers related
+/-- Steps that give results the formalism does not tell apart, the same tokens taken, lexers related
 again when they do not fail, and weakly related lexers. -/
 def StepsAlikeF {β : Type}
     (step₁ : ops₁.Lexer consumer →
@@ -91,7 +92,7 @@ theorem mapError_error {ε ε' β : Type} {f : ε → ε'} {x y : Except ε β}
     simp only [Except.mapError, Except.error.injEq] at h
     exact h
 
-/-- Two lexers whose steps give results the spec does not tell apart, as `StepsAlikeF` says,
+/-- Two lexers whose steps give results the formalism does not tell apart, as `StepsAlikeF` says,
 and whose related lexers hold the same result, stand alike after the same input, take the same
 tokens, and are weakly related, and related if they have not failed. -/
 theorem runInput_alikeF
@@ -173,9 +174,9 @@ theorem runInput_alikeF
 
 end
 
-/-- Two lexers that are constructed related, and whose steps give results the spec does not tell
-apart, as `StepsAlikeF` says, do the same with every consumer of the spec: what the adapter
-makes of them is equal. -/
+/-- Two lexers that are constructed related, and whose steps give results the formalism does not
+tell apart, as `StepsAlikeF` says, do the same with every consumer of the formalism: what the
+adapter makes of them is equal. -/
 theorem lexing_alikeF (ops₁ ops₂ : LexOps)
     (Rel Weak : ∀ consumer : BSmtLibSpec.Lexer.Consumer,
       ops₁.Lexer consumer → ops₂.Lexer consumer → Prop)

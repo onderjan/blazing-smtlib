@@ -9,20 +9,27 @@ public meta import Lean
 
 The Rust crate's public interface is read from the JSON documentation that `rustdoc` writes
 (`cargo +nightly rustdoc --lib -- -Z unstable-options --output-format json
---document-hidden-items` in `rust/`). Public are the items reachable from the crate root: the
-public items of the public modules, the items that a `pub use` re-exports (a glob re-exports the
-public items of its module), the public methods of the inherent implementations of the public
-types, the methods of their trait implementations, and the methods of the public traits. Each is
-named by the path of its definition without the crate, `lexer::SmtLexer::lex_slice` for the
-method `lex_slice` of `SmtLexer`, defined in `lexer.rs`. Items hidden from the documentation
+--document-hidden-items` in `rust/`). Public are the items reachable from the crate root:
+
+- the public items of the public modules;
+- the items that a `pub use` re-exports (a glob re-exports the public items of its module);
+- the public methods of the inherent implementations of the public types;
+- the methods of their trait implementations;
+- the methods of the public traits.
+
+Each is named by the path of its definition without the crate, `lexer::SmtLexer::lex_slice` for
+the method `lex_slice` of `SmtLexer`, defined in `lexer.rs`. Items hidden from the documentation
 count: they are public.
 
-Besides the items, the documentation gives three lists: the items that are only methods of trait
-implementations (`lexer::SmtLexer::fmt`, of `impl Debug for SmtLexer`), which the trait's
-implementation stands for; the trait implementations of the public types, each as the type's
-path and the trait's path, with the crate's name for a trait of another crate
-(`reader::SmtReadError` and `core::fmt::Debug`); and the public structures with private fields
-(`span::SmtLocation`), which the documentation leaves out.
+Besides the items, the documentation gives three lists:
+
+- the items that are only methods of trait implementations (`lexer::SmtLexer::fmt`, of
+  `impl Debug for SmtLexer`), which the trait's implementation stands for;
+- the trait implementations of the public types, each as the type's path and the trait's path,
+  with the crate's name for a trait of another crate (`reader::SmtReadError` and
+  `core::fmt::Debug`);
+- the public structures with private fields (`span::SmtLocation`), which the documentation leaves
+  out.
 
 `extract` makes the lists from the documentation; `render` makes the generated module
 `BSmtLib.Facts.RustItems` from them, which the executable `rust-items`

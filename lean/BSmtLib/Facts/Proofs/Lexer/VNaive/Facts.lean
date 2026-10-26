@@ -10,8 +10,9 @@ import all BSmtLib.Span
 /-!
 # Facts about the bytes and locations of the naive lexer
 
-The byte classes of `VNaive` as the classes of character codes of the spec and its checks,
-and the locations the lexer computes byte by byte as the spec's `locate`.
+The byte classes of `VNaive` as the classes of character codes of the specification formalism
+(`BSmtLibSpec`) and its checks, and the locations the lexer computes byte by byte as the formalism's
+`locate`.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
@@ -70,7 +71,7 @@ theorem isBinaryDigit_iff (c : UInt8) : isBinaryDigit c = true ↔ c.toNat = 48 
   byte_cases (P := fun c => isBinaryDigit c = true ↔ c.toNat = 48 ∨ c.toNat = 49)
     (by decide +kernel) c
 
-/-- A text byte is a printable or white space character of the spec. -/
+/-- A text byte is a printable or white space character of the formalism. -/
 theorem text_iff (c : UInt8) : isTextByte c = true ↔ alt printableChar whiteSpaceChar [c] := by
   rw [isTextByte_iff, printableOrSpace_one]
 
@@ -147,7 +148,7 @@ theorem locAfter_concat (a : List UInt8) (c : UInt8) :
     locAfter (a ++ [c]) = (locAfter a).afterByte c := by
   simp [locAfter_append, advanceLoc]
 
-/-- The location after the bytes is where the spec locates their end. -/
+/-- The location after the bytes is where the formalism locates their end. -/
 theorem toLocation_locAfter (bytes : List UInt8) :
     Lexer.Adapters.toLocation (locAfter bytes) = BSmtLibSpec.Lexer.locate bytes bytes.length := by
   suffices h : ∀ rs : List UInt8,
@@ -172,13 +173,13 @@ theorem toLocation_locAfter (bytes : List UInt8) :
     · have hb : (c == 10) = false := by simpa using hc
       simp [hb, h1, h2, h3, List.count_append, hc]
 
-/-- Where the spec locates an offset depends only on the input up to it. -/
+/-- Where the formalism locates an offset depends only on the input up to it. -/
 theorem locate_append (bytes more : List UInt8) :
     BSmtLibSpec.Lexer.locate (bytes ++ more) bytes.length = BSmtLibSpec.Lexer.locate bytes
         bytes.length := by
   simp [BSmtLibSpec.Lexer.locate]
 
-/-- The location after the bytes, as the spec locates it in an input that starts with them. -/
+/-- The location after the bytes, as the formalism locates it in an input that starts with them. -/
 theorem toLocation_locAfter_append (bytes more : List UInt8) :
     Lexer.Adapters.toLocation (locAfter bytes) = BSmtLibSpec.Lexer.locate
         (bytes ++ more) bytes.length := by

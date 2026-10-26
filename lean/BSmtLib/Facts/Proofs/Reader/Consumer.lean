@@ -8,7 +8,7 @@ import all BSmtLib.Lexicon.Value
 @[expose] public section
 
 /-!
-# The library's script parser as a consumer of the lexer spec
+# The library's script parser as a consumer in the formalism
 
 `scriptConsumer version` is a consumer as `BSmtLibSpec.Lexer` states consumers
 (`BSmtLibSpec.Lexer.Consumer`): what it answers after each token is what the library's script parser

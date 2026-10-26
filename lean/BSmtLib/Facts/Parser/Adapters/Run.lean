@@ -5,24 +5,27 @@ public import BSmtLib.Facts.Parser.Adapters.Handler
 @[expose] public section
 
 /-!
-# Running the library's parser as the spec runs a parser
+# Running the library's parser as the formalism runs a parser
 
-`drive` runs a parser stepped by single tokens over a list of tokens, marking each token's
-arrival and processing with the spec's `Points` before the step that takes it, and making the
-parser's calls due at the token's arrival (`arrival`, none by default) between the two.
-`driveParse` runs a parser that steps by single tokens (an instance of
-`Parser.Internal.ParseByToken`) over a list of tokens as its loop over single tokens runs it over
-a producer's tokens, what the parser asks of the producer done by the spec's producer;
-`driveInput` tells the handler the version first, as the adapter does at the start of every
-input.
-
-`parserRecord` is the recording run of the script parser, under the posture that restricts
-nothing, and `Rejection.libraryParser` is that run as a recording parser of the spec
-(`BSmtLibSpec.Parser.Properties.RecordingParser`). `switchOf` and `discardOf` read what a recording
-run asks of its producer after its last processing.
+- `drive` runs a parser stepped by single tokens over a list of tokens. Before the step that takes a
+  token, it marks the token's arrival with the `Points` of the specification formalism
+  (`BSmtLibSpec`), makes the parser's calls due at the token's arrival (`arrival`, none by default),
+  and marks the token's processing.
+- `driveParse` runs a parser that steps by single tokens (an instance of
+  `Parser.Internal.ParseByToken`) over a list of tokens, as its loop over single tokens runs it
+  over a producer's tokens. What the parser asks of the producer, the formalism's producer does.
+- `driveInput` tells the handler the version first, as the adapter does at the start of every
+  input, and then runs `driveParse`.
+- `parserRecord` is the recording run of the script parser, under the posture that restricts
+  nothing.
+- `Rejection.libraryParser` is that run as a recording parser of the formalism
+  (`BSmtLibSpec.Parser.Properties.RecordingParser`).
+- `switchOf` and `discardOf` read what a recording run asks of its producer after its last
+  processing.
 
 These definitions are adapters: the root theorems of `BSmtLib.Facts.Parser` and
-`BSmtLib.Facts.Reader` are stated with them, so they are trusted, and are to be read with the spec.
+`BSmtLib.Facts.Reader` are stated with them, so they are trusted, and are to be read with the
+formalism.
 -/
 
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Bridge.Rejection
@@ -43,13 +46,13 @@ variable (points : Points (StateT H m))
 def adaptRun (run : Run (StateT H m) (Handler.Error H) α) : PM H α :=
   ExceptT.adapt causeOf run
 
-/-- The arrival of the token, if it stands for something in the spec. -/
+/-- The arrival of the token, if it stands for something in the formalism. -/
 def arriveAt (token : Parser.Internal.Input) : StateT H m Unit :=
   match Bridge.received token with
   | some received => points.arrive received
   | none => pure ()
 
-/-- The processing of the token, if it stands for something in the spec. -/
+/-- The processing of the token, if it stands for something in the formalism. -/
 def processAt (token : Parser.Internal.Input) : StateT H m Unit :=
   match Bridge.received token with
   | some received => points.process received

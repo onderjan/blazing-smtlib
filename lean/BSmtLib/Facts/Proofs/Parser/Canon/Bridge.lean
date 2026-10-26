@@ -13,8 +13,8 @@ import all BSmtLib.Grammar.Multiple.MatchCases
 /-!
 # The recording handler is told contents only
 
-The recording handler turns every view it is handed into the spec's characters, so a call with
-canonicalised arguments is the same call (`canon_call`).
+The recording handler turns every view it is handed into the characters of the specification
+formalism (`BSmtLibSpec`), so a call with canonicalised arguments is the same call (`canon_call`).
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Canon.Bridge

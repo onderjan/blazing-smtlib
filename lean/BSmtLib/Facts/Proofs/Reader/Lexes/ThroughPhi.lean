@@ -253,7 +253,7 @@ open BSmtLib.Facts.Proofs.Reader.Lexes.Told
 open BSmtLib.Facts.Proofs.Lexer.Consumers.RunE (runInputE runInputE_cons runInputE_nil_true)
 open BSmtLib.Facts.Proofs.Reader.Param.Adapter (id_bind_eq)
 
-/-- The library's lexer with the adapter's consumer for a consumer of the spec. -/
+/-- The library's lexer with the adapter's consumer for a consumer of the formalism. -/
 abbrev ZOps := BSmtLib.Facts.Lexer.Adapters.Lexer.lexOps
 
 theorem eofResult_rel {x : Option (Span.Located Unit)} {y : Option (Span.Located Unit)}

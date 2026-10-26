@@ -19,9 +19,10 @@ and before it is processed, is what the traversal of any valid script that agree
 up to that item has done (`placement_arrival`, `placement_processing`); and where its input
 stops, it has done what the traversal does before the next item arrives (`placement_prefix`).
 
-The parser's run takes the items one by one (`driveParse_cons`); each item adds its arrival,
-the calls due at its arrival, its processing and silent events (`afterToken_shape`), so the cut
-functions of the spec pass over the items before the cut alike in two runs that share them.
+The parser's run takes the items one by one (`driveParse_cons`); each item adds its arrival, the
+calls due at its arrival, its processing and silent events (`afterToken_shape`), so the cut
+functions of the specification formalism (`BSmtLibSpec`) pass over the items before the cut alike in
+two runs that share them.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Cut

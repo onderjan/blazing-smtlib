@@ -8,15 +8,15 @@ import all BSmtLib.Lexer.Internal.VNaive
 @[expose] public section
 
 /-!
-# The library's lexer with any consumer of the spec does not tell how its input is cut
+# The library's lexer with any consumer of the formalism does not tell how its input is cut
 
-The run of the library's lexer with the adapter's consumer for a consumer of the spec ends as the
-naive lexer fed the cut of the slices ends (`z_naive`): with the same tokens taken, results alike
-as `preciseOf` says, an error that does not go on, a consumer's error with the span of the last
-token taken, and, where it does not fail, discarding from where the naive lexer does. The naive
-lexer does not tell how its input is cut (`VFlattenE`), so neither does the library's lexer
-(`slicing`): the same tokens taken and results alike as `preciseOf` says, so the same result, and
-the same error but for trailing input and the adapter's error `none`.
+The run of the library's lexer with the adapter's consumer for a consumer of the specification
+formalism (`BSmtLibSpec`) ends as the naive lexer fed the cut of the slices ends (`z_naive`): with
+the same tokens taken, results alike as `preciseOf` says, an error that does not go on, a consumer's
+error with the span of the last token taken, and, where it does not fail, discarding from where the
+naive lexer does. The naive lexer does not tell how its input is cut (`VFlattenE`), so neither does
+the library's lexer (`slicing`): the same tokens taken and results alike as `preciseOf` says, so the
+same result, and the same error but for trailing input and the adapter's error `none`.
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.SlicingC
@@ -165,9 +165,9 @@ theorem error_eq {e₁ e₂ : LexerError (Option C.Error)} (h : preciseOf e₁ =
       subst h1
       rw [hs x rfl rfl]
 
-/-- The library's lexer with the adapter's consumer for a consumer of the spec that does not take
-whitespace and comments takes the same tokens however its input is cut into slices, and gives the
-same result, or the same error where neither is trailing input; where both do not fail, they
+/-- The library's lexer with the adapter's consumer for a consumer of the formalism that does not
+take whitespace and comments takes the same tokens however its input is cut into slices, and gives
+the same result, or the same error where neither is trailing input; where both do not fail, they
 discard from the same location. -/
 theorem slicing (hc : C.concrete = false) (version : Version) (ended : Bool)
     (slices : List BSmtLibSpec.Regex.Chars) :

@@ -6,7 +6,8 @@ public section
 
 /-!
 The lexer with the batch kept in the lexer's state: a lexer of the chain that leads from the
-specification to the library's lexer, after the Rust lexer ported to Lean `WRustPort`.
+specification formalism (`BSmtLibSpec`) to the library's lexer, after the Rust lexer ported to Lean
+`WRustPort`.
 
 It is the code of the Rust port `WRustPort` over operations of its own (`WRustPort.Ops`): the
 batch is kept in the lexer's state (`LexerCore.batch`) and reused from slice to slice. It is

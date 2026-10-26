@@ -23,7 +23,7 @@ namespace BSmtLibSpec
 /-- A sequence of 8-bit characters. -/
 abbrev Regex.Chars := List UInt8
 
-/-- The characters of an ASCII string. Only ASCII strings are used in the specification. -/
+/-- The characters of an ASCII string. Only ASCII strings are used in the formalism. -/
 def Regex.chars (s : String) : Chars := s.toList.map Char.toUInt8
 
 /-- A regular expression: the set of character sequences it matches. -/

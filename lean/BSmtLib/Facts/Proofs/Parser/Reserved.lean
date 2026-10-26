@@ -7,10 +7,10 @@ import all BSmtLib.Token.Reserved
 @[expose] public section
 
 /-!
-# Reserved words as the spec spells them
+# Reserved words as the formalism spells them
 
-Two reserved words that the spec spells alike are the same word, so a token that stands for a
-reserved word of the spec is that word.
+Two reserved words that the specification formalism (`BSmtLibSpec`) spells alike are the same word,
+so a token that stands for a reserved word of the formalism is that word.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Reserved

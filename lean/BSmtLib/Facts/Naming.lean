@@ -7,8 +7,8 @@ public meta import Lean
 /-!
 # The naming rule, checked
 
-The declarations of the library, of the specification and of their facts are named after the
-modules that declare them, so that a name says which file to open:
+The declarations of the library, of the specification formalism (`BSmtLibSpec`) and of their facts
+are named after the modules that declare them, so that a name says which file to open:
 
 - a declaration is named under its module's path, and where several module paths prefix a name,
   the longest is its module; a declaration named exactly like its module complies;

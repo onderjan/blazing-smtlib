@@ -10,9 +10,10 @@ public import BSmtLib.Lexer.Internal.X1BatchInCore
 /-!
 # The lexers of the chain with the collector
 
-The lexers of the chain that leads from the specification to the library's lexer, run as the
-library's lexer is run in `collect`: with the collector, fed the slices and then the end of the
-input. The lexers are what the agreement theorem is about; the definitions here only run them.
+The lexers of the chain that leads from the specification formalism (`BSmtLibSpec`) to the library's
+lexer, run as the library's lexer is run in `collect`: with the collector, fed the slices and then
+the end of the input. The lexers are what the agreement theorem is about; the definitions here only
+run them.
 -/
 
 namespace BSmtLib.Facts.PublicApi.Adapters.Chain

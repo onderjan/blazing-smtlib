@@ -5,14 +5,14 @@ public import BSmtLib.Facts.Parser.Adapters
 @[expose] public section
 
 /-!
-# Every handler of the spec is a handler of the library
+# Every handler of the formalism is a handler of the library
 
-`Bridged h₀ nonstandard` (an adapter, in `Adapters.Handler`) is a library handler with no state
-of its own: each of its calls turns the parser's values into the spec's, through the bridge, and
-asks the spec's handler `h₀`, in the monad `h₀` runs in, lifted into the parser's `StateT`. A
-non-standard command fails with `nonstandard`. `liftHandler h₀` is `h₀` lifted into the same
-monad, and the two agree (`agrees_liftHandler`), so every theorem stated for an agreeing pair
-holds for every spec handler.
+`Bridged h₀ nonstandard` (an adapter, in `Adapters.Handler`) is a library handler with no state of
+its own: each of its calls turns the parser's values into those of the specification formalism
+(`BSmtLibSpec`), through the bridge, and asks the formalism's handler `h₀`, in the monad `h₀` runs
+in, lifted into the parser's `StateT`. A non-standard command fails with `nonstandard`. `liftHandler
+h₀` is `h₀` lifted into the same monad, and the two agree (`agrees_liftHandler`), so every theorem
+stated for an agreeing pair holds for every handler of the formalism.
 -/
 
 namespace BSmtLib.Facts.Proofs.Parser.Link
@@ -26,7 +26,7 @@ section
 variable {m : Type → Type} [Monad m] {ε : Type} {values : Values}
 variable {h₀ : Traversal.Handler m ε values} {nonstandard : ε}
 
-/-- The bridged handler agrees with the lifted spec handler. -/
+/-- The bridged handler agrees with the lifted formalism handler. -/
 theorem agrees_liftHandler :
     Agrees (H := Bridged h₀ nonstandard) (m := m) (liftHandler h₀ nonstandard) where
   handleSort _ _ := rfl

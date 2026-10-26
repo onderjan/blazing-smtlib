@@ -7,8 +7,8 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.Lemmas
 /-!
 # The standard's examples
 
-The examples the standard gives with its lexical rules, checked against the spec. Not
-trusted: these are proofs.
+The examples the standard gives with its lexical rules, checked against the specification formalism
+(`BSmtLibSpec`). Not trusted: these are proofs.
 -/
 
 namespace BSmtLibSpec.Facts.Lexicon.Examples

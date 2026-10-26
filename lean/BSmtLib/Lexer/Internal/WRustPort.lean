@@ -6,8 +6,8 @@ public import BSmtLib.Lexer.Internal.WRustPort.Slice
 public section
 
 /-!
-The Rust lexer ported to Lean: a lexer of the chain that leads from the specification to the
-library's lexer, after the naive lexer `VNaive`.
+The Rust lexer ported to Lean: a lexer of the chain that leads from the specification formalism
+(`BSmtLibSpec`) to the library's lexer, after the naive lexer `VNaive`.
 
 It is the Rust lexer `rust/src/lexer.rs`, with the helpers of `rust/src/lexer/`, ported without
 the optimisations of the library's Lean lexer, and is to be read against the Rust source. It is

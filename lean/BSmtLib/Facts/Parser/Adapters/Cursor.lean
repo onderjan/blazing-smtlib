@@ -11,16 +11,16 @@ A parser of the library parses a cursor, an instance of `Token.Cursor`; what it 
 against the tokens the cursor gives, as the parser takes them (`Parser.Internal.Input`).
 
 - `Takes version cursor tokens next`: taking the tokens one by one from `cursor`, each in the
-  version, leaves `next`. `Reads version cursor tokens`: the cursor gives exactly the tokens, each
-  in the version.
-- `noPoints`: the token points that mark nothing, as a parse of a cursor marks no point: the spec's
-  traversal with them is its handler calls alone.
+  version, leaves `next`.
+- `Reads version cursor tokens`: the cursor gives exactly the tokens, each in the version.
+- `noPoints`: the token points that mark nothing, as a parse of a cursor marks no point: the
+  traversal of the specification formalism (`BSmtLibSpec`) with them is its handler calls alone.
 
 What a parser does on such a cursor is in `Adapters.Outcome`.
 
 These definitions are adapters: the root theorems of `BSmtLib.Facts.Parser` about the category
 parsers and the combinators are stated with them, so they are trusted, and are to be read with the
-spec.
+formalism.
 -/
 
 namespace BSmtLib.Facts.Parser.Adapters.Cursor

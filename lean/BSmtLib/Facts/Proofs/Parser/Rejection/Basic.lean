@@ -8,13 +8,13 @@ import all BSmtLib.Parser
 /-!
 # What a parser state can still take
 
-The converse of the parser's correctness: a parser takes an item only if some valid construct
-goes on with it. Each parser state is given its remainders (`rem`): the sequences of items that
-complete the construct the parser is in, as the spec writes it. A step that takes an item
-advances (`Advances`): every remainder of the new state, after the item, is a remainder of the
-old state, and the new state has a remainder; a step that finishes takes the item as the last
-one of a remainder. Then the items a parser takes from its initial state are the start of a
-valid construct, by induction over the items.
+The converse of the parser's correctness: a parser takes an item only if some valid construct goes
+on with it. Each parser state is given its remainders (`rem`): the sequences of items that complete
+the construct the parser is in, as the specification formalism (`BSmtLibSpec`) writes it. A step
+that takes an item advances (`Advances`): every remainder of the new state, after the item, is a
+remainder of the old state, and the new state has a remainder; a step that finishes takes the item
+as the last one of a remainder. Then the items a parser takes from its initial state are the start
+of a valid construct, by induction over the items.
 
 The remainders are sets of item lists (`Lang`), built by concatenation and repetition. The steps
 are run in a recording run (`RPM`), whose handler never fails, so a step fails only on a syntax

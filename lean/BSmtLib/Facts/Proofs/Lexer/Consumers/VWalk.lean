@@ -11,7 +11,7 @@ import all BSmtLib.Lexer.Error
 @[expose] public section
 
 /-!
-# The naive lexer with a consumer of the spec, as `Runs` states
+# The naive lexer with a consumer of the formalism, as `Runs` states
 
 `walk`: what the naive lexer has done with the consumer from a state that is the pure run's
 state, holding no result, is what `BSmtLibSpec.Lexer.Runs` states, from the tokens of the run from

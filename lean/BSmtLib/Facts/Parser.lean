@@ -16,56 +16,63 @@ public import BSmtLib.Facts.Proofs.Parser.Category.Attribute
 @[expose] public section
 
 /-!
-# The parser against the specification's traversal
+# The parser against the formalism's traversal
 
-Proofs that the library's parser (`BSmtLib.Parser`) makes the calls of the specification's
-traversal (`BSmtLibSpec.Parser.Traversal`), at the places among the tokens that the traversal
-states.
+Proofs that the library's parser (`BSmtLib.Parser`) makes the calls of the traversal
+(`BSmtLibSpec.Parser.Traversal`) of the specification formalism (`BSmtLibSpec`), at the places among
+the tokens that the traversal states.
 
-- The handler: a library handler is a class instance, the spec's handler a structure. `Agrees h`
-  says that the instance answers every call as the spec's handler `h` answers it, the views and
-  arrays handed over turned into the spec's characters and lists. Every spec handler, in any
-  monad, has a library handler that agrees with it (`every_handler_linked`), so the theorems
-  below hold for every spec handler.
-- The tokens: a list of the parser's tokens stands for the spec's tokens when each turns into
-  the spec's (`Stands`, `Bridge.received`). The parser is run as its adapter runs it over a
-  producer (`driveInput`, which first tells the handler the version, then `driveParse`): each
-  token arrives, the calls due at its arrival are made, it is processed and the parser takes it;
-  what the parser asks of the producer, the spec's producer does. The spec's token points mark each
+- The handler: a library handler is a class instance, the formalism's handler a structure.
+  `Agrees h` says that the instance answers every call as the formalism's handler `h` answers
+  it, with the views and arrays handed over turned into the formalism's characters and lists.
+  Every handler of the formalism, in any monad, has a library handler that agrees with it
+  (`every_handler_linked`), so the theorems below hold for every handler of the formalism.
+- The tokens: a list of the parser's tokens stands for the formalism's tokens when each turns
+  into the formalism's (`Stands`, `Bridge.received`).
+- The run: the parser is run as its adapter runs it over a producer (`driveInput`, which first
+  tells the handler the version, then `driveParse`). Each token arrives, the calls due at its
+  arrival are made, it is processed, and the parser takes it. What the parser asks of the
+  producer, the formalism's producer does. The formalism's token points mark each
   arrival and processing.
-- Valid input: on the tokens of a valid term, of a valid command, and of a valid script, the
-  parser does exactly what the traversal does, in every monad, with every handler, token points,
-  producer and posture (`term_follows_traversal`, `command_follows_traversal`,
-  `script_follows_traversal`). Failures are the traversal's failures, as the parser's causes.
-- Placement: in a recording run, the parser's events on any input that agrees with what a parser
-  receives for a valid script up to an item are the traversal's before that item arrives, and
-  before it is processed, its arrival left out (`placement_before_arrival`,
-  `placement_before_processing`); where the input stops, they are the traversal's before the
-  next item arrives (`placement_where_input_stops`). The last of these is what the parser has
-  done when its producer has no further token; the second, what it has done when it rejects the
-  item.
-- Rejection: the parser as a recording parser of the spec (`Rejection.libraryParser`) takes what
-  a parser takes for a script, or for commands that a declaration of a version that is not
-  supported ends, as the traversal does (`follows_the_traversal`), and rejects the first item
-  that no script continues with, where its producer hands over nothing but the end of the input
-  after `exit` (`rejects_first_unviable`). The second rests on the parser's every step keeping
-  what it has taken viable, the first on that and on the valid input above. After `exit`, the
-  parser goes back to reading commands; only the end of the input keeps what it has taken
-  viable there, and the traversal asks for the discarding exactly there.
+- Valid input: on the tokens of a valid term, command or script, the parser does exactly what the
+  traversal does (`term_follows_traversal`, `command_follows_traversal`,
+  `script_follows_traversal`), in every monad, with every handler, token points, producer and
+  posture. Failures are the traversal's failures, as the parser's causes.
+- Placement: in a recording run on any input that agrees with what a parser receives for a valid
+  script up to an item, the parser's events are the traversal's:
+  - before that item arrives (`placement_before_arrival`);
+  - before that item is processed, its arrival left out (`placement_before_processing`), which is
+    what the parser has done when it rejects the item;
+  - where the input stops, before the next item arrives (`placement_where_input_stops`), which is
+    what the parser has done when its producer has no further token.
+- Rejection: the parser, as a recording parser of the formalism
+  (`Rejection.libraryParser`):
+  - takes, as the traversal does, what a parser takes for a script, or for commands that a
+    declaration naming no supported version ends (`follows_the_traversal`);
+  - rejects the first item that no script continues with, where its producer hands over nothing
+    but the end of the input after `exit` (`rejects_first_unviable`).
+
+  The second rests on every step of the parser keeping what it has taken viable; the first rests
+  on that and on the valid input above. After `exit`, the parser goes back to reading commands;
+  only the end of the input keeps what it has taken viable there, and the traversal asks for the
+  discarding exactly there.
 - The fused reader: the script parser's `parse` on a batch cursor is the fused script reader
-  (`Parser.Internal.Fused`), which runs the script parser in one loop over the cursor and falls
-  back to the parser's own steps for rare constructs; it parses the cursor as the parser's loop
-  over single tokens does, in every lawful monad and with every handler
-  (`fused_parses_as_port`). So what holds of that loop holds of the script parser's `parse`.
-- The category parsers and the combinators: each parses a cursor of any producer. On a cursor
-  that gives the tokens of a valid identifier, qualified identifier, sorted variable, sorted
-  variables in parentheses, pattern or attribute, followed by anything, the parser finishes
-  right after them with the spec's tree through the bridge, making the traversal's calls; the
-  parsers of single tokens finish at a token of their kind with its content; the combinators do
-  what their inner parsers do, composed, at the same places. On the tokens of a prefix that
-  nothing of the category continues with, a parser fails with the Rust parser's error kind right
-  after the token that nothing continues with, having made the calls for what it took before it;
-  on the tokens of a part of a value, it wants more, as a parser that finishes on the rest.
+  (`Parser.Internal.Fused`). It runs the script parser in one loop over the cursor, and falls back
+  to the parser's own steps for rare constructs. It parses the cursor as the parser's loop over
+  single tokens does, in every lawful monad and with every handler (`fused_parses_as_port`). So
+  what holds of that loop holds of the script parser's `parse`.
+- The category parsers and the combinators: each parses a cursor of any producer.
+  - On a cursor that gives the tokens of a valid identifier, qualified identifier, sorted
+    variable, sorted variables in parentheses, pattern or attribute, followed by anything, the
+    category parser finishes right after them with the formalism's tree through the bridge,
+    making the traversal's calls.
+  - The parsers of single tokens finish at a token of their kind with its content.
+  - The combinators do what their inner parsers do, composed, at the same places.
+  - On the tokens of a prefix that nothing of the category continues with, a parser fails with
+    the Rust parser's error kind right after the token that nothing continues with, having made
+    the calls for what it took before it.
+  - On the tokens of a part of a value, a parser wants more, as a parser that finishes on the
+    rest.
 -/
 
 /-!
@@ -88,7 +95,7 @@ open BSmtLib.Facts.Proofs.Parser.Command BSmtLib.Facts.Proofs.Parser.Cut
 open BSmtLib.Facts.Proofs.Parser.Link BSmtLib.Facts.Proofs.Parser.Script
 open BSmtLib.Facts.Proofs.Parser.Term
 
-/-- Every spec handler, in any monad, is answered alike by a library handler. -/
+/-- Every handler of the formalism, in any monad, is answered alike by a library handler. -/
 theorem every_handler_linked {m : Type → Type} [Monad m] {ε : Type} {values : Values}
     (h₀ : Traversal.Handler m ε values) (nonstandard : ε) :
     Adapters.Bridge.Agrees (H := Adapters.Handler.Bridged h₀ nonstandard) (m := m)
@@ -153,10 +160,10 @@ info: 'BSmtLib.Facts.Parser.command_follows_traversal' depends on axioms: [prope
 #print axioms command_follows_traversal
 
 /--
-On the tokens a parser receives for a valid script with the initial version, followed by anything,
-the script parser run as the parse adapter runs it, the handler told the version first, makes the
-traversal's calls among the traversal's token points, under the policy of its posture, with the
-same producer, and finishes at the end of the input, before the rest.
+The script parser is run as the parse adapter runs it, with the handler told the version first,
+on the tokens a parser receives for a valid script with the initial version `version`, followed by
+anything. Under the policy of its posture and with the same producer, it makes the traversal's
+calls among the traversal's token points, and finishes at the end of the input, before the rest.
 -/
 theorem script_follows_traversal {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
     [Handler.CommandHandler H m] {points : Points (StateT H m)}
@@ -271,9 +278,11 @@ info: 'BSmtLib.Facts.Parser.placement_where_input_stops' depends on axioms: [pro
 #print axioms placement_where_input_stops
 
 /--
-The parser takes what a parser takes for a script, or for commands that a declaration of a
-version that is not supported ends, as the traversal does: on any start of it, its recording run
-has the traversal's events before the next item, and ends as `Takes` says.
+The parser takes, as the traversal does, what a parser takes for a script, or for commands that
+a declaration naming no supported version ends. On any start of it, the parser's recording run:
+
+- has the traversal's events before the next item;
+- ends as `Takes` says.
 -/
 theorem follows_the_traversal : FollowsTheTraversal Adapters.Run.Rejection.libraryParser :=
   Proofs.Parser.Rejection.Library.library_follows
@@ -285,10 +294,14 @@ info: 'BSmtLib.Facts.Parser.follows_the_traversal' depends on axioms: [propext, 
 #print axioms follows_the_traversal
 
 /--
-The parser rejects the first item that no script continues with: it takes the items before it,
-rejects it with a cause that is no version's, has made the traversal's events before the item's
-processing, and makes no call at the item: its processing is the last event of the run. After
-`exit`, it relies on its producer to hand over nothing but the end of the input.
+The parser rejects the first item that no script continues with:
+
+- it takes the items before it;
+- it rejects it with a cause that is no version's;
+- it has made the traversal's events before the item's processing;
+- it makes no call at the item: the item's processing is the last event of the run.
+
+After `exit`, it relies on its producer to hand over nothing but the end of the input.
 -/
 theorem rejects_first_unviable : RejectsFirstUnviable Adapters.Run.Rejection.libraryParser :=
   Proofs.Parser.Rejection.Discard.library_rejects
@@ -301,10 +314,10 @@ info: 'BSmtLib.Facts.Parser.rejects_first_unviable' depends on axioms: [propext,
 
 /--
 The script parser parses a batch cursor of the library's lexer, by the fused script reader
-(`Parser.Internal.Fused`), as its loop over single tokens does (`Parser.Internal.parseByToken`):
-from every parser and handler, it gives the same answer, parser, parse state and cursor, and leaves
-the same handler, in every lawful monad and with every handler. So every theorem about that loop
-holds of the script parser's `parse` on the lexer's cursors.
+(`Parser.Internal.Fused`), as its loop over single tokens does (`Parser.Internal.parseByToken`).
+From every parser and handler, in every lawful monad, it gives the same answer, parser, parse
+state and cursor, and leaves the same handler. So every theorem about that loop holds of the
+script parser's `parse` on the lexer's cursors.
 -/
 theorem fused_parses_as_port {H : Type} {m : Type → Type} [Monad m] [LawfulMonad m]
     [Handler.CommandHandler H m] {batch : Token.BatchTag}
@@ -325,14 +338,18 @@ info: 'BSmtLib.Facts.Parser.fused_parses_as_port' depends on axioms: [propext, C
 
 The parsers of the categories and the combinators parse a cursor of any producer
 (`Token.Cursor`). What they do is stated against the tokens the cursor gives, as the parsers
-take them, all in one version, read as `Adapters.Outcome.outcome` reads a parse: on a cursor that
-has given tokens first, followed by anything, a parser makes the effects of a handler-only
-program and finishes with its result right after the tokens, as a parser it gives back
-(`Adapters.Outcome.Finishes`), or fails with a syntax error of a kind right after the tokens,
-having taken exactly them (`Adapters.Outcome.Rejects`); on a cursor that has exactly the tokens,
-it makes the effects of the program and wants more, as a parser that the program's result gives
-(`Adapters.Outcome.Waits`). Where the program fails with the handler's error, so does the parser.
-The programs are the spec's traversal with the token points that mark nothing
+take them, all in one version, read as `Adapters.Outcome.outcome` reads a parse. Each statement
+names a handler-only program and the tokens:
+
+- On a cursor that has the tokens first, followed by anything, a parser makes the effects of the
+  program and either finishes with its result right after the tokens, as a parser it gives back
+  (`Adapters.Outcome.Finishes`), or fails with a syntax error of a given kind right after the
+  tokens, having taken exactly them (`Adapters.Outcome.Rejects`).
+- On a cursor that has exactly the tokens, a parser makes the effects of the program and wants
+  more, as a parser that the program's result gives (`Adapters.Outcome.Waits`).
+- Where the program fails with the handler's error, so does the parser.
+
+The programs are the formalism's traversal with the token points that mark nothing
 (`Adapters.Cursor.noPoints`), as a parse of a cursor marks no point; a parser that makes no call
 has a pure program.
 
@@ -2484,12 +2501,17 @@ end
 
 /-! ## What is trusted
 
-A reader of the theorems above trusts the specification (`BSmtLibSpec`), the statements in this
-file, and the definitions in `BSmtLib.Facts.Parser.Adapters` and the modules below it, which put
-the parser and its handlers into the spec's shapes: the adapters. Everything else Lean checks.
-The check below lists the adapters, every definition that the statements of the theorems in this
-file rest on outside the specification, the library and Lean (`BSmtLib.Facts.Trusted`), and fails
-the build if one of them is declared outside `BSmtLib.Facts.Parser.Adapters`.
+A reader of the theorems above trusts:
+
+- the formalism (`BSmtLibSpec`);
+- the statements in this file;
+- the adapters: the definitions in `BSmtLib.Facts.Parser.Adapters` and the modules below it,
+  which put the parser and its handlers into the formalism's shapes.
+
+Everything else Lean checks. The check below (`BSmtLib.Facts.Trusted`) lists the adapters: every
+definition that the statements of the theorems in this file rest on, outside the formalism,
+the library and Lean. It fails the build if one of them is declared outside
+`BSmtLib.Facts.Parser.Adapters`.
 -/
 
 /--

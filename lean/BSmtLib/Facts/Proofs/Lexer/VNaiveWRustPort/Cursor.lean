@@ -202,7 +202,7 @@ theorem lexSpan_start (l : Lexeme) : (lexSpan l).start = l.start := by
 theorem lexSpan_end (l : Lexeme) : (lexSpan l).end = l.end := by
   simp only [lexSpan, Span.Internal.newUnchecked, Span.«end», Span.Location.Internal.new_eta]
 
-/-- A location of the library for one of the spec. -/
+/-- A location of the library for one of the formalism. -/
 def ofLocation (l : BSmtLibSpec.Lexer.Location) : Span.Location :=
   Span.Location.Internal.new l.offset l.line l.column
 

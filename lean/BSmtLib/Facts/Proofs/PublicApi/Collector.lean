@@ -14,11 +14,12 @@ import all BSmtLib.Lexer.Cursor
 # The collector against the adapter's consumer
 
 The collector of `Facts.PublicApi` (`Adapters.Collector`) takes one token per call. The adapter's
-consumer of the lexer proofs (`Answering`), for the spec's consumer that takes every entry,
-whitespace and comments included, and breaks at the end of the input (`concreteCollector`),
-takes in one call every token of the cursor up to the end of the input. The lexer hands a batch
-over to the two alike: the collector's calls one after another take what the other's call takes,
-and the lexer reads nothing of the cursor they give back that tells them apart.
+consumer of the lexer proofs (`Answering`), for the consumer of the specification formalism
+(`BSmtLibSpec`) that takes every entry, whitespace and comments included, and breaks at the end of
+the input (`concreteCollector`), takes in one call every token of the cursor up to the end of the
+input. The lexer hands a batch over to the two alike: the collector's calls one after another take
+what the other's call takes, and the lexer reads nothing of the cursor they give back that tells
+them apart.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
@@ -35,8 +36,8 @@ open BSmtLib.Facts.Lexer.Adapters
 open BSmtLib.Facts.Proofs.Reader.Param.Basic BSmtLib.Facts.Proofs.Reader.Param.HandOver
 open BSmtLibSpec.Lexer (Handed TokenType)
 
-/-- The consumer of the spec that takes every entry, whitespace and comments included, continues
-on each but the end-of-file token, breaks on that, and asks for nothing. -/
+/-- The consumer of the formalism that takes every entry, whitespace and comments included,
+continues on each but the end-of-file token, breaks on that, and asks for nothing. -/
 def concreteCollector : BSmtLibSpec.Lexer.Consumer where
   Result := Unit
   Error := Empty
@@ -45,7 +46,7 @@ def concreteCollector : BSmtLibSpec.Lexer.Consumer where
   switchTo _ := none
   discards _ := false
 
-/-- The library's category of a token type of the spec. -/
+/-- The library's category of a token type of the formalism. -/
 def categoryOf : TokenType → Token.TokenCategory
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
@@ -61,7 +62,7 @@ def categoryOf : TokenType → Token.TokenCategory
   | .comment => .comment
   | .endOfFile => .endOfFile
 
-/-- What the collector writes down of an entry of the spec. -/
+/-- What the collector writes down of an entry of the formalism. -/
 def entryOf (handed : Handed) : Entry :=
   (categoryOf handed.type, handed.start.offset, handed.«end».offset)
 
@@ -753,7 +754,8 @@ theorem collect_runInput : ∀ (slices : List ByteList) (lC : BSmtLib.Lexer Coll
 
 
 /-- The collector writes down the entries that the library's lexer, as the adapter of the lexer
-proofs feeds it, hands to the concrete collector of the spec, and fails exactly where that does. -/
+proofs feeds it, hands to the concrete collector of the formalism, and fails exactly where that
+does. -/
 theorem collect_lexing (version : Version) (slices : List ByteList) :
     (collect version slices).2 = (BSmtLib.Facts.Lexer.Adapters.lexing
         BSmtLib.Facts.Lexer.Adapters.Lexer.lexOps concreteCollector (fromVersion version) []

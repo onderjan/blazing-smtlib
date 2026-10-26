@@ -8,7 +8,7 @@ import all BSmtLib.Span
 @[expose] public section
 
 /-!
-# The naive lexer's end of the input with a consumer of the spec
+# The naive lexer's end of the input with a consumer of the formalism
 
 The naive lexer's step at the end of the input with the adapter's consumer `Answering consumer`
 (`vEnd`), in each state of the lexer: the end-of-file token is handed over unless a result is

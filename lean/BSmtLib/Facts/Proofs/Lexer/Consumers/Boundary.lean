@@ -10,12 +10,12 @@ import all BSmtLib.Lexer.Cursor
 
 /-!
 # What follows a boundary
-
-The run from a boundary for a consumer that takes whitespace and comments, and the layout the spec
-gives there (`BSmtLibSpec.Lexer.layoutFrom`, `stream_layout`): either the spec gives none, and the
-first lexeme of the run, if any, is a token; or the first lexeme is whitespace or a comment from the
-boundary, which is the first piece the spec gives; or the layout there is not complete yet, and
-the run has finished nothing and not failed.
+The run from a boundary for a consumer that takes whitespace and comments, and the layout the
+specification formalism (`BSmtLibSpec`) gives there (`BSmtLibSpec.Lexer.layoutFrom`,
+`stream_layout`): either the formalism gives none, and the first lexeme of the run, if any, is a
+token; or the first lexeme is whitespace or a comment from the boundary, which is the first piece
+the formalism gives; or the layout there is not complete yet, and the run has finished nothing and
+not failed.
 -/
 
 namespace BSmtLib.Facts.Proofs.Lexer.Consumers.Boundary
@@ -216,7 +216,7 @@ theorem headIs_whitespace_end (version : Version) {p : Pending} {location : Span
   | some x => obtain ⟨st, ls⟩ := x; exact headIs_withBefore _
 
 
-/-! ## The layout after a boundary, as the spec gives it -/
+/-! ## The layout after a boundary, as the formalism gives it -/
 
 /-- The test for a byte that is no line break. -/
 def notLineBreak (x : UInt8) : Bool := !((x == 10) || (x == 13))
@@ -340,7 +340,7 @@ theorem drop_length_le {input : List UInt8} {o : Nat} {piece more : List UInt8}
     | nil => exact absurd rfl hp
     | cons _ _ => cases h
 
-/-- A lexeme that spans the piece after the offset is the piece of layout the spec gives there,
+/-- A lexeme that spans the piece after the offset is the piece of layout the formalism gives there,
 and ends after it. -/
 theorem lexemeLayout_eq {input : List UInt8} {o : Nat} {piece more : List UInt8}
     (h : input.drop o = piece ++ more) (hp : piece ≠ []) {l : Lexeme}
@@ -383,10 +383,10 @@ theorem dropWhile_split {p : UInt8 → Bool} {a t : List UInt8} {d : UInt8}
   | nil => simp [hd]
   | cons x a ih => simp [ha x (by simp), ih fun y hy => ha y (by simp [hy])]
 
-/-- The run from a boundary for a consumer that takes whitespace and comments, and the layout
-the spec gives there: either the spec gives none, and the first lexeme of the run, if any, is a
-token; or the first lexeme is whitespace or a comment, the first piece the spec gives, after
-which the spec goes on from its end; or the layout there is not complete yet, and the run has
+/-- The run from a boundary for a consumer that takes whitespace and comments, and the layout the
+formalism gives there: either the formalism gives none, and the first lexeme of the run, if any, is
+a token; or the first lexeme is whitespace or a comment, the first piece the formalism gives, after
+which the formalism goes on from its end; or the layout there is not complete yet, and the run has
 finished nothing and not failed. -/
 theorem stream_layout (version : Version) (input : List UInt8) (ended : Bool) (o : Nat) :
     (BSmtLibSpec.Lexer.layoutFrom input ended o = [] ∧

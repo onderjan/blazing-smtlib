@@ -7,8 +7,12 @@ module
 
 The items of the Rust crate (`BSmtLib.Facts.RustItems`) that `#counterparts` finds no Lean
 counterpart for, each with the reason. The keys are those of `BSmtLib.Facts.Counterparts.implKey`:
-an item is named by its path, a trait implementation by `impl <trait> for <type>`, the private
-fields of a structure by `fields of <type>`. A reason that begins with `coming:` names the item
+
+- an item is named by its path;
+- a trait implementation by `impl <trait> for <type>`;
+- the private fields of a structure by `fields of <type>`.
+
+A reason that begins with `coming:` names the item
 of the queue that adds the counterpart; the entry goes when it does, as `#counterparts` fails for
 an entry that is not needed.
 

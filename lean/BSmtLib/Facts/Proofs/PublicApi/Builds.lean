@@ -13,11 +13,11 @@ version it starts in only by `setVersion`, such a handler is left in the same st
 whose first command does not depend on the version, and after that `check-sat-assuming` of a
 symbol makes the same calls in 2.6 and in 2.7 while the file's commands differ.
 
-The proof: the script reader with a handler whose calls never fail leaves it where the
-specification's traversal of the file's commands leaves it, for every spec handler it agrees with
-(`Reader.Handler.Traversal.reader_follows_traversal`); the builder agrees with `specBuilder`
-(`Builder.agrees`), and the traversal with `specBuilder` leaves the commands
-(`BuilderTraversal.script_builds`).
+The proof: the script reader with a handler whose calls never fail leaves it where the traversal of
+the specification formalism (`BSmtLibSpec`) of the file's commands leaves it, for every handler of
+the formalism it agrees with (`Reader.Handler.Traversal.reader_follows_traversal`); the builder
+agrees with `specBuilder` (`Builder.agrees`), and the traversal with `specBuilder` leaves the
+commands (`BuilderTraversal.script_builds`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Builds
@@ -31,8 +31,8 @@ theorem libVersion_eq (version : BSmtLibSpec.Lexicon.Version) :
   cases version <;> rfl
 
 /-- There is a handler told contents only, whose state is the version in force and a list of
-commands of the specification and whose sorts, s-expressions, attributes and terms are those of
-the specification, such that the script reader over it, with the initial version and no commands,
+commands of the formalism and whose sorts, s-expressions, attributes and terms are those of
+the formalism, such that the script reader over it, with the initial version and no commands,
 reads every file to the end and builds the file's commands. -/
 theorem builds_commands :
     ∃ inst : ContentHandler (BSmtLibSpec.Lexicon.Version × List Tree.Command),

@@ -5,11 +5,12 @@ public import BSmtLib.Facts.Proofs.Parser.Lemmas
 @[expose] public section
 
 /-!
-# Which tokens of the parser stand for which tokens of the spec
+# Which tokens of the parser stand for which tokens of the formalism
 
-`Stands tokens syntaxTokens`: the parser's tokens stand for the spec's, one by one. The lemmas
-split such a relation along the concatenations of `Tree.*.tokens` and invert it for each kind of
-token, so that a proof by a tree finds the parser's tokens it steps over.
+`Stands tokens syntaxTokens`: the parser's tokens stand for those of the specification formalism
+(`BSmtLibSpec`), one by one. The lemmas split such a relation along the concatenations of
+`Tree.*.tokens` and invert it for each kind of token, so that a proof by a tree finds the parser's
+tokens it steps over.
 -/
 
 open BSmtLib.Facts.Parser.Adapters.Bridge
@@ -183,7 +184,7 @@ theorem split_paren {tokens : List Parser.Internal.Input}
       Parser.Internal.Input.received_parenClose hclose]
   exact ⟨inner', rfl, hinner⟩
 
-/-- Tokens that stand for a spec constant are one constant token, standing for it. -/
+/-- Tokens that stand for a constant of the formalism are one constant token, standing for it. -/
 theorem constant {tokens : List Parser.Internal.Input} {constant : Tree.SpecConstant}
     (h : Stands tokens [constant.token]) :
     ∃ constant', tokens = [.constant constant'] ∧ Bridge.constant constant' = constant := by

@@ -10,7 +10,7 @@ public import BSmtLib.Facts.Proofs.Reader.Classify
 A lexer that is `BSmtLibSpec.Lexer.CorrectWithConsumers`, fed any slices and then the end of the
 input, with the script consumer, ends as `Classified` says (`lexing_classified`); with the parser
 properties, the parser's recording run on the tokens taken is then the one the specification
-gives (`lexing_session`):
+formalism (`BSmtLibSpec`) gives (`lexing_session`):
 
 - **finished**: the tokens stand for what a parser takes for a script, and the run has the
   traversal's events (`record`);

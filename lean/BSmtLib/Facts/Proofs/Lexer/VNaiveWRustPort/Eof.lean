@@ -297,7 +297,7 @@ def runIA {α : Type} (x : Lexer.Internal.WRustPort.InnerM (Answering C) AnswerM
     (coll : List Handed) : (α × WP.WCore) × List Handed :=
   ((((x.run c).run {}).run coll).1.1, (((x.run c).run {}).run coll).2)
 
-/-- The result of the end of the input before it is located, in the spec's form. -/
+/-- The result of the end of the input before it is located, in the formalism's form. -/
 def innerRes (location : Span.Location) :
     Except (Lexer.Internal.Failure (Option C.Error)) (ControlFlow C.Result) →
       Except (PFailure C.Error) (ControlFlow (Span.Located C.Result))

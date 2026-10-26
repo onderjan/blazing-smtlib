@@ -41,7 +41,7 @@ open BSmtLib.Facts.Proofs.PublicApi.Resets
 open BSmtLib.Facts.Lexer.Adapters (Answering AnswerM)
 open BSmtLib.Facts.Proofs.Lexer.Consumers.Alike BSmtLib.Facts.Proofs.Lexer.Consumers.AlikeF
 
-/-- The library's lexer with the adapter's consumer for a consumer of the spec, fed an input to
+/-- The library's lexer with the adapter's consumer for a consumer of the formalism, fed an input to
 the end without failing, has the version it was constructed with as its initial one, and does not
 recover. -/
 theorem fields_afterC (C : BSmtLibSpec.Lexer.Consumer) (version : Version)

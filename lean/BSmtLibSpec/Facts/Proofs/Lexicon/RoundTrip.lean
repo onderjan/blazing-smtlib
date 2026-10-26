@@ -7,14 +7,14 @@ public import BSmtLibSpec.Facts.Proofs.Lexicon.RoundTrip.Lexical
 /-!
 # Printing and reading back
 
-Printers that go back the way the specification reads:
+Printers that go back the way the specification formalism (`BSmtLibSpec`) reads:
 
 - `RoundTrip.Tokens`: from lexicon tokens to characters, the concrete printer, which writes an
   input back exactly, and the canonical layout.
 - `RoundTrip.Lexical`: from syntax tokens to lexicon tokens, in a version.
 
 Reading what a printer writes gives back what it was printed from, for everything the
-specification can read.
+formalism can read.
 
 Not trusted: everything here is proved.
 -/

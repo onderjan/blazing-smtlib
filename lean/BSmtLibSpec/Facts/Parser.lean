@@ -13,9 +13,9 @@ The traversal, for every handler:
 - its calls rebuild the script;
 - its calls are placed by the items before them.
 
-Each theorem below proves a property of the specification, from the modules imported above.
-Each is followed by the axioms its proof uses: only those of Lean's standard library, no
-`sorry` and no axiom of its own. The build fails if that changes.
+Each theorem below proves a property of the specification formalism (`BSmtLibSpec`), from the
+modules imported above. Each is followed by the axioms its proof uses: only those of Lean's standard
+library, no `sorry` and no axiom of its own. The build fails if that changes.
 -/
 
 namespace BSmtLibSpec.Facts
@@ -128,7 +128,7 @@ at a given position: what such a run has done before that item arrives. The two 
 carry `BSmtLibSpec.Parser.Properties.PlacementDetermined` over to every handler: the cut runs of two
 scripts from the same version are equal when what a parser receives for them agrees before the cut,
 and the cut runs of two scripts are equal when their recordings do.
-They are checks of the specification, not properties stated in it.
+They are checks of the formalism, not properties stated in it.
 -/
 
 /--

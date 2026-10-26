@@ -7,7 +7,7 @@ import all BSmtLib.Parser
 @[expose] public section
 
 /-!
-# Lemmas about the monads, the spec's tokens and calls
+# Lemmas about the monads, the formalism's tokens and calls
 
 `ExceptT.adapt`, which turns a failure of the traversal into the parser's, commutes with the
 monad's operations; the traversal's tokens and handler calls are the parser's ticks and calls.

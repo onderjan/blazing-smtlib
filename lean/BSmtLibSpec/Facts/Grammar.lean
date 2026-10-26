@@ -13,9 +13,9 @@ public import BSmtLibSpec.Facts.Proofs.Grammar.RoundTrip
 - The tokens of a tree determine the tree.
 - Every file has at most one reading, from which it is reproduced.
 
-Each theorem below proves a property of the specification, from the modules imported above.
-Each is followed by the axioms its proof uses: only those of Lean's standard library, no
-`sorry` and no axiom of its own. The build fails if that changes.
+Each theorem below proves a property of the specification formalism (`BSmtLibSpec`), from the
+modules imported above. Each is followed by the axioms its proof uses: only those of Lean's standard
+library, no `sorry` and no axiom of its own. The build fails if that changes.
 -/
 
 namespace BSmtLibSpec.Facts

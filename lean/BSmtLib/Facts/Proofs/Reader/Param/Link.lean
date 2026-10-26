@@ -17,9 +17,10 @@ import all BSmtLib.Lexer.Cursor
 
 Along the tokens of a valid script, the parse adapter with the recording handler and the script
 parser answers every call as `Flagged (scriptConsumer version)` does, and gives back the same
-cursor: both read the same recording run of the parser, the stand-in consumer on the tokens'
-items as the spec reads them, the adapter on its cursor's items, and the parser's properties
-(`Facts.Parser.follows_the_traversal`) say that the two runs make the same events and end alike.
+cursor: both read the same recording run of the parser, the stand-in consumer on the tokens' items
+as the specification formalism (`BSmtLibSpec`) reads them, the adapter on its cursor's items, and
+the parser's properties (`Facts.Parser.follows_the_traversal`) say that the two runs make the same
+events and end alike.
 -/
 
 open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
@@ -62,7 +63,7 @@ theorem parse_items {version : Lexicon.Version} {commands : List Tree.Command}
   erw [heq] at this
   exact this
 
-/-! ## The adapter's item for a token, and the spec's -/
+/-! ## The adapter's item for a token, and the formalism's -/
 
 theorem toByteSlice_beq_slice (a : ByteArray) (s : ByteSlice) (h : (a.toByteSlice == s) = true) :
     a.data.toList = s.toByteArray.toList := by
@@ -78,7 +79,7 @@ theorem reservedTable_bytes : ∀ e ∈ Token.Reserved.Internal.reservedTable.to
     e.1.size = 0 ∨ e.1.data.toList = Bridge.reserved e.2.1 := by
   decide +kernel
 
-/-- A reserved word the library's lookup finds is the one the spec's bytes decode to. -/
+/-- A reserved word the library's lookup finds is the one the formalism's bytes decode to. -/
 theorem fromBytes_decode {s : ByteSlice} {v : Version} {w : Token.Reserved}
     (h : Token.Reserved.fromBytes? s v = some w) :
     decodeReserved (Lexer.Adapters.toContent s) = some w := by
@@ -116,7 +117,7 @@ theorem fromBytes_decode {s : ByteSlice} {v : Version} {w : Token.Reserved}
         exact absurd (by rw [hw]; rfl) hne
     · cases h
 
-/-- The parse adapter's item for a token stands for what the spec's form of the token stands
+/-- The parse adapter's item for a token stands for what the formalism's form of the token stands
 for. -/
 theorem received_ofSyntax {b : Token.BatchTag} (cursor : LexerCursor b) (token : LexerToken b)
     {handed : Handed} (h : toHanded cursor token = some handed) :

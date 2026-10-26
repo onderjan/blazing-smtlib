@@ -39,7 +39,7 @@ Its sources of truth are the specification files of the respective versions.
 
 `Facts` prove properties of the formalism, including its correspondence to the examples
 in the standard. We note that the proofs depend on the formal statement of the property
-being proven as well as the specification: if the property does not accurately formalise
+being proven as well as the formalism: if the property does not accurately formalise
 what its comment says, proving it does not give credibility to what the comment promises.
 
 ## Version releases

@@ -9,14 +9,14 @@ import all BSmtLib.Reader
 /-!
 # The library's reader as a recording reader
 
-`libraryReader` is the library's script reader (`Reader.script`), with the recording handler and
-the posture that allows every version, as the specification's `BSmtLibSpec.Reader.RecordingReader`
-sees it: fed the slices by `Reader.readSlice`, and then the end of the input by `Reader.readEof` if
-the input has ended, it gives the calls its handler was told, in order, and whether the end of
-the input returned a result. Where a call fails, the reader is not given back; the calls are then
-those the handler that the failure carries holds, which is the handler of the lexer the failed
-step leaves (`readSlice_ofLexer`, `readEof_ofLexer`). `libraryReader` and the definitions it is
-made of are adapters, in `Facts.Reader.Adapters`; this module proves what they do.
+`libraryReader` is the library's script reader (`Reader.script`), with the recording handler and the
+posture that allows every version, as the `BSmtLibSpec.Reader.RecordingReader` of the specification
+formalism (`BSmtLibSpec`) sees it: fed the slices by `Reader.readSlice`, and then the end of the
+input by `Reader.readEof` if the input has ended, it gives the calls its handler was told, in order,
+and whether the end of the input returned a result. Where a call fails, the reader is not given
+back; the calls are then those the handler that the failure carries holds, which is the handler of
+the lexer the failed step leaves (`readSlice_ofLexer`, `readEof_ofLexer`). `libraryReader` and the
+definitions it is made of are adapters, in `Facts.Reader.Adapters`; this module proves what they do.
 
 On a file it reads the traversal's calls and finishes (`reader_reads_files`): the reader's calls
 are the lexer's public calls with the parse adapter (`Param.paFeed`), on which

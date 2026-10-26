@@ -91,7 +91,7 @@ theorem utf8_2_6 : "2.6".toUTF8.toList = BSmtLibSpec.Regex.chars "2.6" := by
 theorem utf8_2_7 : "2.7".toUTF8.toList = BSmtLibSpec.Regex.chars "2.7" := by
   rw [ByteArray.toList_eq_data]; decide
 
-/-- A symbol the spec names `not` is `not` to the literal parser. -/
+/-- A symbol the formalism names `not` is `not` to the literal parser. -/
 theorem Symbol.isNot_of_name {s : Lexicon.Value.Symbol} (h :
     (Bridge.symbol s).name = BSmtLibSpec.Regex.chars "not") :
     (isNot s) = true := by
@@ -99,14 +99,14 @@ theorem Symbol.isNot_of_name {s : Lexicon.Value.Symbol} (h :
   rw [slice_beq_utf8 _ _ utf8_not]
   exact decide_eq_true h
 
-/-- The parser's test for `smt-lib-version` is the spec's. -/
+/-- The parser's test for `smt-lib-version` is the formalism's. -/
 theorem isVersionKeyword_eq (k : Keyword) :
     Parser.Command.Internal.Standard.isVersionKeyword k = decide
         (Bridge.keyword k = BSmtLibSpec.Regex.chars "smt-lib-version") := by
   unfold Parser.Command.Internal.Standard.isVersionKeyword
   exact slice_beq_utf8 _ _ utf8_smtLibVersion
 
-/-- The library reads the number of a version as the spec does. -/
+/-- The library reads the number of a version as the formalism does. -/
 theorem fromDecimal_eq (d : Decimal) :
     Version.fromDecimal? d = (versionOfNumber (Bridge.chars d.asSlice)).map Bridge.libVersion := by
   unfold Version.fromDecimal?

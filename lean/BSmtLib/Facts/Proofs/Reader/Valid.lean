@@ -470,7 +470,7 @@ theorem eventsBefore_all (events : List Event) :
   simpa [eventsBefore] using this
 
 /--
-A lexer that handles consumers as the lexer spec states, fed the slices of a file and then the
+A lexer that handles consumers as the formalism states, fed the slices of a file and then the
 end of the input, with the script consumer: it finishes, the consumer having taken what stands for
 what a parser receives for the script; and the recording run of the library's parser on those
 tokens has the traversal's events.

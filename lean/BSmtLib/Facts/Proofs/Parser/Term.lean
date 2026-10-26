@@ -157,7 +157,7 @@ theorem annotation_runs
   rw [hsplit]
   simp
 
-/-- The cases of a `match` as the spec hands them over, from the parser's. -/
+/-- The cases of a `match` as the formalism hands them over, from the parser's. -/
 def specCases {T : Type} (cases : List (Grammar.Nodes.Pattern × T)) : List (Tree.Pattern × T) :=
   cases.map fun (pattern, body) => (Bridge.pattern pattern, body)
 

@@ -17,22 +17,28 @@ public import BSmtLib.Facts.Proofs.PublicApi.Builds
 @[expose] public section
 
 /-!
-# What holds without the specification
+# What holds without the formalism
 
-Theorems about the library's public API whose statements rest on almost nothing: the names a
-user writes (`BSmtLib.Lexer`, `BSmtLib.Reader`, the handler classes, …), bytes, lists, and the
-small definitions below `BSmtLib.Facts.PublicApi.Adapters`. The proofs may go through the
-specification and the other facts; the statements do not.
+Theorems about the library's public API whose statements rest on almost nothing:
+
+- the names a user writes (`BSmtLib.Lexer`, `BSmtLib.Reader`, the handler classes, …);
+- bytes and lists;
+- the small definitions below `BSmtLib.Facts.PublicApi.Adapters`.
+
+The proofs may go through the specification formalism (`BSmtLibSpec`) and the other facts; the
+statements do not.
 
 A theorem that claims a handler or a printer to exist says what it does and not how:
 the witness is not trusted. Where several properties of one witness are claimed, they are claimed
 of the same witness, so that a property that would hold of a trivial witness is pinned by the
 others.
 
-`#adapters` and `#trusts` at the end list what the statements rest on beside Lean and the public
-API (`BSmtLib.Facts.Trusted`): the first the small definitions, which are this part's adapters,
-the second, for each theorem, also the constants of the specification and of the lexers of the
-chain that it names.
+Two checks at the end list what the statements rest on beside Lean and the public API
+(`BSmtLib.Facts.Trusted`):
+
+- `#adapters` lists the small definitions, which are this part's adapters;
+- `#trusts` lists, for each theorem, those and also the constants of the formalism and of the
+  lexers of the chain that it names.
 -/
 
 namespace BSmtLib.Facts.PublicApi
@@ -47,11 +53,13 @@ open BSmtLib.Span (Located)
 /-! ## Reprinting -/
 
 /--
-There is a handler told contents only, with a printer, such that on every input, in any slices,
-that the script reader over the handler reads to the end, printing what the handler was told,
-with layout between the tokens, gives back the input up to where the reader began to discard it:
-on every input but for the spelling of string literals that stand for the same bytes in 2.0, and
-exactly where the reader allows only the versions from 2.5 on and starts in one of them.
+There is a handler told contents only, with a printer, such that on every input that the script
+reader over the handler reads to the end, in any slices, printing what the handler was told, with
+layout between the tokens, gives back the input up to where the reader began to discard it:
+
+- on every input, but for the spelling of string literals in 2.0, which may come back as another
+  literal that stands for the same bytes;
+- exactly, where the reader allows only the versions from 2.5 on and starts in one of them.
 -/
 theorem reprinting : ∃ r : Reprinter, r.Reprints ∧ r.ReprintsExactly :=
   ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
@@ -121,9 +129,11 @@ info: 'BSmtLib.Facts.PublicApi.reading_slicing' depends on axioms: [propext, Cla
 
 /--
 The library's lexer, with a consumer that takes every token: an input that it lexes to the end
-with a `)` as its last token is lexed as a prefix of every input it starts: the tokens of the
-longer input are its tokens, but the end of the input, and then the tokens of the rest, as the
-rest alone has them, moved by its length; and the longer input ends as the rest does.
+with a `)` as its last token is lexed as a prefix of every input it starts. For the longer input:
+
+- its tokens are those of the prefix but the end of the input, and then the tokens of the rest as
+  the rest alone has them, moved by the length of the prefix;
+- it ends as the rest does.
 -/
 theorem lexing_composes (version : Version) (first rest : ByteList) (result : Option (Located Unit))
     (entries : List Entry) (h : collect version [first] = (.ok result, entries))
@@ -201,8 +211,8 @@ info: 'BSmtLib.Facts.PublicApi.lexers_agree' depends on axioms: [propext, Classi
 
 /--
 There is a handler told contents only, whose state is the version in force and a list of commands
-of the specification, and whose sorts, s-expressions, attributes and terms are those of the
-specification, such that the script reader over it, with the initial version and no commands, reads
+of the formalism, and whose sorts, s-expressions, attributes and terms are those of the
+formalism, such that the script reader over it, with the initial version and no commands, reads
 every file to the end and builds the file's commands.
 -/
 theorem builds_commands :

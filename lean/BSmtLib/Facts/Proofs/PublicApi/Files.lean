@@ -8,12 +8,12 @@ public import BSmtLibSpec.Facts
 /-!
 # Files as tokens with layout between them
 
-A file of the specification is its commands' tokens, each as the version in force writes it,
-with layout between them: up to the end of its last command, and then either whitespace or the
-unread rest after `exit` (`spaced_of_reading`). The tokens are written as in the input but for
-the spelling of 2.0 string literals, and exactly on an input without a backslash.
+A file of the specification formalism (`BSmtLibSpec`) is its commands' tokens, each as the version
+in force writes it, with layout between them: up to the end of its last command, and then either
+whitespace or the unread rest after `exit` (`spaced_of_reading`). The tokens are written as in the
+input but for the spelling of 2.0 string literals, and exactly on an input without a backslash.
 
-Facts about the specification, in the terms of the theorems of `Facts.PublicApi`.
+Facts about the formalism, in the terms of the theorems of `Facts.PublicApi`.
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Files
@@ -97,7 +97,7 @@ theorem layout_of_whitespaceAtEnd {w : Chars} (h : whitespaceAtEnd w) : Layout w
 
 /-! ## The spelling of a token -/
 
-/-- The unescaping of `Facts.PublicApi` is the specification's. -/
+/-- The unescaping of `Facts.PublicApi` is the formalism's. -/
 theorem unescape20_eq : ∀ bytes : ByteList, PublicApi.Adapters.unescape20 bytes =
     Lexicon.unescape20 bytes
   | a :: b :: rest => by

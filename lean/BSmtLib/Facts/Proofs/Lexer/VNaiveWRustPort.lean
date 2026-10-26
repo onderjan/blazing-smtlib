@@ -7,14 +7,14 @@ public import BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Calls
 /-!
 # The naive lexer and the Rust port with every consumer
 
-`VNaiveWRustPort.lexing_wRustPort_vNaive`: what the adapter makes of the Rust port `WRustPort`
-with every consumer of the spec is what it makes of the naive lexer `VNaive`
-(`Adapters.lexing`), however the input is cut into slices. The two cut their hand-overs
-differently: the Rust port lexes a whole slice ahead into one batch, and hands a token in
-progress at a slice's end over alone. So the proof compares the Rust port's code, run with the
-adapter's consumer, with the naive lexer's pure run over the bytes it consumes: the Rust port's
-lexer state is the naive lexer's pure state at the index of the slice it has reached, with the
-lexemes of its batch still to be handed over. In parts:
+`VNaiveWRustPort.lexing_wRustPort_vNaive`: what the adapter makes of the Rust port `WRustPort` with
+every consumer of the specification formalism (`BSmtLibSpec`) is what it makes of the naive lexer
+`VNaive` (`Adapters.lexing`), however the input is cut into slices. The two cut their hand-overs
+differently: the Rust port lexes a whole slice ahead into one batch, and hands a token in progress
+at a slice's end over alone. So the proof compares the Rust port's code, run with the adapter's
+consumer, with the naive lexer's pure run over the bytes it consumes: the Rust port's lexer state is
+the naive lexer's pure state at the index of the slice it has reached, with the lexemes of its batch
+still to be handed over. In parts:
 
 - `VNaiveWRustPort.Bytes`, `Tables`, `Runs`, `Pure`: runs and bytes of a slice, the Rust port's
   byte tables and run scans against the naive lexer's byte classes, cursors and contents, and the

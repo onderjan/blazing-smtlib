@@ -5,7 +5,7 @@ public import BSmtLibSpec.Lexicon.Properties
 @[expose] public section
 
 /-!
-# Lemmas for checking the spec
+# Lemmas for checking the formalism
 
 Facts about the combinators that make the checks short. Not trusted: everything here is
 proved.

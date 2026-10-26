@@ -173,7 +173,7 @@ def afterNext (token : Parser.Internal.Input) (attributes : Array (Handler.Attri
   | .keyword name => .more { mode := .afterName name, attributes }
   | _ => .done attributes
 
-/-- The spec's token after an attribute, and the parser's token standing for it. -/
+/-- The formalism's token after an attribute, and the parser's token standing for it. -/
 def FollowsAttribute (token : Parser.Internal.Input)
     (following : BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
   (token = .parenClose ∧ following = .parenClose) ∨

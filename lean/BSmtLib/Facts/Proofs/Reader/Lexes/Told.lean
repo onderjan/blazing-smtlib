@@ -43,14 +43,15 @@ open BSmtLib.Facts.Reader.Adapters BSmtLib.Lexer.Error
 
 /-! ## No whitespace and comments for a consumer that does not take them -/
 
-/-- The library's lexer with the adapter's consumer for the consumer of the spec, with the
+/-- The library's lexer with the adapter's consumer for the consumer of the formalism, with the
 fields and the held result. -/
 abbrev zLexer (consumer : BSmtLibSpec.Lexer.Consumer) (c : LexerCore)
     (held : Option (Span.Located consumer.Result)) : Lexer.Adapters.Lexer.lexOps.Lexer consumer :=
   Internal.ofParts {} c held
 
-/-- The states of the library's lexer, with the adapter's consumer for the consumer of the spec,
-that it reaches from its construction with the version by calls on slices that do not fail. -/
+/-- The states of the library's lexer, with the adapter's consumer for the consumer of the
+formalism, that it reaches from its construction with the version by calls on slices that do not
+fail. -/
 inductive Reach (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) : LexerCore → Prop
   | new : Reach consumer version (Internal.core (Lexer.Adapters.Lexer.lexOps.new consumer
       {} version))

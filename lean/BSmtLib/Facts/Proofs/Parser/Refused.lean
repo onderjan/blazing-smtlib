@@ -283,8 +283,8 @@ variable {points : Points (StateT H m)}
 variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /--
-The script parser under the posture before a command, over what a parser takes for commands and
-any rest: the spec's commands under the policy of the posture. Where a declaration that names no
+The script parser under the posture before a command, over what a parser takes for commands and any
+rest: the formalism's commands under the policy of the posture. Where a declaration that names no
 supported version ends the commands, both fail after it.
 -/
 theorem takes_runs (hA : Agrees h) (producer : Producer (StateT H m))

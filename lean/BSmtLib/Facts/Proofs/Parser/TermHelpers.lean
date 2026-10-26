@@ -378,7 +378,7 @@ abbrev start₀ (H : Type) {m : Type → Type} [Handler H m] :
     SortedVarState (Handler.«Sort» H) :=
   .start
 
-/-- The spec's start of a binder of sorted variables. -/
+/-- The formalism's start of a binder of sorted variables. -/
 def specStart (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)) :
     SortedBinder → List (Tree.Symbol × Handler.«Sort» H) →
       Run (StateT H m) (Handler.Error H) (Handler.Scope H)

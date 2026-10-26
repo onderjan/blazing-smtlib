@@ -5,18 +5,19 @@ public import BSmtLib.Facts.Parser.Adapters.Bridge
 @[expose] public section
 
 /-!
-# Library handlers for spec handlers
+# Library handlers for handlers of the formalism
 
-`Bridged h₀ nonstandard` is a library handler with no state of its own: each of its calls turns
-the parser's values into the spec's, through the bridge, and asks the spec's handler `h₀`, in
-the monad `h₀` runs in, lifted into the parser's `StateT`. A non-standard command fails with
-`nonstandard`. `liftHandler h₀` is `h₀` lifted into the same monad.
+`Bridged h₀ nonstandard` is a library handler with no state of its own: each of its calls turns the
+parser's values into those of the specification formalism (`BSmtLibSpec`), through the bridge, and
+asks the formalism's handler `h₀`, in the monad `h₀` runs in, lifted into the parser's `StateT`. A
+non-standard command fails with `nonstandard`. `liftHandler h₀` is `h₀` lifted into the same monad.
 
 `recordingLibrary` is the library handler whose state is the log of a recording run
-(`List Event`): each call writes down what the spec's recording handler writes down for it.
+(`List Event`): each call writes down what the formalism's recording handler writes down for it.
 
 These definitions are adapters: the root theorems of `BSmtLib.Facts.Parser` and
-`BSmtLib.Facts.Reader` are stated with them, so they are trusted, and are to be read with the spec.
+`BSmtLib.Facts.Reader` are stated with them, so they are trusted, and are to be read with the
+formalism.
 -/
 
 namespace BSmtLib.Facts.Parser.Adapters.Handler
@@ -26,7 +27,7 @@ open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
 open BSmtLib.Facts.Parser.Adapters.Bridge
 
-/-- The library handler that asks the spec's handler `h₀`; it holds nothing. -/
+/-- The library handler that asks the formalism's handler `h₀`; it holds nothing. -/
 structure Bridged {m : Type → Type} {ε : Type} {values : Values}
     (h₀ : Traversal.Handler m ε values) (nonstandard : ε) : Type where
 
@@ -45,16 +46,16 @@ abbrev bridgedCall {returns : Returns} (request : Call values returns) :
     ExceptT ε (StateT (Bridged h₀ nonstandard) m) (values.of returns) :=
   liftCall (h₀.call request)
 
-/-! The bridge's turning of nodes into the spec's, for the types of `values`: the handler
+/-! The bridge's turning of nodes into the formalism's, for the types of `values`: the handler
 instance needs them before it exists, so they cannot be the bridge's functions themselves. -/
 
-/-- The spec's term node for a term node of the parser, with the values of `values`. -/
+/-- The formalism's term node for a term node of the parser, with the values of `values`. -/
 def termNodeOf : Grammar.Nodes.Term values.sort values.term → TermNode values
   | .specialConstant c => .constant (Bridge.constant c)
   | .qualifiedIdent i s => .identifier (Bridge.identifier i) s
   | .application i s args _ => .application (Bridge.identifier i) s args.asSlice.toList
 
-/-- The spec's S-expression node for one of the parser, with the values of `values`. -/
+/-- The formalism's S-expression node for one of the parser, with the values of `values`. -/
 def sExprNodeOf : Grammar.Nodes.SExpr values.sExpr → SExprNode values
   | .specialConstant c => .constant (Bridge.constant c)
   | .symbol s => .symbol (Bridge.symbol s)
@@ -62,14 +63,14 @@ def sExprNodeOf : Grammar.Nodes.SExpr values.sExpr → SExprNode values
   | .keyword k => .keyword (Bridge.keyword k)
   | .sExprs items => .list items.asSlice.toList
 
-/-- The spec's attribute value node for one of the parser, with the values of `values`. -/
+/-- The formalism's attribute value node for one of the parser, with the values of `values`. -/
 def attributeValueOf : Grammar.Nodes.AttributeValue values.sExpr → AttributeValueNode values
   | .specialConstant c => .constant (Bridge.constant c)
   | .symbol s => .symbol (Bridge.symbol s)
   | .sExprs items => .list items.asSlice.toList
 
 /-- The bridged handler's values are those of `h₀`; it answers each call of terms, and the
-version, by turning the values into the spec's and asking `h₀`. -/
+version, by turning the values into the formalism's and asking `h₀`. -/
 instance : Handler (Bridged h₀ nonstandard) m where
   Error := ε
   SExpr := values.sExpr
@@ -98,8 +99,8 @@ instance : Handler (Bridged h₀ nonstandard) m where
   endMatch t cs := bridgedCall h₀ nonstandard
     (.endMatch t (cs.toArray.toList.map fun (p, b) => (Bridge.pattern p, b)))
 
-/-- The bridged handler answers each command by turning the values into the spec's and asking
-`h₀`; a non-standard command fails with `nonstandard`. -/
+/-- The bridged handler answers each command by turning the values into the formalism's and
+asking `h₀`; a non-standard command fails with `nonstandard`. -/
 instance : Handler.CommandHandler (Bridged h₀ nonstandard) m where
   NonstandardParser := Empty
   nonstandardCommand _ := throw nonstandard
@@ -164,7 +165,7 @@ instance : Handler.CommandHandler (Bridged h₀ nonstandard) m where
   commandSetOption a := bridgedCall h₀ nonstandard (.commandSetOption a)
 
 variable (h₀ nonstandard) in
-/-- The spec's handler `h₀`, lifted into the parser's monad of the bridged handler. -/
+/-- The formalism's handler `h₀`, lifted into the parser's monad of the bridged handler. -/
 def liftHandler :
     Traversal.Handler (StateT (Bridged h₀ nonstandard) m) ε (valuesOf (Bridged h₀ nonstandard))
     where
@@ -179,8 +180,8 @@ abbrev recordingCall {returns : Returns} (request : Call Recorded returns) :
   ExceptT.adapt (fun error => nomatch error) (recordingHandler.call request)
 
 /-- The library handler of terms whose state is the log of a recording run: each call writes
-down what the spec's recording handler writes down for it and returns what it returns, the number
-of calls before it. It fails on nothing. -/
+down what the formalism's recording handler writes down for it and returns what it returns, the
+number of calls before it. It fails on nothing. -/
 instance recordingLibraryTerms : Handler (List Event) Id where
   Error := Unit
   SExpr := Nat
@@ -210,8 +211,8 @@ instance recordingLibraryTerms : Handler (List Event) Id where
     (.endMatch t (cs.toArray.toList.map fun (p, b) => (Bridge.pattern p, b)))
 
 /-- The library handler of commands whose state is the log of a recording run: each call writes
-down what the spec's recording handler writes down for it. A non-standard command fails with
-`()`. -/
+down what the formalism's recording handler writes down for it. A non-standard command fails
+with `()`. -/
 instance recordingLibrary : Handler.CommandHandler (List Event) Id where
   NonstandardParser := Empty
   nonstandardCommand _ := throw ()

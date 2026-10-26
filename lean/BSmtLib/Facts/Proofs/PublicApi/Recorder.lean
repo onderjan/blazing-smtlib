@@ -10,9 +10,9 @@ public import BSmtLib.Facts.Parser.Adapters
 
 The recording handler of the parser proofs (`Parser.Adapters.Handler.recordingLibrary`) uses of the
 views it is handed only their contents. `recorderContent` is the same handler as a `ContentHandler`:
-each call writes down what the specification's recording handler writes down for it, built from the
-contents. As a library handler it is the recording handler itself (`instCommandHandler_eq`), so
-everything proved of the one holds of the other.
+each call writes down what the recording handler of the specification formalism (`BSmtLibSpec`)
+writes down for it, built from the contents. As a library handler it is the recording handler itself
+(`instCommandHandler_eq`), so everything proved of the one holds of the other.
 -/
 
 open BSmtLib.Facts.PublicApi.Adapters BSmtLib.Facts.PublicApi.Adapters.Content
@@ -25,18 +25,18 @@ open BSmtLib.Facts.Parser.Adapters.Handler (recordingCall)
 
 namespace ToSpec
 
-/-- The specification's symbol for a symbol's content. -/
+/-- The formalism's symbol for a symbol's content. -/
 def symbol (s : Content.Symbol) : Tree.Symbol := ⟨s.name, s.quoted⟩
 
-/-- The specification's index for an index's content. -/
+/-- The formalism's index for an index's content. -/
 def index : Content.Index → Tree.Index
   | .numeral digits => .numeral digits
   | .symbol s => .symbol (symbol s)
 
-/-- The specification's identifier for an identifier's content. -/
+/-- The formalism's identifier for an identifier's content. -/
 def identifier (i : Content.Identifier) : Tree.Identifier := ⟨symbol i.symbol, i.indices.map index⟩
 
-/-- The specification's constant for a constant's content. -/
+/-- The formalism's constant for a constant's content. -/
 def constant : Content.Constant → Tree.SpecConstant
   | .numeral d => .numeral d
   | .decimal d => .decimal d
@@ -44,32 +44,32 @@ def constant : Content.Constant → Tree.SpecConstant
   | .binary d => .binary d
   | .string c => .string c
 
-/-- The specification's symbol or wildcard. -/
+/-- The formalism's symbol or wildcard. -/
 def symbolOrWildcard : Content.SymbolOrWildcard → Tree.SymbolOrWildcard
   | .symbol s => .symbol (symbol s)
   | .wildcard => .wildcard
 
-/-- The specification's pattern. -/
+/-- The formalism's pattern. -/
 def pattern : Content.Pattern → Tree.Pattern
   | .single s => .single (symbolOrWildcard s)
   | .constructor c args => .constructor (symbol c) (args.map symbolOrWildcard)
 
-/-- The specification's quantifier. -/
+/-- The formalism's quantifier. -/
 def quantifier : Grammar.Nodes.QuantifierKind → Tree.Quantifier
   | .forall => .forall
   | .exists => .exists
 
-/-- The pairs with their symbols the specification's. -/
+/-- The pairs with their symbols the formalism's. -/
 def pairs {α : Type} (items : List (Content.Symbol × α)) : List (Tree.Symbol × α) :=
   items.map fun (s, a) => (symbol s, a)
 
-/-- The specification's term node. -/
+/-- The formalism's term node. -/
 def termNode : Content.TermNode Nat Nat → Traversal.TermNode Recorded
   | .constant c => .constant (constant c)
   | .identifier i s => .identifier (identifier i) s
   | .application i s args => .application (identifier i) s args
 
-/-- The specification's s-expression node. -/
+/-- The formalism's s-expression node. -/
 def sExprNode : Content.SExprNode Nat → Traversal.SExprNode Recorded
   | .constant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
@@ -77,17 +77,17 @@ def sExprNode : Content.SExprNode Nat → Traversal.SExprNode Recorded
   | .keyword k => .keyword k
   | .list items => .list items
 
-/-- The specification's attribute value node. -/
+/-- The formalism's attribute value node. -/
 def attributeValue : Content.AttributeValueNode Nat → Traversal.AttributeValueNode Recorded
   | .constant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
   | .list items => .list items
 
-/-- The specification's signature. -/
+/-- The formalism's signature. -/
 def signature (sig : Content.Signature Nat) : Traversal.Signature Recorded :=
   ⟨symbol sig.symbol, pairs sig.parameters, sig.result⟩
 
-/-- The specification's constructor. -/
+/-- The formalism's constructor. -/
 def constructor (c : Content.Constructor Nat) : Traversal.Constructor Recorded :=
   ⟨symbol c.symbol, pairs c.selectors⟩
 
@@ -164,7 +164,7 @@ def recorderContent : ContentHandler (List Event) where
   commandSetLogic s := recordingCall (.commandSetLogic (ToSpec.symbol s))
   commandSetOption a := recordingCall (.commandSetOption a)
 
-/-! ## The contents turned into the specification's are the views turned into it -/
+/-! ## The contents turned into the formalism's are the views turned into it -/
 
 open BSmtLib.Facts.Parser.Adapters.Bridge (Bridge.symbol Bridge.index Bridge.identifier
     Bridge.constant Bridge.symbolOrWildcard Bridge.pattern Bridge.pairs)

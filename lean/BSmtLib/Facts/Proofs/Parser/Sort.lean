@@ -11,7 +11,8 @@ import all BSmtLib.Token.Reserved
 # The identifier and sort parsers against the traversal
 
 The identifier parser hands nothing over; its lemmas say which identifier it ends with, as the
-spec's identifier through the bridge, after the identifier's tokens.
+identifier of the specification formalism (`BSmtLibSpec`) through the bridge, after the identifier's
+tokens.
 
 The sort parser is a stack parser like the s-expression parser (see `Facts.Proofs.Parser.SExpr`):
 its lemma is stated for every stack of open applications, with the parser's "a sort is complete"

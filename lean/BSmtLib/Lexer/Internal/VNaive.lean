@@ -5,8 +5,8 @@ public import BSmtLib.Lexer
 public section
 
 /-!
-The naive lexer: the first of the chain of lexers that leads from the specification to the
-library's lexer.
+The naive lexer: the first of the chain of lexers that leads from the specification formalism
+(`BSmtLibSpec`) to the library's lexer.
 
 It has the contract of the library's lexer `BSmtLib.Lexer` and reuses its types: the consumer
 classes `Consume` and `Recover`, the cursor and the batch, the tokens, the errors and the

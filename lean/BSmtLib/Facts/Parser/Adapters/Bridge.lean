@@ -8,19 +8,21 @@ public import BSmtLibSpec.Grammar.Properties
 @[expose] public section
 
 /-!
-# From the parser's values to the spec's
+# From the parser's values to the formalism's
 
-The parser hands over views of bytes and arrays; the spec's traversal hands over characters and
-lists. The functions here turn the one into the other, and `Agrees` says that a handler of the
-library (an instance of `Parser.CommandHandler`) answers each call as a handler of the spec
-answers the same call with the values turned into the spec's: the link between the library's
-handler class and the spec's handler structure. The theorems about the parser are stated for
-such a pair, so they hold for every library handler that sees in a view only its bytes.
+The parser hands over views of bytes and arrays; the traversal of the specification formalism
+(`BSmtLibSpec`) hands over characters and lists. The functions here turn the one into the other, and
+`Agrees` says that a handler of the library (an instance of `Parser.CommandHandler`) answers each
+call as a handler of the formalism answers the same call with the values turned into the
+formalism's: the link between the library's handler class and the formalism's handler structure. The
+theorems about the parser are stated for such a pair, so they hold for every library handler that
+sees in a view only its bytes.
 
-`Bridge.received` is what a token as the parser takes it stands for in the spec.
+`Bridge.received` is what a token as the parser takes it stands for in the formalism.
 
 These definitions are adapters: the root theorems of `BSmtLib.Facts.Parser` and
-`BSmtLib.Facts.Reader` are stated with them, so they are trusted, and are to be read with the spec.
+`BSmtLib.Facts.Reader` are stated with them, so they are trusted, and are to be read with the
+formalism.
 -/
 
 open BSmtLib.Lexicon.Value
@@ -37,19 +39,19 @@ namespace Bridge
 /-- The characters of the bytes. -/
 def chars (bytes : ByteSlice) : Chars := bytes.toByteArray.toList
 
-/-- The spec's symbol for a symbol of the parser: its characters, quoted or not. -/
+/-- The formalism's symbol for a symbol of the parser: its characters, quoted or not. -/
 def symbol (s : Symbol) : Tree.Symbol := ⟨chars s.asSlice, s.isQuoted⟩
 
-/-- The spec's index for an index of the parser. -/
+/-- The formalism's index for an index of the parser. -/
 def index : Grammar.Nodes.Index → Tree.Index
   | .numeral digits => .numeral (chars digits.asSlice)
   | .symbol s => .symbol (symbol s)
 
-/-- The spec's identifier for an identifier of the parser: its symbol and its indices. -/
+/-- The formalism's identifier for an identifier of the parser: its symbol and its indices. -/
 def identifier (i : Grammar.Nodes.Ident) : Tree.Identifier :=
   ⟨symbol i.name, i.indices.toList.map index⟩
 
-/-- The spec's constant for a constant of the parser, of the same kind and characters. -/
+/-- The formalism's constant for a constant of the parser, of the same kind and characters. -/
 def constant : Grammar.Nodes.SpecialConstant → Tree.SpecConstant
   | .numeral d => .numeral (chars d.asSlice)
   | .decimal d => .decimal (chars d.asSlice)
@@ -60,37 +62,37 @@ def constant : Grammar.Nodes.SpecialConstant → Tree.SpecConstant
 /-- The characters of a keyword. -/
 def keyword (k : Keyword) : Chars := chars k.asSlice
 
-/-- The characters the spec spells a reserved word with. -/
+/-- The characters the formalism spells a reserved word with. -/
 def reserved (w : Token.Reserved) : Chars := BSmtLibSpec.Regex.chars w.asStr
 
-/-- The spec's symbol or wildcard for the parser's. -/
+/-- The formalism's symbol or wildcard for the parser's. -/
 def symbolOrWildcard : Grammar.Nodes.SimplePattern → Tree.SymbolOrWildcard
   | .symbol s => .symbol (symbol s)
   | .wildcard => .wildcard
 
-/-- The spec's pattern for a pattern of the parser. -/
+/-- The formalism's pattern for a pattern of the parser. -/
 def pattern : Grammar.Nodes.Pattern → Tree.Pattern
   | .simple s => .single (symbolOrWildcard s)
   | .application ⟨c, args, _⟩ => .constructor (symbol c) (args.toList.map symbolOrWildcard)
 
-/-- The spec's quantifier for a quantifier of the parser. -/
+/-- The formalism's quantifier for a quantifier of the parser. -/
 def quantifier : Grammar.Nodes.QuantifierKind → Tree.Quantifier
   | .forall => .forall
   | .exists => .exists
 
-/-- The spec's version for a version of the library. -/
+/-- The formalism's version for a version of the library. -/
 def version : Version → BSmtLibSpec.Lexicon.Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
   | .v2_6 => .v2_6
   | .v2_7 => .v2_7
 
-/-- The pairs with their symbols turned into the spec's, as a list. -/
+/-- The pairs with their symbols turned into the formalism's, as a list. -/
 def pairs {α : Type} (items : Array (Symbol × α)) : List (Tree.Symbol × α) :=
   items.toList.map fun (s, a) => (symbol s, a)
 
-/-- What a token as the parser takes it stands for in the spec: none for whitespace and
-comments, which the spec has no place for. -/
+/-- What a token as the parser takes it stands for in the formalism: none for whitespace and
+comments, which the formalism has no place for. -/
 def received : Parser.Internal.Input → Option Received
   | .parenOpen => some (.token .parenOpen)
   | .parenClose => some (.token .parenClose)
@@ -103,7 +105,7 @@ def received : Parser.Internal.Input → Option Received
 
 end Bridge
 
-/-- The parser's tokens stand for the spec's tokens, one by one. -/
+/-- The parser's tokens stand for the formalism's tokens, one by one. -/
 def Stands (inputs : List Parser.Internal.Input)
     (tokens : List BSmtLibSpec.Grammar.SyntaxToken) : Prop :=
   inputs.map Bridge.received = tokens.map fun token => some (.token token)
@@ -112,21 +114,21 @@ section
 
 variable {H : Type} {m : Type → Type} [Handler H m]
 
-/-- The values of the spec's traversal that a library handler's types make. -/
+/-- The values of the formalism's traversal that a library handler's types make. -/
 abbrev valuesOf (H : Type) {m : Type → Type} [Handler H m] : Values :=
   ⟨Handler.SExpr H, Handler.Attribute H, Handler.«Sort» H,
     Handler.Term H, Handler.Scope H⟩
 
 namespace Bridge
 
-/-- The spec's term node for a term node of the parser, with the handler's values. -/
+/-- The formalism's term node for a term node of the parser, with the handler's values. -/
 def termNode : Grammar.Nodes.Term (Handler.«Sort» H) (Handler.Term H) →
     TermNode (valuesOf H)
   | .specialConstant c => .constant (constant c)
   | .qualifiedIdent i s => .identifier (identifier i) s
   | .application i s args _ => .application (identifier i) s args.asSlice.toList
 
-/-- The spec's S-expression node for one of the parser, with the handler's values. -/
+/-- The formalism's S-expression node for one of the parser, with the handler's values. -/
 def sExprNode : Grammar.Nodes.SExpr (Handler.SExpr H) → SExprNode (valuesOf H)
   | .specialConstant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
@@ -134,57 +136,57 @@ def sExprNode : Grammar.Nodes.SExpr (Handler.SExpr H) → SExprNode (valuesOf H)
   | .keyword k => .keyword (keyword k)
   | .sExprs items => .list items.asSlice.toList
 
-/-- The spec's attribute value node for one of the parser, with the handler's values. -/
+/-- The formalism's attribute value node for one of the parser, with the handler's values. -/
 def attributeValue : Grammar.Nodes.AttributeValue (Handler.SExpr H) →
     AttributeValueNode (valuesOf H)
   | .specialConstant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)
   | .sExprs items => .list items.asSlice.toList
 
-/-- The spec's signature for a signature of the parser, with the handler's sorts. -/
+/-- The formalism's signature for a signature of the parser, with the handler's sorts. -/
 def signature (sig : Grammar.Multiple.FunctionSignature (Handler.«Sort» H)) :
     Signature (valuesOf H) :=
   ⟨symbol sig.name, pairs sig.params, sig.resultSort⟩
 
-/-- The spec's constructor for a constructor of the parser, with the handler's sorts. -/
+/-- The formalism's constructor for a constructor of the parser, with the handler's sorts. -/
 def constructor (c : Lexicon.Value.Symbol × Grammar.Multiple.SortedVars (Handler.«Sort» H)) :
     Constructor (valuesOf H) :=
   ⟨symbol c.1, pairs c.2.toArray⟩
 
 
-/-! The spec handler's answers, with the types of the library handler's values. -/
+/-! The handler of the formalism's answers, with the types of the library handler's values. -/
 
-/-- The answer of the spec's handler `h` to a call that returns a sort. -/
+/-- The answer of the formalism's handler `h` to a call that returns a sort. -/
 def callSort (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .sort) :
     ExceptT (Handler.Error H) (StateT H m) (Handler.«Sort» H) :=
   h.call request
 
-/-- The answer of the spec's handler `h` to a call that returns an S-expression. -/
+/-- The answer of the formalism's handler `h` to a call that returns an S-expression. -/
 def callSExpr (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .sExpr) :
     ExceptT (Handler.Error H) (StateT H m) (Handler.SExpr H) :=
   h.call request
 
-/-- The answer of the spec's handler `h` to a call that returns an attribute. -/
+/-- The answer of the formalism's handler `h` to a call that returns an attribute. -/
 def callAttribute (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .attribute) :
     ExceptT (Handler.Error H) (StateT H m) (Handler.Attribute H) :=
   h.call request
 
-/-- The answer of the spec's handler `h` to a call that returns a term. -/
+/-- The answer of the formalism's handler `h` to a call that returns a term. -/
 def callTerm (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .term) :
     ExceptT (Handler.Error H) (StateT H m) (Handler.Term H) :=
   h.call request
 
-/-- The answer of the spec's handler `h` to a call that returns a scope. -/
+/-- The answer of the formalism's handler `h` to a call that returns a scope. -/
 def callScope (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .scope) :
     ExceptT (Handler.Error H) (StateT H m) (Handler.Scope H) :=
   h.call request
 
-/-- The answer of the spec's handler `h` to a call that returns nothing. -/
+/-- The answer of the formalism's handler `h` to a call that returns nothing. -/
 def callUnit (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
     (request : Call (valuesOf H) .nothing) :
     ExceptT (Handler.Error H) (StateT H m) Unit :=
@@ -193,8 +195,8 @@ def callUnit (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H))
 end Bridge
 
 /--
-The library handler answers each call of terms as the spec's handler `h` answers the call with
-the values turned into the spec's.
+The library handler answers each call of terms as the formalism's handler `h` answers the call
+with the values turned into the formalism's.
 -/
 structure TermAgrees (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)) :
     Prop where
@@ -234,8 +236,8 @@ section
 variable {H : Type} {m : Type → Type} [Handler.CommandHandler H m]
 
 /--
-The library handler answers each call as the spec's handler `h` answers the call with the
-values turned into the spec's.
+The library handler answers each call as the formalism's handler `h` answers the call with the
+values turned into the formalism's.
 -/
 structure Agrees (h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)) : Prop
     extends TermAgrees h where
@@ -340,7 +342,7 @@ def causeOf {ε : Type} : Cause ε → Parser.ParseErrorCause ε
 
 namespace Bridge
 
-/-- The library's version for a version of the spec. -/
+/-- The library's version for a version of the formalism. -/
 def libVersion : BSmtLibSpec.Lexicon.Version → Version
   | .v2_0 => .v2_0
   | .v2_5 => .v2_5
@@ -349,12 +351,12 @@ def libVersion : BSmtLibSpec.Lexicon.Version → Version
 
 end Bridge
 
-/-- The spec's policy that a posture of the parser stands for. -/
+/-- The formalism's policy that a posture of the parser stands for. -/
 def policyOf (posture : Version.VersionPosture) : VersionPolicy :=
   { allowed := posture.allowed.toList.map Bridge.version,
     maxDeclarations := posture.maxDeclarations }
 
-/-- How the command parser ends a command of the spec. -/
+/-- How the command parser ends a command of the formalism. -/
 def outcomeOf (command : Tree.Command) : Parser.Command.CommandOutcome :=
   match command with
   | .exit => .exit
@@ -372,7 +374,7 @@ def allReserved : List Token.Reserved :=
   Token.Reserved.GeneralReserved.all.toList.map .general ++
       Token.Reserved.CommandNameReserved.all.toList.map .commandName
 
-/-- The reserved word the spec spells with the characters, if there is one. -/
+/-- The reserved word the formalism spells with the characters, if there is one. -/
 def decodeReserved (c : BSmtLibSpec.Regex.Chars) : Option Token.Reserved :=
   allReserved.find? fun r => decide (Bridge.reserved r = c)
 

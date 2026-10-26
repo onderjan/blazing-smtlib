@@ -8,7 +8,7 @@ public import BSmtLib.Facts.Proofs.Parser.Lemmas
 /-!
 # The recording run as a run of the library's parser
 
-The spec states the placement of the calls on a recording run
+The specification formalism (`BSmtLibSpec`) states the placement of the calls on a recording run
 (`BSmtLibSpec.Parser.Properties.record`), whose handler writes down every call in the log that is
 the state of the monad `Recording`. A library handler whose state is that log (`List Event`) runs
 the parser in the same monad. Its error type is `Unit`, since a library handler must be able to fail
