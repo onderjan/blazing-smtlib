@@ -4,7 +4,7 @@ name = "lean-driver"
 defaultTargets = ["lean-driver"]
 
 [[require]]
-name = "blazing-smtlib"
+name = "bsmtlib"
 path = "../../lean"
 
 # The modules of the driver besides its root.

@@ -3,7 +3,7 @@
  "packages":
  [{"type": "path",
    "scope": "",
-   "name": "«blazing-smtlib»",
+   "name": "bsmtlib",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
    "dir": "../../lean",

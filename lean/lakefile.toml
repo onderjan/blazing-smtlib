@@ -1,4 +1,4 @@
-name = "blazing-smtlib"
+name = "bsmtlib"
 version = "0.1.0-alpha.0"
 defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecFacts", "BSmtLibFacts"]
 
