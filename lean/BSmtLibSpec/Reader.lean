@@ -106,8 +106,8 @@ def _root_.BSmtLibSpec.Lexer.Handed.received (handed : Lexer.Handed) : Option Re
   | .endOfFile => some .endOfInput
 
 /--
-The requests a parser's run made of its producer after the last item it processed: the switch
-of the version, if any, the last one counting, and whether it had the rest discarded.
+The requests a parser's run made of its producer after the last item it processed: the version
+switch, if any, the last one counting, and whether it had the rest discarded.
 -/
 def requestsAfterLast (events : List Event) : Option Version × Bool :=
   (events.reverse.takeWhile fun event => event.processed.isNone).foldr
@@ -121,7 +121,7 @@ def requestsAfterLast (events : List Event) : Option Version × Bool :=
 A parser as a plain consumer of a lexer, given what it takes for each token handed over: after
 each token it answers as its run on the tokens so far ends, breaking when it has finished and
 failing when it has rejected or failed; at the end of the input it fails rather than wait. It
-asks for the switch of the version and the discarding that its run asked of its producer after
+asks for the version switch and the discarding that its run asked of its producer after
 the last token.
 -/
 def consumer (parser : RecordingParser)

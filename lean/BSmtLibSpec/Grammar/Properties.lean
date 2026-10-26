@@ -13,7 +13,7 @@ each file is at most one sequence of commands, and that a lexer fed a command ho
 tokens back. `BSmtLibSpec.Facts.Grammar` proves them.
 
 Together with `tokens`, which writes every tree as exactly one sequence of tokens, the first five
-say that the valid trees of a version and the sequences of tokens they are written as
+say that, in each version, the valid trees and the sequences of tokens they are written as
 correspond one to one: a tree can be read back from its tokens, and nothing is lost in either
 direction.
 -/
@@ -23,10 +23,10 @@ namespace BSmtLibSpec.Grammar.Properties
 open BSmtLibSpec.Lexicon
 
 /--
-Property: two s-expressions of a version that are written with the same tokens are the same
-s-expression.
+Property: two s-expressions valid in the same version and written with the same tokens are the
+same s-expression.
 
-So a sequence of tokens is an s-expression of the version in at most one way
+So in each version, a sequence of tokens is an s-expression in at most one way
 (`Syntax.IsSExpr`). If it did not hold, one s-expression would stand for two different trees,
 and a parser could not tell which one to hand over.
 -/
@@ -35,10 +35,10 @@ def SExprsOneToOne : Prop :=
     sExpr.tokens = sExpr'.tokens → sExpr = sExpr'
 
 /--
-Property: two attributes of a version that are written with the same tokens are the same
-attribute.
+Property: two attributes valid in the same version and written with the same tokens are the
+same attribute.
 
-So a sequence of tokens is an attribute of the version in at most one way
+So in each version, a sequence of tokens is an attribute in at most one way
 (`Syntax.IsAttribute`). If it did not hold, one attribute would stand for two different trees,
 and a parser could not tell which one to hand over.
 -/
@@ -47,9 +47,10 @@ def AttributesOneToOne : Prop :=
     attribute'.Valid version → «attribute».tokens = attribute'.tokens → «attribute» = attribute'
 
 /--
-Property: two sorts of a version that are written with the same tokens are the same sort.
+Property: two sorts valid in the same version and written with the same tokens are the same
+sort.
 
-So a sequence of tokens is a sort of the version in at most one way (`Syntax.IsSort`). If it did
+So in each version, a sequence of tokens is a sort in at most one way (`Syntax.IsSort`). If it did
 not hold, one sort would stand for two different trees, and a parser could not tell which one to
 hand over.
 -/
@@ -58,23 +59,25 @@ def SortsOneToOne : Prop :=
     sort.tokens = sort'.tokens → sort = sort'
 
 /--
-Property: two terms of a version that are written with the same tokens are the same term.
+Property: two terms valid in the same version and written with the same tokens are the same
+term.
 
-So a sequence of tokens is a term of the version in at most one way (`Syntax.IsTerm`). If it did not
-hold, one term would stand for two different trees, and a parser could not tell which one to
-hand over.
+So in each version, a sequence of tokens is a term in at most one way (`Syntax.IsTerm`). If it
+did not hold, one term would stand for two different trees, and a parser could not tell which
+one to hand over.
 -/
 def TermsOneToOne : Prop :=
   ∀ version (term term' : Tree.Term), term.Valid version → term'.Valid version →
     term.tokens = term'.tokens → term = term'
 
 /--
-Property: two commands of a version that are written with the same tokens are the same command.
+Property: two commands valid in the same version and written with the same tokens are the same
+command.
 
-So a sequence of tokens is a command of the version in at most one way (`Syntax.IsCommand`). The
-version matters: `(check-sat-assuming (p))` is written the same as a command of 2.7 with a list
-of terms and as a command of 2.6 with a list of propositional literals, and only one of them is
-a command of each version.
+So in each version, a sequence of tokens is a command in at most one way (`Syntax.IsCommand`).
+The version matters: `(check-sat-assuming (p))` is written the same as a command of 2.7 with a
+list of terms and as a command of 2.6 with a list of propositional literals, and only one of them
+is valid in each version.
 -/
 def CommandsOneToOne : Prop :=
   ∀ version (command command' : Tree.Command), command.Valid version →

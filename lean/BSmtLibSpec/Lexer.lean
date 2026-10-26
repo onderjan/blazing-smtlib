@@ -402,7 +402,7 @@ continue, break, fail, switch the version or have the rest discarded at any entr
   `UnexpectedTrailingToken`, located at the start of that entry. Entries that the consumer left
   untaken when it broke count as handed over. A lexical error found before that entry is a
   lexical error, as it would be without the break.
-- **Requests.** A switch of the version or discarding that the consumer asks for at an entry
+- **Requests.** A version switch or discarding that the consumer asks for at an entry
   stands, whether the consumer continues, breaks or fails at that entry.
 - **Discarding.** When the consumer has the rest discarded, the lexer drops everything it is fed
   after the entry, and hands over nothing more but the end of the input, which it hands over
@@ -429,7 +429,7 @@ answers and asks for after each entry, given the entries it has taken so far, in
 one among them. The entries are the tokens, and for a concrete consumer also the pieces of
 whitespace and comments.
 
-A consumer that asks for a switch of the version has the input after the entry read in that
+A consumer that asks for a version switch has the input after the entry read in that
 version; one that asks for discarding has the input after the entry dropped. Both requests stand
 whether the consumer continues, breaks or fails at the entry: a consumer that breaks has the
 trailing input read in the version it asked for, and one that fails leaves the lexer in that
@@ -542,7 +542,7 @@ def Handed.after (before : Chars) (handed : Handed) : Handed :=
   { handed with start := handed.start.after before, «end» := handed.«end».after before }
 
 /--
-Property: the input after a switch of the version is read on its own, in the new version.
+Property: the input after a version switch is read on its own, in the new version.
 
 What a lexer hands over to the collector from the offset of the input on, in the version: what
 `feed` does with the input from the offset on, read on its own, located in the whole input.
@@ -676,7 +676,7 @@ inductive Runs (feed : Version → List Chars → Bool → Fed) (consumer : Cons
   /-- No entry is ready, and the lexer has failed. -/
   | lexical : Runs feed consumer start input ended version [] true taken
       (settle start taken (.failed .lexical) version none)
-  /-- The consumer fails at the entry. Its switch of the version and its discarding stand. -/
+  /-- The consumer fails at the entry. Its version switch and its discarding stand. -/
   | fails : consumer.answer (taken ++ [token]) = .fail error →
       Runs feed consumer start input ended version (token :: ready) failed taken
         (settle start (taken ++ [token]) (.failed (.consumer error))
@@ -740,7 +740,7 @@ inductive Runs (feed : Version → List Chars → Bool → Fed) (consumer : Cons
           ((consumer.switchTo (taken ++ [token])).getD version) none)
   /-- The consumer continues at an entry and has the rest discarded, and the input has ended:
   the end of the input is handed over, located where the discarding began, and the consumer
-  fails at it. The discarding goes on from the entry, and a switch of the version at the end of
+  fails at it. The discarding goes on from the entry, and a version switch at the end of
   the input stands. -/
   | discardsFailsAtEnd : token.type ≠ .endOfFile →
       consumer.answer (taken ++ [token]) = .continue →

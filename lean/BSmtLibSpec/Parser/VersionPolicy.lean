@@ -46,7 +46,7 @@ inductive VersionPolicy.Error where
   | tooManyDeclarations (limit : Nat)
 
 /--
-The check of a declaration of the version against the policy, given the number of declarations
+The check of a version declaration against the policy, given the number of declarations
 the script made before it: first the number of declarations, then the version.
 
 A declaration that breaks both rules is rejected for the number of declarations.

@@ -8,7 +8,7 @@ public import BSmtLibSpec.Lexicon
 # Tokenising an input
 
 How an input is broken into a sequence of tokens, its tokenisation: whitespace breaks the
-input into tokens, and every token is one of the lexical tokens of the version.
+input into tokens, and every token is a lexical token.
 -/
 
 namespace BSmtLibSpec.Lexicon

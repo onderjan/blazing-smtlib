@@ -10,7 +10,8 @@ public import BSmtLibSpec.Lexicon.Tokenization
 
 How the characters of a file are read as commands, on three levels:
 
-- **commands**: each command is a sequence of tokens of the version in force (`Syntax.IsCommand`);
+- **commands**: each command is a sequence of tokens, read in the version in force
+  (`Syntax.IsCommand`);
 - **reading modes**: a run of commands is read in one version, until a command changes the
   mode in which the input after it is read (`File.Mode`, `Tree.Command.modeAfter`);
 - **files**: a file is read from a starting version, mode after mode, up to the end of the
@@ -31,7 +32,7 @@ open Regex (Chars chars)
 How the input after a command is read: in a version, or not at all.
 -/
 inductive File.Mode where
-  /-- The input is read as commands of the version. -/
+  /-- The input is read as commands in the version. -/
   | read (version : Version)
   /-- The input is not read: it need not be valid, nor even lexable. -/
   | unparsed

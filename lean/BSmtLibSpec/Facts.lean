@@ -22,7 +22,7 @@ are not trusted.
 - Composition: reading can stop at the `)` of a command and start again on the rest, possibly
   in another version.
 - A lexer and its consumers: what a lexer does with a consumer is determined, and the input
-  after a switch of the version is located as in the whole input.
+  after a version switch is located as in the whole input.
 - Round trips: the tokens of an input can be printed back, exactly with the whitespace and
   comments between them and in a canonical layout without them, and are read back from what is
   printed.

@@ -59,7 +59,7 @@ the input after `exit`. Each comes after the handler's call for the same `)`.
 
 ## Failures
 
-A handler call can fail with the handler's error, except the switch of the version, which
+A handler call can fail with the handler's error, except the version switch, which
 cannot fail. A version declaration can be rejected: if it breaks the version policy, or if the
 producer refuses to switch to it. A failure stops the traversal: no call and no token point
 follows it.
@@ -148,7 +148,7 @@ structure Constructor (values : Values) where
 
 /--
 The calls a handler is told that can fail, each with what it returns: one constructor for each
-method of the library's handler traits but the switch of the version, which cannot fail
+method of the library's handler traits but the version switch, which cannot fail
 (`Handler.setVersion`).
 -/
 inductive Call (values : Values) : Returns → Type where
@@ -238,8 +238,8 @@ inductive Received where
   | endOfInput
 
 /--
-The item is one that a lexer of the version can hand over, as far as a parser can tell: a
-reserved word is a reserved word of the version.
+The item is one that a lexer can hand over in the version, as far as a parser can tell: a
+reserved word is one that the version reserves.
 
 Standard: 2.7 §3.1 Reserved words; ⟨reserved⟩ of each version.
 -/
@@ -260,8 +260,8 @@ structure Points (m : Type → Type) where
 structure VersionRefused where
 
 /--
-The producer of the tokens in a monad `m`, as far as the traversal tells it anything: its switch
-of the version, which it may refuse, and its discarding of the rest of the input, which cannot
+The producer of the tokens in a monad `m`, as far as the traversal tells it anything: its version
+switch, which it may refuse, and its discarding of the rest of the input, which cannot
 fail.
 -/
 structure Producer (m : Type → Type) where

@@ -68,7 +68,7 @@ inductive SyntaxToken where
   | reserved (word : Chars)
 
 /--
-What a lexical token of the version stands for, and for a symbol whether it was quoted.
+What a lexical token stands for, and for a symbol whether it was quoted.
 
 Standard: 2.7 §3.1 Symbols, as `SyntaxToken`.
 -/

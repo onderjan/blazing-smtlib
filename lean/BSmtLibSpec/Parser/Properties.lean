@@ -37,9 +37,9 @@ inductive Event where
   | arrive (received : Received)
   | process (received : Received)
   | call (returns : Returns) (request : Call Recorded returns)
-  /-- The handler's switch of the version. -/
+  /-- The handler's version switch. -/
   | handlerSwitch (version : Version)
-  /-- The producer's switch of the version. -/
+  /-- The producer's version switch. -/
   | producerSwitch (version : Version)
   /-- The producer's discarding of the rest of the input. -/
   | producerDiscard
@@ -302,7 +302,7 @@ traversal's events before the item's processing, where a `)` gets none of the ca
 arrival (`eventsBeforeProcessingOf`); processing the item makes no call, so the item's processing
 is the last event of the run.
 
-A lexer hands over a reserved word only if it is one of the version in force, and a parser
+A lexer hands over a reserved word only if the version in force reserves it, and a parser
 relies on that; so the rejected item is taken to be such. The items before it are such, as they
 stand for items of a valid script.
 
