@@ -434,7 +434,7 @@ section
 attribute [-instance] BSmtLib.Facts.Parser.Adapters.Handler.recordingLibraryTerms
   BSmtLib.Facts.Parser.Adapters.Handler.recordingLibrary
 
-/-- `reading_slicing` of a library handler with the recording handler's state, outside the
+/-- `Facts.reading_slicing` of a library handler with the recording handler's state, outside the
 printer. -/
 def SlicingWith (I : Handler.CommandHandler (List BSmtLibSpec.Parser.Properties.Event) Id) :
     Prop :=

@@ -20,4 +20,258 @@ What the library satisfies, one module for each part:
 
 Each part states its theorems, each followed by the axioms its proof uses, and checks the
 adapters that its statements are made with. The proofs are below `Facts.Proofs`.
+
+## The mainline theorems
+
+The main theorems about the public API are stated here; `Facts.PublicApi` states the others:
+
+- the lexer's tokens cover the input without a gap or an overlap (`lexing_lossless`);
+- the lexer and the script reader do not depend on how the input is cut into slices
+  (`lexing_slicing`, `reading_slicing`);
+- what the script reader is told can be printed back as the input (`reprinting`);
+- the lexers of the chain hand over the same tokens as the library's lexer and fail with errors
+  of the same cause (`lexers_agree`).
+
+They are stated as those of `Facts.PublicApi` are, with the names a user writes, bytes, lists and
+the small definitions below `BSmtLib.Facts.PublicApi.Adapters`, and checked in the same way at
+the end.
 -/
+
+namespace BSmtLib.Facts
+
+open BSmtLib.Facts.PublicApi.Adapters
+open BSmtLib.Facts.PublicApi.Adapters.Reprinter BSmtLib.Facts.PublicApi.Adapters.Chain
+open BSmtLib (Version)
+
+/-! ## Reprinting -/
+
+/--
+There is a handler told contents only, with a printer, that gives back what the script reader
+over it reads. On every input that the reader reads to the end, in any slices, printing what the
+handler was told, with layout between the tokens, gives back the input up to where the reader
+began to discard it:
+
+- where the reader allows every version, but for the spelling of string literals in 2.0, which
+  may come back as another literal that stands for the same bytes;
+- exactly, where the reader allows only the versions from 2.5 on and starts in one of them.
+-/
+theorem reprinting : ∃ r : Reprinter, r.Reprints ∧ r.ReprintsExactly :=
+  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
+    Proofs.PublicApi.Reprinting.recorder_ReprintsExactly⟩
+
+/--
+info: 'BSmtLib.Facts.reprinting' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms reprinting
+
+/-! ## Lossless lexing -/
+
+/--
+The library's lexer hands over tokens whose spans cover the input without a gap or an overlap:
+
+- the whole input, ending with the end of the input, where no error occurs;
+- the input from its start up to at most where the error is, at an error.
+
+Its consumer takes every token, whitespace and comments included. The lexer is fed the input in
+any slices and then the end of the input.
+-/
+theorem lexing_lossless (version : Version) (slices : List ByteList) :
+    (∀ result entries, collect version slices = (.ok result, entries) →
+      Tiles entries 0 slices.flatten.length) ∧
+    (∀ error entries, collect version slices = (.error error, entries) →
+      ∃ stop, Tiles entries 0 stop ∧ stop ≤ error.span.start.offset) := by
+  have lossless := Proofs.PublicApi.Lossless.lossless version slices
+  refine ⟨fun _ _ run => ?_, fun _ _ run => ?_⟩ <;> rw [run] at lossless <;> exact lossless
+
+/--
+info: 'BSmtLib.Facts.lexing_lossless' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms lexing_lossless
+
+/-! ## Slicing invariance -/
+
+/--
+The library's lexer, with a consumer that takes every token, hands over the same tokens and ends
+the same way however the input is cut into slices.
+-/
+theorem lexing_slicing (version : Version) (slices : List ByteList) :
+    collect version slices = collect version [slices.flatten] :=
+  Proofs.PublicApi.Slicing.slicing version slices
+
+/--
+info: 'BSmtLib.Facts.lexing_slicing' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms lexing_slicing
+
+/--
+There is a handler told contents only, with a printer as in `reprinting`, over which the script
+reader ends the same way however the input is cut into slices. The reader ends with the same
+printed tokens and the same location where it began to discard.
+-/
+theorem reading_slicing :
+    ∃ r : Reprinter, r.Reprints ∧
+      ∀ version slices, r.observe (readThrough (r.reader version) slices) =
+        r.observe (readThrough (r.reader version) [slices.flatten]) :=
+  ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints,
+    Proofs.PublicApi.ReaderSlicing.recorder_slicing⟩
+
+/--
+info: 'BSmtLib.Facts.reading_slicing' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms reading_slicing
+
+/-! ## The lexers of the chain agree -/
+
+/--
+The naive lexer, the Rust port, the lexer with the batch kept in its state and the library's
+lexer hand over the same tokens and end the same way. They fail with errors of the same cause;
+where an error is located is not compared. Each has a consumer that takes every token and is fed
+the same input in the same slices, whatever they are.
+-/
+theorem lexers_agree (version : Version) (slices : List ByteList) :
+    causeOnly (collectV version slices) = causeOnly (collect version slices) ∧
+      causeOnly (collectW version slices) = causeOnly (collect version slices) ∧
+      causeOnly (collectX1 version slices) = causeOnly (collect version slices) :=
+  Proofs.PublicApi.Agree.lexers_agree version slices
+
+/--
+info: 'BSmtLib.Facts.lexers_agree' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms lexers_agree
+
+/-! ## What the statements rest on -/
+
+/--
+info: 5 theorems, stated with 59 adapters:
+BSmtLib.Facts.PublicApi.Adapters:
+  BSmtLib.Facts.PublicApi.Adapters.ByteList
+  BSmtLib.Facts.PublicApi.Adapters.CollectM
+  BSmtLib.Facts.PublicApi.Adapters.Collector
+  BSmtLib.Facts.PublicApi.Adapters.Entry
+  BSmtLib.Facts.PublicApi.Adapters.Layout
+  BSmtLib.Facts.PublicApi.Adapters.SameSpelling
+  BSmtLib.Facts.PublicApi.Adapters.SameSpellings
+  BSmtLib.Facts.PublicApi.Adapters.Spaced
+  BSmtLib.Facts.PublicApi.Adapters.Tiles
+  BSmtLib.Facts.PublicApi.Adapters.allVersions
+  BSmtLib.Facts.PublicApi.Adapters.collect
+  BSmtLib.Facts.PublicApi.Adapters.collectWith
+  BSmtLib.Facts.PublicApi.Adapters.feed
+  BSmtLib.Facts.PublicApi.Adapters.instConsumeCollectorUnitEmpty
+  BSmtLib.Facts.PublicApi.Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty
+  BSmtLib.Facts.PublicApi.Adapters.readThrough
+  BSmtLib.Facts.PublicApi.Adapters.readUpTo
+  BSmtLib.Facts.PublicApi.Adapters.resultOf
+  BSmtLib.Facts.PublicApi.Adapters.unescape20
+BSmtLib.Facts.PublicApi.Adapters.Chain:
+  BSmtLib.Facts.PublicApi.Adapters.Chain.causeOnly
+  BSmtLib.Facts.PublicApi.Adapters.Chain.collectBy
+  BSmtLib.Facts.PublicApi.Adapters.Chain.collectV
+  BSmtLib.Facts.PublicApi.Adapters.Chain.collectW
+  BSmtLib.Facts.PublicApi.Adapters.Chain.collectX1
+BSmtLib.Facts.PublicApi.Adapters.Content:
+  BSmtLib.Facts.PublicApi.Adapters.Content.AttributeValueNode
+  BSmtLib.Facts.PublicApi.Adapters.Content.Constant
+  BSmtLib.Facts.PublicApi.Adapters.Content.Constructor
+  BSmtLib.Facts.PublicApi.Adapters.Content.ContentHandler
+  BSmtLib.Facts.PublicApi.Adapters.Content.ContentHandler.instCommandHandler
+  BSmtLib.Facts.PublicApi.Adapters.Content.ContentHandler.instHandler
+  BSmtLib.Facts.PublicApi.Adapters.Content.Identifier
+  BSmtLib.Facts.PublicApi.Adapters.Content.Index
+  BSmtLib.Facts.PublicApi.Adapters.Content.Pattern
+  BSmtLib.Facts.PublicApi.Adapters.Content.SExprNode
+  BSmtLib.Facts.PublicApi.Adapters.Content.Signature
+  BSmtLib.Facts.PublicApi.Adapters.Content.Symbol
+  BSmtLib.Facts.PublicApi.Adapters.Content.SymbolOrWildcard
+  BSmtLib.Facts.PublicApi.Adapters.Content.TermNode
+  BSmtLib.Facts.PublicApi.Adapters.Content.contentOf
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofAttributeValueNode
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofConstant
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofConstructor
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofIdentifier
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofIndex
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofPairs
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofPattern
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofSExprNode
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofSignature
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofSymbol
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofSymbolOrWildcard
+  BSmtLib.Facts.PublicApi.Adapters.Content.ofTermNode
+BSmtLib.Facts.PublicApi.Adapters.Reprinter:
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.Reprints
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.ReprintsExactly
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.from25
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.instContentHandlerH
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.observe
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.reader
+  BSmtLib.Facts.PublicApi.Adapters.Reprinter.readerWith
+-/
+#guard_msgs in
+#adapters within BSmtLib.Facts.PublicApi
+
+/--
+info: BSmtLib.Facts.lexers_agree:
+  small: Adapters.ByteList, Adapters.Chain.causeOnly, Adapters.Chain.collectBy,
+    Adapters.Chain.collectV, Adapters.Chain.collectW, Adapters.Chain.collectX1, Adapters.CollectM,
+    Adapters.Collector, Adapters.Entry, Adapters.collect, Adapters.collectWith,
+    Adapters.instConsumeCollectorUnitEmpty,
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf
+  chain: BSmtLib.Lexer.Internal.VNaive.Lexer, BSmtLib.Lexer.Internal.VNaive.Lexer.AfterEofError,
+    BSmtLib.Lexer.Internal.VNaive.Lexer.AfterError, BSmtLib.Lexer.Internal.VNaive.Lexer.lexEof,
+    BSmtLib.Lexer.Internal.VNaive.Lexer.lexSlice, BSmtLib.Lexer.Internal.VNaive.Lexer.new,
+    BSmtLib.Lexer.Internal.WRustPort.Lexer, BSmtLib.Lexer.Internal.WRustPort.Lexer.AfterEofError,
+    BSmtLib.Lexer.Internal.WRustPort.Lexer.AfterError, BSmtLib.Lexer.Internal.WRustPort.Lexer.lexEof,
+    BSmtLib.Lexer.Internal.WRustPort.Lexer.lexSlice, BSmtLib.Lexer.Internal.WRustPort.Lexer.new,
+    BSmtLib.Lexer.Internal.X1BatchInCore.Lexer.lexEof,
+    BSmtLib.Lexer.Internal.X1BatchInCore.Lexer.lexSlice
+BSmtLib.Facts.lexing_lossless:
+  small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry, Adapters.Tiles,
+    Adapters.collect, Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf
+BSmtLib.Facts.lexing_slicing:
+  small: Adapters.ByteList, Adapters.CollectM, Adapters.Collector, Adapters.Entry, Adapters.collect,
+    Adapters.collectWith, Adapters.instConsumeCollectorUnitEmpty,
+    Adapters.instConsumeFromCollectorLexerCursorCollectMUnitEmpty, Adapters.resultOf
+BSmtLib.Facts.reading_slicing:
+  small: Adapters.ByteList, Adapters.Content.AttributeValueNode, Adapters.Content.Constant,
+    Adapters.Content.Constructor, Adapters.Content.ContentHandler,
+    Adapters.Content.ContentHandler.instCommandHandler, Adapters.Content.ContentHandler.instHandler,
+    Adapters.Content.Identifier, Adapters.Content.Index, Adapters.Content.Pattern,
+    Adapters.Content.SExprNode, Adapters.Content.Signature, Adapters.Content.Symbol,
+    Adapters.Content.SymbolOrWildcard, Adapters.Content.TermNode, Adapters.Content.contentOf,
+    Adapters.Content.ofAttributeValueNode, Adapters.Content.ofConstant,
+    Adapters.Content.ofConstructor, Adapters.Content.ofIdentifier, Adapters.Content.ofIndex,
+    Adapters.Content.ofPairs, Adapters.Content.ofPattern, Adapters.Content.ofSExprNode,
+    Adapters.Content.ofSignature, Adapters.Content.ofSymbol, Adapters.Content.ofSymbolOrWildcard,
+    Adapters.Content.ofTermNode, Adapters.Layout, Adapters.Reprinter, Adapters.Reprinter.Reprints,
+    Adapters.Reprinter.instContentHandlerH, Adapters.Reprinter.observe, Adapters.Reprinter.reader,
+    Adapters.Reprinter.readerWith, Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced,
+    Adapters.allVersions, Adapters.feed, Adapters.readThrough, Adapters.readUpTo,
+    Adapters.unescape20
+BSmtLib.Facts.reprinting:
+  small: Adapters.ByteList, Adapters.Content.AttributeValueNode, Adapters.Content.Constant,
+    Adapters.Content.Constructor, Adapters.Content.ContentHandler,
+    Adapters.Content.ContentHandler.instCommandHandler, Adapters.Content.ContentHandler.instHandler,
+    Adapters.Content.Identifier, Adapters.Content.Index, Adapters.Content.Pattern,
+    Adapters.Content.SExprNode, Adapters.Content.Signature, Adapters.Content.Symbol,
+    Adapters.Content.SymbolOrWildcard, Adapters.Content.TermNode, Adapters.Content.contentOf,
+    Adapters.Content.ofAttributeValueNode, Adapters.Content.ofConstant,
+    Adapters.Content.ofConstructor, Adapters.Content.ofIdentifier, Adapters.Content.ofIndex,
+    Adapters.Content.ofPairs, Adapters.Content.ofPattern, Adapters.Content.ofSExprNode,
+    Adapters.Content.ofSignature, Adapters.Content.ofSymbol, Adapters.Content.ofSymbolOrWildcard,
+    Adapters.Content.ofTermNode, Adapters.Layout, Adapters.Reprinter, Adapters.Reprinter.Reprints,
+    Adapters.Reprinter.ReprintsExactly, Adapters.Reprinter.from25,
+    Adapters.Reprinter.instContentHandlerH, Adapters.Reprinter.reader, Adapters.Reprinter.readerWith,
+    Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced, Adapters.allVersions,
+    Adapters.feed, Adapters.readThrough, Adapters.readUpTo, Adapters.unescape20
+-/
+#guard_msgs in
+#trusts within BSmtLib.Facts.PublicApi
+
+end BSmtLib.Facts

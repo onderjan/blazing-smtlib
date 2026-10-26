@@ -11,7 +11,8 @@ import all BSmtLib.Lexer.Internal.VNaive
 /-!
 # The lexers with the collector agree
 
-`lexers_agree`: the runs of the lexers with the collector agree. The proof rests on three facts:
+`Facts.lexers_agree`: the runs of the lexers with the collector agree. The proof rests on three
+facts:
 - the lexer with the batch in its state with the collector runs as the Rust port does
   (`collectX1_collectW`), as the two lexers' calls correspond (`Api.lexSlice_couple`);
 - the naive lexer and the Rust port, each with the collector, end as the naive lexer with the

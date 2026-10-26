@@ -9,10 +9,11 @@ public import BSmtLib.Facts.PublicApi.Adapters
 
 A library handler is handed views of the bytes names and constants were written with, and a view
 keeps the storage it points into: the slice the reader was fed, or the lexer's buffer. A handler
-could read the whole input from that storage. The theorems of `BSmtLib.Facts.PublicApi` therefore
-speak of handlers that are told what the parser's handler is told with each view replaced by its
-content, as a list of bytes (`ContentHandler`); `instCommandHandler` makes such a handler a
-library handler, which converts each view before every call.
+could read the whole input from that storage. The theorems about the public API (`BSmtLib.Facts`,
+`BSmtLib.Facts.PublicApi`) therefore speak of handlers that are told what the parser's handler is
+told with each view replaced by its content, as a list of bytes (`ContentHandler`);
+`instCommandHandler` makes such a handler a library handler, which converts each view before every
+call.
 -/
 
 namespace BSmtLib.Facts.PublicApi.Adapters.Content

@@ -13,7 +13,8 @@ in force writes it, with layout between them: up to the end of its last command,
 whitespace or the unread rest after `exit` (`spaced_of_reading`). The tokens are written as in the
 input but for the spelling of 2.0 string literals, and exactly on an input without a backslash.
 
-Facts about the formalism, in the terms of the theorems of `Facts.PublicApi`.
+Facts about the formalism, in the terms of the theorems about the public API (`Facts` and
+`Facts.PublicApi`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Files

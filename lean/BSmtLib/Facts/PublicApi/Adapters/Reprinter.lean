@@ -7,7 +7,7 @@ public import BSmtLib.Facts.PublicApi.Adapters.Content
 /-!
 # Reprinters
 
-The shape of the witness that `Facts.PublicApi.reprinting` claims to exist, and that the reading
+The shape of the witness that `Facts.reprinting` claims to exist, and that the reading
 theorems read with: a handler that is told contents only, with a printer of what it was told
 (`Reprinter`). The theorems say what the witness does, not how; the witness is not trusted.
 -/

@@ -16,12 +16,12 @@ import all BSmtLib.Reader
 /-!
 # Reprinting
 
-The witness of `reprinting`: the recording handler, which writes down every call it is told, and
-the printer that reads the file's commands back from the calls and writes their tokens. The
-calls determine the commands (`BSmtLibSpec.Facts.Reader.callsDetermineCommands`); the reader
-tells the handler the calls of a file's commands and finishes only on files
-(`Facts.Reader.reader_reads_files`, `Facts.Reader.reader_finishes_only_on_files`); and a file is
-its commands' tokens with layout between them (`Files.spaced_of_reading`).
+The witness of `Facts.reprinting`: the recording handler, which writes down every call it is told,
+and the printer that reads the file's commands back from the calls and writes their tokens. The
+calls determine the commands (`BSmtLibSpec.Facts.Reader.callsDetermineCommands`); the reader tells
+the handler the calls of a file's commands and finishes only on files
+(`Facts.Reader.reader_reads_files`, `Facts.Reader.reader_finishes_only_on_files`); and a file is its
+commands' tokens with layout between them (`Files.spaced_of_reading`).
 -/
 
 namespace BSmtLib.Facts.Proofs.PublicApi.Reprinting

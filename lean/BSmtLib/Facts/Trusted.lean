@@ -32,7 +32,7 @@ about: a theorem says that its subject meets the formalism, so its subject need 
 trusted.
 
 `#trusts` is the same walk for theorems stated with the library's public API rather than the
-formalism (`BSmtLib.Facts.PublicApi`). For each theorem, it lists:
+formalism (`BSmtLib.Facts`, `BSmtLib.Facts.PublicApi`). For each theorem, it lists:
 
 - the small definitions its statement reaches;
 - every constant of the formalism, of the library's internals, of the lexers of the chain or
