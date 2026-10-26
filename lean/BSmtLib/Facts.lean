@@ -135,17 +135,19 @@ info: 'BSmtLib.Facts.lexing_slicing' depends on axioms: [propext, Classical.choi
 #print axioms lexing_slicing
 
 /--
-There is a handler told contents only, with a printer that gives back what the script reader
-reads where it allows only 2.0 and starts in it (`Reprints20`, the first part of `reprinting`), over
-which the script reader ends the same way however the input is cut into slices. That reader allows
-every version and starts in any of them; it ends with the same printed tokens and the same
-location where it began to discard.
+The script reader does not tell how its input is cut into slices.
+
+There is a handler told contents only, with a printer as in `reprinting` (`Reprints20`,
+`ReprintsExactly25Plus`). The script reader over it, allowing every version and starting in any of
+them, ends the same way however the input is cut: with the same error, or with the same result,
+the same printed tokens and the same location where it began to discard.
 -/
 theorem reading_slicing :
-    ∃ r : Reprinter, r.Reprints20 ∧
+    ∃ r : Reprinter, r.Reprints20 ∧ r.ReprintsExactly25Plus ∧
       ∀ version slices, r.observe (readThrough (r.reader version) slices) =
         r.observe (readThrough (r.reader version) [slices.flatten]) :=
   ⟨Proofs.PublicApi.Reprinting.recorder, Proofs.PublicApi.Reprinting.recorder_Reprints20,
+    Proofs.PublicApi.Reprinting.recorder_ReprintsExactly25Plus,
     Proofs.PublicApi.ReaderSlicing.recorder_slicing⟩
 
 /--
@@ -282,11 +284,11 @@ BSmtLib.Facts.reading_slicing:
     Adapters.Content.ofPairs, Adapters.Content.ofPattern, Adapters.Content.ofSExprNode,
     Adapters.Content.ofSignature, Adapters.Content.ofSymbol, Adapters.Content.ofSymbolOrWildcard,
     Adapters.Content.ofTermNode, Adapters.FinalLayout, Adapters.Layout, Adapters.Reprinter,
-    Adapters.Reprinter.Reprints20, Adapters.Reprinter.instContentHandlerH,
-    Adapters.Reprinter.observe, Adapters.Reprinter.only20, Adapters.Reprinter.reader,
-    Adapters.Reprinter.readerWith, Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced,
-    Adapters.allVersions, Adapters.feed, Adapters.readThrough, Adapters.readUpTo,
-    Adapters.unescape20
+    Adapters.Reprinter.Reprints20, Adapters.Reprinter.ReprintsExactly25Plus,
+    Adapters.Reprinter.from25, Adapters.Reprinter.instContentHandlerH, Adapters.Reprinter.observe,
+    Adapters.Reprinter.only20, Adapters.Reprinter.reader, Adapters.Reprinter.readerWith,
+    Adapters.SameSpelling, Adapters.SameSpellings, Adapters.Spaced, Adapters.allVersions,
+    Adapters.feed, Adapters.readThrough, Adapters.readUpTo, Adapters.unescape20
 BSmtLib.Facts.reprinting:
   small: Adapters.ByteList, Adapters.Content.AttributeValueNode, Adapters.Content.Constant,
     Adapters.Content.Constructor, Adapters.Content.ContentHandler,
