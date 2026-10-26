@@ -21,8 +21,6 @@ A reader can have a parser of any syntactic category; only the reader of scripts
 here. It reads under the policy that allows every version, and is seen through a recording
 handler, as in `Parser.Properties.record`. Where its tokens are located, and where the discarding
 after `exit` began, are stated by the lexer (`Lexer.Runs`) and not again here.
-
-The standard has no reader; all of this is the library's.
 -/
 
 namespace BSmtLibSpec.Reader

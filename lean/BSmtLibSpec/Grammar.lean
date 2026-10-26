@@ -21,8 +21,6 @@ The syntax of SMT-LIB scripts as the standard defines it, in four parts:
 This module holds what the parts share: a token as the syntactic rules see it (`SyntaxToken`),
 the numbers of the versions, and how parentheses and reserved words are written as tokens.
 
-It depends on no implementation.
-
 Scripts only: theory declarations, logic declarations and command responses are
 not covered.
 -/

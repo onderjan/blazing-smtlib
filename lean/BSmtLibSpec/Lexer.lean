@@ -8,10 +8,9 @@ public import BSmtLibSpec.Lexicon.Properties
 # Lexers
 
 What a lexer hands over, in a form that does not depend on how a lexer represents its tokens,
-and what it means for a lexer to be correct. The properties are trusted as much as the spec:
-a proof shows that a property holds, so the property has to say what is meant. An error named
-in code, such as `UnexpectedTrailingToken`, is the error of the library's interface that the
-definition specifies.
+and what it means for a lexer to be correct. An error named in code, such as
+`UnexpectedTrailingToken`, is the error of the library's interface that the definition
+specifies.
 -/
 
 namespace BSmtLibSpec.Lexer
@@ -413,8 +412,6 @@ continue, break, fail, switch the version or have the rest discarded at any entr
   the consumer's obligation, not the lexer's (`Consumer.BreaksAtEnd`). After the end of the
   input, everything is reset: the version to the one the lexer was created with, the discarding,
   the held result, and any partial token (`ResetsAtEnd`).
-
-The standard has no lexer fed in slices and no consumer; all of this is the library's.
 -/
 
 /-- What a consumer answers when it has taken an entry. -/

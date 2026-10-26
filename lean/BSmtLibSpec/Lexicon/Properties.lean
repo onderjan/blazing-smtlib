@@ -8,14 +8,7 @@ public import BSmtLibSpec.Lexicon.Tokenization
 # Properties of tokenisation
 
 Each definition here formalises a property stated in words on its first line, such as "every
-input has at most one tokenisation". The properties of the grammar, of the lexer, and of the
-parser are built from them, and proofs about this library end in them.
-
-A proof only shows that the formal statement holds. If a definition here does not formalise
-what its first line says, every property built on it, and every proof of one, establishes
-something other than what its own words promise, and nothing in Lean will notice. So these
-definitions are trusted as much as the rules of the standard, and are to be read with the
-same care.
+input has at most one tokenisation".
 -/
 
 namespace BSmtLibSpec.Lexicon.Properties
