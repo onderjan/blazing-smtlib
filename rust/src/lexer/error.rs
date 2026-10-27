@@ -2,6 +2,7 @@ use std::{error::Error, fmt, io};
 
 use crate::span::{SmtLocation, SmtSpan};
 
+/// Why a lexical error occurred.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {
     UnexpectedByte,
@@ -19,7 +20,9 @@ pub enum SmtLexicalErrorKind {
     UnexpectedTrailingToken,
 }
 
-/// What the lexer expected, in [`SmtLexicalErrorKind::Expected`].
+/// Expected but not encountered lexical character class.
+///
+/// This is used in [SmtLexicalErrorKind::Expected].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalExpected {
     /// A digit of the fractional part of a decimal.
@@ -32,7 +35,7 @@ pub enum SmtLexicalExpected {
     Base,
 }
 
-/// Error that caused lexing to stop.
+/// Error that forced lexing to stop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtLexerError<E> {
     cause: SmtLexerErrorCause<E>,
@@ -40,7 +43,7 @@ pub struct SmtLexerError<E> {
     continues_from: Option<SmtLocation>,
 }
 
-/// The reason why a lexer call failed: a lexical error or a consumer error.
+/// Why a lexer error was returned (lexical or consumer error).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmtLexerErrorCause<E> {
     /// The input is lexically malformed.
@@ -196,15 +199,14 @@ impl<E: Error + 'static> Error for SmtLexerError<E> {
     }
 }
 
-/// Error that ended lexing the input from a buffered reader or a file.
+/// Error that forced lexing from a buffered reader or a file to stop.
 #[derive(Debug)]
 pub struct SmtLexerReadError<E> {
     cause: SmtLexerReadErrorCause<E>,
     span: SmtSpan,
 }
 
-/// The reason why lexing from a buffered reader or a file failed: an I/O
-/// error, a lexical error or a consumer error.
+/// Why a lexer read error was returned (I/O, lexical, or consumer error).
 #[derive(Debug)]
 pub enum SmtLexerReadErrorCause<E> {
     /// Reading from the file or the buffered reader failed.

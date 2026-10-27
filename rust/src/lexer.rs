@@ -37,7 +37,7 @@ use crate::{
     token::{SmtConsume, SmtConsumeFrom, SmtCursor},
 };
 
-/// SMT-LIB lexer.
+/// Blazing-fast SMT-LIB lexer.
 ///
 /// The lexer lexes a byte stream into tokens that it sends
 /// to an implementation of [`SmtConsume`], which is expected

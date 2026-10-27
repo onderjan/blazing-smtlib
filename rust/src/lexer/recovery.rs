@@ -1,12 +1,12 @@
 use crate::{span::SmtLocation, token::SmtConsume};
 
-/// The lexer stops at its first error.
+/// Marker for a lexer that stops at its first error.
 ///
 /// This is the default and can be used with any token consumer.
 #[derive(Debug)]
 pub enum SmtFailFast {}
 
-/// The lexer recovers from errors (EXPERIMENTAL).
+/// Marker for a lexer that recovers from errors (EXPERIMENTAL).
 ///
 /// For recovery to be possible not just on the side of the lexer
 /// but also the token consumer, the token consumer must be able
@@ -42,7 +42,7 @@ pub(super) mod sealed {
     }
 }
 
-/// Determines the lexer behaviour after an error occurs.
+/// Determines lexer behaviour after an error occurs.
 ///
 /// Currently, only fail-fast behaviour is supported,
 /// implemented by [`SmtFailFast`] for every token consumer.
@@ -51,7 +51,7 @@ pub(super) mod sealed {
 /// documentation-hidden feature in this version,
 /// and may change or be removed in any version.
 ///
-/// It cannot be implemented outside of this crate.
+/// This trait cannot be implemented outside of this crate.
 pub trait SmtLexerRecovery<C: SmtConsume>: sealed::Recovery<C> {}
 
 impl<C: SmtConsume> SmtLexerRecovery<C> for SmtFailFast {}

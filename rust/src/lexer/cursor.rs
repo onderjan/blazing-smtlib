@@ -6,6 +6,11 @@ use crate::{
     token::{SmtCursor, SmtLookahead, SmtToken, SmtTokenCategory, SmtVersionRefused},
 };
 
+/// Lexer token.
+///
+/// Lexer tokens are given out by [SmtLexerCursor]. Each token includes its
+/// location span and can be viewed as [SmtToken](crate::token::SmtToken) via
+/// [SmtCursor::syntax] on [SmtLexerCursor].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmtLexerToken<'a> {
     /// Entry where End of File is kept as None.
@@ -92,7 +97,7 @@ pub(crate) enum LexerCursorAction {
     Discard,
 }
 
-/// A cursor into a batch of tokens, from which elements are consumed sequentially.
+/// Cursor into a batch of lexer tokens.
 ///
 /// A parser reads a batch through a cursor: it consumes the tokens one at
 /// a time, can look at the next one, and can attempt to take several at once.
@@ -253,8 +258,10 @@ impl<'a> SmtCursor for SmtLexerCursor<'a> {
     }
 }
 
-/// The tokens ahead of a cursor, as the extractor of [`SmtLexerCursor::attempt`]
-/// sees them: they can only be taken in order.
+/// Lookahead window for an attempt to extract tokens from lexer cursor.
+///
+/// This window is given by [`SmtLexerCursor`] to the extraction function passed
+/// to [`SmtLexerCursor::attempt`] so it can attempt extraction of multiple tokens.
 pub struct SmtLexerWindow<'a> {
     version: SmtVersion,
     entries: &'a [Option<(InnerCategory, &'a [u8])>],
