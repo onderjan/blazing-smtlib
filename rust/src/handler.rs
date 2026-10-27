@@ -12,7 +12,7 @@ use crate::{
     token::SmtCommandNameReserved,
 };
 
-/// Handler of nodes (sorts, terms, etc.).
+/// Handles nodes (sorts, terms, etc.).
 pub trait SmtHandler {
     type Error;
 
@@ -157,7 +157,7 @@ pub trait SmtHandler {
     ) -> Result<Self::Term, Self::Error>;
 }
 
-/// Handler of commands.
+/// Handles commands.
 pub trait SmtCommandHandler: SmtHandler {
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
@@ -516,7 +516,7 @@ fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCom
     Err(SmtPartialCommandError::Unsupported(command))
 }
 
-/// Handler of a subset of commands.
+/// Handles a subset of commands.
 ///
 /// Every command it does not implement fails with
 /// [SmtPartialCommandError::Unsupported] naming the command, or with

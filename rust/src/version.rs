@@ -57,7 +57,7 @@ impl Default for SmtVersionPosture {
     }
 }
 
-/// Version posture builder.
+/// Builds a version posture.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtVersionPostureBuilder {
     allowed: Vec<SmtVersion>,

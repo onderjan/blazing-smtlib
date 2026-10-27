@@ -666,7 +666,7 @@ impl<'a> SmtCursor for SmtTokensCursor<'a> {
     }
 }
 
-/// Value whose tokens can be put into a cursor.
+/// Appends its tokens to a cursor.
 pub trait SmtAppendTokens {
     /// Puts the tokens of the value after those in the cursor.
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>);
@@ -751,7 +751,7 @@ plain_append_tokens!(SmtSymbol, SmtSymbolBuf, Symbol);
 plain_append_tokens!(SmtWhitespace, SmtWhitespaceBuf, Whitespace);
 plain_append_tokens!(SmtComment, SmtCommentBuf, Comment);
 
-/// Sequential consumer of tokens.
+/// Consumes tokens sequentially.
 pub trait SmtConsume {
     /// Value the consumer finishes with.
     type Result;
@@ -772,7 +772,7 @@ pub trait SmtConsume {
     const IS_CONCRETE: bool;
 }
 
-/// Sequential consumer of tokens for given producers.
+/// Consumes tokens sequentially from the given producers.
 pub trait SmtConsumeFrom<Z: SmtCursor>: SmtConsume {
     /// Consumes the tokens handed over in the cursor, in order.
     ///

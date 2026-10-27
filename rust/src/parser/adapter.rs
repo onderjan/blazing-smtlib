@@ -6,7 +6,7 @@ use crate::{
     token::{SmtConsume, SmtConsumeFrom, SmtCursor},
 };
 
-/// Adapts a parser to a token consumer.
+/// Token consumer that adapts a parser to parse the consumed tokens.
 ///
 /// The adapter implements [SmtConsume] and hands over to a parser which
 /// implements [SmtParse], providing it the handler and additional persistent
