@@ -1,11 +1,15 @@
-/// A location in an SMT-LIB stream.
+/// Location in an SMT-LIB stream.
 ///
-/// All counts are in bytes (SMT-LIB works on bytes).
-/// While SMT-LIB accepts both CR and LF as a comment separator,
-/// we consider only LF to start a new line for location purposes
-/// as that is compatible with both LF and CRLF conventions.
+/// All counts are in bytes. While SMT-LIB accepts both CR and LF as a comment
+/// separator, we consider only LF to start a new line for location purposes as
+/// that is compatible with both LF and CRLF conventions.
 ///
-/// The offset, line, and column all start at zero.
+/// The offset, line, and column all start at zero, but are formatted one-based
+/// using [Display](std::fmt::Display).
+///
+/// The location is guaranteed to be valid with respect to the offset and
+/// line/column: as each terminated line must contain at least one byte (LF),
+/// the offset must be equal to or greater than the sum of line and column.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SmtLocation {
     /// Zero-based byte offset from the start of the stream.
@@ -16,8 +20,9 @@ pub struct SmtLocation {
     column: u64,
 }
 
-/// The line and column cannot be at the offset: every line before
-/// and every column on the line take at least one byte.
+/// Error constructing a location that would be invalid.
+///
+/// See [SmtLocation] for the validity condition.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtInvalidLocationError;
 
@@ -57,7 +62,9 @@ impl SmtLocation {
     }
 
     fn is_allowed(offset: u64, line: u64, column: u64) -> bool {
-        // each line before ends with a line feed, each column is a byte
+        // each terminated line ends with a line feed,
+        // so it must consist of at least one byte,
+        // and each column is an additional byte
         line.checked_add(column)
             .is_some_and(|bytes| bytes <= offset)
     }
@@ -148,16 +155,21 @@ impl<V> SmtLocated<V> {
     }
 }
 
-/// Span of an SMT-LIB element.
+/// Span of an SMT-LIB item.
 ///
 /// The span is a half-open range `[start, end)` between locations.
+///
+/// The span is guaranteed to be valid: The end location must be at or after the
+/// start location, both in terms of offset and line/column information.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SmtSpan {
     start: SmtLocation,
     end: SmtLocation,
 }
 
-/// The end location is not at or after the start location.
+/// Error constructing a span that would be invalid.
+///
+/// See [SmtSpan] for the validity condition.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtInvalidSpanError;
 
