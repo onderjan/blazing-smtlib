@@ -6,8 +6,8 @@
 //! to some unclosed item.
 //!
 //! The locations and spans are given by the [lexer](crate::lexer) for tokens
-//! via [SmtLexerToken::span](crate::lexer::SmtLexerToken::span). Lexing and
-//! reading produces the result value wrapped in [SmtLocated] on success and a
+//! via [`SmtLexerToken::span`](crate::lexer::SmtLexerToken::span). Lexing and
+//! reading produces the result value wrapped in [`SmtLocated`] on success and a
 //! spanned error on failure. Parsers and handlers do not interact with
 //! locations and spans.
 
@@ -18,7 +18,7 @@
 /// that is compatible with both LF and CRLF conventions.
 ///
 /// The offset, line, and column all start at zero, but are formatted one-based
-/// using [Display](std::fmt::Display).
+/// using [`Display`](std::fmt::Display).
 ///
 /// The location is guaranteed to be valid with respect to the offset and
 /// line/column: as each terminated line must contain at least one byte (LF),
@@ -35,7 +35,7 @@ pub struct SmtLocation {
 
 /// Error constructing a location that would be invalid.
 ///
-/// See [SmtLocation] for the validity condition.
+/// See [`SmtLocation`] for the validity condition.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtInvalidLocationError;
 
@@ -185,7 +185,7 @@ pub struct SmtSpan {
 
 /// Error constructing a span that would be invalid.
 ///
-/// See [SmtSpan] for the validity condition.
+/// See [`SmtSpan`] for the validity condition.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtInvalidSpanError;
 

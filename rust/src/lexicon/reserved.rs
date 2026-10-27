@@ -153,7 +153,7 @@ const RESERVED_SLOTS: usize = 128;
 ///
 /// A perfect hash of the reserved words over their length and their first, last, and
 /// middle byte: no two reserved words share a slot, which the construction of
-/// [RESERVED_TABLE] checks at compile time. The multipliers were found by the
+/// [`RESERVED_TABLE`] checks at compile time. The multipliers were found by the
 /// ignored test `search_reserved_hash_multipliers` in this module; if a reserved
 /// word is added and the check fails, run it again for new ones.
 #[inline(always)]

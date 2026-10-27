@@ -10,7 +10,7 @@ pub enum SmtFailFast {}
 ///
 /// For recovery to be possible not just on the side of the lexer
 /// but also the token consumer, the token consumer must be able
-/// to abandon unfinished work and recover (see [SmtRecover]).
+/// to abandon unfinished work and recover (see [`SmtRecover`]).
 ///
 /// Lexer recovery is implemented but experimental
 /// since the exact semantics have not yet been set in stone.
@@ -45,7 +45,7 @@ pub(super) mod sealed {
 /// Determines lexer behaviour after an error occurs.
 ///
 /// Currently, only fail-fast behaviour is supported,
-/// implemented by [SmtFailFast] for every token consumer.
+/// implemented by [`SmtFailFast`] for every token consumer.
 ///
 /// Lexer error recovery is an experimental,
 /// documentation-hidden feature in this version,
@@ -105,7 +105,7 @@ pub trait SmtRecover: SmtConsume {
     /// Called when the input is lexically malformed or the consumer itself
     /// returns an error, before the failing call returns. The location is
     /// where the failure occurred: the input from there on is skipped, up
-    /// to the location given to [recover](Self::recover).
+    /// to the location given to [`recover`](Self::recover).
     ///
     /// The tokens consumed so far that belong to an unfinished top-level
     /// value (typically, an SMT-LIB command) are to be abandoned, as if
@@ -114,7 +114,7 @@ pub trait SmtRecover: SmtConsume {
 
     /// Finishes the recovery after abandoning.
     ///
-    /// Called exactly once after every [abandon](Self::abandon) before the
+    /// Called exactly once after every [`abandon`](Self::abandon) before the
     /// new token is handed over after the recovery. The tokens handed over
     /// after the recovery are to be considered to follow the tokens before
     /// the abandoned top-level value started, as if the abandoned top-level

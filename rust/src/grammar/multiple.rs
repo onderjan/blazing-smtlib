@@ -17,7 +17,7 @@ use crate::{
 
 /// View of multiple values.
 ///
-/// The values can be inspected and modified in place, and [IntoIterator]
+/// The values can be inspected and modified in place, and [`IntoIterator`]
 /// moves them out in order.
 pub struct SmtMultiple<'a, T> {
     stack: &'a mut Vec<T>,
@@ -171,7 +171,7 @@ impl<T: Debug> Debug for SmtMultiple<'_, T> {
 ///
 /// Each value is named by a symbol, such as in let bindings or sorted variables.
 ///
-/// The values can be inspected and modified in place, and [IntoIterator]
+/// The values can be inspected and modified in place, and [`IntoIterator`]
 /// moves them out in order.
 pub struct SmtNamedValues<'a, V> {
     text: &'a [u8],
@@ -935,7 +935,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
         }
     }
 
-    /// Starts a signature with no parameters; [Self::push_param] adds them.
+    /// Starts a signature with no parameters; [`Self::push_param`] adds them.
     pub fn push(&mut self, name: SmtSymbol, result_sort: N::Sort) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
@@ -1161,7 +1161,7 @@ impl Debug for SmtSortAritiesBuf {
 ///
 /// Each constructor has a name and selectors, the selectors as sorted variables.
 ///
-/// [IntoIterator] hands over each constructor with its selectors,
+/// [`IntoIterator`] hands over each constructor with its selectors,
 /// whose sorts can be moved out.
 pub struct SmtConstructors<'a, N: SmtNodeTypes + ?Sized> {
     text: &'a [u8],
@@ -1297,7 +1297,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
         }
     }
 
-    /// Starts a constructor with no selectors; [Self::push_selector] adds them.
+    /// Starts a constructor with no selectors; [`Self::push_selector`] adds them.
     pub fn push(&mut self, name: SmtSymbol) {
         let index = self.names.len();
         let name = SymbolHandle::create_by_push(&mut self.text, name);

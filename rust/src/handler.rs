@@ -30,12 +30,12 @@ pub trait SmtHandler {
     /// other methods so the handler can process them
     /// according to the version semantics.
     ///
-    /// The handler should start in [SmtVersion::default].
+    /// The handler should start in [`SmtVersion::default`].
     ///
     /// In the library,
-    /// [SmtParseAdapter](crate::parser::SmtParseAdapter)
+    /// [`SmtParseAdapter`](crate::parser::SmtParseAdapter)
     /// calls this method before any other calls, and
-    /// [SmtScriptParser](crate::parser::SmtScriptParser)
+    /// [`SmtScriptParser`](crate::parser::SmtScriptParser)
     /// calls this method when switching versions.
     fn set_version(&mut self, version: SmtVersion);
 
@@ -154,7 +154,7 @@ pub trait SmtHandler {
 
 /// Types of handled nodes (S-expressions, sorts, and terms).
 ///
-/// The views of nodes are parametrised by these types. Every [SmtHandler] has them as its own
+/// The views of nodes are parametrised by these types. Every [`SmtHandler`] has them as its own
 /// types of the same names. A program that builds views without a handler, e.g. to write them,
 /// implements this trait on a type of its own.
 pub trait SmtNodeTypes {
@@ -531,9 +531,9 @@ fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCom
 /// Handles a subset of commands.
 ///
 /// Every command it does not implement fails with
-/// [SmtPartialCommandError::Unsupported] naming the command, or with
-/// [SmtPartialCommandError::UnsupportedNonstandard] for a nonstandard command.
-/// Each implementor is a [SmtCommandHandler].
+/// [`SmtPartialCommandError::Unsupported`] naming the command, or with
+/// [`SmtPartialCommandError::UnsupportedNonstandard`] for a nonstandard command.
+/// Each implementor is a [`SmtCommandHandler`].
 pub trait SmtPartialCommandHandler:
     SmtHandler<Error = SmtPartialCommandError<Self::HandlerError>>
 {
@@ -955,13 +955,13 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
 ///
 /// This handler quietly swallows all standard categories and commands.
 /// It does not allow any non-standard commands, failing with
-/// [SmtNonstandardCommandError].
+/// [`SmtNonstandardCommandError`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SmtSyntaxChecker;
 
 /// Error encountering a nonstandard command.
 ///
-/// Used by [SmtSyntaxChecker], which does not
+/// Used by [`SmtSyntaxChecker`], which does not
 /// support non-standard commands.
 #[derive(Debug, Clone)]
 pub struct SmtNonstandardCommandError(SmtSymbolBuf);

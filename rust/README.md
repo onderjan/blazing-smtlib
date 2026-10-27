@@ -21,20 +21,20 @@ use blazing_smtlib::{read_smt_file, SmtSyntaxChecker};
 read_smt_file(&mut SmtSyntaxChecker, "file.smt2").expect("should be a valid SMT-LIB script");
 ```
 
-`SmtSyntaxChecker` implements `SmtHandler` that handles SMT-LIB syntactic
-categories (identifiers, sorts, terms, etc.), and `SmtCommandHandler` that
+[`SmtSyntaxChecker`] implements [`SmtHandler`] that handles SMT-LIB syntactic
+categories (identifiers, sorts, terms, etc.), and [`SmtCommandHandler`] that
 handles standard SMT-LIB commands (`assert`, `check-sat`, etc.). SMT solvers can
-implement `SmtHandler` and `SmtCommandHandler` to handle SMT-LIB scripts,
+implement [`SmtHandler`] and [`SmtCommandHandler`] to handle SMT-LIB scripts,
 including custom parsing of non-standard commands. See the handler documentation
 for details.
 
-The function `read_smt_file` is a simplified caller for `SmtReader`, which
+The function [`read_smt_file`] is a simplified caller for [`SmtReader`], which
 supports reading SMT-LIB scripts as well as other categories and commands. The
-reader is itself a wrapper for `SmtLexer` and a selectable parser implementing
-`SmtParse`; these can be used separately in applications such as token
+reader is itself a wrapper for [`SmtLexer`] and a selectable parser implementing
+[`SmtParse`]; these can be used separately in applications such as token
 pretty-printing or parsing user-constructed tokens.
 
-Tokens and syntactic nodes can be written using `SmtWriter`, which is
+Tokens and syntactic nodes can be written using [`SmtWriter`], which is
 configurable for various whitespace formats including 1:1 reconstruction.
 
 ## Speed and Memory Consumption
@@ -85,3 +85,12 @@ write benchmarks and tests (including unit tests).
 
 See the [repository](https://github.com/onderjan/blazing-smtlib) for more
 information.
+
+[`SmtSyntaxChecker`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/struct.SmtSyntaxChecker.html
+[`SmtHandler`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/trait.SmtHandler.html
+[`SmtCommandHandler`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/trait.SmtCommandHandler.html
+[`read_smt_file`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/fn.read_smt_file.html
+[`SmtReader`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/struct.SmtReader.html
+[`SmtLexer`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/lexer/struct.SmtLexer.html
+[`SmtParse`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/parser/trait.SmtParse.html
+[`SmtWriter`]: https://docs.rs/blazing-smtlib/0.1.0/blazing_smtlib/struct.SmtWriter.html

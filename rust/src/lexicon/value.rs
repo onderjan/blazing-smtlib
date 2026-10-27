@@ -29,10 +29,10 @@ impl SmtStringContentBuf {
 /// Equality and hash are intentionally not implemented:
 /// quoted and unquoted symbols refer to the same value semantically,
 /// so the value without the quoted flag should be compared in that case,
-/// obtained through [SmtSymbolBuf::bytes] or [SmtSymbolBuf::into_bytes_buf].
+/// obtained through [`SmtSymbolBuf::bytes`] or [`SmtSymbolBuf::into_bytes_buf`].
 ///
 /// The content is stripped of the enclosing pipes if quoted, e.g. for the token `|a b|`,
-/// [as_slice](Self::as_slice) returns `b"a b"`.
+/// [`as_slice`](Self::as_slice) returns `b"a b"`.
 #[derive(Clone)]
 pub struct SmtSymbolBuf {
     is_quoted: bool,
@@ -167,10 +167,10 @@ impl Debug for SmtSymbolBuf {
 /// Equality and hash are intentionally not implemented:
 /// quoted and unquoted symbols refer to the same value semantically,
 /// so the value without the quoted flag should be compared in that case,
-/// obtained through [SmtSymbol::bytes].
+/// obtained through [`SmtSymbol::bytes`].
 ///
 /// The content is stripped of the enclosing pipes if quoted, e.g. for the token `|a b|`,
-/// [as_slice](Self::as_slice) returns `b"a b"`.
+/// [`as_slice`](Self::as_slice) returns `b"a b"`.
 #[derive(Clone, Copy)]
 pub struct SmtSymbol<'a> {
     is_quoted: bool,
@@ -389,7 +389,7 @@ impl SmtCommentBuf {
 /// Error constructing an owned value from disallowed bytes.
 ///
 /// See the type being constructed for the validity condition. The bytes are
-/// returned by [into_vec](Self::into_vec).
+/// returned by [`into_vec`](Self::into_vec).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SmtDisallowedByteVecError(SmtBytesBuf);
 
@@ -607,7 +607,7 @@ string8_newtype! {
     /// Must contain only SMT-LIB printable or whitespace bytes.
     ///
     /// The content is stripped of the enclosing quotes and its escapes are resolved,
-    /// e.g. for the token `"a""b"` in version 2.5 or later, [as_slice](Self::as_slice)
+    /// e.g. for the token `"a""b"` in version 2.5 or later, [`as_slice`](Self::as_slice)
     /// returns `b"a\"b"`.
 }
 
@@ -629,7 +629,7 @@ string8_newtype! {
     /// reserved words as the colon already uniquely determines the category.
     ///
     /// The content is stripped of the starting colon, e.g. for the token `:named`,
-    /// [as_slice](Self::as_slice) returns `b"named"`.
+    /// [`as_slice`](Self::as_slice) returns `b"named"`.
 }
 
 string8_newtype! {
@@ -651,7 +651,7 @@ string8_newtype! {
     /// Must contain only digits, lower-case letters `a`-`f` or upper-case letters `A`-`F`.
     ///
     /// The content is stripped of the base declaration, e.g. for the token `#xA04`,
-    /// [as_slice](Self::as_slice) returns `b"A04"`.
+    /// [`as_slice`](Self::as_slice) returns `b"A04"`.
 }
 
 string8_newtype! {
@@ -663,7 +663,7 @@ string8_newtype! {
     /// Must contain only the digits `0`, `1`.
     ///
     /// The content is stripped of the base declaration, e.g. for the token `#b0101`,
-    /// [as_slice](Self::as_slice) returns `b"0101"`.
+    /// [`as_slice`](Self::as_slice) returns `b"0101"`.
 }
 
 string8_newtype! {
@@ -674,7 +674,7 @@ string8_newtype! {
     /// A dot (the character `.`) must be present. It divides the decimal into
     /// a whole part (before it) and a fractional part (after it).
     ///
-    /// The whole part follows the same rules as [SmtNumeral]:
+    /// The whole part follows the same rules as [`SmtNumeral`]:
     /// cannot be empty, must contain only digits, the leading digit must not be zero.
     ///
     /// The fractional part cannot be empty and must contain only digits.
@@ -700,7 +700,7 @@ string8_newtype! {
     /// If the comment runs to the end of the input, there is no ending CR/LF.
     ///
     /// The content is stripped of the starting semicolon, e.g. for the token `; note`
-    /// followed by a line feed, [as_slice](Self::as_slice) returns `b" note\n"`.
+    /// followed by a line feed, [`as_slice`](Self::as_slice) returns `b" note\n"`.
 }
 
 /// Error converting into an unsigned type that cannot hold the numeric value.
@@ -716,12 +716,12 @@ impl std::fmt::Display for SmtNumericOverflowError {
 impl std::error::Error for SmtNumericOverflowError {}
 
 impl<'a> SmtNumeral<'a> {
-    /// The value as [u32], or [None] if it does not fit.
+    /// The value as [`u32`], or [`None`] if it does not fit.
     pub fn to_u32(&self) -> Option<u32> {
         u32::try_from(self.to_u64()?).ok()
     }
 
-    /// The value as [u64], or [None] if it does not fit.
+    /// The value as [`u64`], or [`None`] if it does not fit.
     pub fn to_u64(&self) -> Option<u64> {
         let mut value: u64 = 0;
         for digit in self.iter() {
@@ -732,7 +732,7 @@ impl<'a> SmtNumeral<'a> {
         Some(value)
     }
 
-    /// The value as [u128], or [None] if it does not fit.
+    /// The value as [`u128`], or [`None`] if it does not fit.
     pub fn to_u128(&self) -> Option<u128> {
         let mut value: u128 = 0;
         for digit in self.iter() {
@@ -743,7 +743,7 @@ impl<'a> SmtNumeral<'a> {
         Some(value)
     }
 
-    /// The value as [usize], or [None] if it does not fit.
+    /// The value as [`usize`], or [`None`] if it does not fit.
     ///
     /// Whether a value fits depends on the platform.
     pub fn to_usize(&self) -> Option<usize> {
@@ -752,46 +752,46 @@ impl<'a> SmtNumeral<'a> {
 }
 
 impl SmtNumeralBuf {
-    /// Constructs from [u32].
+    /// Constructs from [`u32`].
     pub fn from_u32(value: u32) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Constructs from [u64].
+    /// Constructs from [`u64`].
     pub fn from_u64(value: u64) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Constructs from [u128].
+    /// Constructs from [`u128`].
     pub fn from_u128(value: u128) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Constructs from [usize].
+    /// Constructs from [`usize`].
     pub fn from_usize(value: usize) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// The value as [u32], or [None] if it does not fit.
+    /// The value as [`u32`], or [`None`] if it does not fit.
     pub fn to_u32(&self) -> Option<u32> {
         self.view().to_u32()
     }
 
-    /// The value as [u64], or [None] if it does not fit.
+    /// The value as [`u64`], or [`None`] if it does not fit.
     pub fn to_u64(&self) -> Option<u64> {
         self.view().to_u64()
     }
 
-    /// The value as [u128], or [None] if it does not fit.
+    /// The value as [`u128`], or [`None`] if it does not fit.
     pub fn to_u128(&self) -> Option<u128> {
         self.view().to_u128()
     }
 
-    /// The value as [usize], or [None] if it does not fit.
+    /// The value as [`usize`], or [`None`] if it does not fit.
     ///
     /// Whether a value fits depends on the platform.
     pub fn to_usize(&self) -> Option<usize> {
@@ -868,12 +868,12 @@ fn bin_digit_value(digit: u8) -> u8 {
 macro_rules! digits_to_int {
     ($view:ident, $buf:ident, $radix:literal, $digit_value:ident) => {
         impl $view<'_> {
-            /// The value as [u32], or [None] if it does not fit.
+            /// The value as [`u32`], or [`None`] if it does not fit.
             pub fn to_u32(&self) -> Option<u32> {
                 u32::try_from(self.to_u64()?).ok()
             }
 
-            /// The value as [u64], or [None] if it does not fit.
+            /// The value as [`u64`], or [`None`] if it does not fit.
             pub fn to_u64(&self) -> Option<u64> {
                 let mut value: u64 = 0;
                 for digit in self.iter() {
@@ -884,7 +884,7 @@ macro_rules! digits_to_int {
                 Some(value)
             }
 
-            /// The value as [u128], or [None] if it does not fit.
+            /// The value as [`u128`], or [`None`] if it does not fit.
             pub fn to_u128(&self) -> Option<u128> {
                 let mut value: u128 = 0;
                 for digit in self.iter() {
@@ -895,7 +895,7 @@ macro_rules! digits_to_int {
                 Some(value)
             }
 
-            /// The value as [usize], or [None] if it does not fit.
+            /// The value as [`usize`], or [`None`] if it does not fit.
             ///
             /// Whether a value fits depends on the platform.
             pub fn to_usize(&self) -> Option<usize> {
@@ -904,22 +904,22 @@ macro_rules! digits_to_int {
         }
 
         impl $buf {
-            /// The value as [u32], or [None] if it does not fit.
+            /// The value as [`u32`], or [`None`] if it does not fit.
             pub fn to_u32(&self) -> Option<u32> {
                 self.view().to_u32()
             }
 
-            /// The value as [u64], or [None] if it does not fit.
+            /// The value as [`u64`], or [`None`] if it does not fit.
             pub fn to_u64(&self) -> Option<u64> {
                 self.view().to_u64()
             }
 
-            /// The value as [u128], or [None] if it does not fit.
+            /// The value as [`u128`], or [`None`] if it does not fit.
             pub fn to_u128(&self) -> Option<u128> {
                 self.view().to_u128()
             }
 
-            /// The value as [usize], or [None] if it does not fit.
+            /// The value as [`usize`], or [`None`] if it does not fit.
             ///
             /// Whether a value fits depends on the platform.
             pub fn to_usize(&self) -> Option<usize> {

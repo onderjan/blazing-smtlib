@@ -1,9 +1,9 @@
 //! SMT-LIB lexicon: symbols, reserved words, keywords, numerals, etc.
 //!
 //! Each lexical category in SMT-LIB is represented by a type that views its
-//! content (e.g. [SmtNumeral]) and a type that owns its content (e.g.
-//! [SmtNumeralBuf]), similarly to [std::path::Path] and [std::path::PathBuf].
-//! Specially, words reserved in any version are represented by [SmtReserved].
+//! content (e.g. [`SmtNumeral`]) and a type that owns its content (e.g.
+//! [`SmtNumeralBuf`]), similarly to [`std::path::Path`] and [`std::path::PathBuf`].
+//! Specially, words reserved in any version are represented by [`SmtReserved`].
 //!
 //! Only valid SMT-LIB values can be constructed.
 //!
@@ -53,7 +53,7 @@
 //! This is not a problem when reading, as the [lexer](crate::lexer) will only
 //! give out appropriate [tokens](crate::token) but can be when generating
 //! SMT-LIB output or converting between versions. See documentation on
-//! [tokens](crate::token) and [SmtWriter](crate::SmtWriter) for how collisions
+//! [tokens](crate::token) and [`SmtWriter`](crate::SmtWriter) for how collisions
 //! between simple symbols and reserved words are handled.
 //!
 //!

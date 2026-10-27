@@ -80,10 +80,12 @@ are how agents follow it.
   stays.
 - Rules and their discussion come before the paragraph on content, which comes
   last: "The content is stripped of the base declaration, e.g. for the token
-  `#b0101`, [as_slice](Self::as_slice) returns `b"0101"`."
-- Items are linked without code formatting (`[SmtNumeral]`,
-  `[as_slice](Self::as_slice)`, `[u32]`); literal characters, tokens and
-  syntax are in code formatting (`` `0` ``, `` `|` ``, `` `#b0101` ``).
+  `#b0101`, [`as_slice`](Self::as_slice) returns `b"0101"`."
+- A link labelled with the name of an item is in code formatting
+  (``[`SmtNumeral`]``, ``[`as_slice`](Self::as_slice)``, ``[`u32`]``); a link
+  labelled with prose is not ("given by the [lexer](crate::lexer)"). Literal
+  characters, tokens and syntax are in code formatting too (`` `0` ``,
+  `` `|` ``, `` `#b0101` ``).
 - Comment lines are at most 100 columns long.
 
 ## Rust (`rust/`)

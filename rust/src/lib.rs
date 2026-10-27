@@ -1,4 +1,15 @@
 #![forbid(unsafe_code)]
+// The crate page is the README, whose links point to docs.rs so that they work wherever the
+// README is shown. Markdown takes the first definition of a link label, so these definitions,
+// put before the README, make the crate page link within the crate instead.
+#![doc = "[`SmtSyntaxChecker`]: crate::SmtSyntaxChecker"]
+#![doc = "[`SmtHandler`]: crate::SmtHandler"]
+#![doc = "[`SmtCommandHandler`]: crate::SmtCommandHandler"]
+#![doc = "[`read_smt_file`]: crate::read_smt_file"]
+#![doc = "[`SmtReader`]: crate::SmtReader"]
+#![doc = "[`SmtLexer`]: crate::lexer::SmtLexer"]
+#![doc = "[`SmtParse`]: crate::parser::SmtParse"]
+#![doc = "[`SmtWriter`]: crate::SmtWriter"]
 #![doc = include_str!("../README.md")]
 
 mod handler;

@@ -48,7 +48,7 @@ macro_rules! standard_command_rule {
 /// Defines the standard commands.
 ///
 /// The commands before the semicolon are each named like their variant of
-/// [SmtCommandNameReserved], which the command kinds are mapped from.
+/// [`SmtCommandNameReserved`], which the command kinds are mapped from.
 ///
 /// A command after the semicolon is the form a command had before the given
 /// version, where its payload has another grammar: before that version,

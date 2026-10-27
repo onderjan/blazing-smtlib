@@ -8,9 +8,9 @@ use crate::{
 
 /// Lexer token.
 ///
-/// Lexer tokens are given out by [SmtLexerCursor]. Each token includes its
-/// location span and can be viewed as [SmtToken](crate::token::SmtToken) via
-/// [SmtCursor::syntax] on [SmtLexerCursor].
+/// Lexer tokens are given out by [`SmtLexerCursor`]. Each token includes its
+/// location span and can be viewed as [`SmtToken`](crate::token::SmtToken) via
+/// [`SmtCursor::syntax`] on [`SmtLexerCursor`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmtLexerToken<'a> {
     /// Entry where End of File is kept as None.
@@ -260,8 +260,8 @@ impl<'a> SmtCursor for SmtLexerCursor<'a> {
 
 /// Lookahead window for an attempt to extract tokens from a lexer cursor.
 ///
-/// This window is given by [SmtLexerCursor] to the extraction function passed
-/// to [SmtLexerCursor::attempt] so it can attempt extraction of multiple tokens.
+/// This window is given by [`SmtLexerCursor`] to the extraction function passed
+/// to [`SmtLexerCursor::attempt`] so it can attempt extraction of multiple tokens.
 pub struct SmtLexerWindow<'a> {
     version: SmtVersion,
     entries: &'a [Option<(InnerCategory, &'a [u8])>],

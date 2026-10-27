@@ -23,7 +23,7 @@ pub enum SmtLexicalErrorKind {
 /// Character class expected by the lexer (fraction digit, hexadecimal digit, binary digit,
 /// or base).
 ///
-/// This is used in [SmtLexicalErrorKind::Expected].
+/// This is used in [`SmtLexicalErrorKind::Expected`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalExpected {
     /// Digit of the fractional part of a decimal.

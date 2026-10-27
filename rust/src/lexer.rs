@@ -43,19 +43,19 @@ use crate::{
 /// Lexes SMT-LIB input, handing the tokens to a consumer.
 ///
 /// The lexer lexes a byte stream into tokens that it sends
-/// to an implementation of [SmtConsume], which is expected
+/// to an implementation of [`SmtConsume`], which is expected
 /// to break with a value once it has finished processing
 /// and expects no more tokens belonging to the value.
 /// If any more tokens appear in the stream before
 /// its end, the lexer returns an error of the kind
-/// [SmtLexicalErrorKind::UnexpectedTrailingToken].
+/// [`SmtLexicalErrorKind::UnexpectedTrailingToken`].
 ///
 /// The EOF token is only produced if no value has been
-/// produced before the end of file, and the [SmtConsume]
+/// produced before the end of file, and the [`SmtConsume`]
 /// implementation is required by the contract to break
 /// with a value on it.
 ///
-/// When [SmtLexer::lex_eof] or [SmtLexer::lex_all] returns
+/// When [`SmtLexer::lex_eof`] or [`SmtLexer::lex_all`] returns
 /// successfully, the lexer is guaranteed to be reset
 /// and ready to lex another byte stream.
 ///
@@ -245,7 +245,7 @@ enum LexerState {
     /// Lexing whitespace.
     ///
     /// The lexer can only be set to this state if
-    /// [SmtConsume::IS_CONCRETE] is true,
+    /// [`SmtConsume::IS_CONCRETE`] is true,
     /// otherwise the whitespace is eagerly discarded without combining it.
     Whitespace,
     /// A lexer or consumer error was returned; lexing cannot continue.
@@ -269,7 +269,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     /// where all further lexing calls panic.
     ///
     /// The contract of the token consumer forbids it from
-    /// returning [ControlFlow::Continue] on the EOF token,
+    /// returning [`ControlFlow::Continue`] on the EOF token,
     /// and the lexer panics if it does.
     pub fn lex_all(
         &mut self,
@@ -289,7 +289,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     /// The buffer content is consumed up to where the consumer requests
     /// discarding the rest or fully if no such request was made.
     ///
-    /// Otherwise, behaves as [lex_all](Self::lex_all).
+    /// Otherwise, behaves as [`lex_all`](Self::lex_all).
     pub fn lex_from<B: BufRead>(
         &mut self,
         mut buf_reader: B,
@@ -323,7 +323,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     }
 
     /// Opens the file at `path` and lexes it as the whole input, as
-    /// [lex_from](Self::lex_from) does.
+    /// [`lex_from`](Self::lex_from) does.
     ///
     /// A failure to open the file is reported as an I/O error with an empty
     /// span at the start of the input.
@@ -483,7 +483,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
     /// a failure state and all further lexing calls panic.
     ///
     /// The contract of the token consumer forbids it from
-    /// returning [ControlFlow::Continue] on the EOF token,
+    /// returning [`ControlFlow::Continue`] on the EOF token,
     /// and the lexer panics if it does.
     pub fn lex_eof(&mut self) -> Result<SmtLocated<C::Result>, SmtLexerError<C::Error>> {
         // the end of the input forces recovery
@@ -2185,7 +2185,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
     /// Skips the input while recovering.
     ///
     /// Returns the position in the slice where the recovery was made,
-    /// or returns [Option::None] if it has not yet been done.
+    /// or returns [`Option::None`] if it has not yet been done.
     fn skip_slice(&mut self, slice: &[u8], mut skip: RecoveryState) -> Option<usize> {
         if let RecoveryState::Boundary = skip {
             if self.consumed_depth == 0 {

@@ -169,7 +169,7 @@ pub struct SmtWriter<W: Write> {
     writer: W,
     version: SmtVersion,
     position: Position,
-    /// Kept for [Self::write] to reuse its allocation, empty between calls.
+    /// Kept for [`Self::write`] to reuse its allocation, empty between calls.
     cursor: SmtTokensCursor<'static>,
 }
 
