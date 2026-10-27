@@ -137,30 +137,25 @@ impl SmtHandler for Retoken {
         }
         assert_same_tokens(&sort.ident.indices, &indices);
         assert_same_tokens(&sort.ident, &sort.ident.into_owned());
-        Ok(tokens_of(&sort))
+        let tokens = tokens_of(&sort);
+        let mut owned = sort.into_owned();
+        assert_same_tokens(&owned, &tokens);
+        assert_same_tokens(&owned.view_mut(), &tokens);
+        Ok(tokens)
     }
 
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<SmtTokensBuf, Error> {
         let tokens = tokens_of(&term);
-        match term {
-            SmtTerm::SpecialConstant(constant) => {
-                assert_same_tokens(&constant, &constant.into_owned());
-            }
-            SmtTerm::QualifiedIdent(ident) => {
-                let viewed = tokens_of(&ident);
-                assert_same_tokens(&viewed, &ident.into_owned());
-            }
-            SmtTerm::Application(application) => {
-                let (function, _) = application.into_parts();
-                let viewed = tokens_of(&function);
-                assert_same_tokens(&viewed, &function.into_owned());
-            }
-        }
+        assert_same_tokens(&term.into_owned(), &tokens);
         Ok(tokens)
     }
 
     fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<SmtTokensBuf, Error> {
-        Ok(tokens_of(&expr))
+        let tokens = tokens_of(&expr);
+        let mut owned = expr.into_owned();
+        assert_same_tokens(&owned, &tokens);
+        assert_same_tokens(&owned.view_mut(), &tokens);
+        Ok(tokens)
     }
 
     fn handle_attribute(
@@ -171,7 +166,13 @@ impl SmtHandler for Retoken {
         let built = Build::new().value(&name);
         Ok(match value {
             None => built,
-            Some(value) => built.value(&value),
+            Some(value) => {
+                let viewed = tokens_of(&value);
+                let mut owned = value.into_owned();
+                assert_same_tokens(&owned, &viewed);
+                assert_same_tokens(&owned.view_mut(), &viewed);
+                built.value(&owned)
+            }
         }
         .0)
     }

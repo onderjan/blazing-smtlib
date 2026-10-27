@@ -5,8 +5,8 @@ use crate::{
     grammar::SmtMultiple,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigits, SmtHexDigitsBuf,
-        SmtKeyword, SmtNumeral, SmtNumeralBuf, SmtStringContent, SmtStringContentBuf, SmtSymbol,
-        SmtSymbolBuf,
+        SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtStringContent,
+        SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
     },
     parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
     token::{SmtAppendTokens, SmtGeneralReserved, SmtReserved, SmtToken, SmtTokensCursor},
@@ -281,10 +281,58 @@ where
     }
 }
 
+/// Owned sort.
+pub struct SmtSortBuf<N: SmtNodeTypes + ?Sized> {
+    pub ident: SmtIdentBuf,
+    pub args: Vec<N::Sort>,
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtSortBuf<N> {
+    pub fn view_mut(&mut self) -> SmtSort<'_, N> {
+        SmtSort {
+            ident: self.ident.view(),
+            args: SmtMultiple::new(&mut self.args),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtSortBuf<N>
+where
+    N::Sort: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtSortBuf")
+            .field("ident", &self.ident)
+            .field("args", &self.args)
+            .finish()
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtSortBuf<N>
+where
+    N::Sort: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            ident: self.ident.clone(),
+            args: self.args.clone(),
+        }
+    }
+}
+
 /// View of a sort.
 pub struct SmtSort<'a, N: SmtNodeTypes + ?Sized> {
     pub ident: SmtIdent<'a>,
     pub args: SmtMultiple<'a, N::Sort>,
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtSort<'_, N> {
+    pub fn into_owned(self) -> SmtSortBuf<N> {
+        SmtSortBuf {
+            ident: self.ident.into_owned(),
+            args: self.args.into_iter().collect(),
+        }
+    }
 }
 
 impl<N: SmtNodeTypes + ?Sized> Debug for SmtSort<'_, N>
@@ -296,6 +344,72 @@ where
             .field("ident", &self.ident)
             .field("args", &self.args)
             .finish()
+    }
+}
+
+/// Owned application.
+///
+/// It is guaranteed that `args` are nonempty.
+pub struct SmtApplicationBuf<N: SmtNodeTypes + ?Sized> {
+    function: SmtQualifiedIdentBuf<N>,
+    args: Vec<N::Term>,
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtApplicationBuf<N> {
+    pub fn new(
+        function: SmtQualifiedIdentBuf<N>,
+        args: Vec<N::Term>,
+    ) -> Result<Self, SmtEmptyArgumentsError> {
+        if args.is_empty() {
+            return Err(SmtEmptyArgumentsError);
+        }
+        Ok(Self { function, args })
+    }
+
+    pub fn function(&self) -> &SmtQualifiedIdentBuf<N> {
+        &self.function
+    }
+
+    pub fn function_mut(&mut self) -> &mut SmtQualifiedIdentBuf<N> {
+        &mut self.function
+    }
+
+    pub fn args(&self) -> &[N::Term] {
+        &self.args
+    }
+
+    pub fn args_mut(&mut self) -> &mut [N::Term] {
+        &mut self.args
+    }
+
+    pub fn into_parts(self) -> (SmtQualifiedIdentBuf<N>, Vec<N::Term>) {
+        (self.function, self.args)
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtApplicationBuf<N>
+where
+    N::Sort: Debug,
+    N::Term: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SmtApplicationBuf")
+            .field("function", &self.function)
+            .field("args", &self.args)
+            .finish()
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtApplicationBuf<N>
+where
+    N::Sort: Clone,
+    N::Term: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            function: self.function.clone(),
+            args: self.args.clone(),
+        }
     }
 }
 
@@ -345,6 +459,13 @@ impl<'a, N: SmtNodeTypes + ?Sized> SmtApplication<'a, N> {
 
     pub fn into_parts(self) -> (SmtQualifiedIdent<'a, N>, SmtMultiple<'a, N::Term>) {
         (self.function, self.args)
+    }
+
+    pub fn into_owned(self) -> SmtApplicationBuf<N> {
+        SmtApplicationBuf {
+            function: self.function.into_owned(),
+            args: self.args.into_iter().collect(),
+        }
     }
 }
 
@@ -417,11 +538,56 @@ impl SmtSpecialConstant<'_> {
     }
 }
 
+/// Owned term (special constant, qualified identifier, or application).
+pub enum SmtTermBuf<N: SmtNodeTypes + ?Sized> {
+    SpecialConstant(SmtSpecialConstantBuf),
+    QualifiedIdent(SmtQualifiedIdentBuf<N>),
+    Application(SmtApplicationBuf<N>),
+}
+
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtTermBuf<N>
+where
+    N::Sort: Debug,
+    N::Term: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
+            Self::QualifiedIdent(arg0) => f.debug_tuple("QualifiedIdent").field(arg0).finish(),
+            Self::Application(arg0) => f.debug_tuple("Application").field(arg0).finish(),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtTermBuf<N>
+where
+    N::Sort: Clone,
+    N::Term: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::SpecialConstant(constant) => Self::SpecialConstant(constant.clone()),
+            Self::QualifiedIdent(ident) => Self::QualifiedIdent(ident.clone()),
+            Self::Application(application) => Self::Application(application.clone()),
+        }
+    }
+}
+
 /// View of a term (special constant, qualified identifier, or application).
 pub enum SmtTerm<'a, N: SmtNodeTypes + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     QualifiedIdent(SmtQualifiedIdent<'a, N>),
     Application(SmtApplication<'a, N>),
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtTerm<'_, N> {
+    pub fn into_owned(self) -> SmtTermBuf<N> {
+        match self {
+            Self::SpecialConstant(constant) => SmtTermBuf::SpecialConstant(constant.into_owned()),
+            Self::QualifiedIdent(ident) => SmtTermBuf::QualifiedIdent(ident.into_owned()),
+            Self::Application(application) => SmtTermBuf::Application(application.into_owned()),
+        }
+    }
 }
 
 /// Kind of a quantifier (existential or universal).
@@ -445,11 +611,66 @@ where
     }
 }
 
+/// Owned attribute value (special constant, symbol, or a list of S-expressions).
+pub enum SmtAttributeValueBuf<N: SmtNodeTypes + ?Sized> {
+    SpecialConstant(SmtSpecialConstantBuf),
+    Symbol(SmtSymbolBuf),
+    SExprs(Vec<N::SExpr>),
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtAttributeValueBuf<N> {
+    pub fn view_mut(&mut self) -> SmtAttributeValue<'_, N> {
+        match self {
+            Self::SpecialConstant(constant) => SmtAttributeValue::SpecialConstant(constant.view()),
+            Self::Symbol(symbol) => SmtAttributeValue::Symbol(symbol.view()),
+            Self::SExprs(s_exprs) => SmtAttributeValue::SExprs(SmtMultiple::new(s_exprs)),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtAttributeValueBuf<N>
+where
+    N::SExpr: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
+            Self::Symbol(arg0) => f.debug_tuple("Symbol").field(arg0).finish(),
+            Self::SExprs(arg0) => f.debug_tuple("SExprs").field(arg0).finish(),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtAttributeValueBuf<N>
+where
+    N::SExpr: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::SpecialConstant(constant) => Self::SpecialConstant(constant.clone()),
+            Self::Symbol(symbol) => Self::Symbol(symbol.clone()),
+            Self::SExprs(s_exprs) => Self::SExprs(s_exprs.clone()),
+        }
+    }
+}
+
 /// View of an attribute value (special constant, symbol, or a list of S-expressions).
 pub enum SmtAttributeValue<'a, N: SmtNodeTypes + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     Symbol(SmtSymbol<'a>),
     SExprs(SmtMultiple<'a, N::SExpr>),
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtAttributeValue<'_, N> {
+    pub fn into_owned(self) -> SmtAttributeValueBuf<N> {
+        match self {
+            Self::SpecialConstant(constant) => {
+                SmtAttributeValueBuf::SpecialConstant(constant.into_owned())
+            }
+            Self::Symbol(symbol) => SmtAttributeValueBuf::Symbol(symbol.into_owned()),
+            Self::SExprs(s_exprs) => SmtAttributeValueBuf::SExprs(s_exprs.into_iter().collect()),
+        }
+    }
 }
 
 impl<N: SmtNodeTypes + ?Sized> Debug for SmtAttributeValue<'_, N>
@@ -549,6 +770,58 @@ impl SmtPatternApplicationBuf {
     }
 }
 
+/// Owned S-expression (special constant, symbol, reserved word, keyword, or a list of
+/// S-expressions).
+pub enum SmtSExprBuf<N: SmtNodeTypes + ?Sized> {
+    SpecialConstant(SmtSpecialConstantBuf),
+    Symbol(SmtSymbolBuf),
+    Reserved(SmtReserved),
+    Keyword(SmtKeywordBuf),
+    SExprs(Vec<N::SExpr>),
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtSExprBuf<N> {
+    pub fn view_mut(&mut self) -> SmtSExpr<'_, N> {
+        match self {
+            Self::SpecialConstant(constant) => SmtSExpr::SpecialConstant(constant.view()),
+            Self::Symbol(symbol) => SmtSExpr::Symbol(symbol.view()),
+            Self::Reserved(reserved) => SmtSExpr::Reserved(*reserved),
+            Self::Keyword(keyword) => SmtSExpr::Keyword(keyword.view()),
+            Self::SExprs(s_exprs) => SmtSExpr::SExprs(SmtMultiple::new(s_exprs)),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtSExprBuf<N>
+where
+    N::SExpr: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SpecialConstant(arg0) => f.debug_tuple("SpecialConstant").field(arg0).finish(),
+            Self::Symbol(arg0) => f.debug_tuple("Symbol").field(arg0).finish(),
+            Self::Reserved(arg0) => f.debug_tuple("Reserved").field(arg0).finish(),
+            Self::Keyword(arg0) => f.debug_tuple("Keyword").field(arg0).finish(),
+            Self::SExprs(arg0) => f.debug_tuple("SExprs").field(arg0).finish(),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtSExprBuf<N>
+where
+    N::SExpr: Clone,
+{
+    fn clone(&self) -> Self {
+        match self {
+            Self::SpecialConstant(constant) => Self::SpecialConstant(constant.clone()),
+            Self::Symbol(symbol) => Self::Symbol(symbol.clone()),
+            Self::Reserved(reserved) => Self::Reserved(*reserved),
+            Self::Keyword(keyword) => Self::Keyword(keyword.clone()),
+            Self::SExprs(s_exprs) => Self::SExprs(s_exprs.clone()),
+        }
+    }
+}
+
 /// View of an S-expression (special constant, symbol, reserved word, keyword, or a list of
 /// S-expressions).
 pub enum SmtSExpr<'a, N: SmtNodeTypes + ?Sized> {
@@ -557,6 +830,18 @@ pub enum SmtSExpr<'a, N: SmtNodeTypes + ?Sized> {
     Reserved(SmtReserved),
     Keyword(SmtKeyword<'a>),
     SExprs(SmtMultiple<'a, N::SExpr>),
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtSExpr<'_, N> {
+    pub fn into_owned(self) -> SmtSExprBuf<N> {
+        match self {
+            Self::SpecialConstant(constant) => SmtSExprBuf::SpecialConstant(constant.into_owned()),
+            Self::Symbol(symbol) => SmtSExprBuf::Symbol(symbol.into_owned()),
+            Self::Reserved(reserved) => SmtSExprBuf::Reserved(reserved),
+            Self::Keyword(keyword) => SmtSExprBuf::Keyword(keyword.into_owned()),
+            Self::SExprs(s_exprs) => SmtSExprBuf::SExprs(s_exprs.into_iter().collect()),
+        }
+    }
 }
 
 impl<N: SmtNodeTypes + ?Sized> Debug for SmtSExpr<'_, N>
@@ -911,21 +1196,67 @@ where
     }
 }
 
+/// Appends a sort of the identifier with the arguments.
+fn append_sort<'a, S: SmtAppendTokens>(
+    ident: SmtIdent<'a>,
+    args: &'a [S],
+    tokens: &mut SmtTokensCursor<'a>,
+) {
+    if args.is_empty() {
+        // a sort without arguments is represented by its identifier
+        append_ident(ident, tokens);
+    } else {
+        // use the syntax for a sort with arguments: ( identifier sort+ )
+        tokens.push(SmtToken::ParenOpen);
+        append_ident(ident, tokens);
+        append_values(args, tokens);
+        tokens.push(SmtToken::ParenClose);
+    }
+}
+
+/// Appends an application of the potentially qualified identifier to the arguments.
+fn append_application<'a, S: SmtAppendTokens, T: SmtAppendTokens>(
+    function: SmtIdent<'a>,
+    sort: Option<&'a S>,
+    args: &'a [T],
+    tokens: &mut SmtTokensCursor<'a>,
+) {
+    // use the application syntax: ( function term+ )
+    tokens.push(SmtToken::ParenOpen);
+    append_qualified_ident(function, sort, tokens);
+    append_values(args, tokens);
+    tokens.push(SmtToken::ParenClose);
+}
+
+/// Appends a list of S-expressions, enclosed in parentheses: ( s_expr* ).
+fn append_s_exprs<'a, E: SmtAppendTokens>(s_exprs: &'a [E], tokens: &mut SmtTokensCursor<'a>) {
+    tokens.push(SmtToken::ParenOpen);
+    append_values(s_exprs, tokens);
+    tokens.push(SmtToken::ParenClose);
+}
+
+/// Appends the values one after another.
+fn append_values<'a, V: SmtAppendTokens>(values: &'a [V], tokens: &mut SmtTokensCursor<'a>) {
+    for value in values {
+        value.append_tokens(tokens);
+    }
+}
+
 impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtSort<'_, N>
 where
     N::Sort: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
-        if self.args.is_empty() {
-            // a sort without arguments is represented by its identifier
-            append_ident(self.ident, tokens);
-        } else {
-            // use the syntax for a sort with arguments: ( identifier sort+ )
-            tokens.push(SmtToken::ParenOpen);
-            append_ident(self.ident, tokens);
-            self.args.append_tokens(tokens);
-            tokens.push(SmtToken::ParenClose);
-        }
+        append_sort(self.ident, self.args.as_slice(), tokens);
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtSortBuf<N>
+where
+    N::Sort: SmtAppendTokens,
+{
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        append_sort(self.ident.view(), &self.args, tokens);
     }
 }
 
@@ -935,11 +1266,27 @@ where
     N::Term: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
-        // use the application syntax: ( function term+ )
-        tokens.push(SmtToken::ParenOpen);
-        self.function.append_tokens(tokens);
-        self.args.append_tokens(tokens);
-        tokens.push(SmtToken::ParenClose);
+        append_application(
+            self.function.ident,
+            self.function.sort.as_ref(),
+            self.args.as_slice(),
+            tokens,
+        );
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtApplicationBuf<N>
+where
+    N::Sort: SmtAppendTokens,
+    N::Term: SmtAppendTokens,
+{
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        append_application(
+            self.function.ident.view(),
+            self.function.sort.as_ref(),
+            &self.args,
+            tokens,
+        );
     }
 }
 
@@ -957,6 +1304,20 @@ where
     }
 }
 
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtTermBuf<N>
+where
+    N::Sort: SmtAppendTokens,
+    N::Term: SmtAppendTokens,
+{
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        match self {
+            Self::SpecialConstant(constant) => append_special_constant(constant.view(), tokens),
+            Self::QualifiedIdent(ident) => ident.append_tokens(tokens),
+            Self::Application(application) => application.append_tokens(tokens),
+        }
+    }
+}
+
 impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtAttributeValue<'_, N>
 where
     N::SExpr: SmtAppendTokens,
@@ -965,12 +1326,20 @@ where
         match self {
             Self::SpecialConstant(constant) => append_special_constant(*constant, tokens),
             Self::Symbol(symbol) => tokens.push(SmtToken::Symbol(*symbol)),
-            Self::SExprs(s_exprs) => {
-                // the S-expressions are enclosed in parentheses: ( s_expr* )
-                tokens.push(SmtToken::ParenOpen);
-                s_exprs.append_tokens(tokens);
-                tokens.push(SmtToken::ParenClose);
-            }
+            Self::SExprs(s_exprs) => append_s_exprs(s_exprs.as_slice(), tokens),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtAttributeValueBuf<N>
+where
+    N::SExpr: SmtAppendTokens,
+{
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        match self {
+            Self::SpecialConstant(constant) => append_special_constant(constant.view(), tokens),
+            Self::Symbol(symbol) => tokens.push(SmtToken::Symbol(symbol.view())),
+            Self::SExprs(s_exprs) => append_s_exprs(s_exprs, tokens),
         }
     }
 }
@@ -985,12 +1354,22 @@ where
             Self::Symbol(symbol) => tokens.push(SmtToken::Symbol(*symbol)),
             Self::Reserved(reserved) => tokens.push(SmtToken::Reserved(*reserved)),
             Self::Keyword(keyword) => tokens.push(SmtToken::Keyword(*keyword)),
-            Self::SExprs(s_exprs) => {
-                // the S-expressions are enclosed in parentheses: ( s_expr* )
-                tokens.push(SmtToken::ParenOpen);
-                s_exprs.append_tokens(tokens);
-                tokens.push(SmtToken::ParenClose);
-            }
+            Self::SExprs(s_exprs) => append_s_exprs(s_exprs.as_slice(), tokens),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtSExprBuf<N>
+where
+    N::SExpr: SmtAppendTokens,
+{
+    fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
+        match self {
+            Self::SpecialConstant(constant) => append_special_constant(constant.view(), tokens),
+            Self::Symbol(symbol) => tokens.push(SmtToken::Symbol(symbol.view())),
+            Self::Reserved(reserved) => tokens.push(SmtToken::Reserved(*reserved)),
+            Self::Keyword(keyword) => tokens.push(SmtToken::Keyword(keyword.view())),
+            Self::SExprs(s_exprs) => append_s_exprs(s_exprs, tokens),
         }
     }
 }

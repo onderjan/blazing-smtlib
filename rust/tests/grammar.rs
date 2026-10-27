@@ -6,13 +6,14 @@ use std::fmt::Debug;
 use blazing_smtlib::{
     SmtHandler, SmtVersion,
     grammar::{
-        SmtApplication, SmtAttributeValue, SmtBindings, SmtConstructors, SmtEmptyArgumentsError,
-        SmtFunctionSignature, SmtFunctionSignatures, SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf,
-        SmtIndices, SmtIndicesBuf, SmtMatchCases, SmtMatchCasesBuf, SmtMultiple, SmtNamedValues,
-        SmtPattern, SmtPatternApplication, SmtPatternApplicationBuf, SmtPatternBuf,
-        SmtQualifiedIdent, SmtQualifiedIdentBuf, SmtQuantifierKind, SmtSExpr, SmtSimplePattern,
-        SmtSimplePatternBuf, SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort, SmtSortArities,
-        SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtSymbols, SmtTerm,
+        SmtApplication, SmtApplicationBuf, SmtAttributeValue, SmtAttributeValueBuf, SmtBindings,
+        SmtConstructors, SmtEmptyArgumentsError, SmtFunctionSignature, SmtFunctionSignatures,
+        SmtIdent, SmtIdentBuf, SmtIndex, SmtIndexBuf, SmtIndices, SmtIndicesBuf, SmtMatchCases,
+        SmtMatchCasesBuf, SmtMultiple, SmtNamedValues, SmtPattern, SmtPatternApplication,
+        SmtPatternApplicationBuf, SmtPatternBuf, SmtQualifiedIdent, SmtQualifiedIdentBuf,
+        SmtQuantifierKind, SmtSExpr, SmtSExprBuf, SmtSimplePattern, SmtSimplePatternBuf,
+        SmtSimplePatterns, SmtSimplePatternsBuf, SmtSort, SmtSortArities, SmtSortBuf,
+        SmtSortedVars, SmtSpecialConstant, SmtSpecialConstantBuf, SmtSymbols, SmtTerm, SmtTermBuf,
     },
     lexicon::{
         SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeyword, SmtNumeralBuf,
@@ -143,6 +144,12 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug::<SmtSortedVars<'static, OpaqueHandler>>();
     assert_debug::<SmtAttributeValue<'static, OpaqueHandler>>();
     assert_debug::<SmtSExpr<'static, OpaqueHandler>>();
+    // their owned forms hold the values handed over, so they can be cloned
+    assert_debug_and_clone::<SmtSortBuf<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtApplicationBuf<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtTermBuf<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtAttributeValueBuf<OpaqueHandler>>();
+    assert_debug_and_clone::<SmtSExprBuf<OpaqueHandler>>();
     // the signature views hand their sorts over by reference, so they can be copied
     assert_debug_and_clone::<SmtFunctionSignature<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtFunctionSignatures<'static, OpaqueHandler>>();
