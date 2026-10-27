@@ -258,10 +258,10 @@ impl<'a> SmtCursor for SmtLexerCursor<'a> {
     }
 }
 
-/// Lookahead window for an attempt to extract tokens from lexer cursor.
+/// Lookahead window for an attempt to extract tokens from a lexer cursor.
 ///
-/// This window is given by [`SmtLexerCursor`] to the extraction function passed
-/// to [`SmtLexerCursor::attempt`] so it can attempt extraction of multiple tokens.
+/// This window is given by [SmtLexerCursor] to the extraction function passed
+/// to [SmtLexerCursor::attempt] so it can attempt extraction of multiple tokens.
 pub struct SmtLexerWindow<'a> {
     version: SmtVersion,
     entries: &'a [Option<(InnerCategory, &'a [u8])>],

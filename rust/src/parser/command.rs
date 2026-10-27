@@ -19,8 +19,8 @@ use standard::{StandardCommandKind, StandardCommandParsers};
 
 /// Parses an SMT-LIB command.
 ///
-/// The parser finishes after every command, returning [`ControlFlow::Break`]
-/// with a [`SmtCommandOutcome`] that distinguishes the command `(exit)`
+/// The parser finishes after every command, returning [ControlFlow::Break]
+/// with a [SmtCommandOutcome] that distinguishes the command `(exit)`
 /// and the version-switch command `(set-info :smt-lib-version <version>)`
 /// from the others. It also finishes after an EOF while awaiting a command.
 /// An EOF inside a command is a syntax error.
@@ -35,7 +35,7 @@ impl<H: SmtCommandHandler> fmt::Debug for SmtCommandParser<H> {
     }
 }
 
-/// Outcome of parsing a command with [`SmtCommandParser`].
+/// Outcome of parsing a command with [SmtCommandParser].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtCommandOutcome {
     /// A command other than special ones was parsed.
@@ -203,7 +203,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
     }
 }
 
-/// Handles the result of a command parsed by [`SmtCommandPayloadParser`].
+/// Handles the result of a command parsed by [SmtCommandPayloadParser].
 pub trait SmtCommandRule<H: SmtCommandHandler> {
     type Parser: SmtParse<H>;
 

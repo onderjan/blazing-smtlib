@@ -11,7 +11,7 @@ use crate::{
     token::{SmtCursor, SmtToken},
 };
 
-/// Parses a sorted variable (parentheses-enclosed symbol and sort).
+/// Parses a sorted variable (a symbol and a sort enclosed in parentheses).
 pub struct SmtSortedVarParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

@@ -12,7 +12,7 @@ use crate::{
     token::SmtCommandNameReserved,
 };
 
-/// A handler of SMT-LIB nodes (sorts, terms, etc.).
+/// Handler of nodes (sorts, terms, etc.).
 pub trait SmtHandler {
     type Error;
 
@@ -23,18 +23,18 @@ pub trait SmtHandler {
 
     type Scope;
 
-    /// Informs the handler of the SMT-LIB version in force.
+    /// Informs the handler of the version in force.
     ///
     /// The caller must set the version before calling
     /// other methods so the handler can process them
     /// according to the version semantics.
     ///
-    /// The handler should start in [`SmtVersion::default`].
+    /// The handler should start in [SmtVersion::default].
     ///
     /// In the library,
-    /// [`SmtParseAdapter`](crate::parser::SmtParseAdapter)
+    /// [SmtParseAdapter](crate::parser::SmtParseAdapter)
     /// calls this method before any other calls, and
-    /// [`SmtScriptParser`](crate::parser::SmtScriptParser)
+    /// [SmtScriptParser](crate::parser::SmtScriptParser)
     /// calls this method when switching versions.
     fn set_version(&mut self, version: SmtVersion);
 
@@ -157,11 +157,11 @@ pub trait SmtHandler {
     ) -> Result<Self::Term, Self::Error>;
 }
 
-/// A handler of SMT-LIB commands.
+/// Handler of commands.
 pub trait SmtCommandHandler: SmtHandler {
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
-    /// Returns a parser that parses a non-standard command with the given name.
+    /// Returns a parser that parses a nonstandard command with the given name.
     fn nonstandard_command(
         &mut self,
         name: SmtSymbol<'_>,
@@ -184,7 +184,7 @@ pub trait SmtCommandHandler: SmtHandler {
     fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error>;
     fn command_get_unsat_core(&mut self) -> Result<(), Self::Error>;
 
-    /// Adds a sort symbol with an associated arity.
+    /// Declares a sort with an arity (`declare-sort`).
     ///
     /// As per the standard, the handler should return an error if `name`
     /// is a sort symbol or parameter that is already present in the current signature.
@@ -194,7 +194,7 @@ pub trait SmtCommandHandler: SmtHandler {
         arity: SmtNumeral<'_>,
     ) -> Result<(), Self::Error>;
 
-    /// Adds a global sort parameter `name` to the current signature.
+    /// Declares a global sort parameter (`declare-sort-parameter`).
     ///
     /// As per the standard, the handler should return an error
     /// if `name` is a sort symbol, sort parameter, or theory symbol
@@ -243,12 +243,12 @@ pub trait SmtCommandHandler: SmtHandler {
 
     fn command_exit(&mut self) -> Result<(), Self::Error>;
 
-    /// Pushes `amount` of empty assertion levels onto the assertion stack.
+    /// Pushes `amount` empty assertion levels onto the assertion stack (`push`).
     ///
     /// If `amount` is 0, no levels are pushed (i.e. successful no-op).
     fn command_push(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error>;
 
-    /// Pops `amount` of assertion levels from the assertion stack.
+    /// Pops `amount` assertion levels from the assertion stack (`pop`).
     ///
     /// If `amount` is 0, no levels are popped (i.e. successful no-op).
     ///
@@ -257,7 +257,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// beyond the inherent first assertion level.
     fn command_pop(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error>;
 
-    /// Starts sort definition (in `define-sort`).
+    /// Starts a sort definition (`define-sort`).
     ///
     /// The handler should bring `params` into scope as local sort parameters
     /// before the body sort is handled. As per the standard, they shadow
@@ -273,14 +273,14 @@ pub trait SmtCommandHandler: SmtHandler {
         params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error>;
 
-    /// Ends sort definition (in `define-sort`).
+    /// Ends a sort definition (`define-sort`).
     ///
     /// As per the standard, the handler should return an error
     /// if `sort` is not a well-defined (polymorphic) sort with respect to the
     /// current signature extended with the sort parameters.
     fn end_define_sort(&mut self, sort: Self::Sort) -> Result<(), Self::Error>;
 
-    /// Starts function definition body (in `define-fun`).
+    /// Starts the body of a function definition (`define-fun`).
     fn start_define_fun(
         &mut self,
         signature: SmtFunctionSignature<'_, Self::Sort>,
@@ -297,7 +297,7 @@ pub trait SmtCommandHandler: SmtHandler {
         body: Self::Term,
     ) -> Result<(), Self::Error>;
 
-    /// Ends function definition body (in `define-fun`).
+    /// Ends the body of a function definition (`define-fun`).
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
     /// Starts a recursive function definition (`define-fun-rec`).
@@ -334,7 +334,7 @@ pub trait SmtCommandHandler: SmtHandler {
         signatures: SmtFunctionSignatures<'_, Self::Sort>,
     ) -> Result<(), Self::Error>;
 
-    /// Ends recursive function definitions (in `define-funs-rec`).
+    /// Ends recursive function definitions (`define-funs-rec`).
     ///
     /// The parser guarantees:
     /// 1. There is a pending unended `start_define_funs_rec`.
@@ -346,7 +346,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn end_define_funs_rec(&mut self) -> Result<(), Self::Error>;
 
-    /// Starts the body of a recursive function (in `define-fun-rec` / `define-funs-rec`).
+    /// Starts the body of a recursive function (in `define-funs-rec`).
     ///
     /// The parser guarantees:
     /// 1. This method is only called between `start_define_funs_rec` and `end_define_funs_rec`.
@@ -442,7 +442,7 @@ pub trait SmtCommandHandler: SmtHandler {
         sort_params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error>;
 
-    /// Ends a datatype declaration (in `declare-datatypes` / `declare-datatype`).
+    /// Ends a datatype declaration (in `declare-datatypes`).
     ///
     /// The parser guarantees:
     /// 1. This method is only called between `start_declare_datatypes` and `end_declare_datatypes`.
@@ -516,21 +516,21 @@ fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCom
     Err(SmtPartialCommandError::Unsupported(command))
 }
 
-/// A handler of a partial subset of SMT-LIB commands.
+/// Handler of a subset of commands.
 ///
 /// Every command it does not implement fails with
-/// [`SmtPartialCommandError::Unsupported`] naming the command, or with
-/// [`SmtPartialCommandError::UnsupportedNonstandard`] for a nonstandard command.
-/// Each implementor is a [`SmtCommandHandler`].
+/// [SmtPartialCommandError::Unsupported] naming the command, or with
+/// [SmtPartialCommandError::UnsupportedNonstandard] for a nonstandard command.
+/// Each implementor is a [SmtCommandHandler].
 pub trait SmtPartialCommandHandler:
     SmtHandler<Error = SmtPartialCommandError<Self::HandlerError>>
 {
-    /// The error of the handler itself.
+    /// Error of the handler itself.
     type HandlerError;
 
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
-    /// Returns a parser that parses a non-standard command with the given name.
+    /// Returns a parser that parses a nonstandard command with the given name.
     fn nonstandard_command(
         &mut self,
         name: SmtSymbol<'_>,
@@ -939,17 +939,17 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
     }
 }
 
-/// A handler that checks compliance with SMT-LIB syntax.
+/// Handler that checks compliance with SMT-LIB syntax.
 ///
 /// This handler quietly swallows all standard categories and commands.
 /// It does not allow any non-standard commands, failing with
-/// [`SmtNonstandardCommandError`].
+/// [SmtNonstandardCommandError].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SmtSyntaxChecker;
 
-/// Error encountering a non-standard command.
+/// Error encountering a nonstandard command.
 ///
-/// Used by [`SmtSyntaxChecker`], which does not
+/// Used by [SmtSyntaxChecker], which does not
 /// support non-standard commands.
 #[derive(Debug, Clone)]
 pub struct SmtNonstandardCommandError(SmtSymbolBuf);
@@ -959,7 +959,7 @@ impl SmtNonstandardCommandError {
         Self(name)
     }
 
-    /// The name of the nonstandard command.
+    /// Name of the nonstandard command.
     pub fn name(&self) -> &SmtSymbolBuf {
         &self.0
     }

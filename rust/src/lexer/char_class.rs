@@ -243,7 +243,7 @@ pub(super) fn run_end(slice: &[u8], mask: u8) -> usize {
             .unwrap_or(tail.len())
 }
 
-/// Like [`run_end`], but a byte continues the run only if it has all the flags of the mask.
+/// Like [run_end], but a byte continues the run only if it has all the flags of the mask.
 #[inline]
 pub(super) fn run_end_all(slice: &[u8], mask: u8) -> usize {
     slice

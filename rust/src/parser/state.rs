@@ -18,7 +18,7 @@ use crate::{
 /// Parsers that are constructed multiple times in locations where their use
 /// does not overlap can have unnecessarily duplicated resources (e.g.
 /// collections). This structure is only constructed once (usually by
-/// [`SmtParseAdapter`](super::SmtParseAdapter)) for the root parser and
+/// [SmtParseAdapter](super::SmtParseAdapter)) for the root parser and
 /// propagated to smaller parsers.
 pub struct SmtParseState<H: SmtHandler + ?Sized> {
     pub(crate) arena: Arena<H>,
@@ -469,7 +469,7 @@ fn ident_view<'a>(text: &'a [u8], indices: &'a [IndexHandle], ident: IdentHandle
 /// Proof that a hand-over comes from the arena.
 ///
 /// Only the arena can construct it, so only the arena
-/// can create [`SmtMultiple`] or [`SmtNamedValues`].
+/// can create [SmtMultiple] or [SmtNamedValues].
 pub(crate) struct ArenaAccess {
     _priv: (),
 }
@@ -502,7 +502,7 @@ impl TextHandle {
 /// the symbols are not produced as text, which could
 /// silently convert a quoted symbol into an unquoted one.
 ///
-/// This type is created by [`SymbolHandle::create_by_push`],
+/// This type is created by [SymbolHandle::create_by_push],
 /// and returns the proper symbol view.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct SymbolHandle(TextHandle);

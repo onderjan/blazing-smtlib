@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-/// Why writing has failed (I/O error or writing impossibility).
+/// Why writing failed (I/O error or writing impossibility).
 #[derive(Debug)]
 pub enum SmtWriteErrorKind {
     /// Writing to the writer failed.
@@ -32,12 +32,12 @@ impl SmtWriteError {
         Self(kind)
     }
 
-    /// Determines why writing has failed.
+    /// Kind of the error.
     pub fn kind(&self) -> &SmtWriteErrorKind {
         &self.0
     }
 
-    /// Convert into the enumeration that determines why writing has failed.
+    /// Converts into the kind of the error.
     pub fn into_kind(self) -> SmtWriteErrorKind {
         self.0
     }
@@ -149,17 +149,17 @@ impl SmtWriterConfig {
         }
     }
 
-    /// The configuration with the style replaced.
+    /// Configuration with the style replaced.
     pub fn with_style(self, style: SmtWriteStyle) -> Self {
         Self { style, ..self }
     }
 
-    /// The version written in.
+    /// Version written in.
     pub fn version(&self) -> SmtVersion {
         self.version
     }
 
-    /// The style written in.
+    /// Style written in.
     pub fn style(&self) -> SmtWriteStyle {
         self.style
     }
@@ -171,7 +171,7 @@ pub struct SmtWriter<W: Write> {
     writer: W,
     version: SmtVersion,
     position: Position,
-    /// Kept for [`Self::write`] to reuse its allocation, empty between calls.
+    /// Kept for [Self::write] to reuse its allocation, empty between calls.
     cursor: SmtTokensCursor<'static>,
 }
 
@@ -191,7 +191,7 @@ impl<W: Write> SmtWriter<W> {
         }
     }
 
-    /// The configuration the writer writes in.
+    /// Configuration the writer writes in.
     pub fn config(&self) -> SmtWriterConfig {
         let style = match self.position {
             Position::Line(_) => SmtWriteStyle::Line,
@@ -201,7 +201,7 @@ impl<W: Write> SmtWriter<W> {
         SmtWriterConfig::new(self.version).with_style(style)
     }
 
-    /// The version the writer writes in.
+    /// Version the writer writes in.
     pub fn version(&self) -> SmtVersion {
         self.version
     }

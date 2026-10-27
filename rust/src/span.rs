@@ -1,4 +1,4 @@
-/// Location in an SMT-LIB stream.
+/// Location in a byte stream.
 ///
 /// All counts are in bytes. While SMT-LIB accepts both CR and LF as a comment
 /// separator, we consider only LF to start a new line for location purposes as
@@ -126,7 +126,7 @@ impl SmtLocation {
     }
 }
 
-/// A value located in an SMT-LIB stream.
+/// Value located in a byte stream.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtLocated<V> {
     value: V,
@@ -155,7 +155,7 @@ impl<V> SmtLocated<V> {
     }
 }
 
-/// Span of an SMT-LIB item.
+/// Span of an item in a byte stream.
 ///
 /// The span is a half-open range `[start, end)` between locations.
 ///

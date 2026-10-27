@@ -1,17 +1,17 @@
 //! Reading SMT-LIB input: lexing and parsing.
 //!
-//! Reading turns bytes into tokens (the [`lexer`](crate::lexer) module) and tokens into
-//! the syntactic categories and commands of SMT-LIB (the [`parser`](crate::parser) module),
-//! which are delivered to a [`SmtCommandHandler`] in streaming fashion:
+//! Reading turns bytes into tokens (the [lexer](crate::lexer) module) and tokens into
+//! the syntactic categories and commands of SMT-LIB (the [parser](crate::parser) module),
+//! which are delivered to a [SmtCommandHandler] in streaming fashion:
 //! the input is processed piece by piece and every category or command
 //! to be handled reaches the handler before the next one is read.
 //!
-//! For simple usage, use [`read_smt`] and [`read_smt_file`].
+//! For simple usage, use [read_smt] and [read_smt_file].
 //!
-//! [`SmtReader`] reads the same way from any sequence of buffers and keeps
+//! [SmtReader] reads the same way from any sequence of buffers and keeps
 //! the parser's resources under the caller's control, so it is the entry
 //! point when the input does not arrive as one buffered reader or when the
-//! resources should serve several reads. The [`lexer`](crate::lexer) and [`parser`](crate::parser)
+//! resources should serve several reads. The [lexer](crate::lexer) and [parser](crate::parser)
 //! modules can also be used on their own.
 
 use std::{
@@ -33,7 +33,7 @@ use crate::{
 };
 use crate::{SmtVersion, SmtVersionPosture, span::SmtLocation};
 
-/// Why reading has failed (I/O, lexical, syntax, version, or handler error).
+/// Why reading failed (I/O, lexical, syntax, version, or handler error).
 #[derive(Debug)]
 pub enum SmtReadErrorKind<E> {
     /// Reading from a file or a buffered reader failed.
@@ -43,7 +43,7 @@ pub enum SmtReadErrorKind<E> {
     /// The tokens do not form valid SMT-LIB syntactic categories or commands.
     ///
     /// Commands with non-standard names are routed to the handler for
-    /// processing, so they are rejected with a [`SmtReadErrorKind::Handler`]
+    /// processing, so they are rejected with a [SmtReadErrorKind::Handler]
     /// error cause instead.
     Syntax(SmtSyntaxErrorKind),
     /// The script declares a version that cannot be used.
@@ -64,7 +64,7 @@ impl<E> SmtReadError<E> {
         Self { kind, span }
     }
 
-    /// Determines why reading has failed.
+    /// Kind of the error.
     pub fn kind(&self) -> &SmtReadErrorKind<E> {
         &self.kind
     }
@@ -77,7 +77,7 @@ impl<E> SmtReadError<E> {
         self.span
     }
 
-    /// The most useful location for deciphering the error.
+    /// Most useful location for deciphering the error.
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
@@ -87,7 +87,7 @@ impl<E> SmtReadError<E> {
         }
     }
 
-    /// Convert into the enumeration that determines why reading has failed.
+    /// Converts into the kind of the error.
     pub fn into_kind(self) -> SmtReadErrorKind<E> {
         self.kind
     }
@@ -151,9 +151,9 @@ impl<E> From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E> {
 
 /// Reads an SMT-LIB script from a file, delivering it to a handler.
 ///
-/// This is a convenience function over [`SmtReader`]: the parser
+/// This is a convenience function over [SmtReader]: the parser
 /// is dropped after reading, so its resources cannot be preserved
-/// for future use. Use [`SmtReader`] directly to keep the
+/// for future use. Use [SmtReader] directly to keep the
 /// resources across reads or to feed the input in pieces.
 ///
 /// A failure to open the file is reported as an I/O error with an empty
@@ -175,9 +175,9 @@ pub fn read_smt_file<H: SmtCommandHandler>(
 /// The buffer content is consumed up to where the parser requests
 /// discarding the rest or fully if no such request was made.
 ///
-/// This is a convenience function over [`SmtReader`]: the parser
+/// This is a convenience function over [SmtReader]: the parser
 /// is dropped after reading, so its resources cannot be preserved
-/// for future use. Use [`SmtReader`] directly to keep the
+/// for future use. Use [SmtReader] directly to keep the
 /// resources across reads or to feed the input in pieces.
 pub fn read_smt<H: SmtCommandHandler>(
     handler: &mut H,
@@ -192,17 +192,17 @@ pub fn read_smt<H: SmtCommandHandler>(
 ///
 /// A reader owns its lexer, its parser, and the parser resources, and borrows
 /// the handler. Any parser can be used, and a convenience method
-/// [`Self::script`] is provided for the common case of reading SMT-LIB scripts.
+/// [Self::script] is provided for the common case of reading SMT-LIB scripts.
 ///
-/// The input is read either whole, through [`read_file`](Self::read_file)
-/// or [`read_all`](Self::read_all), or in pieces, using
-/// [`read_slice`](Self::read_slice) sequentially, followed by [`read_eof`](Self::read_eof)
+/// The input is read either whole, through [read_file](Self::read_file)
+/// or [read_all](Self::read_all), or in pieces, using
+/// [read_slice](Self::read_slice) sequentially, followed by [read_eof](Self::read_eof)
 /// once the input has ended. A piece may end anywhere, even inside a token.
 ///
-/// After a call of [`read_all`](Self::read_all) or [`read_eof`](Self::read_eof)
+/// After a call of [read_all](Self::read_all) or [read_eof](Self::read_eof)
 /// that does not return an error, the reader is reset and can be reused.
 ///
-/// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
+/// For whole inputs, consider [read_smt_file] and [read_smt].
 pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParser<H>> {
     lexer: SmtLexer<SmtParseAdapter<'a, H, P>>,
 }
@@ -237,13 +237,13 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// The version passed is the initial one.
     /// Parsers may request the lexer to change versions,
     /// and the lexer will always comply.
-    /// No standard parser changes versions except for [`SmtScriptParser`].
+    /// No standard parser changes versions except for [SmtScriptParser].
     pub fn new(handler: &'a mut H, parser: P, version: SmtVersion) -> Self {
         let lexer = SmtLexer::new(SmtParseAdapter::new(handler, parser), version);
         Self { lexer }
     }
 
-    /// The SMT-LIB version currently in force.
+    /// Version currently in force.
     ///
     /// The version can change if the token consumer asks for it from the
     /// cursor. The end of the input resets the version to the initial one.
@@ -364,8 +364,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     ///
     /// Returns the located parser result if successful.
     ///
-    /// Call this once after the last [`read_slice`](Self::read_slice);
-    /// [`read_file`](Self::read_file) and [`read_all`](Self::read_all) call
+    /// Call this once after the last [read_slice](Self::read_slice);
+    /// [read_file](Self::read_file) and [read_all](Self::read_all) call
     /// it themselves.
     ///
     /// May panic if a previous call on this reader returned an error
@@ -375,9 +375,9 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         self.lexer.lex_eof().map_err(|err| err.into())
     }
 
-    /// The location from which the input has been discarded, if set.
+    /// Location from which the input has been discarded, if set.
     ///
-    /// [`SmtScriptParser`] discards input after the `(exit)` command.
+    /// [SmtScriptParser] discards input after the `(exit)` command.
     /// No other standard parsers discard.
     pub fn discarded_from(&self) -> Option<SmtLocation> {
         self.lexer.discarded_from()

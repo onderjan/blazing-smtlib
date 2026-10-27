@@ -11,7 +11,7 @@ pub enum SmtVersion {
 }
 
 impl SmtVersion {
-    /// The version that the decimal names, if any.
+    /// Version that the decimal names, if any.
     pub fn from_decimal(decimal: SmtDecimal<'_>) -> Option<Self> {
         match decimal.as_slice() {
             b"2.0" => Some(SmtVersion::V2_0),
@@ -22,7 +22,7 @@ impl SmtVersion {
         }
     }
 
-    /// The decimal that names the version, as in `:smt-lib-version`.
+    /// Decimal that names the version, as in `:smt-lib-version`.
     pub fn as_decimal(&self) -> SmtDecimal<'static> {
         let decimal: &'static [u8] = match self {
             SmtVersion::V2_0 => b"2.0",
@@ -34,7 +34,7 @@ impl SmtVersion {
     }
 }
 
-/// Version posture (allowed SMT-LIB versions and maximal number of their declarations).
+/// Version posture (allowed SMT-LIB versions and the maximal number of their declarations).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtVersionPosture {
     allowed: Vec<SmtVersion>,

@@ -8,8 +8,8 @@ use crate::{
 
 /// Adapts a parser to a token consumer.
 ///
-/// The adapter implements [`SmtConsume`] and hands over to a parser which
-/// implements [`SmtParse`], providing it the handler and additional persistent
+/// The adapter implements [SmtConsume] and hands over to a parser which
+/// implements [SmtParse], providing it the handler and additional persistent
 /// resources.
 pub struct SmtParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     handler: &'a mut H,

@@ -753,25 +753,25 @@ impl<'a> SmtNumeral<'a> {
 }
 
 impl SmtNumeralBuf {
-    /// Construct from [u32].
+    /// Constructs from [u32].
     pub fn from_u32(value: u32) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Construct from [u64].
+    /// Constructs from [u64].
     pub fn from_u64(value: u64) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Construct from [u128].
+    /// Constructs from [u128].
     pub fn from_u128(value: u128) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Construct from [usize].
+    /// Constructs from [usize].
     pub fn from_usize(value: usize) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))

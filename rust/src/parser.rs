@@ -23,10 +23,10 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
 
     /// Parses tokens from the cursor, progressing the parser.
     ///
-    /// If the parser returns [`ControlFlow::Continue`], it means all tokens
+    /// If the parser returns [ControlFlow::Continue], it means all tokens
     /// were handled and more are wanted: the cursor must be empty.
     ///
-    /// If the parser returns [`ControlFlow::Break`], it means
+    /// If the parser returns [ControlFlow::Break], it means
     /// it finished the input it accepts (consuming exactly its tokens),
     /// is returning a result and waiting for processing of the next value.
     ///
@@ -34,14 +34,14 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     /// the consumed ones. The state of the parser, cursor, and resources
     /// is unspecified.
     ///
-    /// All library parsers implementing [`SmtParse`] are fully self-resetting:
-    /// after returning [`ControlFlow::Break`], they are back in their initial state.
+    /// All library parsers implementing [SmtParse] are fully self-resetting:
+    /// after returning [ControlFlow::Break], they are back in their initial state.
     ///
     /// The `parse_state` holds the shared resources of standard category parsers.
-    /// To keep resources valid, each [`SmtParse`] must be progressed
-    /// until completion once started, i.e. if [`SmtParse::parse()`]
+    /// To keep resources valid, each [SmtParse] must be progressed
+    /// until completion once started, i.e. if [SmtParse::parse()]
     /// returns `Ok(Continue(()))`, the subsequent outer parse call
-    /// must call [`SmtParse::parse()`] on the same parser, and
+    /// must call [SmtParse::parse()] on the same parser, and
     /// is forbidden from progressing any other parsers.
     /// Failure to heed this contract may lead to silently wrong parsing
     /// or panics, but never unsafe behaviour.
@@ -70,11 +70,11 @@ pub(crate) fn parse_by_token<Z: SmtCursor, R, E>(
     Ok(ControlFlow::Continue(()))
 }
 
-/// Error returned by a parser.
+/// Error that forced parsing to stop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtParseError<E>(Box<SmtParseErrorKind<E>>);
 
-/// Why a parser error was returned.
+/// Why parsing failed (syntax, version, or handler error).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmtParseErrorKind<E> {
     /// The tokens do not form the syntax the parser accepts.
@@ -96,18 +96,18 @@ pub enum SmtSyntaxErrorKind {
     Missing(SmtMissingItem),
 }
 
-/// A syntax item was expected by a parser.
+/// Syntax item expected by a parser.
 ///
-/// Used in [`SmtSyntaxErrorKind::Expected`].
+/// Used in [SmtSyntaxErrorKind::Expected].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxExpected {
-    /// A token of the given category.
+    /// Token of the given category.
     Token(SmtTokenCategory),
-    /// The reserved word.
+    /// Reserved word.
     Reserved(SmtReserved),
-    /// A symbol, simple or quoted.
+    /// Symbol (quoted or unquoted).
     Symbol,
-    /// An index of an identifier: a numeral or a symbol.
+    /// Index of an identifier (a numeral or a symbol).
     Index,
     Ident,
     Sort,
@@ -116,15 +116,15 @@ pub enum SmtSyntaxExpected {
     Attribute,
     /// What follows the opening parenthesis of a compound term.
     Operator,
-    /// The name of a command.
+    /// Name of a command.
     CommandName,
-    /// A propositional literal: a symbol or its negation.
+    /// Propositional literal (a symbol or its negation).
     PropositionalLiteral,
 }
 
-/// A list was expected not to be empty.
+/// List that was expected to be non-empty.
 ///
-/// Used in [`SmtSyntaxErrorKind::Empty`].
+/// Used in [SmtSyntaxErrorKind::Empty].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtNonEmptyList {
     IdentIndices,
@@ -143,14 +143,14 @@ pub enum SmtNonEmptyList {
     GetValueTerms,
 }
 
-/// An item was expected but did not arrive.
+/// Announced item that did not arrive.
 ///
-/// Used in [`SmtSyntaxErrorKind::Missing`].
+/// Used in [SmtSyntaxErrorKind::Missing].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtMissingItem {
-    /// A body of a function of `define-funs-rec`.
+    /// Body of a function of `define-funs-rec`.
     FunctionBody,
-    /// A datatype of `declare-datatypes`.
+    /// Datatype of `declare-datatypes`.
     Datatype,
 }
 
@@ -173,22 +173,22 @@ pub(crate) mod expected {
         SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par));
 }
 
-/// Why a version-switch error was returned.
+/// Why switching the version failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtVersionErrorKind {
     /// The requested version was rejected as not supported.
     ///
     /// This can happen if the parser itself rejects the version or
-    /// [`SmtCursor`] rejects the version switch requested by
-    /// [`set_version`](SmtCursor::set_version), prompting the parser to reject.
+    /// [SmtCursor] rejects the version switch requested by
+    /// [set_version](SmtCursor::set_version), prompting the parser to reject.
     ///
     /// The only parser in the library that switches versions is
-    /// [`SmtScriptParser`], and it rejects on versions of SMT-LIB not supported
+    /// [SmtScriptParser], and it rejects on versions of SMT-LIB not supported
     /// by the library, versions not allowed by the posture, and lastly versions
     /// rejected by the cursor.
     ///
-    /// [`SmtLexerCursor`](crate::lexer::SmtLexerCursor) never rejects a
-    /// version, and [`SmtTokensCursor`](crate::token::SmtTokensCursor) rejects
+    /// [SmtLexerCursor](crate::lexer::SmtLexerCursor) never rejects a
+    /// version, and [SmtTokensCursor](crate::token::SmtTokensCursor) rejects
     /// all versions except the one already in force.
     Unsupported,
     /// The script declares its version more times than allowed.

@@ -1,6 +1,6 @@
 use crate::SmtVersion;
 
-/// A reserved word in SMT-LIB (general or a command name).
+/// Reserved word (general or a command name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtReserved {
     General(SmtGeneralReserved),
@@ -27,7 +27,7 @@ macro_rules! reserved_words {
             }
 
             impl $enum_name {
-                /// The word of this group that the symbol spells in the version, if any.
+                /// Word of this group that the symbol spells in the version, if any.
                 #[inline]
                 pub fn from_bytes(symbol: &[u8], version: SmtVersion) -> Option<Self> {
                     match SmtReserved::from_bytes(symbol, version) {
@@ -52,7 +52,7 @@ macro_rules! reserved_words {
 }
 
 reserved_words! {
-    /// A general reserved word in SMT-LIB.
+    /// General reserved word.
     General: SmtGeneralReserved {
         Binary = "BINARY",
         Decimal = "DECIMAL",
@@ -69,7 +69,7 @@ reserved_words! {
         Match = "match",
         Par = "par",
     }
-    /// A reserved word naming a standard SMT-LIB command.
+    /// Reserved word naming a standard command.
     ///
     /// Standard SMT-LIB2 commands are reserved words.
     CommandName: SmtCommandNameReserved {
@@ -153,7 +153,7 @@ const RESERVED_SLOTS: usize = 128;
 ///
 /// A perfect hash of the reserved words over their length and their first, last, and
 /// middle byte: no two reserved words share a slot, which the construction of
-/// [`RESERVED_TABLE`] checks at compile time. The multipliers were found by the
+/// [RESERVED_TABLE] checks at compile time. The multipliers were found by the
 /// ignored test `search_reserved_hash_multipliers` in this module; if a reserved
 /// word is added and the check fails, run it again for new ones.
 #[inline(always)]
@@ -192,7 +192,7 @@ static RESERVED_TABLE: [(&[u8], SmtReserved, SmtVersion); RESERVED_SLOTS] = {
 };
 
 impl SmtReserved {
-    /// Returns the reserved word that the symbol spells in the version, if any.
+    /// Reserved word that the symbol spells in the version, if any.
     #[inline]
     pub fn from_bytes(symbol: &[u8], version: SmtVersion) -> Option<SmtReserved> {
         // make sure that the symbol is not an empty word,

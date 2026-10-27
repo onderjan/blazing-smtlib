@@ -255,7 +255,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtOpenedParser<H, P> {
     }
 }
 
-/// Parses an item enclosed by parentheses.
+/// Parses an item enclosed in parentheses.
 pub struct SmtParenParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtOpenedParser<H, SmtClosedParser<H, P>>,
 }
@@ -382,7 +382,7 @@ impl<T> ClosedMultipleResource<T> {
     }
 }
 
-/// Parses multiple items enclosed by parentheses.
+/// Parses multiple items enclosed in parentheses.
 pub struct SmtParenMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtOpenedParser<H, SmtClosedMultipleParser<H, P>>,
 }
@@ -424,7 +424,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenMultipleParser<H, P>
 
 /// Parses a number of items up to some maximum, followed by a closing parenthesis.
 ///
-/// The maximum can be changed by [`SmtClosedMaximumParser::set_max_items`].
+/// The maximum can be changed by [SmtClosedMaximumParser::set_max_items].
 pub struct SmtClosedMaximumParser<H: SmtHandler, P: SmtParse<H>> {
     max_items: usize,
 
@@ -519,7 +519,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtClosedMaximumParser<H, P>
 
 /// Parses a number of items up to some maximum, all enclosed in parentheses.
 ///
-/// The maximum can be changed by [`SmtParenMaximumParser::set_max_items`].
+/// The maximum can be changed by [SmtParenMaximumParser::set_max_items].
 pub struct SmtParenMaximumParser<H: SmtHandler, P: SmtParse<H>> {
     is_opened: bool,
     inner: SmtClosedMaximumParser<H, P>,

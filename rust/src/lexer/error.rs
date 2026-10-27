@@ -2,7 +2,7 @@ use std::{error::Error, fmt, io};
 
 use crate::span::{SmtLocation, SmtSpan};
 
-/// Why a lexical error occurred.
+/// Why the input is lexically malformed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {
     UnexpectedByte,
@@ -20,18 +20,18 @@ pub enum SmtLexicalErrorKind {
     UnexpectedTrailingToken,
 }
 
-/// Expected but not encountered lexical character class.
+/// Character class expected by the lexer.
 ///
 /// This is used in [SmtLexicalErrorKind::Expected].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalExpected {
-    /// A digit of the fractional part of a decimal.
+    /// Digit of the fractional part of a decimal.
     FractionDigit,
-    /// A hexadecimal digit after `#x`.
+    /// Hexadecimal digit after `#x`.
     HexadecimalDigit,
-    /// A binary digit after `#b`.
+    /// Binary digit after `#b`.
     BinaryDigit,
-    /// The base of a number after `#`: `x` or `b`.
+    /// Base of a number after `#` (`x` or `b`).
     Base,
 }
 
@@ -43,7 +43,7 @@ pub struct SmtLexerError<E> {
     continues_from: Option<SmtLocation>,
 }
 
-/// Why a lexer error was returned (lexical or consumer error).
+/// Why lexing failed (lexical or consumer error).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmtLexerErrorKind<E> {
     /// The input is lexically malformed.
@@ -71,22 +71,22 @@ impl<E> SmtLexerError<E> {
         self
     }
 
-    /// The reason why the lexer call failed: a lexical error or a consumer error.
+    /// Kind of the error.
     pub fn kind(&self) -> &SmtLexerErrorKind<E> {
         &self.kind
     }
 
-    /// Converts into the reason why the lexer call failed.
+    /// Converts into the kind of the error.
     pub fn into_kind(self) -> SmtLexerErrorKind<E> {
         self.kind
     }
 
-    /// Location where the error occurred.
+    /// Span where the error occurred.
     pub fn span(&self) -> SmtSpan {
         self.span
     }
 
-    /// The most useful location for deciphering the error.
+    /// Most useful location for deciphering the error.
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
@@ -206,7 +206,7 @@ pub struct SmtLexerReadError<E> {
     span: SmtSpan,
 }
 
-/// Why a lexer read error was returned (I/O, lexical, or consumer error).
+/// Why lexing from a buffered reader or a file failed (I/O, lexical, or consumer error).
 #[derive(Debug)]
 pub enum SmtLexerReadErrorKind<E> {
     /// Reading from the file or the buffered reader failed.
@@ -222,12 +222,12 @@ impl<E> SmtLexerReadError<E> {
         Self { kind, span }
     }
 
-    /// The reason why lexing failed.
+    /// Kind of the error.
     pub fn kind(&self) -> &SmtLexerReadErrorKind<E> {
         &self.kind
     }
 
-    /// Converts into the reason why lexing failed.
+    /// Converts into the kind of the error.
     pub fn into_kind(self) -> SmtLexerReadErrorKind<E> {
         self.kind
     }
@@ -239,7 +239,7 @@ impl<E> SmtLexerReadError<E> {
         self.span
     }
 
-    /// The most useful location for deciphering the error.
+    /// Most useful location for deciphering the error.
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
