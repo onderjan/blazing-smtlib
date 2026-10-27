@@ -414,7 +414,7 @@ The line of the error. With `recover`, it ends with where the input continues fr
 does.
 -/
 def errorLine (err : LexerError String) (recover : Bool) : Except String String := do
-  let line ← match err.cause with
+  let line ← match err.kind with
     | .lexical kind => pure s!"err {errorKindName kind} {location err.span.start} \
         {location err.span.end}"
     | .consumer name => pure s!"cerr {name}"
@@ -907,7 +907,7 @@ def readLines (result : Except (LexerReadError String) (Option (Located Bool)))
     s!"{finish}done {location located.location}{rest}\n"
   | .ok none => "none\n"
   | .error err =>
-    match err.cause with
+    match err.kind with
     | .lexical kind =>
       s!"err {errorKindName kind} {location err.span.start} {location err.span.end}\n"
     | .consumer name => s!"cerr {name}\n"

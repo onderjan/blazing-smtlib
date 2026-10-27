@@ -41,7 +41,8 @@ of the size in its type, by its array. -/
 @[no_expose] instance {α : Type} {n : Nat} [AppendTokens α] : AppendTokens (Vector α n) where
   appendTokens self tokens := appendTokens self.toArray tokens
 
-@[no_expose] instance : AppendTokens Reserved := ⟨fun self tokens => tokens.push (.reserved self)⟩
+@[no_expose] instance : AppendTokens Lexicon.Reserved :=
+  ⟨fun self tokens => tokens.push (.reserved self)⟩
 
 /- LEAN: the counterpart of the Rust macro `plain_append_tokens!`: the appending of a plain value,
 viewed or owned, as the token of its variant. -/

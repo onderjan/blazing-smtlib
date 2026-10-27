@@ -22,7 +22,7 @@ open BSmtLib.Lexer.Cursor (LexerCursor)
 namespace BSmtLib.Facts.Proofs.Reader.Param.Stop
 
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 open BSmtLib.Parser.Internal (After Consuming ParseByToken)
 

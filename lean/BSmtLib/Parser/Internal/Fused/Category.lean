@@ -29,7 +29,7 @@ open BSmtLib.Lexicon.Value (Symbol Numeral)
 open BSmtLib.Token (BatchTag TokenCategory)
 open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
 open BSmtLib (Version)
-open BSmtLib.Token.Reserved (GeneralReserved)
+open BSmtLib.Lexicon.Reserved (GeneralReserved)
 
 /-- A step of a category parser that calls no handler: on with the state, done with the
 result, or a syntax error. -/

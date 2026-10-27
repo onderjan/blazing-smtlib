@@ -21,7 +21,7 @@ proved again with them in the modules beside this one.
 
 namespace BSmtLib.Facts.Proofs.Parser.Category.Steps
 
-open BSmtLib.Parser (ParseErrorCause SyntaxErrorKind VersionErrorKind)
+open BSmtLib.Parser (ParseErrorKind SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Parser.Adapters.Outcome (HandlerOnly)
@@ -35,23 +35,23 @@ section
 variable {H E : Type} {m : Type → Type} [Monad m] [LawfulMonad m] {α β : Type}
 
 theorem handlerOnly_pure (a : α) :
-    HandlerOnly (pure a : ExceptT (ParseErrorCause E) (StateT H m) α) :=
+    HandlerOnly (pure a : ExceptT (ParseErrorKind E) (StateT H m) α) :=
   ⟨pure a, by
     apply ExceptT.ext
     simp⟩
 
 theorem handlerOnly_lift (x : StateT H m α) :
-    HandlerOnly (ExceptT.lift x : ExceptT (ParseErrorCause E) (StateT H m) α) :=
+    HandlerOnly (ExceptT.lift x : ExceptT (ParseErrorKind E) (StateT H m) α) :=
   ⟨ExceptT.lift x, by
     apply ExceptT.ext
     simp [ExceptT.run_lift]⟩
 
 omit [LawfulMonad m] in
 theorem handlerOnly_adapt (x : ExceptT E (StateT H m) α) :
-    HandlerOnly (ExceptT.adapt ParseErrorCause.handler x) := ⟨x, rfl⟩
+    HandlerOnly (ExceptT.adapt ParseErrorKind.handler x) := ⟨x, rfl⟩
 
-theorem handlerOnly_bind {x : ExceptT (ParseErrorCause E) (StateT H m) α}
-    {f : α → ExceptT (ParseErrorCause E) (StateT H m) β} (hx : HandlerOnly x)
+theorem handlerOnly_bind {x : ExceptT (ParseErrorKind E) (StateT H m) α}
+    {f : α → ExceptT (ParseErrorKind E) (StateT H m) β} (hx : HandlerOnly x)
     (hf : ∀ a, HandlerOnly (f a)) : HandlerOnly (x >>= f) := by
   obtain ⟨y, rfl⟩ := hx
   refine ⟨y >>= fun a => Classical.choose (hf a), ?_⟩
@@ -60,18 +60,18 @@ theorem handlerOnly_bind {x : ExceptT (ParseErrorCause E) (StateT H m) α}
   funext a
   exact Classical.choose_spec (hf a)
 
-theorem handlerOnly_map {x : ExceptT (ParseErrorCause E) (StateT H m) α} (f : α → β)
+theorem handlerOnly_map {x : ExceptT (ParseErrorKind E) (StateT H m) α} (f : α → β)
     (hx : HandlerOnly x) : HandlerOnly (f <$> x) := by
   rw [map_eq_pure_bind]
   exact handlerOnly_bind hx fun a => handlerOnly_pure _
 
 omit [LawfulMonad m] in
-theorem handlerOnly_congr {x y : ExceptT (ParseErrorCause E) (StateT H m) α} (hx : HandlerOnly x)
+theorem handlerOnly_congr {x y : ExceptT (ParseErrorKind E) (StateT H m) α} (hx : HandlerOnly x)
     (h : x = y) : HandlerOnly y := h ▸ hx
 
 omit [LawfulMonad m] in
 /-- A handler-only program, run: its failures are the handler's. -/
-theorem handlerOnly_run_eq {x : ExceptT (ParseErrorCause E) (StateT H m) α} (hx : HandlerOnly x) :
+theorem handlerOnly_run_eq {x : ExceptT (ParseErrorKind E) (StateT H m) α} (hx : HandlerOnly x) :
     ∃ calls : ExceptT E (StateT H m) α,
       x.run = (fun e => match e with
         | .ok a => .ok a
@@ -142,7 +142,7 @@ variable (points : Points (StateT H m))
 /-- What the step's answer does, with the tokens after it. -/
 def onStep (continue_ : σ → StateT H m (Res σ ρ (Handler.Error H)))
     (rest : List Parser.Internal.Input) :
-    Except (ParseErrorCause (Handler.Error H)) (Parser.Internal.Step σ ρ) →
+    Except (ParseErrorKind (Handler.Error H)) (Parser.Internal.Step σ ρ) →
     StateT H m (Res σ ρ (Handler.Error H))
   | .ok (.more state) => continue_ state
   | .ok (.done result) => pure (.done result rest)
@@ -167,7 +167,7 @@ def resumeS (step : σ → Parser.Internal.Input → PM H (Parser.Internal.Step 
 /-- What a handler-only program's answer does, then the continuation. -/
 def afterProgram (k : α → StateT H m (Res σ ρ (Handler.Error H)))
     (rest : List Parser.Internal.Input) :
-    Except (ParseErrorCause (Handler.Error H)) α →
+    Except (ParseErrorKind (Handler.Error H)) α →
     StateT H m (Res σ ρ (Handler.Error H))
   | .ok a => k a
   | .error (.syntax kind) => pure (.rejected kind rest)

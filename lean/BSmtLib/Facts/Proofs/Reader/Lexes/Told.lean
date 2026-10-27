@@ -71,10 +71,10 @@ def NoLayout (consumer : BSmtLibSpec.Lexer.Consumer) (version : Version) : Prop 
   ∀ c, Reach consumer version c →
     (∀ held (slice : Regex.Chars) taken e,
       ((Lexer.Adapters.Lexer.lexOps.lexSliceStep (zLexer consumer c held)
-        slice.toByteArray.toByteSlice).run taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
+        slice.toByteArray.toByteSlice).run taken).1.1 = .error e → e.kind ≠ .consumer none) ∧
     (∀ held taken e,
       ((Lexer.Adapters.Lexer.lexOps.lexEofStep (zLexer consumer c held)).run taken).1.1 =
-        .error e → e.cause ≠ .consumer none)
+        .error e → e.kind ≠ .consumer none)
 
 /-! ## The stand-in consumer's steps, as the adapter's consumer's -/
 
@@ -148,11 +148,11 @@ section
 
 variable {version : Lexicon.Version}
 
-theorem cause_ne_of_alike {ε : Type} {α β : Type} {Q : α → β → Prop}
+theorem kind_ne_of_alike {ε : Type} {α β : Type} {Q : α → β → Prop}
     {x : Except (LexerError (Option ε)) α} {y : Except (LexerError (Option ε)) β}
     (h : ERel (LexErrRel (· = ·)) Q x y)
-    (hx : ∀ e, x = .error e → e.cause ≠ .consumer none) :
-    ∀ e, y = .error e → e.cause ≠ .consumer none := by
+    (hx : ∀ e, x = .error e → e.kind ≠ .consumer none) :
+    ∀ e, y = .error e → e.kind ≠ .consumer none := by
   intro e he
   subst he
   match x, h with
@@ -191,7 +191,7 @@ theorem slice_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version)
       (Recovery.LexerRecovery.abandon Recovery.FailFast)
           (Recovery.LexerRecovery.recover Recovery.FailFast)
       slice).run (Internal.core a)).run {} |>.run taken).1.1.1 = .error e →
-      e.cause ≠ .consumer none :=
+      e.kind ≠ .consumer none :=
     fun e he => (hnl _ hR).1 (Internal.held a) bytes taken e (by rw [← hb]; exact he)
   have hreach : ∀ r, (((Internal.lexSliceStep (H := Answering (scriptConsumer version))
       (m := AnswerM)
@@ -236,7 +236,7 @@ theorem slice_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version)
   obtain ⟨hAl, hAc, -⟩ := halike
   dsimp only at hv₁ he₁ hs₁ h2 hAl hAc hA hreach
   obtain ⟨⟨hrel, rfl⟩, hinv', hfail⟩ := h2 hgood (hs₁.trans hsp)
-  have hnone := cause_ne_of_alike hAl hA
+  have hnone := kind_ne_of_alike hAl hA
   match res, res₂, hrel with
   | .ok held₁, .ok held₂, hh =>
     have hfl : fl'.errored = false := by
@@ -289,7 +289,7 @@ theorem eof_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
       (Recovery.LexerRecovery.abandon Recovery.FailFast)
           (Recovery.LexerRecovery.recover Recovery.FailFast)).run
         (Internal.core a)).run {} |>.run taken).1.1.1 = .error e →
-      e.cause ≠ .consumer none :=
+      e.kind ≠ .consumer none :=
     fun e he => (hnl _ hR).2 (Internal.held a) taken e he
   unfold irun at hok
   simp only [Param.Flagged.flaggedOps] at hr
@@ -322,7 +322,7 @@ theorem eof_stepT (hnl : NoLayout (scriptConsumer version) (toVersion version))
   obtain ⟨he₁, hs₁⟩ := hok
   dsimp only at hs₁ h2 he₁ halike hA
   obtain ⟨⟨hrel, rfl⟩, hinv', hfail⟩ := h2 hgood (hs₁.trans hsp)
-  have hnone := cause_ne_of_alike halike hA
+  have hnone := kind_ne_of_alike halike hA
   match res, res₂, hrel with
   | .ok flow, .ok flow₂, hh =>
     have hfl : fl'.errored = false := by

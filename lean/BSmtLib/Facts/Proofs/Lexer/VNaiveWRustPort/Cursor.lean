@@ -155,7 +155,7 @@ theorem toHanded_at {ls : List Lexeme} (c : LexerCursor g) (h : c.HasNext)
     toContent, hcontent, byteArray_toList]
   cases hc : ls[cNext c].category <;> simp [toTokenType, lexemeReserved, toReservedKind]
   · rw [← hcontent, fromBytes_toByteArray]
-    cases Token.Reserved.fromBytes? (c.content (c.next h).1) c.version <;> rfl
+    cases Lexicon.Reserved.fromBytes? (c.content (c.next h).1) c.version <;> rfl
 
 /-- The next token of a cursor over a batch that holds the lexemes is taken as the entry the naive
 lexer reports for the lexeme at its index alone. -/

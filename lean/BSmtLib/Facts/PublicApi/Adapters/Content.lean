@@ -67,7 +67,7 @@ inductive TermNode (S T : Type) where
 inductive SExprNode (X : Type) where
   | constant (constant : Constant)
   | symbol (symbol : Symbol)
-  | reserved (word : Token.Reserved)
+  | reserved (word : Lexicon.Reserved)
   | keyword (name : ByteList)
   | list (items : List X)
 

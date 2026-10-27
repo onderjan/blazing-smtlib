@@ -24,7 +24,7 @@ handler calls in the same order, the others by the port's step itself.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Term
 
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Category.Term.Internal (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Internal.Fused
@@ -107,7 +107,8 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     simp only [inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [termCont, fail, Parser.Category.Token.Internal.expectOpen, syntaxError]
   | letBindingClose bindings =>
     rw [portTermStep_eq]
@@ -115,7 +116,8 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     simp only [inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [termCont, fail, Parser.Category.Token.Internal.expectClose, syntaxError]
   | letBindingSymbol bindings =>
     rw [portTermStep_eq]
@@ -123,7 +125,8 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     simp only [Category.symbolOf?, Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [termCont, fail, Parser.Category.Token.Internal.expectSymbol, syntaxError]
   | letBindingOpen bindings =>
     rw [portTermStep_eq]
@@ -131,7 +134,8 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     simp only [inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [termCont, fail, syntaxError]
     all_goals
       by_cases hb : bindings = #[]
@@ -148,7 +152,8 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     simp only [inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [termCont, fail, syntaxError, Parser.Category.Token.Internal.expectClose]
     all_goals
       rcases kind with _ | (_ | _) <;>
@@ -164,7 +169,8 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     simp only [Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [termCont, fail, syntaxError, constantOf, ← handleTerm_eq]
     all_goals
       (rcases levels with _ | ⟨level, outer⟩ <;> (try cases level) <;> simp [termCont, fail])
@@ -175,7 +181,8 @@ theorem termStep_eq (posture : VersionPosture) {batch : BatchTag} (h : H) (decla
     simp only [Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [termCont, fail, syntaxError]
     all_goals (cases w <;> simp [termCont, fail])
   | qualIdent state =>

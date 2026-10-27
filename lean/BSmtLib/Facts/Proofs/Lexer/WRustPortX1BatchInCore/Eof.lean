@@ -143,7 +143,7 @@ theorem lexEofInner_sim (ho : OpsSim o₁ o₂ LRel) (w x : Core) (hwx : Core.Co
       obtain ⟨result, span, location, stopAfter⟩ := i
       dsimp only
       cases result with
-      | error cause => exact Couple.pure ⟨rfl, hcr, hz⟩
+      | error kind => exact Couple.pure ⟨rfl, hcr, hz⟩
       | ok stop =>
         cases stop with
         | relex => exact Couple.pure ⟨rfl, hcr, hz⟩

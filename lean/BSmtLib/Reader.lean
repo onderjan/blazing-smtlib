@@ -29,7 +29,7 @@ namespace BSmtLib.Reader
 open Parser
 
 /-- Determines why reading has failed. -/
-inductive ReadErrorCause (E : Type) where
+inductive ReadErrorKind (E : Type) where
   /-- Reading from a file or a buffered reader failed. -/
   | io (error : IO.Error)
   /-- The input is not a valid sequence of SMT-LIB tokens. -/
@@ -38,7 +38,7 @@ inductive ReadErrorCause (E : Type) where
   The tokens do not form valid SMT-LIB syntactic categories or commands.
 
   Commands with non-standard names are routed to the handler for processing, so they are
-  rejected with a `ReadErrorCause.handler` error cause instead.
+  rejected with a `ReadErrorKind.handler` error cause instead.
   -/
   | syntax (kind : SyntaxErrorKind)
   /-- The script declares a version that cannot be used. -/
@@ -48,12 +48,12 @@ inductive ReadErrorCause (E : Type) where
 
 /- LEAN: Rust's derived `Debug`. Lean's `IO.Error` has no `Repr`, so an I/O error is shown by its
 message. -/
-@[no_expose] instance {E : Type} [Repr E] : Repr (ReadErrorCause E) where
-  reprPrec cause prec :=
+@[no_expose] instance {E : Type} [Repr E] : Repr (ReadErrorKind E) where
+  reprPrec kind prec :=
     let app (name : String) (argument : Std.Format) : Std.Format :=
-      Repr.addAppParen (.group (.nest 2 (.text ("BSmtLib.Reader.ReadErrorCause." ++ name) ++
+      Repr.addAppParen (.group (.nest 2 (.text ("BSmtLib.Reader.ReadErrorKind." ++ name) ++
         .line ++ argument))) prec
-    match cause with
+    match kind with
     | .io error => app "io" (reprArg (toString error))
     | .lexical kind => app "lexical" (reprArg kind)
     | .syntax kind => app "syntax" (reprArg kind)
@@ -61,13 +61,13 @@ message. -/
     | .handler error => app "handler" (reprArg error)
 
 /- LEAN: the constructor is private, as Rust's fields are, and the reader builds an error with
-`ReadError.Internal.new`. The fields are readable as `error.cause` and `error.span`, replacing
-the getters `cause`, `span` and `into_cause`. -/
+`ReadError.Internal.new`. The fields are readable as `error.kind` and `error.span`, replacing
+the getters `kind`, `span` and `into_kind`. -/
 /-- An error that ended reading, including its span. -/
 structure ReadError (E : Type) where
   private mk ::
   /-- Determines why reading has failed. -/
-  cause : ReadErrorCause E
+  kind : ReadErrorKind E
   /--
   Span where the error occurred.
 
@@ -78,33 +78,33 @@ structure ReadError (E : Type) where
   deriving Repr
 
 @[inline]
-def ReadError.Internal.new {E : Type} (cause : ReadErrorCause E) (span : Span) : ReadError E :=
-  { cause, span }
+def ReadError.Internal.new {E : Type} (kind : ReadErrorKind E) (span : Span) : ReadError E :=
+  { kind, span }
 
 @[simp]
-theorem ReadError.Internal.cause_new {E : Type} (cause : ReadErrorCause E) (span : Span) :
-    (ReadError.Internal.new cause span).cause = cause :=
+theorem ReadError.Internal.kind_new {E : Type} (kind : ReadErrorKind E) (span : Span) :
+    (ReadError.Internal.new kind span).kind = kind :=
   (rfl)
 
 @[simp]
-theorem ReadError.Internal.span_new {E : Type} (cause : ReadErrorCause E) (span : Span) :
-    (ReadError.Internal.new cause span).span = span :=
+theorem ReadError.Internal.span_new {E : Type} (kind : ReadErrorKind E) (span : Span) :
+    (ReadError.Internal.new kind span).span = span :=
   (rfl)
 
 /-- A read error is the one built from its fields. -/
 @[simp]
 theorem ReadError.Internal.new_eta {E : Type} (error : ReadError E) :
-    ReadError.Internal.new error.cause error.span = error :=
+    ReadError.Internal.new error.kind error.span = error :=
   (rfl)
 
 /-- Two read errors built from the same fields are equal. -/
-theorem ReadError.Internal.new_inj {E : Type} {cause cause' : ReadErrorCause E}
+theorem ReadError.Internal.new_inj {E : Type} {kind kind' : ReadErrorKind E}
     {span span' : Span} :
-    ReadError.Internal.new cause span = ReadError.Internal.new cause' span' ↔
-      cause = cause' ∧ span = span' := by
+    ReadError.Internal.new kind span = ReadError.Internal.new kind' span' ↔
+      kind = kind' ∧ span = span' := by
   constructor
   · intro h
-    exact ⟨congrArg ReadError.cause h, congrArg ReadError.span h⟩
+    exact ⟨congrArg ReadError.kind h, congrArg ReadError.span h⟩
   · rintro ⟨rfl, rfl⟩
     rfl
 
@@ -117,12 +117,12 @@ The most useful location for deciphering the error.
 Guaranteed to be within the span.
 -/
 def ReadError.location {E : Type} (self : ReadError E) : Span.Location :=
-  match self.cause with
+  match self.kind with
   | .lexical kind => LexicalErrorKind.Internal.locationIn kind self.span
   | _ => self.span.start
 
 /- LEAN: Rust's `Display` implementations are `ToString` instances, with the same text. -/
-@[no_expose] instance {E : Type} [ToString E] : ToString (ReadErrorCause E) where
+@[no_expose] instance {E : Type} [ToString E] : ToString (ReadErrorKind E) where
   toString
     | .io error => s!"I/O: {error}"
     | .lexical kind => toString kind
@@ -134,25 +134,25 @@ def ReadError.location {E : Type} (self : ReadError E) : Span.Location :=
 @[no_expose] instance {E : Type} [ToString E] : ToString (ReadError E) where
   toString self :=
     let location := self.location
-    s!"{self.cause} at line {location.line + 1}, column {location.column + 1}"
+    s!"{self.kind} at line {location.line + 1}, column {location.column + 1}"
 
 /-- Converts the error of a parser, located at `span`, into a read error. -/
 /- LEAN: Rust's private `from_parse`. It is public here as the statements about the reader's
 errors in the facts about the public interface name it. -/
 def ReadError.ofParse {E : Type} (err : ParseError E) (span : Span) : ReadError E :=
-  let cause := match err.cause with
-    | .syntax err => ReadErrorCause.«syntax» err
-    | .version err => ReadErrorCause.version err
-    | .handler err => ReadErrorCause.handler err
-  { cause, span }
+  let kind := match err.kind with
+    | .syntax err => ReadErrorKind.«syntax» err
+    | .version err => ReadErrorKind.version err
+    | .handler err => ReadErrorKind.handler err
+  { kind, span }
 
 /-- Converts the error of a lexer over a parser into a read error. -/
 /- LEAN: Rust's `impl From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E>`, which Lean's
 conversion by name stands for. -/
 def ReadError.ofLex {E : Type} (err : LexerError (ParseError E)) : ReadError E :=
   let span := err.span
-  match err.cause with
-  | .lexical kind => { cause := .lexical kind, span }
+  match err.kind with
+  | .lexical kind => { kind := .lexical kind, span }
   | .consumer err => ReadError.ofParse err span
 
 /- LEAN: not in Rust, whose reader takes `&mut self` and survives the error, and borrows the
@@ -365,8 +365,8 @@ partial def readFrom {B : Type} {n : Type → Type} [Monad n] [MonadLiftT m n] [
     -- return an empty span on the current lexer location
     let location := self.lexer.currentLocation
     let span := Span.Internal.newEmpty location
-    let cause := ReadErrorCause.io err
-    return (.error { error := { cause, span }, handler := self.handler }, bufReader)
+    let kind := ReadErrorKind.io err
+    return (.error { error := { kind, span }, handler := self.handler }, bufReader)
   | .ok (buffer, bufReader) =>
     if buffer.size == 0 then
       -- end of file reached
@@ -408,7 +408,7 @@ def readFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n] (s
   let opened : IO (Except IO.Error IO.FS.Handle) := (IO.FS.Handle.mk path .read).toBaseIO
   match ← opened with
   | .error err =>
-    return .error { error := { cause := .io err, span := Span.Internal.newZero }, handler :=
+    return .error { error := { kind := .io err, span := Span.Internal.newZero }, handler :=
         self.handler }
   | .ok file =>
     -- make the buffered reader use a 1 MiB buffer so that we can

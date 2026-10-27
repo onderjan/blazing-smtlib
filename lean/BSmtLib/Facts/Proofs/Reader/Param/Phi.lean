@@ -80,7 +80,7 @@ theorem causeOf_unique {x y : Parser.ParseError Unit} {t : List Handed}
   obtain ⟨i₂, h₂, l₂, r₂⟩ := hy
   have := (RecCanon.recRun_congr version (h₁.trans h₂.symm)).1
   rw [r₁, r₂] at this
-  have hc : x.cause = y.cause := by simpa [Except.map] using this
+  have hc : x.kind = y.kind := by simpa [Except.map] using this
   rw [← Parser.ParseError.Internal.new_eta x, ← Parser.ParseError.Internal.new_eta y, hc]
 
 open Classical in

@@ -52,7 +52,7 @@ def SameRes {α₁ α₂ : Type} (Q : α₁ → α₂ → Prop) (a : α₁ × Co
 /-- Failures of the naive lexer with causes related and the same span and location. -/
 def VFailRel {E₁ E₂ : Type} (RE : E₁ → E₂ → Prop) (a : BSmtLib.Lexer.Internal.VNaive.Failure E₁)
     (b : BSmtLib.Lexer.Internal.VNaive.Failure E₂) : Prop :=
-  CauseRel RE a.cause b.cause ∧ a.span = b.span ∧ a.location = b.location
+  CauseRel RE a.kind b.kind ∧ a.span = b.span ∧ a.location = b.location
 
 /-- The results of the steps on bytes: related results or related failures. -/
 abbrev StepRes : Except (BSmtLib.Lexer.Internal.VNaive.Failure E₁) (Option (Span.Located R₁)) →

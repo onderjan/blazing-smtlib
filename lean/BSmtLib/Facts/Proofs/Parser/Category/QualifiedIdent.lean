@@ -6,7 +6,7 @@ import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Category.Ident
 import all BSmtLib.Parser.Category.Sort
 import all BSmtLib.Parser.Category.QualifiedIdent
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 
@@ -481,7 +481,7 @@ theorem qualifiedIdent_rejects_sort_inner {version : Version} {identifier : Tree
       (.parenOpen :: .reserved (.general .as) :: (identTokens ++ tokens))
       ((fun _ => ()) <$> program) kind := by
   obtain ⟨head, hruns⟩ := qualifiedIdent_sortRuns hvalid hident hsort
-  have hruns' := hruns.congr (next' := fun _ => throw (Parser.ParseErrorCause.syntax kind)) rfl
+  have hruns' := hruns.congr (next' := fun _ => throw (Parser.ParseErrorKind.syntax kind)) rfl
     (by
       funext a
       apply ExceptT.ext

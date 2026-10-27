@@ -22,7 +22,7 @@ inductive _root_.BSmtLib.Token.TokenBuf where
   | string (value : StringContentBuf)
   | keyword (value : KeywordBuf)
   | symbol (value : SymbolBuf)
-  | reserved (value : Reserved)
+  | reserved (value : Lexicon.Reserved)
   | whitespace (value : WhitespaceBuf)
   | comment (value : CommentBuf)
   | endOfFile

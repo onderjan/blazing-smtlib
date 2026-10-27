@@ -5,7 +5,7 @@ public import BSmtLib.Facts.Proofs.Reader.Param.UnaryCalls
 public import BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
 import all BSmtLib.Parser
 import all BSmtLib.Lexicon.Value
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 import all BSmtLib.Token
 import all BSmtLib.Version
 import all BSmtLib.Lexer.Cursor
@@ -75,20 +75,20 @@ theorem toByteSlice_beq_slice (a : ByteArray) (s : ByteSlice) (h : (a.toByteSlic
   rw [Lexer.Simulation.Bytes.byteArray_toList, h]
 
 /-- The table of reserved words holds each word with its bytes. -/
-theorem reservedTable_bytes : ∀ e ∈ Token.Reserved.Internal.reservedTable.toList,
+theorem reservedTable_bytes : ∀ e ∈ Lexicon.Reserved.Internal.reservedTable.toList,
     e.1.size = 0 ∨ e.1.data.toList = Bridge.reserved e.2.1 := by
   decide +kernel
 
 /-- A reserved word the library's lookup finds is the one the formalism's bytes decode to. -/
-theorem fromBytes_decode {s : ByteSlice} {v : Version} {w : Token.Reserved}
-    (h : Token.Reserved.fromBytes? s v = some w) :
+theorem fromBytes_decode {s : ByteSlice} {v : Version} {w : Lexicon.Reserved}
+    (h : Lexicon.Reserved.fromBytes? s v = some w) :
     decodeReserved (Lexer.Adapters.toContent s) = some w := by
   by_cases h0 : s.size = 0
-  · simp [Token.Reserved.fromBytes?, h0] at h
+  · simp [Lexicon.Reserved.fromBytes?, h0] at h
   · rw [Lexer.VNaive.Reserved.fromBytes_eq _ _ h0] at h
-    have hmem := Lexer.VNaive.Reserved.getElem!_mem Token.Reserved.Internal.reservedTable
+    have hmem := Lexer.VNaive.Reserved.getElem!_mem Lexicon.Reserved.Internal.reservedTable
       (Lexer.VNaive.Reserved.slotOf s)
-    generalize Token.Reserved.Internal.reservedTable[Lexer.VNaive.Reserved.slotOf s]! = e
+    generalize Lexicon.Reserved.Internal.reservedTable[Lexer.VNaive.Reserved.slotOf s]! = e
       at h hmem
     obtain ⟨word, r, since⟩ := e
     simp only at h
@@ -132,7 +132,7 @@ theorem received_ofSyntax {b : Token.BatchTag} (cursor : LexerCursor b) (token :
   cases category <;> simp only [Lexer.Adapters.toTokenType, Option.map_none,
     Option.map_some, reduceCtorEq, Option.some.injEq] at h <;> subst h
   case unquotedSymbol =>
-    cases hw : Token.Reserved.fromBytes? content cursor.version with
+    cases hw : Lexicon.Reserved.fromBytes? content cursor.version with
     | none =>
       simp only [Token.Internal.fromParts, hw, Parser.Internal.Input.ofSyntax, itemOf,
         Lexer.Adapters.toReservedKind, Bridge.received, rcv, Option.getD_some,

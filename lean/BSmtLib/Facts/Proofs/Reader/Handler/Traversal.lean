@@ -74,7 +74,7 @@ theorem hRun_traversal
   obtain ⟨u, s₀⟩ := S
   dsimp only at hr
   have hm : ((fun p => (Except.ok p.fst, p.snd)) <$> (((u, s₀) : Unit × H) : Id (Unit × H)) :
-      Id (Except (BSmtLib.Parser.ParseErrorCause (Handler.Error H)) Unit × H)) =
+      Id (Except (BSmtLib.Parser.ParseErrorKind (Handler.Error H)) Unit × H)) =
       (.ok u, s₀) := rfl
   rw [hm] at hl
   dsimp only at hl

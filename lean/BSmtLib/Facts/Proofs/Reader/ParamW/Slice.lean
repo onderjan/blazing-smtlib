@@ -93,8 +93,8 @@ theorem lexSliceRun_sim_lt (hc : ConsumersW L) {floor : Option Nat} (input : Byt
           cases hspan
           cases r₁ <;> cases r₂ <;> try exact absurd hres id
           · refine lexSliceRun_sim_lt hc input n position
-              (.error { cause := _, span := s₁, location := l₁ })
-              (.error { cause := _, span := s₁, location := l₁ }) ⟨hres, rfl, rfl⟩ _ ?_
+              (.error { kind := _, span := s₁, location := l₁ })
+              (.error { kind := _, span := s₁, location := l₁ }) ⟨hres, rfl, rfl⟩ _ ?_
             simp only [runMeasureW] at hn ⊢
             simp at hflush <;> omega
           · exact L.rc.pure ⟨⟨hres, rfl⟩, rfl⟩

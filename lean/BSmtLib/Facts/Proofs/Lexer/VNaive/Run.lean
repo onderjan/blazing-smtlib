@@ -5,7 +5,7 @@ import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Span
 import all BSmtLib.Token
 import all BSmtLib.Version
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 import all BSmtLib.Lexer.Cursor
 
 @[expose] public section
@@ -167,9 +167,9 @@ def lexemeHanded (version : Version) (l : Lexeme) : Option BSmtLibSpec.Lexer.Han
       start := toLocation l.start
       «end» := toLocation l.end
       reserved := match l.category with
-        | .unquotedSymbol => (Token.Reserved.fromBytes? l.content.toByteSlice version).map fun word
-            =>
-          if word.isCommandName then .command else .general
+        | .unquotedSymbol =>
+          (Lexicon.Reserved.fromBytes? l.content.toByteSlice version).map fun word =>
+            if word.isCommandName then .command else .general
         | _ => none
       content := toContent l.content.toByteSlice }
 
@@ -204,7 +204,7 @@ theorem toHanded_batch (version : Version) (l : Lexeme) (h : l.Valid) :
       hcat, hstart, hend,
     hcontent, hversion]
   cases hc : l.category <;> simp [toTokenType, toReservedKind]
-  cases Token.Reserved.fromBytes? l.content.toByteSlice version <;> rfl
+  cases Lexicon.Reserved.fromBytes? l.content.toByteSlice version <;> rfl
 
 /-- The lexeme in the formalism's form as a piece of layout, as the adapter records it (`toLayout`).
 -/

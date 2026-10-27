@@ -36,7 +36,7 @@ open BSmtLib.Lexer.Cursor.LexerCursor.Internal (discardRequested resetConsumed r
     relexRequested
     EndsAfter consumedSpanOf foldConsumedCategories consumedEndOf)
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState)
 open BSmtLib.Parser.Adapter (ParseAdapter)
 
 /-! ## The loop over single tokens against the one that stops -/

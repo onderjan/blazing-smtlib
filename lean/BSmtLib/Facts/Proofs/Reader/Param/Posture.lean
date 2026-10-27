@@ -126,7 +126,7 @@ def StepWith (posture strict : Version.VersionPosture) :
 /-- A run of a resumption under the posture, as the one under `strict` runs, unless that one
 fails. -/
 def ResumeWith (posture strict : Version.VersionPosture)
-    (x y : Except (ParseErrorCause Unit) (Parser.Internal.Step (ScriptParser
+    (x y : Except (ParseErrorKind Unit) (Parser.Internal.Step (ScriptParser
         (List Event)) Unit) × List Event) :
     Prop :=
   (∃ e, x.1 = .error e) ∨

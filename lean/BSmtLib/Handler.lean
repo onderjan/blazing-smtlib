@@ -114,7 +114,7 @@ def NonstandardCommandError.new (name : SymbolBuf) : NonstandardCommandError :=
 /-- Error of a `PartialCommandHandler`. -/
 inductive PartialCommandError (E : Type) where
   /-- The handler does not implement the standard command. -/
-  | unsupported (command : Token.Reserved.CommandNameReserved)
+  | unsupported (command : Lexicon.Reserved.CommandNameReserved)
   /-- The handler does not implement the nonstandard command with the given name. -/
   | unsupportedNonstandard (name : SymbolBuf)
   /-- The handler failed. -/

@@ -41,8 +41,8 @@ variable (C : BSmtLibSpec.Lexer.Consumer)
 span of the last token taken, and the adapter's error `none` comes only with a consumer that
 takes whitespace and comments. -/
 def WErr (e : LexerError (Option C.Error)) (t : List Handed) : Prop :=
-  (∀ x, e.cause = .consumer (some x) → e.span = VNaiveWRustPort.Cursor.handedSpan t) ∧
-    (C.concrete = false → e.cause ≠ .consumer none)
+  (∀ x, e.kind = .consumer (some x) → e.span = VNaiveWRustPort.Cursor.handedSpan t) ∧
+    (C.concrete = false → e.kind ≠ .consumer none)
 
 theorem w_run_err (ended : Bool) : ∀ (slices : List BSmtLibSpec.Regex.Chars)
     (a : WOps.Lexer C) (taken : List Handed) (b : VOps.Lexer C), WVRel C a b →
@@ -143,9 +143,9 @@ theorem z_naive (version : Version) (ended : Bool) (slices : List BSmtLibSpec.Re
 errors, and neither trailing input nor the adapter's error `none`, are the same. -/
 theorem error_eq {e₁ e₂ : LexerError (Option C.Error)} (h : preciseOf e₁ = preciseOf e₂)
     (hc₁ : e₁.continuesFrom = none) (hc₂ : e₂.continuesFrom = none)
-    (hs : ∀ x, e₁.cause = .consumer (some x) → e₂.cause = .consumer (some x) → e₁.span = e₂.span)
-    (hn₁ : e₁.cause ≠ .consumer none) (hn₂ : e₂.cause ≠ .consumer none)
-    (ht : e₁.cause ≠ .lexical .unexpectedTrailingToken) : e₁ = e₂ := by
+    (hs : ∀ x, e₁.kind = .consumer (some x) → e₂.kind = .consumer (some x) → e₁.span = e₂.span)
+    (hn₁ : e₁.kind ≠ .consumer none) (hn₂ : e₂.kind ≠ .consumer none)
+    (ht : e₁.kind ≠ .lexical .unexpectedTrailingToken) : e₁ = e₂ := by
   obtain ⟨c₁, s₁, f₁⟩ := e₁
   obtain ⟨c₂, s₂, f₂⟩ := e₂
   simp only at hc₁ hc₂ hs hn₁ hn₂ ht
@@ -159,7 +159,7 @@ theorem error_eq {e₁ e₂ : LexerError (Option C.Error)} (h : preciseOf e₁ =
   · exact absurd rfl hn₁
   · have h1 := congrArg Prod.fst h
     simp only [preciseOf, preciseFailure, causeFailure, failureOf,
-      Lexer.Error.LexerError.Internal.cause_new] at h1
+      Lexer.Error.LexerError.Internal.kind_new] at h1
     rcases c₂ with k | (_ | y)
     · simp only at h1
       split at h1 <;> cases h1
@@ -177,7 +177,7 @@ theorem slicing (hc : C.concrete = false) (version : Version) (ended : Bool)
     ((runInputE ZOps (ZOps.new C {} version) ended slices).run []).2 =
         ((runInputE ZOps (ZOps.new C {} version) ended [slices.flatten]).run []).2 ∧
       ((∀ e, ((runInputE ZOps (ZOps.new C {} version) ended slices).run []).1.1 = .error e →
-          e.cause ≠ .lexical .unexpectedTrailingToken) →
+          e.kind ≠ .lexical .unexpectedTrailingToken) →
         ((runInputE ZOps (ZOps.new C {} version) ended slices).run []).1.1 =
           ((runInputE ZOps (ZOps.new C {} version) ended [slices.flatten]).run []).1.1) ∧
       (((runInputE ZOps (ZOps.new C {} version) ended slices).run []).1.1.isOk = true →

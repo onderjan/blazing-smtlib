@@ -49,9 +49,9 @@ structure Request where
   items : Array Item
 
 /-- The reserved word of the spelling, in whichever version reserves it. -/
-def readReserved (spelling : String) : Except String Token.Reserved :=
+def readReserved (spelling : String) : Except String Lexicon.Reserved :=
   let found := [Version.v2_7, .v2_6, .v2_5, .v2_0].findSome? fun version =>
-    Token.Reserved.fromBytes? spelling.toUTF8.toByteSlice version
+    Lexicon.Reserved.fromBytes? spelling.toUTF8.toByteSlice version
   match found with
   | some reserved => pure reserved
   | none => throw s!"unknown reserved word {repr spelling}"
@@ -133,7 +133,7 @@ def readRequest (line : String) : Except String Request := do
 
 /-- The line of an error of writing. -/
 def writeErrorLine (err : WriteError) : String :=
-  match err.cause with
+  match err.kind with
   | .io error => s!"werr io x{hex (toString error).toUTF8.toByteSlice}"
   | .notInVersion reserved => s!"werr not-in-version {reserved.asStr}"
 
@@ -143,7 +143,7 @@ def lexLine {H : Type} (result : Except (LexerError WriteError × H) α) : Strin
   match result with
   | .ok _ => "ok"
   | .error (err, _) =>
-    match err.cause with
+    match err.kind with
     | .lexical kind =>
       s!"err {errorKindName kind} {location err.span.start} {location err.span.end}"
     | .consumer err => writeErrorLine err

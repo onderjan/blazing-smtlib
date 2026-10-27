@@ -691,10 +691,10 @@ unsupported parser <name>`.
 Any request that reads or drives may end with an error instead:
 
 ```
-error <start> <end> <cause>
+error <start> <end> <kind>
 ```
 
-The span of the error and its cause:
+The span of the error and its kind:
 
 - `lexical <kind>`: a lexer error, of the kind spelled as in `err`.
 - `syntax <kind>`: a syntax error, of the kind spelled as the `Debug` form of

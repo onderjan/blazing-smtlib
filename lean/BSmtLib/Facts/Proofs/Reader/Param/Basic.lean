@@ -55,7 +55,7 @@ def ERel {ε₁ ε₂ α β : Type} (Qe : ε₁ → ε₂ → Prop) (Q : α → 
   | _, _ => False
 
 /-- The same lexical error kind, or consumer errors related by `RE`. -/
-def CauseRel {E₁ E₂ : Type} (RE : E₁ → E₂ → Prop) : LexerErrorCause E₁ → LexerErrorCause E₂ → Prop
+def CauseRel {E₁ E₂ : Type} (RE : E₁ → E₂ → Prop) : LexerErrorKind E₁ → LexerErrorKind E₂ → Prop
   | .lexical e, .lexical e' => e = e'
   | .consumer e, .consumer e' => RE e e'
   | _, _ => False
@@ -92,11 +92,11 @@ def IRel {R₁ R₂ E₁ E₂ : Type} {floor : Option Nat} (RR : R₁ → R₂ �
 
 /-- Failures with the same span at the same location, with causes related. -/
 def FailRel {E₁ E₂ : Type} (RE : E₁ → E₂ → Prop) (a : Failure E₁) (b : Failure E₂) : Prop :=
-  CauseRel RE a.cause b.cause ∧ a.span = b.span ∧ a.location = b.location
+  CauseRel RE a.kind b.kind ∧ a.span = b.span ∧ a.location = b.location
 
 /-- Lexer errors with causes related and the same span, continuing from the same location. -/
 def LexErrRel {E₁ E₂ : Type} (RE : E₁ → E₂ → Prop) (a : LexerError E₁) (b : LexerError E₂) : Prop :=
-  CauseRel RE a.cause b.cause ∧ a.span = b.span ∧ a.continuesFrom = b.continuesFrom
+  CauseRel RE a.kind b.kind ∧ a.span = b.span ∧ a.continuesFrom = b.continuesFrom
 
 /-! ## The link between two consumers -/
 

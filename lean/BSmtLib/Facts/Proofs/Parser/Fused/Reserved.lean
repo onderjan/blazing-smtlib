@@ -3,7 +3,7 @@ module
 public import BSmtLib.Parser.Internal.Fused.Basic
 import all BSmtLib.Parser.Internal.Fused.Basic
 import all BSmtLib.Parser.Internal.Fused.Reserved
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 
@@ -12,7 +12,7 @@ import all BSmtLib.Token.Reserved
 
 The fused reader looks reserved words up on the bytes and bounds of a token's content
 (`Parser.Internal.Fused.Reserved.ofBounds?`); the port, on the content's slice
-(`Token.Reserved.fromBytes?`). The two agree on every array and bounds (`ofBounds?_eq`), so on
+(`Lexicon.Reserved.fromBytes?`). The two agree on every array and bounds (`ofBounds?_eq`), so on
 every token (`reservedAt_eq`): the bounds are clamped as `ByteArray.toByteSlice` clamps them, the
 hash reads the same bytes, the word is compared byte by byte where the library compares slices,
 and the versions by rank where the library compares them by their order.
@@ -104,13 +104,13 @@ theorem slice_getElem (bytes : ByteArray) {start stop : Nat} (ordered : start �
 theorem slot_eq (bytes : ByteArray) {start stop : Nat} (ordered : start ≤ stop)
     (within : stop ≤ bytes.size) (h : 0 < (bytes.toByteSlice start stop).size)
     (hsize : (bytes.toByteSlice start stop).size = stop - start) :
-    (Token.Reserved.Internal.reservedSlot (bytes.toByteSlice start stop) h).val =
+    (Lexicon.Reserved.Internal.reservedSlot (bytes.toByteSlice start stop) h).val =
       ((bytes[start]'(by omega)).toNat +
         (bytes[start + (stop - start - 1)]'(by omega)).toNat * 4 + (stop - start) * 34 +
         (bytes[start + (stop - start) / 2]'(by
           have : (stop - start) / 2 < stop - start := Nat.div_lt_self (by omega) (by decide)
           omega)).toNat * 54) % 128 := by
-  unfold Token.Reserved.Internal.reservedSlot
+  unfold Lexicon.Reserved.Internal.reservedSlot
   simp only [slice_getElem bytes ordered within, hsize, Nat.add_zero]
   rfl
 
@@ -124,23 +124,23 @@ theorem array_getElem_congr {α : Type} (a : Array α) {i j : Nat} (hij : i = j)
 theorem ofParts?_eq (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ stop)
     (within : stop ≤ bytes.size) (version : Version) :
     ofParts? bytes start stop ordered within version =
-      BSmtLib.Token.Reserved.fromBytes? (bytes.toByteSlice start stop) version := by
+      BSmtLib.Lexicon.Reserved.fromBytes? (bytes.toByteSlice start stop) version := by
   obtain ⟨hb, hs, he⟩ := toByteSlice_parts bytes ordered within
   have hsize : (bytes.toByteSlice start stop).size = stop - start := by
     unfold ByteSlice.size
     rw [hs, he]
-  unfold ofParts? BSmtLib.Token.Reserved.fromBytes?
+  unfold ofParts? BSmtLib.Lexicon.Reserved.fromBytes?
   by_cases empty : stop - start = 0
   · rw [dite_eq_left empty, dite_eq_left (hsize.trans empty)]
   rw [dite_eq_right empty, dite_eq_right (fun h => empty (hsize.symm.trans h))]
   have hpos : 0 < (bytes.toByteSlice start stop).size := by omega
-  have e := array_getElem_congr Token.Reserved.Internal.reservedTable
+  have e := array_getElem_congr Lexicon.Reserved.Internal.reservedTable
     (slot_eq bytes ordered within hpos hsize)
-    (by rw [Token.Reserved.Internal.size_reservedTable]; exact Fin.isLt _)
+    (by rw [Lexicon.Reserved.Internal.size_reservedTable]; exact Fin.isLt _)
     (by rw [size_table]; exact Nat.mod_lt _ (by decide))
   simp only [e]
   rw [e]
-  generalize Token.Reserved.Internal.reservedTable[((_ : Nat))]'_ = entry
+  generalize Lexicon.Reserved.Internal.reservedTable[((_ : Nat))]'_ = entry
   obtain ⟨word, reserved, since⟩ := entry
   have hcmp := word_beq_iff word bytes ordered within
   by_cases sized : word.size = stop - start
@@ -182,7 +182,7 @@ theorem ofParts?_eq (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ 
 /-- The lookup on bounds, clamped, is the library's on the slice the bounds make. -/
 theorem ofBounds?_eq (bytes : ByteArray) (start stop : Nat) (version : Version) :
     ofBounds? bytes start stop version =
-      Token.Reserved.fromBytes? (bytes.toByteSlice start stop) version := by
+      Lexicon.Reserved.fromBytes? (bytes.toByteSlice start stop) version := by
   unfold ofBounds?
   by_cases within : stop ≤ bytes.size
   · rw [dite_eq_left within]
@@ -221,7 +221,7 @@ theorem contentOf_eq {batch : BatchTag} (next : LexerCursor batch) (token : Lexe
 /-- The reserved-word lookup on the content's bytes is the library's on the content. -/
 theorem reservedAt_eq {batch : BatchTag} (version : Version) (next : LexerCursor batch)
     (token : LexerToken batch) :
-    reservedAt? version next token = Token.Reserved.fromBytes? (next.content token) version := by
+    reservedAt? version next token = Lexicon.Reserved.fromBytes? (next.content token) version := by
   unfold reservedAt?
   rw [ofBounds?_eq, Lexer.Cursor.Internal.content_eq_parts]
 

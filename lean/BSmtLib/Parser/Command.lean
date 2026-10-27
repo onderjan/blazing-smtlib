@@ -101,7 +101,7 @@ def Internal.nonstandardStep (version : Version) (parser : CommandHandler.Nonsta
   let (answer, parser, _) ← ExceptT.lift
     (Parse.parse parser ParseState.new (Internal.InputCursor.mk version (some token)))
   match answer with
-  | .error error => throw error.cause
+  | .error error => throw error.kind
   | .ok .continue => return .more (.nonstandard parser)
   -- a non-standard command cannot be the exit command
   | .ok (.break ()) => return .done .command

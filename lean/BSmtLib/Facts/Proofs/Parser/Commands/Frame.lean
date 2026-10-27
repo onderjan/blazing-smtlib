@@ -66,7 +66,7 @@ abbrev PayloadRuns {α : Type} (state : Parser.Command.Internal.Standard.Payload
 
 /-- A token standing for a command's name is that name. -/
 theorem Parser.Internal.Input.received_commandName {token : Parser.Internal.Input}
-    {name : Token.Reserved.CommandNameReserved}
+    {name : Lexicon.Reserved.CommandNameReserved}
     {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     (h : Bridge.received token = some (.token (word s))) :
@@ -80,7 +80,7 @@ The frame of a command: if the payload parser, from the command's initial payloa
 tokens after the name with the effects of `program`, the command parser reads the whole command
 with the opening's ticks, then `program`.
 -/
-theorem command_frame {name : Token.Reserved.CommandNameReserved} {s : String}
+theorem command_frame {name : Lexicon.Reserved.CommandNameReserved} {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     {payload : List Parser.Internal.Input} {program : PM H Unit} {outcome : CommandOutcome}
     (hruns : PayloadRuns points version (Payload.init name version) payload program
@@ -110,7 +110,7 @@ A command against the traversal, from what its payload parser does: the command'
 the rest; and the payload parser, from the command's initial payload, reads the tokens standing
 for the payload's and the `)` with the rest's effects.
 -/
-theorem command_of_payload (command : Tree.Command) {name : Token.Reserved.CommandNameReserved}
+theorem command_of_payload (command : Tree.Command) {name : Lexicon.Reserved.CommandNameReserved}
     {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     {payloadSyntax : List BSmtLibSpec.Grammar.SyntaxToken}

@@ -3,7 +3,7 @@ module
 public import BSmtLib.Facts.Proofs.Parser.SExpr
 import all BSmtLib.Parser.Category.Ident
 import all BSmtLib.Parser.Category.Sort
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 

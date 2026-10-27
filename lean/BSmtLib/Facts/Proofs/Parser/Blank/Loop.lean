@@ -42,12 +42,12 @@ open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 /-- Results of the two runs, the first with a handler, the second with the blank handler: values
 related by `Q`, or failures with the same cause, blanked. -/
 def ERelB {ε α β : Type} (Q : α → β → Prop) :
-    Except (ParseErrorCause ε) α → Except (ParseErrorCause Unit) β → Prop
+    Except (ParseErrorKind ε) α → Except (ParseErrorKind Unit) β → Prop
   | .ok a, .ok b => Q a b
   | .error e, .error e' => e' = blankCause e
   | _, _ => False
 
-theorem eRelB_blankResult {ε α β : Type} [Blanks α β] (r : Except (ParseErrorCause ε) α) :
+theorem eRelB_blankResult {ε α β : Type} [Blanks α β] (r : Except (ParseErrorKind ε) α) :
     ERelB (fun a b => b = blank a) r (blankResult r) := by
   cases r <;> rfl
 

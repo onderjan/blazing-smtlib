@@ -39,7 +39,7 @@ stand for items on which the recording run fails with it. -/
 def CauseOf (version : Lexicon.Version) (ae : Parser.ParseError Unit) (taken : List Handed) :
     Prop :=
   ∃ items : List LibItem, items.map (rcv ∘ Subtype.val) = taken.map (rcv ∘ itemOf) ∧
-    ∃ log, recRun version items = (.error ae.cause, log)
+    ∃ log, recRun version items = (.error ae.kind, log)
 
 attribute [local instance high] Stop.consumeFrom
 

@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Category.CursorS
 public import BSmtLib.Facts.Proofs.Parser.TermParts
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Pattern
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 

@@ -1283,7 +1283,7 @@ theorem closedMaximum_parser_waits_between {version : Version} {p : P}
     (hvalues : ∀ value ∈ values, Finishes version p value.1 value.2 p ∧
       ∃ token tokens, value.1 = token :: tokens ∧ token ≠ .parenClose) :
     ∃ after : Nat → List R → ClosedMaximumParser H P,
-      (∀ maximum found n, (after maximum found).setMaxElements n = after n found) ∧
+      (∀ maximum found n, (after maximum found).setMaxItems n = after n found) ∧
       (∀ maximum, values.length ≤ maximum →
         Waits version (ClosedMaximumParser.new (H := H) p maximum) (values.flatMap (·.1))
           (values.mapM fun value => value.2) (after maximum)) ∧
@@ -1317,7 +1317,7 @@ Setting the maximum of a closed list parser with a maximum before its first valu
 parser with the new maximum.
 -/
 theorem closedMaximum_parser_setMaximum_new (p : P) (maximum n : Nat) :
-    (ClosedMaximumParser.new (H := H) p maximum).setMaxElements n =
+    (ClosedMaximumParser.new (H := H) p maximum).setMaxItems n =
       ClosedMaximumParser.new (H := H) p n := by
   apply Proofs.Parser.Category.Maximum.closedMaximum_setMaximum_new <;> assumption
 
@@ -1329,15 +1329,15 @@ info: 'BSmtLib.Facts.Parser.closedMaximum_parser_setMaximum_new' depends on axio
 
 omit [Monad m] [LawfulMonad m] in
 /-- A new closed list parser with a maximum has that maximum. -/
-theorem closedMaximum_parser_maxElements_new (p : P) (maximum : Nat) :
-    (ClosedMaximumParser.new (H := H) p maximum).maxElements = maximum := by
-  apply Proofs.Parser.Category.Maximum.closedMaximum_maxElements_new <;> assumption
+theorem closedMaximum_parser_maxItems_new (p : P) (maximum : Nat) :
+    (ClosedMaximumParser.new (H := H) p maximum).maxItems = maximum := by
+  apply Proofs.Parser.Category.Maximum.closedMaximum_maxItems_new <;> assumption
 
 /--
-info: 'BSmtLib.Facts.Parser.closedMaximum_parser_maxElements_new' depends on axioms: [propext, Quot.sound]
+info: 'BSmtLib.Facts.Parser.closedMaximum_parser_maxItems_new' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in
-#print axioms closedMaximum_parser_maxElements_new
+#print axioms closedMaximum_parser_maxItems_new
 
 /--
 The list parser with a maximum and its own `(` finishes on the `(`, at most the maximum of values
@@ -1427,7 +1427,7 @@ Setting the maximum of a list parser with a maximum and its own `(` before its `
 parser with the new maximum.
 -/
 theorem parenMaximum_parser_setMaximum_new (p : P) (maximum n : Nat) :
-    (ParenMaximumParser.new (H := H) p maximum).setMaxElements n =
+    (ParenMaximumParser.new (H := H) p maximum).setMaxItems n =
       ParenMaximumParser.new (H := H) p n := by
   apply Proofs.Parser.Category.Maximum.parenMaximum_setMaximum_new <;> assumption
 
@@ -1439,15 +1439,15 @@ info: 'BSmtLib.Facts.Parser.parenMaximum_parser_setMaximum_new' depends on axiom
 
 omit [Monad m] [LawfulMonad m] in
 /-- A new list parser with a maximum and its own `(` has that maximum. -/
-theorem parenMaximum_parser_maxElements_new (p : P) (maximum : Nat) :
-    (ParenMaximumParser.new (H := H) p maximum).maxElements = maximum := by
-  apply Proofs.Parser.Category.Maximum.parenMaximum_maxElements_new <;> assumption
+theorem parenMaximum_parser_maxItems_new (p : P) (maximum : Nat) :
+    (ParenMaximumParser.new (H := H) p maximum).maxItems = maximum := by
+  apply Proofs.Parser.Category.Maximum.parenMaximum_maxItems_new <;> assumption
 
 /--
-info: 'BSmtLib.Facts.Parser.parenMaximum_parser_maxElements_new' depends on axioms: [propext, Quot.sound]
+info: 'BSmtLib.Facts.Parser.parenMaximum_parser_maxItems_new' depends on axioms: [propext, Quot.sound]
 -/
 #guard_msgs in
-#print axioms parenMaximum_parser_maxElements_new
+#print axioms parenMaximum_parser_maxItems_new
 
 /--
 When the cursor holds fewer values than the maximum and then tokens that do not start with `)`, and
@@ -1464,7 +1464,7 @@ theorem closedMaximum_parser_waits_inner {version : Version} {p : P}
     (h : Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
     ∃ after' : Nat → List R × α → ClosedMaximumParser H P,
-      (∀ maximum x n, (after' maximum x).setMaxElements n = after' n x) ∧
+      (∀ maximum x n, (after' maximum x).setMaxItems n = after' n x) ∧
       (∀ maximum, values.length < maximum →
         Waits version (ClosedMaximumParser.new (H := H) p maximum)
           (values.flatMap (·.1) ++ tokens)
@@ -1508,7 +1508,7 @@ values and the `)`, and rejects a token that is not `)` after the maximum of val
 -/
 theorem parenMaximum_parser_waits_after_open {version : Version} {p : P} :
     ∃ after : Nat → ParenMaximumParser H P,
-      (∀ maximum n, (after maximum).setMaxElements n = after n) ∧
+      (∀ maximum n, (after maximum).setMaxItems n = after n) ∧
       (∀ maximum, Waits version (ParenMaximumParser.new (H := H) p maximum) [.parenOpen]
         (pure () : PM H Unit) fun _ => after maximum) ∧
       (∀ maximum {values : List (List Parser.Internal.Input × PM H R)},
@@ -1547,7 +1547,7 @@ theorem parenMaximum_parser_waits_between {version : Version} {p : P}
       ∃ token tokens, value.1 = token :: tokens ∧ token ≠ .parenClose)
     (hne : values ≠ []) :
     ∃ after : Nat → List R → ParenMaximumParser H P,
-      (∀ maximum found n, (after maximum found).setMaxElements n = after n found) ∧
+      (∀ maximum found n, (after maximum found).setMaxItems n = after n found) ∧
       (∀ maximum, values.length ≤ maximum →
         Waits version (ParenMaximumParser.new (H := H) p maximum)
           (.parenOpen :: values.flatMap (·.1)) (values.mapM fun value => value.2)
@@ -1591,7 +1591,7 @@ theorem parenMaximum_parser_waits_inner {version : Version} {p : P}
     (h : Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
     ∃ after' : Nat → List R × α → ParenMaximumParser H P,
-      (∀ maximum x n, (after' maximum x).setMaxElements n = after' n x) ∧
+      (∀ maximum x n, (after' maximum x).setMaxItems n = after' n x) ∧
       (∀ maximum, values.length < maximum →
         Waits version (ParenMaximumParser.new (H := H) p maximum)
           (.parenOpen :: (values.flatMap (·.1) ++ tokens))

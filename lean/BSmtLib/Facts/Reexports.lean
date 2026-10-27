@@ -65,6 +65,9 @@ def uses : List Use := [
     path := "nodes", modules := [`BSmtLib.Grammar.Nodes] },
   { rust := "`pub use bytes::*` in `lexicon.rs`; `SmtBytes` is itself `BSmtLib.Lexicon.Bytes`",
     target := `BSmtLib.Lexicon, path := "bytes", modules := [`BSmtLib.Lexicon.Bytes] },
+  { rust := "`pub use reserved::*` in `lexicon.rs`; `SmtReserved` is itself \
+      `BSmtLib.Lexicon.Reserved`",
+    target := `BSmtLib.Lexicon, path := "reserved", modules := [`BSmtLib.Lexicon.Reserved] },
   { rust := "`pub use value::*` in `lexicon.rs`", target := `BSmtLib.Lexicon,
     path := "value", modules := [`BSmtLib.Lexicon.Value] },
   { rust := "`pub use cursor::{SmtLexerCursor, SmtLexerToken, SmtLexerWindow}` in `lexer.rs`",
@@ -72,13 +75,13 @@ def uses : List Use := [
     items := [("cursor::SmtLexerCursor", `BSmtLib.Lexer.Cursor.LexerCursor),
       ("cursor::SmtLexerToken", `BSmtLib.Lexer.Cursor.LexerToken),
       ("cursor::SmtLexerWindow", `BSmtLib.Lexer.Cursor.LexerWindow)] },
-  { rust := "`pub use error::{SmtLexerError, SmtLexerErrorCause, SmtLexerReadError, \
-      SmtLexerReadErrorCause, SmtLexicalErrorKind, SmtLexicalExpected}` in `lexer.rs`",
+  { rust := "`pub use error::{SmtLexerError, SmtLexerErrorKind, SmtLexerReadError, \
+      SmtLexerReadErrorKind, SmtLexicalErrorKind, SmtLexicalExpected}` in `lexer.rs`",
     target := `BSmtLib.Lexer,
     items := [("error::SmtLexerError", `BSmtLib.Lexer.Error.LexerError),
-      ("error::SmtLexerErrorCause", `BSmtLib.Lexer.Error.LexerErrorCause),
+      ("error::SmtLexerErrorKind", `BSmtLib.Lexer.Error.LexerErrorKind),
       ("error::SmtLexerReadError", `BSmtLib.Lexer.Error.LexerReadError),
-      ("error::SmtLexerReadErrorCause", `BSmtLib.Lexer.Error.LexerReadErrorCause),
+      ("error::SmtLexerReadErrorKind", `BSmtLib.Lexer.Error.LexerReadErrorKind),
       ("error::SmtLexicalErrorKind", `BSmtLib.Lexer.Error.LexicalErrorKind),
       ("error::SmtLexicalExpected", `BSmtLib.Lexer.Error.LexicalExpected)] },
   { rust := "`pub use recovery::{SmtFailFast, SmtLexerRecovery, SmtRecover, SmtRecovering}` in \
@@ -88,10 +91,6 @@ def uses : List Use := [
       ("recovery::SmtLexerRecovery", `BSmtLib.Lexer.Recovery.LexerRecovery),
       ("recovery::SmtRecover", `BSmtLib.Lexer.Recovery.Recover),
       ("recovery::SmtRecovering", `BSmtLib.Lexer.Recovery.Recovering)] },
-  { rust := "`pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved}` in \
-      `token.rs`; `Reserved` is itself `BSmtLib.Token.Reserved`", target := `BSmtLib.Token,
-    items := [("reserved::SmtCommandNameReserved", `BSmtLib.Token.Reserved.CommandNameReserved),
-      ("reserved::SmtGeneralReserved", `BSmtLib.Token.Reserved.GeneralReserved)] },
   { rust := "`pub use {…}` in `parser/category.rs`",
     target := `BSmtLib.Parser.Category,
     items := [
@@ -182,10 +181,10 @@ def uses : List Use := [
 /-- The modules the generated module imports: those the library's root imports but for it. -/
 def sources : List Name :=
   [`BSmtLib.ControlFlow, `BSmtLib.Lexicon.Bytes, `BSmtLib.Lexicon.Value,
-    `BSmtLib.Lexicon.Value.Versioned, `BSmtLib.Span, `BSmtLib.Version,
+    `BSmtLib.Lexicon.Value.Versioned, `BSmtLib.Lexicon.Reserved, `BSmtLib.Span, `BSmtLib.Version,
     `BSmtLib.Grammar.Nodes, `BSmtLib.Grammar.Multiple.MatchCasesBuf,
     `BSmtLib.Handler, `BSmtLib.Handler.CommandHandler, `BSmtLib.Handler.PartialCommandHandler,
-    `BSmtLib.Handler.SyntaxChecker, `BSmtLib.Token.Reserved, `BSmtLib.Token,
+    `BSmtLib.Handler.SyntaxChecker, `BSmtLib.Token,
     `BSmtLib.Lexer.Cursor, `BSmtLib.Token.Lookahead, `BSmtLib.Token.Cursor,
     `BSmtLib.Token.ConsumeFrom, `BSmtLib.Token.TokenBuf, `BSmtLib.Token.TokensBuf,
     `BSmtLib.Token.TokensCursor, `BSmtLib.Token.AppendTokens, `BSmtLib.Writer,

@@ -63,7 +63,7 @@ def constant : Grammar.Nodes.SpecialConstant → Tree.SpecConstant
 def keyword (k : Keyword) : Chars := chars k.asSlice
 
 /-- The characters the formalism spells a reserved word with. -/
-def reserved (w : Token.Reserved) : Chars := BSmtLibSpec.Regex.chars w.asStr
+def reserved (w : Lexicon.Reserved) : Chars := BSmtLibSpec.Regex.chars w.asStr
 
 /-- The formalism's symbol or wildcard for the parser's. -/
 def symbolOrWildcard : Grammar.Nodes.SimplePattern → Tree.SymbolOrWildcard
@@ -334,7 +334,7 @@ end
 A failure of the traversal as a failure of the parser: a rejected version declaration is the
 version error of the same kind.
 -/
-def causeOf {ε : Type} : Cause ε → Parser.ParseErrorCause ε
+def causeOf {ε : Type} : Cause ε → Parser.ParseErrorKind ε
   | .syntax .unsupportedVersion => .version .unsupported
   | .syntax (.tooManyDeclarations limit) => .version (.tooManyDeclarations limit)
   | .handler error => .handler error
@@ -370,12 +370,12 @@ def NoLayout (items : List Parser.Internal.Input) : Prop := ∀ token ∈ items,
     Bridge.received token ≠ none
 
 /-- Every reserved word. -/
-def allReserved : List Token.Reserved :=
-  Token.Reserved.GeneralReserved.all.toList.map .general ++
-      Token.Reserved.CommandNameReserved.all.toList.map .commandName
+def allReserved : List Lexicon.Reserved :=
+  Lexicon.Reserved.GeneralReserved.all.toList.map .general ++
+      Lexicon.Reserved.CommandNameReserved.all.toList.map .commandName
 
 /-- The reserved word the formalism spells with the characters, if there is one. -/
-def decodeReserved (c : BSmtLibSpec.Regex.Chars) : Option Token.Reserved :=
+def decodeReserved (c : BSmtLibSpec.Regex.Chars) : Option Lexicon.Reserved :=
   allReserved.find? fun r => decide (Bridge.reserved r = c)
 
 namespace Rejection

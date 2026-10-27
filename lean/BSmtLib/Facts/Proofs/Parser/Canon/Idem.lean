@@ -82,7 +82,7 @@ instance : CanonIdem HexDigits := ⟨by view_idem⟩
 instance : CanonIdem BinDigits := ⟨by view_idem⟩
 instance : CanonIdem StringContent := ⟨by view_idem⟩
 instance : CanonIdem Keyword := ⟨by view_idem⟩
-instance : CanonIdem Token.Reserved := ⟨fun _ => rfl⟩
+instance : CanonIdem Lexicon.Reserved := ⟨fun _ => rfl⟩
 instance : CanonIdem QuantifierKind := ⟨fun _ => rfl⟩
 
 /-- Canonicalising twice by `canonX` is canonicalising once, by the components. -/

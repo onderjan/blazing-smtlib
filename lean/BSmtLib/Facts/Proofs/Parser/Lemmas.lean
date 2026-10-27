@@ -95,13 +95,13 @@ variable {points : Points (StateT H m)} {α : Type}
 omit [Monad m] [LawfulMonad m] in
 @[simp]
 theorem causeOf_comp_handler :
-    (causeOf ∘ Cause.handler : Handler.Error H → ParseErrorCause (Handler.Error H)) =
-      ParseErrorCause.handler := rfl
+    (causeOf ∘ Cause.handler : Handler.Error H → ParseErrorKind (Handler.Error H)) =
+      ParseErrorKind.handler := rfl
 
 omit [LawfulMonad m] in
 /-- A handler call in a parse is the handler's action, its failure the handler's. -/
 theorem call_eq (action : ExceptT (Handler.Error H) (StateT H m) α) :
-    Parser.Internal.call action = ExceptT.adapt ParseErrorCause.handler action := (rfl)
+    Parser.Internal.call action = ExceptT.adapt ParseErrorKind.handler action := (rfl)
 
 @[simp]
 theorem adaptRun_pure (a : α) :

@@ -29,7 +29,7 @@ open BSmtLib.Parser.Command.Internal.Datatype BSmtLib.Parser.Command.Internal.De
 open BSmtLib.Lexicon.Value (Numeral Keyword StringContent Symbol)
 open BSmtLib.Grammar.Multiple (SortedVars)
 open BSmtLib (Version)
-open BSmtLib.Token.Reserved (CommandNameReserved)
+open BSmtLib.Lexicon.Reserved (CommandNameReserved)
 open BSmtLib.Parser.Internal (PM call syntaxError versionError)
 
 /-- The shape of a propositional literal read so far, ⟨symbol⟩ | `(` `not` ⟨symbol⟩ `)`. -/

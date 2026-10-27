@@ -36,7 +36,7 @@ open BSmtLib.Lexer.Error BSmtLib.Lexer.Internal.VNaive
 
 /-- An error is a lexical one other than trailing input. -/
 def IsLexicalNT {ε : Type} (e : LexerError ε) : Prop :=
-  ∃ kind, e.cause = .lexical kind ∧ kind ≠ .unexpectedTrailingToken
+  ∃ kind, e.kind = .lexical kind ∧ kind ≠ .unexpectedTrailingToken
 
 /-- The concrete collector goes on at a lexeme other than the end-of-file one, under the version
 in force. -/
@@ -108,7 +108,7 @@ theorem vBytes_cc (core : Core) (st : St) (hact : core.activity = st.activity)
     refine .inl ⟨by rw [hvb], by rw [hvb]; exact a3.trans hh, st', by rw [hvb]; exact a1⟩
 
 theorem lexicalKey_some {ε : Type} {e : LexerError (Option ε)} {k : LexicalErrorKind} {s : Span}
-    (h : lexicalKey e.cause e.span = some (k, s)) : IsLexicalNT e := by
+    (h : lexicalKey e.kind e.span = some (k, s)) : IsLexicalNT e := by
   unfold lexicalKey at h
   split at h
   · rename_i kind hk
@@ -190,7 +190,7 @@ theorem vBytes_cc_exact (core : Core) (st : St) (hact : core.activity = st.activ
     rw [hvb]
     exact ⟨rfl, a3.trans hh, a1, a5, a2.trans hv⟩
 
-theorem lexicalKey_span {ε : Type} {c : LexerErrorCause (Option ε)} {s s' : Span}
+theorem lexicalKey_span {ε : Type} {c : LexerErrorKind (Option ε)} {s s' : Span}
     {k : LexicalErrorKind} (h : lexicalKey c s = some (k, s')) : s' = s := by
   unfold lexicalKey at h
   split at h

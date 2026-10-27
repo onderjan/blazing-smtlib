@@ -110,7 +110,7 @@ def MatchesC : Except (LexerError Empty) (Option (Span.Located Unit)) →
     Except (LexerError (Option concreteCollector.Error))
       (Option (Span.Located concreteCollector.Result)) → Prop
   | .ok o, .ok o' => o = o'
-  | .error e, .error e' => ∃ kind, e.cause = .lexical kind ∧ e'.cause = .lexical kind
+  | .error e, .error e' => ∃ kind, e.kind = .lexical kind ∧ e'.kind = .lexical kind
   | _, _ => False
 
 /-- Two runs with the collector that match the same one of the naive lexer and write down the
@@ -149,11 +149,11 @@ theorem matchesC_of_matches {c : Except (LexerError Empty) (Option (Span.Located
 /-- A collector's error related to a lexical error of a lexer with the concrete collector has
 its kind. -/
 theorem cause_of_rel {e : LexerError Empty} {e' : LexerError (Option concreteCollector.Error)}
-    {k : LexicalErrorKind} (h : CauseRel link.re e.cause e'.cause)
-    (hk : e'.cause = .lexical k) : e.cause = .lexical k := by
+    {k : LexicalErrorKind} (h : CauseRel link.re e.kind e'.kind)
+    (hk : e'.kind = .lexical k) : e.kind = .lexical k := by
   rw [hk] at h
   revert h
-  generalize e.cause = c
+  generalize e.kind = c
   cases c with
   | lexical k' => intro h; cases h; rfl
   | consumer x => exact x.elim

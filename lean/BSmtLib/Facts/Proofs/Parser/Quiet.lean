@@ -78,7 +78,7 @@ variable {bad : Event → Bool} {α β : Type} {P Q : α → Prop}
 theorem pure {a : α} (h : P a) : Without bad P (Pure.pure a : RPM α) :=
   ⟨fun events => ⟨[], rfl, by simp, fun a' ha' => by cases ha'; exact h⟩⟩
 
-theorem throw (e : Parser.ParseErrorCause Unit) : Without bad P (MonadExcept.throw e : RPM α) :=
+theorem throw (e : Parser.ParseErrorKind Unit) : Without bad P (MonadExcept.throw e : RPM α) :=
   ⟨fun events => ⟨[], rfl, by simp, fun _ h => by cases h⟩⟩
 
 theorem bind {P : β → Prop} {x : RPM α} {f : α → RPM β} (hx : Without bad Q x)

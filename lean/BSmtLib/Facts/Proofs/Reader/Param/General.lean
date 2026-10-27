@@ -99,7 +99,7 @@ theorem answer_eq (version : Lexicon.Version) (taken : List Handed) :
         (libraryParser.parse version (taken.map libItem)).2 := rfl
 
 /-- The stand-in consumer's answer where the parser's run failed: it fails. -/
-theorem answerOf_error (atEnd : Bool) (e : Parser.ParseErrorCause Unit) :
+theorem answerOf_error (atEnd : Bool) (e : Parser.ParseErrorKind Unit) :
     ∃ err, answerOf atEnd (libEnding (.error e)) = .fail err := by
   rcases e with k | k | h
   · cases k <;> exact ⟨_, rfl⟩
@@ -144,7 +144,7 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
         Flagged.isLayoutAnswer (ansRest version cursor taken).1.1 = true ∨
         ∃ items' : List LibItem,
           items'.map (rcv ∘ Subtype.val) = (ansRest version cursor taken).2.map (rcv ∘ itemOf) ∧
-          ∃ log', recRun version items' = (.error ae.cause, log'))
+          ∃ log', recRun version items' = (.error ae.kind, log'))
   | 0, _, _, _, _, _, hn, _, _, _, _ => absurd hn (Nat.not_lt_zero _)
   | n + 1, cursor, taken, items, parser, log, hn, hst, hrun, hne, hgood => by
     by_cases h : cursor.HasNext
@@ -259,7 +259,7 @@ theorem loop_agreeG {version : Lexicon.Version} {b : Token.BatchTag} :
           refine ⟨trivial, by rw [← hsw', ← hdi'], fun _ => ⟨items ++ [item], hst', ?_⟩,
             fun ae hae => .inr ⟨items ++ [item], hst', _, by
               cases hae; rw [recRun_snoc version items item hrun, hR]
-              simp only [Parser.ParseError.Internal.cause_new]; rfl⟩⟩
+              simp only [Parser.ParseError.Internal.kind_new]; rfl⟩⟩
           unfold AdapterAtG
           rw [recRun_snoc version items item hrun, hR]
           rfl

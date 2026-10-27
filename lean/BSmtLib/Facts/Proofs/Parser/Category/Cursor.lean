@@ -21,7 +21,7 @@ The loop over single tokens against those steps is in `Category.CursorS`.
 namespace BSmtLib.Facts.Proofs.Parser.Category.Cursor
 
 open BSmtLib.Token (Cursor)
-open BSmtLib.Parser (Parse ParseErrorCause ParseState)
+open BSmtLib.Parser (Parse ParseErrorKind ParseState)
 open BSmtLib.Parser.Internal (PM ParseByToken takeOne rest parseByToken After)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
 open BSmtLib.Facts.Parser.Adapters.Cursor
@@ -166,7 +166,7 @@ variable {version : Version} {mk : σ → P}
 
 /-- What the loop does with what a step gave. -/
 def afterOf (mk : σ → P) (fresh : P) :
-    Except (ParseErrorCause (Handler.Error H)) (Parser.Internal.Step σ R) → After P R
+    Except (ParseErrorKind (Handler.Error H)) (Parser.Internal.Step σ R) → After P R
       (Handler.Error H)
   | .error error => .stop (.error (Parser.ParseError.Internal.new error)) fresh
   | .ok (.more state) => .goOn (mk state)

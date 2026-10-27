@@ -128,7 +128,7 @@ theorem compose_lexErr {x : LexerError (Option ScriptError × List Handed)}
   obtain ⟨c₂, s₂, f₂⟩ := h₂
   refine ⟨?_, s₁.symm.trans s₂, f₁.symm.trans f₂⟩
   revert c₁ c₂
-  rcases x.cause with k | fe <;> rcases a.cause with k' | ae <;> rcases z.cause with k'' | o <;>
+  rcases x.kind with k | fe <;> rcases a.kind with k' | ae <;> rcases z.kind with k'' | o <;>
     simp only [CauseRel, imp_self, implies_true, false_implies]
   · intro h₁ h₂; exact h₁.symm.trans h₂
   · intro h₁ h₂; exact compose_err h₁ h₂

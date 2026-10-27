@@ -230,7 +230,7 @@ def MovedResult (base : Span.Location) :
   | .ok none, .ok none => True
   | .ok (some result), .ok (some moved) => Moved base result.location moved.location
   | .error error, .error moved =>
-    moved.cause = error.cause ∧ Moved base error.span.start moved.span.start ∧
+    moved.kind = error.kind ∧ Moved base error.span.start moved.span.start ∧
       Moved base error.span.end moved.span.end ∧
       match error.continuesFrom, moved.continuesFrom with
       | none, none => True

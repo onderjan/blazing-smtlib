@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Lexer.VNaive.Facts
 public import BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 
@@ -25,7 +25,7 @@ open BSmtLib.Facts.Proofs.Lexer.Simulation.Bytes (toByteArray_toByteSlice toByte
 namespace BSmtLib.Facts.Proofs.Lexer.VNaive.Reserved
 
 /-- The kind of reserved word of the formalism for a reserved word of the library. -/
-def reservedKindOf (word : Token.Reserved) : ReservedKind :=
+def reservedKindOf (word : Lexicon.Reserved) : ReservedKind :=
   if word.isCommandName then .command else .general
 
 /-- The kind of reserved word the formalism gives the characters in the version, if they are one. -/
@@ -46,33 +46,34 @@ theorem getElem!_mem {α : Type} [Inhabited α] (T : Array α) (i : Nat) :
 
 /-- The slot of the slice in the table of reserved words, if it has a byte. -/
 def slotOf (s : ByteSlice) : Nat :=
-  if h : 0 < s.size then (Token.Reserved.Internal.reservedSlot s h).val else 0
+  if h : 0 < s.size then (Lexicon.Reserved.Internal.reservedSlot s h).val else 0
 
 /-- The lookup reads the table at the slot of a slice with a byte. -/
 theorem fromBytes_eq (s : ByteSlice) (v : Version) (h : s.size ≠ 0) :
-    Token.Reserved.fromBytes? s v =
-      (let e := Token.Reserved.Internal.reservedTable[slotOf s]!
+    Lexicon.Reserved.fromBytes? s v =
+      (let e := Lexicon.Reserved.Internal.reservedTable[slotOf s]!
        if e.1.toByteSlice == s && v ≥ e.2.2 then some e.2.1 else none) := by
   have hpos : 0 < s.size := Nat.pos_of_ne_zero h
-  have hlt : (Token.Reserved.Internal.reservedSlot s hpos).val <
-      Token.Reserved.Internal.reservedTable.size := by
-    rw [Token.Reserved.Internal.size_reservedTable]
+  have hlt : (Lexicon.Reserved.Internal.reservedSlot s hpos).val <
+      Lexicon.Reserved.Internal.reservedTable.size := by
+    rw [Lexicon.Reserved.Internal.size_reservedTable]
     exact Fin.isLt _
-  rw [show slotOf s = (Token.Reserved.Internal.reservedSlot s hpos).val from
+  rw [show slotOf s = (Lexicon.Reserved.Internal.reservedSlot s hpos).val from
       dite_eq_left_of_eq_true (eq_true hpos),
-    getElem!_pos Token.Reserved.Internal.reservedTable _ hlt]
-  simp only [Token.Reserved.fromBytes?, h, ↓reduceDIte]
+    getElem!_pos Lexicon.Reserved.Internal.reservedTable _ hlt]
+  simp only [Lexicon.Reserved.fromBytes?, h, ↓reduceDIte]
 
 theorem fromBytes_kind (version : BSmtLibSpec.Lexicon.Version) (a : ByteArray) :
-    (Token.Reserved.fromBytes? a.toByteSlice (Lexer.Adapters.toVersion version)).map reservedKindOf
+    (Lexicon.Reserved.fromBytes? a.toByteSlice (Lexer.Adapters.toVersion version)).map
+      reservedKindOf
     =
       specReservedKind version a.data.toList := by
-  have hgood : ∀ e ∈ Token.Reserved.Internal.reservedTable.toList, e.1.size = 0 ∨
+  have hgood : ∀ e ∈ Lexicon.Reserved.Internal.reservedTable.toList, e.1.size = 0 ∨
       (if Lexer.Adapters.toVersion version ≥ e.2.2 then some (reservedKindOf e.2.1) else none) =
         specReservedKind version e.1.data.toList := by
     cases version <;> decide +kernel
   have hfound : ∀ x ∈ reservedWords version,
-      (Token.Reserved.Internal.reservedTable[slotOf x.toByteArray.toByteSlice]!).1.data.toList =
+      (Lexicon.Reserved.Internal.reservedTable[slotOf x.toByteArray.toByteSlice]!).1.data.toList =
         x := by
     cases version <;> decide +kernel
   have hempty : specReservedKind version [] = none := by
@@ -81,9 +82,9 @@ theorem fromBytes_kind (version : BSmtLibSpec.Lexicon.Version) (a : ByteArray) :
   · have : a.data.toList = [] := by
       rw [size_toByteSlice'] at h0
       exact List.eq_nil_of_length_eq_zero h0
-    simp [Token.Reserved.fromBytes?, h0, this, hempty]
+    simp [Lexicon.Reserved.fromBytes?, h0, this, hempty]
   · rw [fromBytes_eq _ _ h0]
-    generalize hT : Token.Reserved.Internal.reservedTable = T at hgood hfound ⊢
+    generalize hT : Lexicon.Reserved.Internal.reservedTable = T at hgood hfound ⊢
     generalize hslot : slotOf = slot at hfound ⊢
     generalize he : T[slot a.toByteSlice]! = e
     obtain ⟨word, r, since⟩ := e

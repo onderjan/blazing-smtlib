@@ -19,7 +19,7 @@ answer depends on no more than that.
 namespace BSmtLib.Facts.Proofs.Parser.Category.Combinator
 
 open BSmtLib.Token (Cursor)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind VersionErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Token.Internal
@@ -37,7 +37,7 @@ macro "answer_cases" a:ident : tactic => `(tactic| (
   rcases $a:ident with e | (_ | result)
   all_goals (try (
     obtain ⟨c, rfl⟩ : ∃ c, e = BSmtLib.Parser.ParseError.Internal.new c :=
-      ⟨e.cause, (BSmtLib.Parser.ParseError.Internal.new_eta e).symm⟩
+      ⟨e.kind, (BSmtLib.Parser.ParseError.Internal.new_eta e).symm⟩
     rcases c with kind | kind | error))))
 
 /-! ## Answers known through `outcome` -/
@@ -122,7 +122,7 @@ theorem bind_outcome_eq (X : StateT H m (Answer H P R E cursor))
   exact bind_congr hk
 
 omit [LawfulMonad m] in
-theorem handler_run {x : ExceptT (ParseErrorCause E) (StateT H m) α} (hx : HandlerOnly x) :
+theorem handler_run {x : ExceptT (ParseErrorKind E) (StateT H m) α} (hx : HandlerOnly x) :
     ∃ calls : ExceptT E (StateT H m) α,
       x.run = (fun e => match e with
         | .ok a => .ok a
@@ -131,7 +131,7 @@ theorem handler_run {x : ExceptT (ParseErrorCause E) (StateT H m) α} (hx : Hand
 
 omit [Cursor Z] in
 /-- The answer of a handler-only program, bound. -/
-theorem answer_bind {Q : Type} {x : ExceptT (ParseErrorCause E) (StateT H m) α}
+theorem answer_bind {Q : Type} {x : ExceptT (ParseErrorKind E) (StateT H m) α}
     {calls : ExceptT E (StateT H m) α}
     (hcalls : x.run = (fun e => match e with
         | .ok a => .ok a
@@ -147,12 +147,12 @@ theorem answer_bind {Q : Type} {x : ExceptT (ParseErrorCause E) (StateT H m) α}
 
 omit [Cursor Z] in
 /-- The answer of a handler-only program followed by more, as a map. -/
-theorem answer_run_bind {β : Type} {x : ExceptT (ParseErrorCause E) (StateT H m) α}
+theorem answer_run_bind {β : Type} {x : ExceptT (ParseErrorKind E) (StateT H m) α}
     {calls : ExceptT E (StateT H m) α}
     (hcalls : x.run = (fun e => match e with
         | .ok a => .ok a
         | .error error => .error (.handler error)) <$> calls.run)
-    (f : α → ExceptT (ParseErrorCause E) (StateT H m) β) (onResult : β → Outcome R P Z E)
+    (f : α → ExceptT (ParseErrorKind E) (StateT H m) β) (onResult : β → Outcome R P Z E)
     (next : Z) :
     answer onResult next <$> (x >>= f).run =
       calls.run >>= fun e => match e with
@@ -184,7 +184,7 @@ theorem outcome_bind_pure {cursor' : Z} (X : StateT H m (Answer H P R E cursor')
 /-- Waiting after a program whose result is changed: waiting after the program, the change made
 by the parser given back. -/
 theorem waits_of_map {Pa Ra : Type} [Parse Pa H m E Ra] {version : Version} {p : Pa}
-    {tokens : List Parser.Internal.Input} {β : Type} {program : ExceptT (ParseErrorCause E)
+    {tokens : List Parser.Internal.Input} {β : Type} {program : ExceptT (ParseErrorKind E)
       (StateT H m) α} {f : α → β} {after : β → Pa}
     (h : Outcome.Waits version p tokens (f <$> program) after) (hp : HandlerOnly program) :
     Outcome.Waits version p tokens program fun a => after (f a) := by
@@ -309,7 +309,7 @@ private theorem pair_k_resp (p₂ : P₂) {Z : Type} [Cursor Z] {cursor : Z}
       .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
     simp only [k, map_pure]
     rfl
-  · simp only [onOutcome, outcome, k, map_pure, ParseError.Internal.cause_new]
+  · simp only [onOutcome, outcome, k, map_pure, ParseError.Internal.kind_new]
   · simp only [onOutcome, outcome, k, map_pure]
   · rw [show outcome (cursor := cursor) (.ok (.break result), p, s, ⟨z, hz⟩) =
       .finished result p z from rfl, onOutcome_finished _ _ _ _ hz, parseState_eq s .new]
@@ -343,7 +343,7 @@ theorem pair_parses {version : Version} {p₁ b₁ : P₁} {p₂ b₂ : P₂}
           .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
         simp only [map_pure]
         rfl
-      · simp only [onOutcome, outcome, map_pure, ParseError.Internal.cause_new]
+      · simp only [onOutcome, outcome, map_pure, ParseError.Internal.kind_new]
       · simp only [onOutcome, outcome, map_pure]
       · rw [show outcome (cursor := cursor) (.ok (.break result), p, s, ⟨z, hz⟩) =
           .finished result p z from rfl, onOutcome_finished _ _ _ _ hz, parseState_eq s .new]),

@@ -10,7 +10,7 @@ import all BSmtLib.Parser.Command.Internal.Function
 import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
 import all BSmtLib.Lexicon.Value
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 
@@ -49,7 +49,7 @@ open BSmtLib.Facts.Proofs.Parser.Rejection.Payload BSmtLib.Facts.Proofs.Parser.R
 open BSmtLib.Facts.Proofs.Parser.Rejection.Unique BSmtLib.Facts.Proofs.Parser.Script
 open BSmtLib.Facts.Proofs.Parser.Tokens BSmtLib.Lexicon.Value
 
-theorem libEnding_benign {e : Parser.ParseErrorCause Unit} (h : Benign e) :
+theorem libEnding_benign {e : Parser.ParseErrorKind Unit} (h : Benign e) :
     libEnding (.error e) = .rejected := by
   rcases e with (_ | _) | _ <;> first | rfl | exact absurd h id
 
@@ -91,7 +91,7 @@ theorem driveParse_run (version : Version) (parser : ScriptParser (List Event))
 /-- A run that fails over the first items fails over more. -/
 theorem driveScript_fails {version : Version} {parser : ScriptParser (List Event)}
     {items more : List Parser.Internal.Input} {events events' : List Event}
-        {e : Parser.ParseErrorCause Unit}
+        {e : Parser.ParseErrorKind Unit}
     (h : (driveScript version parser items).run.run events = (.error e, events')) :
     (driveScript version parser (items ++ more)).run.run events = (.error e, events') := by
   rw [driveScript_append, run_bind_split, h]
@@ -806,7 +806,7 @@ theorem decodeReserved_isSome : ∀ v : BSmtLibSpec.Lexicon.Version,
   intro v
   cases v <;> decide
 
-theorem decodeReserved_spec {w : BSmtLibSpec.Regex.Chars} {r : Token.Reserved}
+theorem decodeReserved_spec {w : BSmtLibSpec.Regex.Chars} {r : Lexicon.Reserved}
     (h : decodeReserved w = some r) : Bridge.reserved r = w := by
   unfold decodeReserved at h
   have := List.find?_some h

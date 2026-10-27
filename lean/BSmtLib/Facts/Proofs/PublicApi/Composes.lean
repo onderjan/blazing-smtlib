@@ -56,7 +56,7 @@ def pureResult (version : Version) (bs : List UInt8) :
         (finishFail true st location).span none)
     | some _ => .ok (some (Span.Located.Internal.new () location))
 
-theorem lexicalKey_cause {ε : Type} {c : LexerErrorCause (Option ε)} {s s' : Span}
+theorem lexicalKey_kind {ε : Type} {c : LexerErrorKind (Option ε)} {s s' : Span}
     {k : LexicalErrorKind} (h : lexicalKey c s = some (k, s')) : c = .lexical k := by
   unfold lexicalKey at h
   split at h
@@ -72,7 +72,7 @@ theorem vEnd_cc_exact (core : Core) (st : St) (hact : core.activity = st.activit
     (hh : core.holding = false) (taken : List Handed) :
     match finishLs true st core.location with
     | none => ∃ e, (vEnd concreteCollector core taken).1.1 = .error e ∧
-        e.cause = .lexical (finishFail true st core.location).kind ∧
+        e.kind = .lexical (finishFail true st core.location).kind ∧
         e.span = (finishFail true st core.location).span
     | some _ => (vEnd concreteCollector core taken).1.1 =
         .ok (.break (Span.Located.Internal.new () core.location)) := by
@@ -91,7 +91,7 @@ theorem vEnd_cc_exact (core : Core) (st : St) (hact : core.activity = st.activit
     | error e =>
       simp only [Except.mapError, Except.error.injEq, preciseOf, preciseFailure,
         Prod.mk.injEq] at h1
-      exact ⟨e, rfl, lexicalKey_cause h1.2, (lexicalKey_span h1.2).symm⟩
+      exact ⟨e, rfl, lexicalKey_kind h1.2, (lexicalKey_span h1.2).symm⟩
   | some ls =>
     have hls : NoEof ls := by
       unfold finishLs at hf

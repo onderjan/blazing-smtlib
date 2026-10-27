@@ -7,7 +7,7 @@ import all BSmtLib.Parser.Category.QualifiedIdent
 import all BSmtLib.Parser.Category.Sort
 import all BSmtLib.Parser.Category.SortedVar
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 

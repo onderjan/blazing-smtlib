@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Lexicon.Value
-public import BSmtLib.Token.Reserved
+public import BSmtLib.Lexicon.Reserved
 
 public section
 
@@ -11,7 +11,7 @@ here; the root module `BSmtLib` imports it. -/
 
 namespace BSmtLib.Lexicon.Value
 
-open BSmtLib.Token (Reserved)
+open BSmtLib.Lexicon (Reserved)
 open BSmtLib (Version)
 
 /-- Whether the bytes are allowed in a simple symbol and are not a reserved word of the given

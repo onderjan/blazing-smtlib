@@ -145,7 +145,7 @@ theorem lexSliceRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) :
       obtain ⟨result, span, location, stopAfter⟩ := i
       cases result with
       | ok stop => exact Couple.pure ⟨⟨rfl, rfl⟩, ⟨hcr, hby rfl⟩, trivial⟩
-      | error cause => exact Couple.pure ⟨rfl, ⟨hcr, hby rfl⟩, hlen⟩
+      | error kind => exact Couple.pure ⟨rfl, ⟨hcr, hby rfl⟩, hlen⟩
     · exact Couple.pure ⟨rfl, ⟨hab.1.1.1, hab.2 rfl⟩, hab.1.2⟩
   · have hok : ∃ v, fnResult = .ok v := by
       cases fnResult with
@@ -182,7 +182,7 @@ theorem lexSliceRun_sim (ho : OpsSim o₁ o₂ LRel) (input : ByteSlice) :
         obtain ⟨result, span, location, stopAfter⟩ := e
         cases result with
         | ok stop => exact Couple.pure ⟨⟨rfl, rfl⟩, ⟨hcr, hby⟩, trivial⟩
-        | error cause =>
+        | error kind =>
           obtain ⟨v, rfl⟩ := hok
           refine ih _ ?_ position _ rfl _ _ ⟨hcr, hby⟩
           subst hk

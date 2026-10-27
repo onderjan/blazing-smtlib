@@ -427,7 +427,7 @@ theorem vSession_step_error {core core' : Core} {b : UInt8} {taken taken' : List
     (held : Option (Span.Located consumer.Result)) (bs : List UInt8) (ended : Bool)
     (h : vByte consumer core b taken = ((.error f, core'), taken')) :
     vSession consumer core held (b :: bs) ended taken =
-      sessionOf consumer taken' (.failed (failureOf (LexerError.Internal.new f.cause f.span none)))
+      sessionOf consumer taken' (.failed (failureOf (LexerError.Internal.new f.kind f.span none)))
         core' := by
   unfold vSession
   simp only [vBytes, h]

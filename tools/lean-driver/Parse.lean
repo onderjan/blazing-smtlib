@@ -399,7 +399,7 @@ instance : BufRead RemoteBuf IO where
 /-! ## The response lines -/
 
 /-- The general reserved word, spelled as the Rust variant. -/
-def generalReservedName : Token.Reserved.GeneralReserved → String
+def generalReservedName : Lexicon.Reserved.GeneralReserved → String
   | .binary => "Binary"
   | .decimal => "Decimal"
   | .hexadecimal => "Hexadecimal"
@@ -416,7 +416,7 @@ def generalReservedName : Token.Reserved.GeneralReserved → String
   | .par => "Par"
 
 /-- The command name, spelled as the Rust variant. -/
-def commandNameReservedName : Token.Reserved.CommandNameReserved → String
+def commandNameReservedName : Lexicon.Reserved.CommandNameReserved → String
   | .assert => "Assert"
   | .checkSat => "CheckSat"
   | .checkSatAssuming => "CheckSatAssuming"
@@ -497,13 +497,13 @@ def versionKindName : VersionErrorKind → String
 
 /-- The line of an error that ended a request. -/
 def errorLine (err : ReadError RemoteError) : String :=
-  let cause := match err.cause with
+  let kind := match err.kind with
     | .io error => s!"io {hex (toString error).toUTF8.toByteSlice}"
     | .lexical kind => s!"lexical {errorKindName kind}"
     | .syntax kind => s!"syntax {syntaxKindName kind}"
     | .version kind => s!"version {versionKindName kind}"
     | .handler (.rust id) => s!"handler {id}"
-  s!"error {location err.span.start} {location err.span.end} {cause}"
+  s!"error {location err.span.start} {location err.span.end} {kind}"
 
 /-- The field of what the command parser finished with. -/
 def commandResult : CommandOutcome → String

@@ -144,7 +144,7 @@ theorem inner_loop (c : WP.WCore) (n : Core) (st : St) (bytes : List UInt8) (tak
 /-- The span of a consumer's error of the Rust port is that of the last token taken. -/
 def SpanAlike {C : BSmtLibSpec.Lexer.Consumer} {β : Type}
     (x : Except (LexerError (Option C.Error)) β) (t : List Handed) : Prop :=
-  ∀ e, x = .error e → ∀ c, e.cause = .consumer (some c) → e.span = Cursor.handedSpan t
+  ∀ e, x = .error e → ∀ c, e.kind = .consumer (some c) → e.span = Cursor.handedSpan t
 
 /-- What a call of the Rust port and one of the naive lexer give alike: an error of the Rust port
 does not go on, the results are alike as `preciseOf` says, the same tokens are taken, the lexer
@@ -251,7 +251,7 @@ theorem slice_step_noNone (c : WP.WCore) (n : Core) (bytes : List UInt8) (taken 
     (h : CR C c n) (hc : C.concrete = false) :
     ∀ e, (runIA (Lexer.Internal.WRustPort.lexSliceStep (H := Answering C) (m := AnswerM)
         (R := C.Result) (E := Option C.Error) (fun _ => pure ()) (fun _ => pure ())
-        bytes.toByteArray.toByteSlice) c taken).1.1 = .error e → e.cause ≠ .consumer none := by
+        bytes.toByteArray.toByteSlice) c taken).1.1 = .error e → e.kind ≠ .consumer none := by
   rcases h.rest with ⟨st, hact, hag, hdf⟩ | ⟨s, hact, hdf, hstate⟩
   · unfold Lexer.Internal.WRustPort.lexSliceStep
     rw [runIA_bind, runIA_getThe]
@@ -334,7 +334,7 @@ theorem eof_step (c : WP.WCore) (n : Core) (taken : List Handed) (h : CR C c n) 
   generalize vEnd C n taken = rv at hVr hreset ⊢
   obtain ⟨⟨resv, n'⟩, tv⟩ := rv
   dsimp only at hW hVr hkeep hreset
-  have hspan : ∀ f, res = .error f → ∀ x, f.cause = .consumer (some x) →
+  have hspan : ∀ f, res = .error f → ∀ x, f.kind = .consumer (some x) →
       f.span = Cursor.handedSpan t := by
     intro f hf x hx
     obtain ⟨l, hl, hs⟩ := hWs f hf x hx
@@ -403,7 +403,7 @@ theorem eof_step_noNone (c : WP.WCore) (n : Core) (taken : List Handed) (h : CR 
     (hc : C.concrete = false) :
     ∀ e, (runIA (Lexer.Internal.WRustPort.lexEofStep (H := Answering C) (m := AnswerM)
         (R := C.Result) (E := Option C.Error) (fun _ => pure ()) (fun _ => pure ())) c
-        taken).1.1 = .error e → e.cause ≠ .consumer none := by
+        taken).1.1 = .error e → e.kind ≠ .consumer none := by
   obtain ⟨st, hag⟩ : ∃ st, StAgrees n.version C.concrete st c := by
     rcases h.rest with ⟨st, -, hag, -⟩ | ⟨s, -, -, hstate⟩
     · exact ⟨st, hag⟩
@@ -525,7 +525,7 @@ theorem wv_slice_span (C : BSmtLibSpec.Lexer.Consumer) (slice : BSmtLibSpec.Rege
       ((WRustPort.lexOps.lexSliceStep a slice.toByteArray.toByteSlice).run taken).2 ∧
     (C.concrete = false → ∀ e,
       ((WRustPort.lexOps.lexSliceStep a slice.toByteArray.toByteSlice).run taken).1.1 =
-        .error e → e.cause ≠ .consumer none) := by
+        .error e → e.kind ≠ .consumer none) := by
   obtain ⟨hh, hcr⟩ := h
   obtain ⟨ha, ca, hda⟩ := a
   obtain ⟨hb, cb, hdb⟩ := b
@@ -548,7 +548,7 @@ theorem wv_eof_span (C : BSmtLibSpec.Lexer.Consumer)
     SpanAlike ((WRustPort.lexOps.lexEofStep a).run taken).1.1
       ((WRustPort.lexOps.lexEofStep a).run taken).2 ∧
     (C.concrete = false → ∀ e, ((WRustPort.lexOps.lexEofStep a).run taken).1.1 = .error e →
-      e.cause ≠ .consumer none) := by
+      e.kind ≠ .consumer none) := by
   obtain ⟨hh, hcr⟩ := h
   obtain ⟨ha, ca, hda⟩ := a
   obtain ⟨hb, cb, hdb⟩ := b

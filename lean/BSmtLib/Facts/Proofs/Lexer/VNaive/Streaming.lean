@@ -52,7 +52,7 @@ def lexemeReserved (version : Version) (category : Token.TokenCategory)
     (content : ByteArray) :
     Option BSmtLibSpec.Lexer.ReservedKind :=
   match category with
-  | .unquotedSymbol => (Token.Reserved.fromBytes? content.toByteSlice version).map reservedKindOf
+  | .unquotedSymbol => (Lexicon.Reserved.fromBytes? content.toByteSlice version).map reservedKindOf
   | _ => none
 
 /-- What the consumer records of a lexeme, field by field. -/

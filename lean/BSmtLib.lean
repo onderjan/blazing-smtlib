@@ -5,6 +5,7 @@ public import BSmtLib.ControlFlow
 public import BSmtLib.Lexicon.Bytes
 public import BSmtLib.Lexicon.Value
 public import BSmtLib.Lexicon.Value.Versioned
+public import BSmtLib.Lexicon.Reserved
 public import BSmtLib.Span
 public import BSmtLib.Version
 public import BSmtLib.Grammar.Multiple
@@ -15,7 +16,6 @@ public import BSmtLib.Handler
 public import BSmtLib.Handler.CommandHandler
 public import BSmtLib.Handler.PartialCommandHandler
 public import BSmtLib.Handler.SyntaxChecker
-public import BSmtLib.Token.Reserved
 public import BSmtLib.Token
 public import BSmtLib.Lexer.Cursor
 public import BSmtLib.Token.Lookahead

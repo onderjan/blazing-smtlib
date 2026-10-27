@@ -170,7 +170,7 @@ theorem vEnd_inv (core : Core) (taken : List Handed) (hp : (Plain core)) :
       match (match r with
           | .ok none => ((.ok .continue, core2.reset), taken2)
           | .ok (some located) => ((.ok (.break located), core2.reset), taken2)
-          | .error f => ((.error (LexerError.Internal.new f.cause f.span none), core2), taken2) :
+          | .error f => ((.error (LexerError.Internal.new f.kind f.span none), core2), taken2) :
           VRes (Except (LexerError (Option consumer.Error))
               (ControlFlow (Span.Located consumer.Result))))
         with

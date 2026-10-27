@@ -34,7 +34,7 @@ open BSmtLib (Version)
 open BSmtLib.Version (VersionPosture)
 
 /-- The cause of a failed parse with the handler. -/
-abbrev Cause (H : Type) {m : Type → Type} [Handler H m] := ParseErrorCause (Handler.Error H)
+abbrev Cause (H : Type) {m : Type → Type} [Handler H m] := ParseErrorKind (Handler.Error H)
 
 /-- The command around a term that the loop reads in its arguments: `assert`, or a definition,
 whose last call it is. -/
@@ -97,7 +97,7 @@ def contentOf {batch : BatchTag} (next : LexerCursor batch) (token : LexerToken 
 content's bytes without making the content. -/
 @[inline]
 def reservedAt? {batch : BatchTag} (version : Version) (next : LexerCursor batch)
-    (token : LexerToken batch) : Option Token.Reserved :=
+    (token : LexerToken batch) : Option Lexicon.Reserved :=
   Reserved.ofBounds? (Lexer.Cursor.Internal.contentBytes next token)
     (Lexer.Cursor.Internal.contentStart next token) (Lexer.Cursor.Internal.contentStop next token)
     version

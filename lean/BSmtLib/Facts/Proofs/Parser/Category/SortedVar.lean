@@ -5,7 +5,7 @@ import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Category.Sort
 import all BSmtLib.Parser.Category.SortedVar
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 
@@ -205,7 +205,7 @@ theorem sortedVar_rejects_sort_inner {version : Version} (symbol : Lexicon.Value
     Rejects version (SortedVarParser.new (H := H))
       (.parenOpen :: .symbol symbol :: tokens) ((fun _ => ()) <$> program) kind := by
   have hruns := (sortedVar_sortRuns symbol hsort).congr
-      (next' := fun _ => throw (Parser.ParseErrorCause.syntax kind)) rfl (by
+      (next' := fun _ => throw (Parser.ParseErrorKind.syntax kind)) rfl (by
     funext a
     apply ExceptT.ext
     simp [ExceptT.run_throw])

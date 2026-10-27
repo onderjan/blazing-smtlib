@@ -23,7 +23,7 @@ command's term, the port's script step is its term step (`portStep_withTerm`).
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Adapter
 
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind)
 open BSmtLib.Parser.Internal (PM call versionError)
 open BSmtLib.Parser.Category.Term.Internal (TermLevelOf TermStateOf)
 open BSmtLib.Parser.Internal.Fused

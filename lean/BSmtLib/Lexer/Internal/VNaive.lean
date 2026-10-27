@@ -623,7 +623,7 @@ def depthAfter (depth : Nat) : Token.TokenCategory → Nat
 
 /-- A lexing error with the location where it takes effect. -/
 structure Failure (E : Type) where
-  cause : LexerErrorCause E
+  kind : LexerErrorKind E
   /-- The span of the error: that of the bytes that raised a lexical error, and for an error of
   the consumer, the empty span where it takes effect. The naive lexer does not keep the span of
   the token the consumer failed at; it agrees with the other lexers on the error's cause, not on
@@ -705,7 +705,7 @@ def handOverAt (core : Core) (l : Lexeme) (h : l.Valid) :
     StateT H m (Except (Failure E) (Option (Span.Located R)) × Core) := do
   if core.holding then
     -- a result is held: what follows it is trailing input
-    return (.error { cause := .lexical .unexpectedTrailingToken
+    return (.error { kind := .lexical .unexpectedTrailingToken
                      span := Span.Internal.newUnchecked l.start l.end, location := l.start }, core)
   let (answer, discards, core) ← handOver core l h
   return match answer with
@@ -723,7 +723,7 @@ def handOverAt (core : Core) (l : Lexeme) (h : l.Valid) :
           { core with activity := .discarding (core.activity.discardStart l.end)
                       startedBefore := trivial }
         else core
-      (.error { cause := .consumer err, span := Span.Internal.newUnchecked l.end l.end
+      (.error { kind := .consumer err, span := Span.Internal.newUnchecked l.end l.end
                 location := l.end }, core)
 
 /-- Lexes the byte `c` with no token in progress. -/
@@ -743,7 +743,7 @@ def lexStart (core : Core) (c : UInt8) :
   | ⟨.token l, hl⟩ =>
     handOverAt { core with activity := .idle, location := after, startedBefore := trivial } l hl.1
   | ⟨.error failure, _⟩ =>
-    return (.error { cause := .lexical failure.kind, span := failure.span
+    return (.error { kind := .lexical failure.kind, span := failure.span
                      location := failure.location }, core)
 
 /--
@@ -824,7 +824,7 @@ def lexByte (recover : Span.Location → StateT H m Unit) (core : Core) (c : UIn
           return (result.map fun _ => some located, core)
       | .error failure => return (.error failure, core)
     | ⟨.error failure, _⟩ =>
-      return (.error { cause := .lexical failure.kind, span := failure.span
+      return (.error { kind := .lexical failure.kind, span := failure.span
                        location := failure.location }, core)
 
 /--
@@ -852,13 +852,13 @@ the end of the input raised the failure.
 def failCall (recovers : Bool) (abandon : Span.Location → StateT H m Unit) (failure : Failure E)
     (atEnd : Bool) (core : Core) : StateT H m (LexerError E × Core) := do
   if !recovers then
-    return (LexerError.Internal.new failure.cause failure.span none, core)
+    return (LexerError.Internal.new failure.kind failure.span none, core)
   let activity : Activity := if atEnd then
       -- the input has ended, nothing is left to skip
       .ended
     else
       -- the skipping starts inside the string or quoted symbol the error was in
-      match failure.cause with
+      match failure.kind with
       | .lexical kind => match kind with
         | .forbiddenByteInString => .skipping .string
         | .backslashInQuotedSymbol | .forbiddenByteInQuotedSymbol => .skipping .quotedSymbol
@@ -866,7 +866,7 @@ def failCall (recovers : Bool) (abandon : Span.Location → StateT H m Unit) (fa
       -- the consumer fails after a whole token: with nothing open, nothing is skipped
       | .consumer _ => if core.depth == 0 then .recovered else .skipping .plain
   abandon failure.location
-  return (LexerError.Internal.new failure.cause failure.span (some failure.location),
+  return (LexerError.Internal.new failure.kind failure.span (some failure.location),
     { core with
       location := failure.location, activity
       -- a value is confirmed only at the end of the input: an error after a break drops it
@@ -913,7 +913,7 @@ def lexEnd (core : Core) :
             rw [show l.start = p.start from h.1, show l.end = location from h.2]
             exact core.started ha))
       | ⟨.error failure, _⟩ =>
-        pure (.error { cause := .lexical failure.kind, span := failure.span
+        pure (.error { kind := .lexical failure.kind, span := failure.span
                        location := failure.location }, core)
     | ⟨.idle, _⟩ | ⟨.recovered, _⟩ | ⟨.skipping _, _⟩ | ⟨.ended, _⟩ | ⟨.discarding _, _⟩ =>
       pure (.ok none, core)
@@ -952,7 +952,7 @@ def lexEofStep (recovers : Bool) (abandon recover : Span.Location → StateT H m
     if recovered then
       -- the consumer has refused the end of the input with nothing left to abandon:
       -- the error is final, and the input has ended
-      return (.error (LexerError.Internal.new failure.cause failure.span none),
+      return (.error (LexerError.Internal.new failure.kind failure.span none),
         core.reset)
     let (err, core) ← failCall recovers abandon failure true core
     return (.error err, core)

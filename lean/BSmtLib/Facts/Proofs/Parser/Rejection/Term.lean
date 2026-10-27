@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Rejection.Parts
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Attribute
 import all BSmtLib.Parser.Category.Term
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 import all BSmtLib.Parser.Category.Token
 
 @[expose] public section
@@ -456,7 +456,7 @@ end
 construct. -/
 theorem termComplete_advances {version : BSmtLibSpec.Lexicon.Version}
     {state : TermState Nat Nat Nat Nat Nat} {item : Received}
-    (levels : List (TermLevel Nat Nat Nat)) (term : Nat) {Q : Parser.ParseErrorCause Unit → Prop}
+    (levels : List (TermLevel Nat Nat Nat)) (term : Nat) {Q : Parser.ParseErrorKind Unit → Prop}
     (h : ∀ v, termAfterAll version levels v → termRem version state (item :: v)) :
     Sound (Advances (termRem version) (fun state _ => termRem version state) state item) Q
       (termComplete (H := List Event) levels term) := by
@@ -485,12 +485,12 @@ theorem termComplete_advances {version : BSmtLibSpec.Lexicon.Version}
 
 /-! ## The steps of the term parser -/
 
-theorem startBinder_sound {Q : Parser.ParseErrorCause Unit → Prop} (binder : SortedBinder)
+theorem startBinder_sound {Q : Parser.ParseErrorKind Unit → Prop} (binder : SortedBinder)
     (variables : Array (Lexicon.Value.Symbol × Nat)) :
     Sound (fun _ => True) Q (startBinder (H := List Event) binder variables) := by
   cases binder <;> exact Sound.ofCall fun _ => ⟨_, _, rfl⟩
 
-theorem endBinder_sound {Q : Parser.ParseErrorCause Unit → Prop} (kind : BinderKind)
+theorem endBinder_sound {Q : Parser.ParseErrorKind Unit → Prop} (kind : BinderKind)
     (scope body : Nat) :
     Sound (fun _ => True) Q (endBinder (H := List Event) kind scope body) := by
   rcases kind with _ | (_ | _) <;> exact Sound.ofCall fun _ => ⟨_, _, rfl⟩

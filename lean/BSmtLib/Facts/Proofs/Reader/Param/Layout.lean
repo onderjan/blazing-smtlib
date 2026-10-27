@@ -66,7 +66,7 @@ attribute [local instance high] Stop.consumeFrom
 def Fails {α : Type} (x : Parser.Quiet.RPM α) : Prop :=
   ∀ events, ∃ e events', x.run.run events = (.error e, events')
 
-theorem fails_throw {α : Type} (e : ParseErrorCause Unit) : Fails (throw e : Parser.Quiet.RPM α) :=
+theorem fails_throw {α : Type} (e : ParseErrorKind Unit) : Fails (throw e : Parser.Quiet.RPM α) :=
   fun events => ⟨e, events, rfl⟩
 
 theorem fails_syntaxError {α : Type} (kind : SyntaxErrorKind) :

@@ -27,7 +27,7 @@ the same handler calls in the same order, the others by the port's step itself.
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Command
 
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Command.Internal (CommandStateOf)
 open BSmtLib.Parser.Internal.Fused
@@ -115,7 +115,8 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       Parser.Command.Internal.commandStep, inputOf]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [scriptCont, fail, syntaxError]
   | opened =>
     rw [portStep_eq]
@@ -126,7 +127,8 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
       Parser.Command.Internal.commandStep, inputOf, Reserved.contentOf_eq, Reserved.reservedAt_eq]
     cases next.category token <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) next.version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
+        _ | (w | w)) <;>
       simp [scriptCont, fail, syntaxError]
     all_goals first
       | (simp only [startNonstandard, runHandler]
@@ -150,7 +152,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.Standard.payloadStep, inputOf]
       cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
-        (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
+        (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.Internal.expectClose, runParser,
           run_bind_eq]
@@ -168,7 +170,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Reserved.reservedAt_eq]
       cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
-        (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
+        (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.Internal.expectSymbol,
           run_bind_eq]
@@ -267,7 +269,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
       cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
-        (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
+        (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.Internal.expectNumeral, toPort,
             closing]
@@ -281,7 +283,7 @@ theorem commandStep_eq (posture : VersionPosture) {batch : BatchTag}
         Parser.Command.Internal.Standard.payloadStep, inputOf, Reserved.contentOf_eq]
       cases next.category token <;> simp only [Token.Internal.fromParts,
           Parser.Internal.Input.ofSyntax] <;>
-        (try rcases Token.Reserved.fromBytes? (next.content token) next.version with
+        (try rcases Lexicon.Reserved.fromBytes? (next.content token) next.version with
           _ | (w | w)) <;>
         simp [scriptCont, fail, syntaxError, Parser.Category.Token.Internal.expectNumeral, toPort,
             closing]

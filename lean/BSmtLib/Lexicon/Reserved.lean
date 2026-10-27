@@ -7,10 +7,11 @@ import all Std.Data.ByteSlice
 
 public section
 
-/- LEAN: in Rust, `token` declares `reserved` as a submodule and re-exports its types. Here
-`BSmtLib.Token` imports this module, as `Token` names `Reserved`. -/
+/- LEAN: in Rust, `lexicon` declares `reserved` as a submodule and re-exports its types. Here the
+root module `BSmtLib` imports this module, as it does the other modules of the lexicon, and
+`BSmtLib.Token` imports it, as `Token` names `Reserved`. -/
 
-namespace BSmtLib.Token.Reserved
+namespace BSmtLib.Lexicon.Reserved
 
 /-- General reserved words of the SMT-LIB2 grammar. -/
 inductive GeneralReserved where
@@ -71,7 +72,7 @@ inductive CommandNameReserved where
   deriving BEq, Hashable, Repr, Inhabited
 
 /-- Reserved words in SMT-LIB2, including standard command names. -/
-inductive _root_.BSmtLib.Token.Reserved where
+inductive _root_.BSmtLib.Lexicon.Reserved where
   | general (reserved : Reserved.GeneralReserved)
   | commandName (reserved : Reserved.CommandNameReserved)
   deriving BEq, Hashable, Repr, Inhabited
@@ -292,4 +293,4 @@ def fromBytes? (symbol : ByteSlice) (version : Version) : Option CommandNameRese
 
 end CommandNameReserved
 
-end BSmtLib.Token.Reserved
+end BSmtLib.Lexicon.Reserved

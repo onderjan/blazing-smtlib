@@ -96,7 +96,7 @@ def intrRes {C : BSmtLibSpec.Lexer.Consumer} {floor : Option Nat} (location : Sp
     (e : WP.Intr C floor) : Except (PFailure C.Error)
     (ControlFlow (Span.Located C.Result)) :=
   match e.result with
-  | .error cause => .error (preciseFailure cause e.span)
+  | .error kind => .error (preciseFailure kind e.span)
   | .ok .relex => .ok .continue
   | .ok (.discarded none) => .ok .continue
   | .ok (.finished r) => .ok (.break (Span.Located.Internal.new r location))
@@ -257,7 +257,7 @@ theorem tail_of_stops {h : HandOut C} {d d0 dd : Option Span.Location} {location
       subst h1
       refine ⟨?_, hv, hd, rfl⟩
       simp only [intrRes, preciseFailure, lexicalKey, causeFailure, failureOf, stopFailure, h2s,
-        Lexer.Error.LexerError.Internal.cause_new, Lexer.Error.LexerError.Internal.span_new]
+        Lexer.Error.LexerError.Internal.kind_new, Lexer.Error.LexerError.Internal.span_new]
       rfl
     | fail err b l =>
       obtain ⟨hm, -⟩ := hm
@@ -303,7 +303,7 @@ def innerRes (location : Span.Location) :
       Except (PFailure C.Error) (ControlFlow (Span.Located C.Result))
   | .ok .continue => .ok .continue
   | .ok (.break r) => .ok (.break (Span.Located.Internal.new r location))
-  | .error f => .error (preciseFailure f.cause f.span)
+  | .error f => .error (preciseFailure f.kind f.span)
 
 /-- The fields of the lexer state that say where it is, kept, with the version it was created
 with and whether it recovers. -/
@@ -388,10 +388,10 @@ theorem lexEofInner_eof (v : Version) (c : WP.WCore) (coll : List Handed) (st : 
         (R := C.Result) (E := Option C.Error)) c coll).2 ∧
     (C.concrete = false → ∀ f, (runIA (Lexer.Internal.WRustPort.lexEofInner (H := Answering C)
       (m := AnswerM) (R := C.Result) (E := Option C.Error)) c coll).1.1 = .error f →
-      f.cause ≠ .consumer none) ∧
+      f.kind ≠ .consumer none) ∧
     (∀ f, (runIA (Lexer.Internal.WRustPort.lexEofInner (H := Answering C)
       (m := AnswerM) (R := C.Result) (E := Option C.Error)) c coll).1.1 = .error f →
-      ∀ x, f.cause = .consumer (some x) → ∃ l,
+      ∀ x, f.kind = .consumer (some x) → ∃ l,
         failLex (eofOut C c.holding C.concrete c.version coll st location) = some l ∧
         f.span = Cursor.lexSpan l) := by
   unfold runIA Lexer.Internal.WRustPort.lexEofInner
@@ -841,7 +841,7 @@ theorem lexEofInner_eof (v : Version) (c : WP.WCore) (coll : List Handed) (st : 
   | ok u => exact ⟨hw, fun _ f hf => (by cases hf), fun f hf => by cases hf⟩
   | error e =>
     obtain ⟨result, espan, eloc, stopAfter⟩ := e
-    rcases result with cause | stp
+    rcases result with kind | stp
     · refine ⟨hw.1, fun hc f hf => ?_, fun f hf x hx => ?_⟩
       · cases hf
         exact fun h => hw.2.1 hc (by simp only at h ⊢; rw [h])

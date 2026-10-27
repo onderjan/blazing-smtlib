@@ -64,7 +64,7 @@ theorem zok_fit (hc : C.concrete = false) {c : BSmtLib.Lexer.Internal.LexerCore}
     (bytes : BSmtLibSpec.Regex.Chars)
     (hs : bytes.toByteArray.toByteSlice.stop < USize.size) (taken : List Handed) :
     (∀ e, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
-        taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
+        taken).1.1 = .error e → e.kind ≠ .consumer none) ∧
       (∀ r, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .ok r →
         ZOK C (Lexer.Internal.core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l
@@ -114,7 +114,7 @@ theorem zok_chunks (hc : C.concrete = false) (s : BSmtLibSpec.Regex.Chars) (p : 
           (Lexer.Recovery.LexerRecovery.recover Lexer.Recovery.FailFast) s.toByteArray.toByteSlice p
               acc)).run t =
           ((r, l'), t') →
-        (∀ e, r = .error e → e.cause ≠ .consumer none) ∧
+        (∀ e, r = .error e → e.kind ≠ .consumer none) ∧
           (∀ h, r = .ok h → ZOK C (Lexer.Internal.core l')) := by
   fun_induction Lexer.X1BatchInCoreLexer.Chunks.chunksFrom s p with
   | case1 p hp ih =>
@@ -151,7 +151,7 @@ theorem zok_slice (hc : C.concrete = false) {c : BSmtLib.Lexer.Internal.LexerCor
     (bytes : BSmtLibSpec.Regex.Chars)
     (taken : List Handed) :
     (∀ e, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
-        taken).1.1 = .error e → e.cause ≠ .consumer none) ∧
+        taken).1.1 = .error e → e.kind ≠ .consumer none) ∧
       (∀ r, ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l bytes.toByteArray.toByteSlice).run
         taken).1.1 = .ok r →
         ZOK C (Lexer.Internal.core ((Lexer.Adapters.Lexer.lexOps.lexSliceStep l
@@ -182,7 +182,7 @@ theorem zok_eof (hc : C.concrete = false) {c : BSmtLib.Lexer.Internal.LexerCore}
     (l : Lexer.Adapters.Lexer.lexOps.Lexer C) (hl : Lexer.Internal.core l = c)
     (taken : List Handed) :
     ∀ e, ((Lexer.Adapters.Lexer.lexOps.lexEofStep l).run taken).1.1 = .error e →
-      e.cause ≠ .consumer none := by
+      e.kind ≠ .consumer none := by
   obtain ⟨x, w, n, hx, hw, hcr⟩ := hz
   let x' : Lexer.Adapters.X1BatchInCore.lexOps.Lexer C := { x with held := Lexer.Internal.held l }
   let w' : Lexer.Adapters.WRustPort.lexOps.Lexer C := { w with held := Lexer.Internal.held l }

@@ -2193,10 +2193,10 @@ def lexSliceRun (input : ByteSlice) (position : Nat)
       match interrupted with
       | { result := .ok stop, location, stopAfter, .. } =>
         return (.stopped stop location fun p hp => stopAfter p hp stop rfl, core)
-      | { result := .error cause, span, location, .. } =>
+      | { result := .error kind, span, location, .. } =>
         /- LEAN: Rust's loop makes another pass, which hands over the batch, empty now; here
         the error is returned at once. -/
-        return (.done (.error { cause, span, location }), core)
+        return (.done (.error { kind, span, location }), core)
   else
     have hposition : position < input.size := by
       simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hflush
@@ -2223,9 +2223,9 @@ def lexSliceRun (input : ByteSlice) (position : Nat)
       match interrupted with
       | { result := .ok stop, location, stopAfter, .. } =>
         return (.stopped stop location fun p hp => stopAfter p hp stop rfl, core)
-      | { result := .error cause, span, location, .. } =>
+      | { result := .error kind, span, location, .. } =>
         -- make sure the tokens before the error get handed over
-        lexSliceRun input position (.error { cause, span, location }) core
+        lexSliceRun input position (.error { kind, span, location }) core
 termination_by (input.size - position, match fnResult with | .ok _ => 1 | .error _ => 0)
 decreasing_by
   · apply Prod.Lex.left
@@ -2436,8 +2436,8 @@ def lexEofInner : InnerM H m (Except (Failure E) (ControlFlow R)) := fun c => do
     return (.ok .continue, core.val)
   | .error interrupted =>
     match interrupted.result with
-    | .error cause =>
-      return (.error { cause, span := interrupted.span, location := interrupted.location },
+    | .error kind =>
+      return (.error { kind, span := interrupted.span, location := interrupted.location },
         core.val)
     | .ok .relex | .ok (.discarded none) =>
       -- we were asked to relex or to discard, but the file is ending anyway
@@ -2469,7 +2469,7 @@ recovery is made.
 def fail (abandon : Span.Location → StateT H m Unit) (failure : Failure E) (atEnd : Bool) :
     InnerM H m (LexerError E) := do
   if !(← getThe LexerCore).recovers then
-    return Error.LexerError.Internal.new failure.cause failure.span none
+    return Error.LexerError.Internal.new failure.kind failure.span none
 
   -- a value is confirmed only at the end of the input: an error after a break drops it
   modifyThe LexerCore fun c => { c with holding := false }
@@ -2479,7 +2479,7 @@ def fail (abandon : Span.Location → StateT H m Unit) (failure : Failure E) (at
       .end
     else
       -- start recovering from inside the string or quoted symbol if necessary
-      match failure.cause with
+      match failure.kind with
       | .lexical kind => match kind with
         | .forbiddenByteInString => .string
         | .backslashInQuotedSymbol | .forbiddenByteInQuotedSymbol => .quotedSymbol
@@ -2492,7 +2492,7 @@ def fail (abandon : Span.Location → StateT H m Unit) (failure : Failure E) (at
   modifyThe LexerCore (·.resumeAt failure.location 0)
   abandon failure.location
   modifyThe LexerCore fun c => { c with recoveryState := some skip }
-  return Error.LexerError.Internal.new failure.cause failure.span (some failure.location)
+  return Error.LexerError.Internal.new failure.kind failure.span (some failure.location)
 
 /-- What skipping goes through, see `skipBytes`. -/
 structure Skipping where
@@ -2656,7 +2656,7 @@ def lexEofStep (abandon recover : Span.Location → StateT H m Unit) :
       -- the consumer has refused the EOF token with nothing left to abandon:
       -- the error is final and the input has ended, reset the lexer
       reset
-      return .error (Error.LexerError.Internal.new failure.cause failure.span none)
+      return .error (Error.LexerError.Internal.new failure.kind failure.span none)
     return .error (← fail abandon failure true)
 
 end

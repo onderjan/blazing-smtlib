@@ -52,7 +52,7 @@ def Matches : Except (LexerError Empty) (Option (Span.Located Unit)) →
     Except (LexerError (Option concreteCollector.Error))
       (Option (Span.Located concreteCollector.Result)) → Prop
   | .ok o, .ok o' => o = o'
-  | .error e, .error e' => (∃ kind, e.cause = .lexical kind ∧ e'.cause = .lexical kind) ∧
+  | .error e, .error e' => (∃ kind, e.kind = .lexical kind ∧ e'.kind = .lexical kind) ∧
       e.span = e'.span ∧ e.continuesFrom = none
   | _, _ => False
 
@@ -88,7 +88,7 @@ theorem oRel_eq {o : Option (Span.Located Unit)} {o' : Option (Span.Located Unit
 other than trailing input agree only if the two have the same cause and span. -/
 theorem precise_lexical {ε : Type} {w v : LexerError (Option ε)}
     (h : preciseOf w = preciseOf v) (hv : IsLexicalNT v) :
-    w.cause = v.cause ∧ w.span = v.span := by
+    w.kind = v.kind ∧ w.span = v.span := by
   obtain ⟨k, hk, hnt⟩ := hv
   have hk' : (k == .unexpectedTrailingToken) = false := by
     cases k <;> first | rfl | exact absurd rfl hnt
@@ -96,7 +96,7 @@ theorem precise_lexical {ε : Type} {w v : LexerError (Option ε)}
   simp only [preciseOf, preciseFailure, lexicalKey, hk, hk', Bool.false_eq_true,
     ↓reduceIte] at h2
   revert h2
-  generalize w.cause = cw
+  generalize w.kind = cw
   cases cw with
   | lexical kw =>
     by_cases ht : (kw == .unexpectedTrailingToken) = true
@@ -184,7 +184,7 @@ theorem collect_naive (version : Version) (slices : List ByteList) :
     obtain ⟨k, hk, -⟩ := hv
     rw [e1, hk] at hcause
     refine ⟨⟨k, ?_, hk⟩, hspan.trans e2, hcont.trans (hW ew rfl)⟩
-    generalize ec.cause = cc at hcause
+    generalize ec.kind = cc at hcause
     cases cc with
     | lexical k' => cases hcause; rfl
     | consumer x => exact x.elim

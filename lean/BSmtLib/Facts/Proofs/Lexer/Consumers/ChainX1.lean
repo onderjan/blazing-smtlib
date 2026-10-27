@@ -46,11 +46,11 @@ theorem reservedKind_congr (category : Token.TokenCategory) {s s' : ByteSlice}
     (h : s.toByteArray = s'.toByteArray) (version : Version) :
     toReservedKind (Token.Internal.fromParts category s version) =
       toReservedKind (Token.Internal.fromParts category s' version) := by
-  have hr : Token.Reserved.fromBytes? s version = Token.Reserved.fromBytes? s' version := by
+  have hr : Lexicon.Reserved.fromBytes? s version = Lexicon.Reserved.fromBytes? s' version := by
     rw [← VNaiveWRustPort.Bytes.fromBytes_toByteArray s,
       ← VNaiveWRustPort.Bytes.fromBytes_toByteArray s', h]
   cases category <;> simp only [Token.Internal.fromParts, hr, toReservedKind] <;>
-    cases Token.Reserved.fromBytes? s' version <;> rfl
+    cases Lexicon.Reserved.fromBytes? s' version <;> rfl
 
 /-- A token below the length of the batches is recorded alike. -/
 theorem toHanded_eq {c : LexerCursor g} {d : LexerCursor g'} (h : CursorAgree c d)

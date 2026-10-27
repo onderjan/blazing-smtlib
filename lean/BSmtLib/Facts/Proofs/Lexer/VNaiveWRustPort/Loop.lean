@@ -102,8 +102,8 @@ structure LoopOk (C : BSmtLibSpec.Lexer.Consumer) (c : WP.WCore) (n : Core) : Pr
 same for trailing input, and the span of the last token taken for the consumer's error. -/
 abbrev SpanRel {ε : Type} (f : BSmtLib.Lexer.Internal.Failure (Option ε))
     (g : Lexer.Internal.VNaive.Failure (Option ε)) (t : List Handed) : Prop :=
-  (f.cause = .lexical .unexpectedTrailingToken → f.span = g.span) ∧
-    (∀ x, f.cause = .consumer (some x) → f.span = Cursor.handedSpan t)
+  (f.kind = .lexical .unexpectedTrailingToken → f.span = g.span) ∧
+    (∀ x, f.kind = .consumer (some x) → f.span = Cursor.handedSpan t)
 
 /-- What the Rust port's loop over a slice and the naive lexer give alike: the same tokens taken,
 the same version, and the same result, or failures alike as `preciseFailure` says. -/
@@ -116,9 +116,9 @@ def LoopRel (C : BSmtLibSpec.Lexer.Consumer)
   rW.2 = rV.2 ∧ rW.1.2.version = rV.1.2.version ∧
   match rW.1.1, rV.1.1 with
   | .ok a, .ok b => a = b ∧ LoopOk C rW.1.2 rV.1.2
-  | .error f, .error g => preciseFailure f.cause f.span = preciseFailure g.cause g.span ∧
+  | .error f, .error g => preciseFailure f.kind f.span = preciseFailure g.kind g.span ∧
       rW.1.2.discardedFrom = discardedOf rV.1.2 ∧ rW.1.2.recovers = false ∧
-      (C.concrete = false → f.cause ≠ .consumer none) ∧ SpanRel f g rW.2
+      (C.concrete = false → f.kind ≠ .consumer none) ∧ SpanRel f g rW.2
   | _, _ => False
 
 theorem stAgrees_legacy {v v' : Version} {ws : Bool} {st : St} {c : WP.WCore}
@@ -278,14 +278,14 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
         hst.discardedFrom.trans (discardedOf_none a3).symm,
         hst.recovers, fun _ => by rw [hg]; nofun, ⟨fun _ => by rw [hsp]; rfl,
         fun x h => by rw [hg] at h; cases h⟩⟩
-      show preciseFailure g.cause g.span =
+      show preciseFailure g.kind g.span =
         preciseFailure (.lexical .unexpectedTrailingToken) (trailingSpan l)
       rw [hg, preciseFailure_trailing, preciseFailure_trailing, hsp]
       rfl
     | fail e d l =>
       obtain ⟨g, rfl, hg⟩ := hx
       obtain ⟨n', span', loc, hvb, a1, a2, a3⟩ := hV
-      have hfs : ∀ x, g.cause = .consumer (some x) → g.span = Cursor.handedSpan p.taken := by
+      have hfs : ∀ x, g.kind = .consumer (some x) → g.span = Cursor.handedSpan p.taken := by
         intro x _
         obtain ⟨x', hx1, hx2, hx3⟩ :=
           outcome_failTaken C n.holding (failTaken_cont C _) _ e d l p hO
@@ -294,7 +294,7 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
       rw [hvb]
       refine ⟨rfl, hst.version.trans a1.symm, ?_, hst.discardedFrom.trans a3.symm,
         hst.recovers, fun _ => by rw [hg.1]; nofun, ⟨fun h => (by rw [hg.1] at h; cases h), hfs⟩⟩
-      show preciseFailure g.cause g.span = preciseFailure (.consumer (some e)) span'
+      show preciseFailure g.kind g.span = preciseFailure (.consumer (some e)) span'
       rw [hg.1]
       rfl
     | layout l =>
@@ -306,7 +306,7 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
         hst.recovers, fun hc => absurd hO (outcome_ne_layout hc
           (st_taken (by have := hpre.agrees; rwa [hc] at this)) l p),
         ⟨fun h => (by rw [hg.1] at h; cases h), fun x h => by rw [hg.1] at h; cases h⟩⟩
-      show preciseFailure g.cause g.span = preciseFailure (.consumer none) span'
+      show preciseFailure g.kind g.span = preciseFailure (.consumer none) span'
       rw [hg.1]
       rfl
     | brk r l nx =>
@@ -322,7 +322,7 @@ theorem loop (bytes : List UInt8) (initialOffset : Nat) :
           hst.discardedFrom.trans (discardedOf_none a3).symm,
         hst.recovers, fun _ => by rw [hg]; nofun, ⟨fun _ => by rw [hsp]; rfl,
           fun x h => by rw [hg] at h; cases h⟩⟩
-        show preciseFailure g.cause g.span =
+        show preciseFailure g.kind g.span =
           preciseFailure (.lexical .unexpectedTrailingToken) (trailingSpan l2)
         rw [hg, preciseFailure_trailing, preciseFailure_trailing, hsp]
         rfl

@@ -501,9 +501,9 @@ section
 
 variable {H P : Type} {m : Type → Type} {E R : Type} [Parse P H m E R]
 
-/-- The parser before the first value, allowing at most `maxElements` values. -/
-def ClosedMaximumParser.new (inner : P) (maxElements : Nat) : ClosedMaximumParser H P :=
-  { maximum := maxElements, outside := true, results := #[], inner }
+/-- The parser before the first value, allowing at most `maxItems` values. -/
+def ClosedMaximumParser.new (inner : P) (maxItems : Nat) : ClosedMaximumParser H P :=
+  { maximum := maxItems, outside := true, results := #[], inner }
 
 /--
 Sets the maximum number of values.
@@ -512,12 +512,12 @@ The maximum is only applied when deciding whether a next value is allowed: it do
 the values parsed before or the value being parsed, so the parser may finish with more values
 than the maximum set while it parses.
 -/
-def ClosedMaximumParser.setMaxElements (self : ClosedMaximumParser H P) (maxElements : Nat) :
+def ClosedMaximumParser.setMaxItems (self : ClosedMaximumParser H P) (maxItems : Nat) :
     ClosedMaximumParser H P :=
-  { self with maximum := maxElements }
+  { self with maximum := maxItems }
 
 /-- The maximum number of values. -/
-def ClosedMaximumParser.maxElements (self : ClosedMaximumParser H P) : Nat :=
+def ClosedMaximumParser.maxItems (self : ClosedMaximumParser H P) : Nat :=
   self.maximum
 
 end
@@ -568,9 +568,9 @@ section
 
 variable {H P : Type} {m : Type → Type} {E R : Type} [Parse P H m E R]
 
-/-- The parser before the `(`, allowing at most `maxElements` values. -/
-def ParenMaximumParser.new (inner : P) (maxElements : Nat) : ParenMaximumParser H P :=
-  { isOpened := false, inner := .new inner maxElements }
+/-- The parser before the `(`, allowing at most `maxItems` values. -/
+def ParenMaximumParser.new (inner : P) (maxItems : Nat) : ParenMaximumParser H P :=
+  { isOpened := false, inner := .new inner maxItems }
 
 /--
 Sets the maximum number of values.
@@ -579,13 +579,13 @@ The maximum is only applied when deciding whether a next value is allowed: it do
 the values parsed before or the value being parsed, so the parser may finish with more values
 than the maximum set while it parses.
 -/
-def ParenMaximumParser.setMaxElements (self : ParenMaximumParser H P) (maxElements : Nat) :
+def ParenMaximumParser.setMaxItems (self : ParenMaximumParser H P) (maxItems : Nat) :
     ParenMaximumParser H P :=
-  { self with inner := self.inner.setMaxElements maxElements }
+  { self with inner := self.inner.setMaxItems maxItems }
 
 /-- The maximum number of values. -/
-def ParenMaximumParser.maxElements (self : ParenMaximumParser H P) : Nat :=
-  self.inner.maxElements
+def ParenMaximumParser.maxItems (self : ParenMaximumParser H P) : Nat :=
+  self.inner.maxItems
 
 end
 

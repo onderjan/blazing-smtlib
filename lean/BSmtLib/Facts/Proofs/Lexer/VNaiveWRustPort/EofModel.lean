@@ -70,18 +70,18 @@ def eofOut (hd ws : Bool) (ver : Version) (coll : List Handed) (st : St)
 end
 
 /-- The formalism's failure for the cause of an error and its span. -/
-def causeFailure {ε : Type} (cause : LexerErrorCause (Option ε)) (span : Span) :
+def causeFailure {ε : Type} (kind : LexerErrorKind (Option ε)) (span : Span) :
     BSmtLibSpec.Lexer.Failure ε :=
-  failureOf (LexerError.Internal.new cause span none)
+  failureOf (LexerError.Internal.new kind span none)
 
 theorem failureOf_eq {ε : Type} (e : LexerError (Option ε)) :
-    failureOf e = causeFailure e.cause e.span :=
+    failureOf e = causeFailure e.kind e.span :=
   (rfl)
 
 theorem causeFailure_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
     (h : k ≠ .unexpectedTrailingToken) :
     causeFailure (ε := ε) (.lexical k) span = .lexical := by
-  simp only [causeFailure, failureOf, LexerError.Internal.cause_new]
+  simp only [causeFailure, failureOf, LexerError.Internal.kind_new]
   have : (k == .unexpectedTrailingToken) = false := by
     cases k <;> first | rfl | exact absurd rfl h
   rw [this]
@@ -92,19 +92,19 @@ error other than trailing input, its kind and span. -/
 abbrev PFailure (ε : Type) := BSmtLibSpec.Lexer.Failure ε × Option (LexicalErrorKind × Span)
 
 /-- The kind and span of a lexical error other than trailing input; none for another error. -/
-def lexicalKey {ε : Type} (cause : LexerErrorCause (Option ε)) (span : Span) :
+def lexicalKey {ε : Type} (kind : LexerErrorKind (Option ε)) (span : Span) :
     Option (LexicalErrorKind × Span) :=
-  match cause with
+  match kind with
   | .lexical kind => if kind == .unexpectedTrailingToken then none else some (kind, span)
   | .consumer _ => none
 
 /-- The precise failure for the cause of an error and its span. -/
-def preciseFailure {ε : Type} (cause : LexerErrorCause (Option ε)) (span : Span) : PFailure ε :=
-  (causeFailure cause span, lexicalKey cause span)
+def preciseFailure {ε : Type} (kind : LexerErrorKind (Option ε)) (span : Span) : PFailure ε :=
+  (causeFailure kind span, lexicalKey kind span)
 
 /-- The precise failure of an error. -/
 def preciseOf {ε : Type} (e : LexerError (Option ε)) : PFailure ε :=
-  preciseFailure e.cause e.span
+  preciseFailure e.kind e.span
 
 theorem preciseFailure_lexical {ε : Type} {k : LexicalErrorKind} {span : Span}
     (h : k ≠ .unexpectedTrailingToken) :

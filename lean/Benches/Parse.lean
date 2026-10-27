@@ -147,12 +147,12 @@ def parseFromMemory (data : ByteArray) (path : String) : IO Unit := do
   match Id.run ((Lexer.new adapter default).lexAll data.toByteSlice) with
   | .ok _ => pure ()
   | .error (err, _) =>
-    match err.cause with
+    match err.kind with
     | .lexical kind =>
       throw <| IO.userError s!"benchmark file {path} must parse, got lexer error \
         {repr kind} at {repr err.span}"
     | .consumer error =>
-      match error.cause with
+      match error.kind with
       | .syntax kind =>
         throw <| IO.userError s!"benchmark file {path} must parse, got parser error {repr kind}"
       | .version kind =>
@@ -166,7 +166,7 @@ def checkLexed (result : Except (LexerError Empty × β) α) (path : String) : I
   match result with
   | .ok _ => pure ()
   | .error (err, _) =>
-    match err.cause with
+    match err.kind with
     | .lexical kind =>
       throw <| IO.userError s!"benchmark file {path} must lex, got {repr kind} at {repr err.span}"
     | .consumer never => nomatch never

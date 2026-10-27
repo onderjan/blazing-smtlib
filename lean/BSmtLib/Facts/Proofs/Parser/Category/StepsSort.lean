@@ -5,7 +5,7 @@ public import BSmtLib.Facts.Proofs.Parser.Sort
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Ident
 import all BSmtLib.Parser.Category.Sort
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 

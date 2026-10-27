@@ -162,7 +162,7 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
           if core.recoveryState.isSome = true then do
             Internal.reset
             pure (.error
-              (BSmtLib.Lexer.Error.LexerError.Internal.new failure.cause failure.span none))
+              (BSmtLib.Lexer.Error.LexerError.Internal.new failure.kind failure.span none))
           else do
             pure (.error (← Internal.failCall abandon₁ failure true)))
       (do
@@ -172,7 +172,7 @@ theorem lexEofStep_sim (hc : Consumers L) (abandon₁ recover₁ : Span.Location
           if core.recoveryState.isSome = true then do
             Internal.reset
             pure (.error
-              (BSmtLib.Lexer.Error.LexerError.Internal.new failure.cause failure.span none))
+              (BSmtLib.Lexer.Error.LexerError.Internal.new failure.kind failure.span none))
           else do
             pure (.error (← Internal.failCall abandon₂ failure true))) := by
     refine SSim.bind (executeStep_sim _ _ (lexEofInner_sim hc)) ?_

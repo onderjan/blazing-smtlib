@@ -146,7 +146,7 @@ variable {SE A S T Sc : Type} [Canon SE] [Canon A] [Canon S] [Canon T] [Canon Sc
 
 section
 
-variable (w : Token.Reserved.GeneralReserved)
+variable (w : Lexicon.Reserved.GeneralReserved)
 
 @[canon_simps] theorem isWord_parenOpen : Internal.Input.parenOpen.isWord w = false := (rfl)
 @[canon_simps] theorem isWord_parenClose : Internal.Input.parenClose.isWord w = false := (rfl)
@@ -159,14 +159,15 @@ variable (w : Token.Reserved.GeneralReserved)
     (Internal.Input.keyword k).isWord w = false := (rfl)
 @[canon_simps] theorem isWord_endOfInput : Internal.Input.endOfInput.isWord w = false := (rfl)
 @[canon_simps] theorem isWord_layout : Internal.Input.layout.isWord w = false := (rfl)
-@[canon_simps] theorem isWord_commandName (c : Token.Reserved.CommandNameReserved) :
+@[canon_simps] theorem isWord_commandName (c : Lexicon.Reserved.CommandNameReserved) :
     (Internal.Input.reserved (.commandName c)).isWord w = false := (rfl)
-@[canon_simps] theorem isWord_general (w' : Token.Reserved.GeneralReserved) :
+@[canon_simps] theorem isWord_general (w' : Lexicon.Reserved.GeneralReserved) :
     (Internal.Input.reserved (.general w')).isWord w = (w' == w) := (rfl)
 
 end
 
-@[canon_simps] theorem isWord_canonInput (t : Internal.Input) (w : Token.Reserved.GeneralReserved) :
+@[canon_simps] theorem isWord_canonInput (t : Internal.Input)
+    (w : Lexicon.Reserved.GeneralReserved) :
     (canonInput t).isWord w = t.isWord w := by cases t <;> rfl
 
 @[canon_simps] theorem canonStep_id {σ ρ : Type} [Canon σ] [Canon ρ] [CanonId σ] [CanonId ρ]
@@ -195,7 +196,7 @@ end
 @[canon_simps] theorem canon_closed {σ ρ : Type} [Canon σ] [Canon ρ] (init : σ) :
     canonListState (ListState.closed init : ListState σ ρ) = .closed (canon init) := by
   simp only [ListState.closed, canon_simps, Canon.canon]
-@[canon_simps] theorem canon_payload_init (name : Token.Reserved.CommandNameReserved)
+@[canon_simps] theorem canon_payload_init (name : Lexicon.Reserved.CommandNameReserved)
     (version : Version) :
     canonPayload (Payload.init name version : Payload SE A S T Sc) = .init name version := by
   cases name <;> simp only [Payload.init] <;> (try split) <;>

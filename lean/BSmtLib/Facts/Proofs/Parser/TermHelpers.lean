@@ -5,7 +5,7 @@ import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.QualifiedIdent
 import all BSmtLib.Parser.Category.Term
 import all BSmtLib.Parser.Category.Token
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 open BSmtLib.Parser.Category.Term.Internal
@@ -275,9 +275,9 @@ theorem identifierTerm_runs (hA : TermAgrees h) {qualified : Tree.QualIdentifier
 
 /-- The words that open a parenthesised qualified identifier, told apart. -/
 theorem beq_words :
-    (Token.Reserved.GeneralReserved.underscore == .underscore) = true ∧
-      (Token.Reserved.GeneralReserved.as == .underscore) = false ∧
-      (Token.Reserved.GeneralReserved.as == .as) = true := by
+    (Lexicon.Reserved.GeneralReserved.underscore == .underscore) = true ∧
+      (Lexicon.Reserved.GeneralReserved.as == .underscore) = false ∧
+      (Lexicon.Reserved.GeneralReserved.as == .as) = true := by
   decide
 
 /--

@@ -495,14 +495,14 @@ def showResult {E R L : Type} (showE : E → String)
   | .ok (none, _) => "ok none"
   | .ok (some located, _) => s!"ok at {repr located.location}"
   | .error (err, _) =>
-    let cause := match err.cause with
+    let kind := match err.kind with
       | .lexical kind => s!"lexical {repr kind}"
       | .consumer error =>
-        match error.cause with
+        match error.kind with
         | .syntax kind => s!"syntax {repr kind}"
         | .version kind => s!"version {repr kind}"
         | .handler e => s!"handler {showE e}"
-    s!"error {cause} at {repr err.span}"
+    s!"error {kind} at {repr err.span}"
 
 /-- Feeds the data to the lexer in pieces of `piece` bytes (all at once for 0), then the end. -/
 def feed {C R E : Type} [Consume C R E] [∀ batch, ConsumeFrom C (LexerCursor batch) IO]

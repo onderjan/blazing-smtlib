@@ -56,7 +56,7 @@ instance : Canon Nat := ⟨id⟩
 instance : Canon Bool := ⟨id⟩
 instance : Canon Unit := ⟨id⟩
 instance : Canon Version := ⟨id⟩
-instance : Canon Token.Reserved := ⟨id⟩
+instance : Canon Lexicon.Reserved := ⟨id⟩
 instance : Canon QuantifierKind := ⟨id⟩
 instance : CanonId Nat := ⟨fun _ => rfl⟩
 instance : CanonId Bool := ⟨fun _ => rfl⟩
@@ -230,7 +230,7 @@ variable {α β : Type} [Canon α] [Canon β]
 theorem CSim.pure {a : α} {b : α} (h : b = canon a) : CSim (Pure.pure a : RPM α) (Pure.pure b) :=
   ⟨fun _ => by rw [h]; rfl⟩
 
-theorem CSim.throw (e : ParseErrorCause Unit) :
+theorem CSim.throw (e : ParseErrorKind Unit) :
     CSim (MonadExcept.throw e : RPM α) (MonadExcept.throw e) := ⟨fun _ => rfl⟩
 
 theorem CSim.bind {x y : RPM α} {f g : α → RPM β} (hx : CSim x y)

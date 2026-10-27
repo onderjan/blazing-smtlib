@@ -19,7 +19,7 @@ import BSmtLib.Handler
 import BSmtLib.Handler.CommandHandler
 import BSmtLib.Handler.PartialCommandHandler
 import BSmtLib.Handler.SyntaxChecker
-import BSmtLib.Token.Reserved
+import BSmtLib.Lexicon.Reserved
 import BSmtLib.Token
 import BSmtLib.Lexer.Cursor
 import BSmtLib.Token.Lookahead

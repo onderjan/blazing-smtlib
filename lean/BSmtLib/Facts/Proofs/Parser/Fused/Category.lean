@@ -34,7 +34,7 @@ The proofs go by the state, then by the token's category and the reserved word i
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Category
 
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
@@ -60,7 +60,7 @@ theorem identStep_run {batch : BatchTag} (version : Version)
   generalize next.content token = c
   cases s <;> cases cat <;> simp only [Token.Internal.fromParts,
       Parser.Internal.Input.ofSyntax] <;>
-    (try rcases Token.Reserved.fromBytes? c version with _ | (w | w)) <;>
+    (try rcases Lexicon.Reserved.fromBytes? c version with _ | (w | w)) <;>
     simp [Parser.Category.Ident.Internal.IdentState.step,
       PureOutcome.toRun, syntaxError, Parser.Internal.Input.isWord]
   all_goals (split <;> simp_all)
@@ -103,7 +103,7 @@ theorem sortStep_run {batch : BatchTag} (version : Version)
     generalize next.content token = c
     cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? c version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? c version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, sortComplete_run, syntaxError]
     all_goals (cases levels <;> simp [HandledOutcome.toRun]) <;>
       (split <;> simp_all [HandledOutcome.toRun, sortComplete_run])
@@ -114,7 +114,7 @@ theorem sortStep_run {batch : BatchTag} (version : Version)
     generalize next.content token = c
     cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? c version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? c version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, syntaxError, Parser.Internal.Input.isWord]
     all_goals (split <;> simp_all [HandledOutcome.toRun])
 
@@ -133,7 +133,7 @@ theorem sortsStep_run {batch : BatchTag} (version : Version)
     generalize next.category token = cat
     cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectOpen, syntaxError]
   | true =>
     by_cases hc : next.category token = .parenClose
@@ -182,7 +182,7 @@ theorem sortedVarStep_run {batch : BatchTag} (version : Version)
     generalize next.category token = cat
     cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectOpen,
         Parser.Category.Token.Internal.expectClose, Parser.Category.Token.Internal.expectSymbol,
             syntaxError]
@@ -202,7 +202,7 @@ theorem sortedVarsStep_run {batch : BatchTag} (version : Version)
     generalize next.category token = cat
     cases cat <;> simp only [Token.Internal.fromParts,
         Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectOpen, syntaxError]
   | true =>
     by_cases hc : next.category token = .parenClose
@@ -246,7 +246,7 @@ theorem signatureStep_run {batch : BatchTag} (version : Version)
     simp only [Category.symbolOf?, Reserved.contentOf_eq, Reserved.reservedAt_eq, inputOf]
     cases next.category token <;>
       simp only [Token.Internal.fromParts, Parser.Internal.Input.ofSyntax] <;>
-      (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
+      (try rcases Lexicon.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
       simp [HandledOutcome.toRun, Parser.Category.Token.Internal.expectSymbol, syntaxError]
   | parameters symbol state =>
     simp only []

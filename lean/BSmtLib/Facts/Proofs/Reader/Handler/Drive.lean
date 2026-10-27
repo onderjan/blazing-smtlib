@@ -95,11 +95,11 @@ theorem driveParse_eq (version : Version) (parser : ScriptParser H)
 an action on the cursor, in the cursor's version, or the end, or the failure. -/
 def afterOf {b : Token.BatchTag} :
     Internal.After (ScriptParser H) Unit (Handler.Error H) × LexerCursor b →
-      Except (ParseErrorCause (Handler.Error H)) ((Version × ScriptParser H) ⊕ Unit)
+      Except (ParseErrorKind (Handler.Error H)) ((Version × ScriptParser H) ⊕ Unit)
   | (.goOn parser, cursor) => .ok (.inl (cursor.version, parser))
   | (.stop (.ok .continue) parser, cursor) => .ok (.inl (cursor.version, parser))
   | (.stop (.ok (.break ())) _, _) => .ok (.inr ())
-  | (.stop (.error e) _, _) => .error e.cause
+  | (.stop (.error e) _, _) => .error e.kind
 
 theorem id_bind {α β : Type} (x : α) (f : α → Id β) : (x >>= f : Id β) = f x := rfl
 
@@ -157,7 +157,7 @@ theorem takeOne_drive {b : Token.BatchTag} (parser : ScriptParser H)
             unfold Lexer.Cursor.LexerCursor.setVersion at hsw
             injection hsw with hsw
             rw [← hsw]
-          have hl : ((ExceptT.lift (m := StateT H Id) (ε := ParseErrorCause (Handler.Error H))
+          have hl : ((ExceptT.lift (m := StateT H Id) (ε := ParseErrorKind (Handler.Error H))
               ((pure () : ExceptT BSmtLibSpec.Parser.Traversal.VersionRefused (StateT H Id)
                 Unit).run)).run.run
                 s₂) = (.ok (.ok ()), s₂) := rfl
@@ -176,7 +176,7 @@ theorem takeOne_drive {b : Token.BatchTag} (parser : ScriptParser H)
       | discardRest resume =>
         dsimp only
         simp only [nullProducer, ExceptT.run_bind, StateT.run_bind, id_bind]
-        have hl : ((ExceptT.lift (m := StateT H Id) (ε := ParseErrorCause (Handler.Error H))
+        have hl : ((ExceptT.lift (m := StateT H Id) (ε := ParseErrorKind (Handler.Error H))
             (pure () : StateT H Id Unit)).run.run s₂) = (.ok (), s₂) := rfl
         rw [hl]
         dsimp only

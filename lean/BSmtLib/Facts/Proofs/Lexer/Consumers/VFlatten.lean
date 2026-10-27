@@ -37,7 +37,7 @@ theorem lexSliceStep_ops (core : Core) (hp : (Plain core))
       match vBytes consumer core none bytes taken with
       | ((.ok h, core'), taken') => ((.ok h, ⟨{}, core', held⟩), taken')
       | ((.error f, core'), taken') =>
-        ((.error (Lexer.Error.LexerError.Internal.new f.cause f.span none), ⟨{}, core', held⟩),
+        ((.error (Lexer.Error.LexerError.Internal.new f.kind f.span none), ⟨{}, core', held⟩),
           taken') := by
   rw [lexOps_lexSliceStep, lexSliceStep_vBytes consumer core hp bytes taken]
   generalize vBytes consumer core none bytes taken = r

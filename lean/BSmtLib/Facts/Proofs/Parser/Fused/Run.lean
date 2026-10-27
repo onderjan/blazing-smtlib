@@ -25,7 +25,7 @@ This module holds what the proofs about the fused reader share:
 namespace BSmtLib.Facts.Proofs.Parser.Fused.Run
 
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind)
 open BSmtLib.Parser.Internal (PM call syntaxError)
 open BSmtLib.Parser.Internal.Fused
 open BSmtLib.Parser.Internal.Fused.Basic
@@ -50,7 +50,7 @@ theorem run_bind_eq {α γ : Type} (x : PM H α) (f : α → PM H γ) (h : H) :
 
 /-- A pure outcome of a fused category step, as the port's step gives it. -/
 def PureOutcome.toRun {σ ρ ε : Type} :
-    Category.PureOutcome σ ρ → Except (ParseErrorCause ε) (Parser.Internal.Step σ ρ)
+    Category.PureOutcome σ ρ → Except (ParseErrorKind ε) (Parser.Internal.Step σ ρ)
   | .more state => .ok (.more state)
   | .done result => .ok (.done result)
   | .error kind => .error (.syntax kind)
@@ -91,7 +91,7 @@ theorem inputOf_parenClose {batch : BatchTag} (version : Version) (next : LexerC
   simp only [inputOf]
   generalize next.category token = cat
   cases cat <;> simp only [Token.Internal.fromParts, Parser.Internal.Input.ofSyntax] <;>
-    (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
+    (try rcases Lexicon.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     simp
 
 omit [Monad m] [LawfulMonad m] [CommandHandler H m] in
@@ -104,19 +104,19 @@ theorem beq_parenClose : (Token.TokenCategory.parenClose == .parenClose) = true 
 
 omit [Monad m] [LawfulMonad m] [CommandHandler H m] in
 theorem inputOf_isWord {batch : BatchTag} (version : Version) (next : LexerCursor batch)
-    (token : LexerToken batch) (word : Token.Reserved.GeneralReserved) :
+    (token : LexerToken batch) (word : Lexicon.Reserved.GeneralReserved) :
     (inputOf version next token).isWord word =
       Category.isWord version (next.category token) next token word := by
   simp only [Category.isWord, Reserved.reservedAt_eq, inputOf]
   cases next.category token <;> simp only [Token.Internal.fromParts,
       Parser.Internal.Input.ofSyntax] <;>
-    (try rcases Token.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
+    (try rcases Lexicon.Reserved.fromBytes? (next.content token) version with _ | (w | w)) <;>
     rfl
 
 /-- A pure outcome of the fused step of a qualified identifier, as the port's step gives it. -/
 def qualToRun {σ ε : Type} :
     Category.PureOutcome σ Grammar.Nodes.Ident →
-      Except (ParseErrorCause ε) (Parser.Internal.Step σ (Grammar.Nodes.Ident × Option
+      Except (ParseErrorKind ε) (Parser.Internal.Step σ (Grammar.Nodes.Ident × Option
           (Handler.«Sort» H)))
   | .more state => .ok (.more state)
   | .done identifier => .ok (.done (identifier, none))

@@ -38,7 +38,7 @@ def eofAfter (r : Except (Failure (Option C.Error)) (Option (Span.Located C.Resu
   match r with
   | .ok none => ((.ok .continue, core3.reset), taken3)
   | .ok (some located) => ((.ok (.break located), core3.reset), taken3)
-  | .error f => ((.error (LexerError.Internal.new f.cause f.span none), core3), taken3)
+  | .error f => ((.error (LexerError.Internal.new f.kind f.span none), core3), taken3)
 
 /-- The lexer state after the end of the input that did not fail is reset. -/
 def ResetOk (iv : Version)
@@ -54,7 +54,7 @@ theorem failureOf_trailing (l : Lexeme) :
 theorem failureOf_lexical {k : LexicalErrorKind} {span : Span}
     (h : k ≠ .unexpectedTrailingToken) :
     failureOf (ε := C.Error) (LexerError.Internal.new (.lexical k) span none) = .lexical := by
-  simp only [failureOf, LexerError.Internal.cause_new]
+  simp only [failureOf, LexerError.Internal.kind_new]
   have : (k == .unexpectedTrailingToken) = false := by
     cases k <;> first | rfl | exact absurd rfl h
   rw [this]

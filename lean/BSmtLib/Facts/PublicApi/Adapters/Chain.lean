@@ -61,9 +61,9 @@ def collectX1 (version : Version) (slices : List ByteList) :
 
 /-- A run's result with an error's cause only, and its entries. -/
 def causeOnly {α : Type} (run : Except (LexerError Empty) α × List Entry) :
-    Except (LexerErrorCause Empty) α × List Entry :=
+    Except (LexerErrorKind Empty) α × List Entry :=
   match run with
   | (.ok result, entries) => (.ok result, entries)
-  | (.error error, entries) => (.error error.cause, entries)
+  | (.error error, entries) => (.error error.kind, entries)
 
 end BSmtLib.Facts.PublicApi.Adapters.Chain

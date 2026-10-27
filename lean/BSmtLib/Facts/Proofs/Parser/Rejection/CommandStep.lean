@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Rejection.Payload
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Command
 import all BSmtLib.Parser.Command.Internal.Standard
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 import all BSmtLib.Parser.Category.Attribute
 
 @[expose] public section
@@ -42,7 +42,7 @@ open BSmtLib.Facts.Proofs.Parser.Rejection.Basic.Lang
 /-! ## Command names -/
 
 /-- The version a command first appears in. -/
-def commandAddedIn : Token.Reserved.CommandNameReserved → BSmtLibSpec.Lexicon.Version
+def commandAddedIn : Lexicon.Reserved.CommandNameReserved → BSmtLibSpec.Lexicon.Version
   | .checkSatAssuming | .declareConst | .defineFunRec | .defineFunsRec | .echo | .getModel
   | .getUnsatAssumptions | .reset | .resetAssertions => .v2_5
   | .declareDatatype | .declareDatatypes => .v2_6
@@ -51,7 +51,7 @@ def commandAddedIn : Token.Reserved.CommandNameReserved → BSmtLibSpec.Lexicon.
 
 set_option maxHeartbeats 2000000 in
 /-- A command name that the version reserves names a command that the version has. -/
-theorem commandName_lexical {version : Version} {name : Token.Reserved.CommandNameReserved}
+theorem commandName_lexical {version : Version} {name : Lexicon.Reserved.CommandNameReserved}
     (h : (Received.token (.reserved (Bridge.reserved (.commandName name)))).OfVersion
       (Bridge.version version)) :
     versionAtLeast (Bridge.version version) (commandAddedIn name) := by
@@ -77,7 +77,7 @@ theorem cmdEnd_setInfo (v : BSmtLibSpec.Lexicon.Version) (keyword : BSmtLibSpec.
 /-! ## From the payload's start to the command -/
 
 /-- The name of a command, as the item a lexer hands over for it. -/
-abbrev nameItem (name : Token.Reserved.CommandNameReserved) : Received :=
+abbrev nameItem (name : Lexicon.Reserved.CommandNameReserved) : Received :=
   .token (.reserved (Bridge.reserved (.commandName name)))
 
 section
@@ -87,7 +87,7 @@ variable (version : Version) (follows : CmdEnd → Lang)
 /-- A command's tokens, from its `(`, its name and the rest. -/
 macro "command_tokens" : tactic => `(tactic|
   (simp [Tree.Command.tokens, commandTokens, paren, toks, word, Bridge.reserved,
-    Token.Reserved.CommandNameReserved.asStr, Tree.FunctionDef.tokens, Tree.Attribute.tokens,
+    Lexicon.Reserved.CommandNameReserved.asStr, Tree.FunctionDef.tokens, Tree.Attribute.tokens,
     Tree.AttributeValue.tokens, Tree.PropLiteral.tokens, List.flatMap, Function.comp_def,
     termTokensAll_eq, sortTokensAll_eq] <;> rfl))
 
@@ -109,7 +109,7 @@ theorem reps_exact {A : Lang} {T : Type} {P : T → Prop} {f : T → List Receiv
 set_option maxHeartbeats 1000000 in
 /-- After a command's `(` and name, the remainders of its payload's start are commands of the
 version, followed by what follows each. -/
-theorem payloadInit_command (name : Token.Reserved.CommandNameReserved)
+theorem payloadInit_command (name : Lexicon.Reserved.CommandNameReserved)
     (hlex : (nameItem name).OfVersion (Bridge.version version)) {u : List Received}
     (hu : payloadRem (Bridge.version version) follows (Payload.init name version) u) :
     CommandLang (Bridge.version version) follows (openItem :: nameItem name :: u) := by
@@ -271,7 +271,7 @@ variable (hfollows : ∀ e, ∃ w, follows e w)
 
 include hfollows in
 /-- The payload's start has a remainder. -/
-theorem payloadInit_nonempty (name : Token.Reserved.CommandNameReserved) :
+theorem payloadInit_nonempty (name : Lexicon.Reserved.CommandNameReserved) :
     ∃ u, payloadRem (Bridge.version version) follows (Payload.init name version) u := by
   have hnext := closeNext_nonempty version follows (hfollows _)
   have hsym := symbolLang_nonempty

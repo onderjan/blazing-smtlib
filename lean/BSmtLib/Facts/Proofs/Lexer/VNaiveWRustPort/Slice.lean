@@ -73,15 +73,15 @@ def EofLoc (c : WP.WCore) (location : Span.Location) : Prop :=
 
 /-- The failure is trailing input at the lexeme, with its span. -/
 def IsTrailingFailure (l : Lexeme) (failure : Lexer.Internal.Failure (Option C.Error)) : Prop :=
-  failure.cause = .lexical .unexpectedTrailingToken ∧ failure.span = Cursor.lexSpan l
+  failure.kind = .lexical .unexpectedTrailingToken ∧ failure.span = Cursor.lexSpan l
 
 /-- How the loop over a slice ends where the consumer stopped. -/
 def ExitMatches : Model.Stop C → Lexer.Internal.WRustPort.SliceExit C.Result
     (Option C.Error) floor → Prop
   | .trailing l, x => ∃ g, x = .done (.error g) ∧ IsTrailingFailure l g
-  | .fail e _ l, x => ∃ g, x = .done (.error g) ∧ g.cause = .consumer (some e) ∧
+  | .fail e _ l, x => ∃ g, x = .done (.error g) ∧ g.kind = .consumer (some e) ∧
       g.span = Cursor.lexSpan l
-  | .layout l, x => ∃ g, x = .done (.error g) ∧ g.cause = .consumer none ∧ g.span = Cursor.lexSpan l
+  | .layout l, x => ∃ g, x = .done (.error g) ∧ g.kind = .consumer none ∧ g.span = Cursor.lexSpan l
   | .brk r l nx, x => (∃ a, x = .stopped (.finished r) l.end a) ∨
       ∃ l2 g, nx = some l2 ∧ x = .done (.error g) ∧ IsTrailingFailure l2 g
   | .brkX r l, x => ∃ a, x = .stopped (.finished r) l.end a
@@ -108,7 +108,7 @@ def exitOf (e : WP.Intr C floor) : Lexer.Internal.WRustPort.SliceExit C.Result
   match e with
   | { result := .ok stop, location, stopAfter, .. } =>
     .stopped stop location fun p hp => stopAfter p hp stop rfl
-  | { result := .error cause, span, location, .. } => .done (.error { cause, span, location })
+  | { result := .error kind, span, location, .. } => .done (.error { kind, span, location })
 
 theorem exitMatches_of {s : Model.Stop C} {e : WP.Intr C floor} (h : Matches s e) :
     ExitMatches s (exitOf e) := by
@@ -335,8 +335,8 @@ theorem sliceRun_ok (v : Version) (input : ByteSlice) :
         cases result with
         | ok stp =>
           exact ⟨hx, ⟨hv, hr, hh, hd', hrs, hi, hby⟩, rfl⟩
-        | error cause =>
-          have hf := sliceRun_flush (C := C) input position (.error { cause, span, location })
+        | error kind =>
+          have hf := sliceRun_flush (C := C) input position (.error { kind, span, location })
             ⟨c'.val, c'.property.weaken⟩ p.taken [] hb hr (.inr ⟨_, rfl⟩) _ rfl
           rcases hf with ⟨c2, h1, hk', hby2, hc⟩ | ⟨e2, p2, d2, hs, -, -, -⟩
           · simp only [pending_nil, HandOut.cont.injEq, Prog.mk.injEq] at hc

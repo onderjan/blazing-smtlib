@@ -160,7 +160,7 @@ abbrev pNew (version : BSmtLibSpec.Lexicon.Version) : PLexer :=
 theorem script_noTrailing (version : BSmtLibSpec.Lexicon.Version)
     (slices : List BSmtLibSpec.Regex.Chars) (e : LexerError (Option ScriptError))
     (he : (zRun (scriptConsumer version) version true slices).1.1 = .error e) :
-    e.cause ≠ .lexical .unexpectedTrailingToken := by
+    e.kind ≠ .lexical .unexpectedTrailingToken := by
   intro hc
   have hcl := lexing_classified _ Facts.Lexer.correctWithConsumers version slices
   have hout : (lexing Lexer.Adapters.Lexer.lexOps (scriptConsumer version) version [] slices
@@ -192,7 +192,7 @@ theorem input_facts (version : BSmtLibSpec.Lexicon.Version) (slices : List ByteL
       (zRun (replay version) version true slices).2 =
         (zRun (scriptConsumer version) version true slices).2 ∧
       ∀ e, (zRun (replay version) version true slices).1.1 = .error e →
-        e.cause ≠ .lexical .unexpectedTrailingToken := by
+        e.kind ≠ .lexical .unexpectedTrailingToken := by
   have hgood := lexing_good _ Facts.Lexer.correctWithConsumers version slices true
   rw [lexing_flagged] at hgood
   let a₀ : FLexer version :=
@@ -224,7 +224,7 @@ theorem input_facts (version : BSmtLibSpec.Lexicon.Version) (slices : List ByteL
   · refine script_noTrailing version slices e' hz ?_
     have h₀ := h₂.1
     rw [hc] at h₀
-    rcases hcz : e'.cause with k | x <;> rw [hcz] at h₀ <;> simp only [CauseRel] at h₀
+    rcases hcz : e'.kind with k | x <;> rw [hcz] at h₀ <;> simp only [CauseRel] at h₀
     subst h₀
     rfl
   · exact h₂
@@ -289,7 +289,7 @@ same. -/
 theorem error_eq_of_cm {version : BSmtLibSpec.Lexicon.Version}
     {e₁ e₂ : LexerError (ParseError Unit)} {y : LexerError (Option (List Handed))}
     (h₁ : LexErrRel (CM version) e₁ y) (h₂ : LexErrRel (CM version) e₂ y)
-    (hn : y.cause ≠ .consumer none) : e₁ = e₂ := by
+    (hn : y.kind ≠ .consumer none) : e₁ = e₂ := by
   obtain ⟨c₁, s₁, f₁⟩ := e₁
   obtain ⟨c₂, s₂, f₂⟩ := e₂
   obtain ⟨cy, sy, fy⟩ := y
@@ -330,7 +330,7 @@ theorem slicing_recording (version : Version) (slices : List ByteList) :
   have hres' : (zRun (replay v) v true slices).1.1 =
       (zRun (replay v) v true [slices.flatten]).1.1 := hres
   have hS₁ : (zRun (replay v) v true slices).2 = (zRun (replay v) v true [slices.flatten]).2 := S₁
-  have hW' : ∀ e, (zRun (replay v) v true slices).1.1 = .error e → e.cause ≠ .consumer none :=
+  have hW' : ∀ e, (zRun (replay v) v true slices).1.1 = .error e → e.kind ≠ .consumer none :=
     fun e he => (hW e he).2.2 rfl
   have hD : (zRun (scriptConsumer v) v false slices).1.1.isOk = true →
       (zRun (scriptConsumer v) v false [slices.flatten]).1.1.isOk = true →

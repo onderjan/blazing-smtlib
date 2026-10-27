@@ -163,7 +163,7 @@ variable {SE SE' A A' S S' T T' Sc Sc' : Type} [Blanks SE SE'] [Blanks A A'] [Bl
     blankListState (σ' := σ') (ρ' := ρ') (ListState.closed init : ListState σ ρ) =
       .closed (blank init) := by
   simp only [ListState.closed, blankListState, Blanks.blank, Array.map_empty]
-@[blank_simps] theorem blank_payload_init (name : Token.Reserved.CommandNameReserved)
+@[blank_simps] theorem blank_payload_init (name : Lexicon.Reserved.CommandNameReserved)
     (version : Version) :
     blankPayload (SE' := SE') (A' := A') (S' := S') (T' := T') (Sc' := Sc')
       (Payload.init name version : Payload SE A S T Sc) = .init name version := by

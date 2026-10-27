@@ -290,13 +290,13 @@ def ScriptPost (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (x : 
 /-- A failure of a step of the script parser: no rejection of a version declaration, or one of a
 declaration that names no supported version, whose `)` the item is. -/
 def ScriptFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received) (x : Received)
-    (e : Parser.ParseErrorCause Unit) : Prop :=
+    (e : Parser.ParseErrorKind Unit) : Prop :=
   Benign e ∨ e = .version .unsupported ∧
     ∃ commands, Takes start commands (pre ++ [x]) (.failed .unsupportedVersion)
 
 /-! ## A step of the script parser -/
 
-theorem producerSetVersion_sound {Q : Parser.ParseErrorCause Unit → Prop}
+theorem producerSetVersion_sound {Q : Parser.ParseErrorKind Unit → Prop}
     (version : BSmtLibSpec.Lexicon.Version) :
     Sound (fun r => r = .ok ()) Q
       (ExceptT.lift (recordingProducer.setVersion version).run :
@@ -435,7 +435,7 @@ theorem recAfter_rejects_quiet {start : BSmtLibSpec.Lexicon.Version} {pre : List
     {x : Received} (hinv : ScriptInv start pre version parser)
     (hitem : Bridge.received token = some x) (hlex : x.OfVersion (Bridge.version version))
     (hexit : AfterExit start pre → x = .endOfInput)
-    {events events' : List Event} {e : Parser.ParseErrorCause Unit}
+    {events events' : List Event} {e : Parser.ParseErrorKind Unit}
     (hrun : (recAfter version parser token).run.run events = (.error e, events'))
     (hb : Benign e) :
     events' = .process x :: (arrivalCalls parser token ++ .arrive x :: events) := by
@@ -699,7 +699,7 @@ def RunPost (start : BSmtLibSpec.Lexicon.Version) (pre : List Received)
 or the rejection of a declaration that names no supported version at its `)`. -/
 def RunFailure (start : BSmtLibSpec.Lexicon.Version) (pre : List Received)
     (items : List Parser.Internal.Input)
-    (e : Parser.ParseErrorCause Unit) : Prop :=
+    (e : Parser.ParseErrorKind Unit) : Prop :=
   Benign e ∨ e = .version .unsupported ∧ ∃ j commands, j < items.length ∧
     Takes start commands (pre ++ (items.take (j + 1)).map rcv) (.failed .unsupportedVersion)
 

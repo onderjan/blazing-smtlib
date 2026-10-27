@@ -29,7 +29,7 @@ namespace BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 open BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Parser.Traversal
-open BSmtLib.Parser (ParseErrorCause SyntaxErrorKind VersionErrorKind)
+open BSmtLib.Parser (ParseErrorKind SyntaxErrorKind VersionErrorKind)
 
 /-! ## Sets of item lists -/
 
@@ -179,12 +179,12 @@ open Lang
 /-! ## Results and failures of a recording run -/
 
 /-- The failure is no rejection of a version declaration. -/
-def Benign : ParseErrorCause Unit → Prop
+def Benign : ParseErrorKind Unit → Prop
   | .version _ => False
   | _ => True
 
 /-- The failures that `Q` allows and that are rejections of a version declaration. -/
-def Firm (Q : ParseErrorCause Unit → Prop) (e : ParseErrorCause Unit) : Prop :=
+def Firm (Q : ParseErrorKind Unit → Prop) (e : ParseErrorKind Unit) : Prop :=
   Q e ∧ ¬ Benign e
 
 /--
@@ -192,7 +192,7 @@ Every result of the action, in a recording run, satisfies `P`, and every failure
 failure that is no rejection of a version declaration writes no event: the action makes no call
 before it rejects.
 -/
-structure Sound {α : Type} (P : α → Prop) (Q : ParseErrorCause Unit → Prop) (x : Quiet.RPM α) :
+structure Sound {α : Type} (P : α → Prop) (Q : ParseErrorKind Unit → Prop) (x : Quiet.RPM α) :
     Prop where
   ok : ∀ events a events', x.run.run events = (.ok a, events') → P a
   error : ∀ events e events', x.run.run events = (.error e, events') → Q e
@@ -204,13 +204,13 @@ def SilentOk {α : Type} (x : Quiet.RPM α) : Prop :=
 
 section
 
-variable {α β : Type} {P P' : α → Prop} {Q Q' : ParseErrorCause Unit → Prop}
+variable {α β : Type} {P P' : α → Prop} {Q Q' : ParseErrorKind Unit → Prop}
 
 theorem Sound.pure {a : α} (h : P a) : Sound P Q (Pure.pure a : Quiet.RPM α) :=
   ⟨fun _ _ _ hrun => (by cases hrun; exact h), fun _ _ _ hrun => (by cases hrun),
     fun _ _ _ hrun => (by cases hrun)⟩
 
-theorem Sound.throw {e : ParseErrorCause Unit} (h : Q e) : Sound P Q (throw e : Quiet.RPM α) :=
+theorem Sound.throw {e : ParseErrorKind Unit} (h : Q e) : Sound P Q (throw e : Quiet.RPM α) :=
   ⟨fun _ _ _ hrun => (by cases hrun), fun _ _ _ hrun => (by cases hrun; exact h),
     fun _ _ _ hrun _ => (by cases hrun; rfl)⟩
 
@@ -225,7 +225,7 @@ theorem Sound.versionError {kind : VersionErrorKind} (h : Q (.version kind)) :
 theorem SilentOk.pure {a : α} : SilentOk (Pure.pure a : Quiet.RPM α) := fun _ _ _ hrun => by
   cases hrun; rfl
 
-theorem SilentOk.throw {e : ParseErrorCause Unit} : SilentOk (throw e : Quiet.RPM α) :=
+theorem SilentOk.throw {e : ParseErrorKind Unit} : SilentOk (throw e : Quiet.RPM α) :=
   fun _ _ _ hrun => by cases hrun
 
 theorem SilentOk.syntaxError {kind : SyntaxErrorKind} :
@@ -383,14 +383,14 @@ of it can reject after it wrote events: what it writes before a rejection is sai
 used. -/
 
 /-- Every result of the action, in a recording run, satisfies `P`, and every failure `Q`. -/
-structure RunSound {α : Type} (P : α → Prop) (Q : ParseErrorCause Unit → Prop) (x : Quiet.RPM α) :
+structure RunSound {α : Type} (P : α → Prop) (Q : ParseErrorKind Unit → Prop) (x : Quiet.RPM α) :
     Prop where
   ok : ∀ events a events', x.run.run events = (.ok a, events') → P a
   error : ∀ events e events', x.run.run events = (.error e, events') → Q e
 
 section
 
-variable {α β : Type} {P P' : α → Prop} {Q Q' : ParseErrorCause Unit → Prop}
+variable {α β : Type} {P P' : α → Prop} {Q Q' : ParseErrorKind Unit → Prop}
 
 theorem Sound.run {x : Quiet.RPM α} (h : Sound P Q x) : RunSound P Q x := ⟨h.ok, h.error⟩
 
@@ -542,7 +542,7 @@ theorem push_isEmpty {α : Type} (array : Array α) (a : α) : (array.push a).is
   simp [Array.isEmpty]
 
 /-- A handler call that never fails, as every call of the recording handler. -/
-theorem Sound.ofCall {α : Type} {Q : ParseErrorCause Unit → Prop}
+theorem Sound.ofCall {α : Type} {Q : ParseErrorKind Unit → Prop}
     {x : ExceptT Unit (StateT (List Event) Id) α}
     (hx : ∀ events, ∃ a events', x.run.run events = (.ok a, events')) :
     Sound (fun _ => True) Q (Parser.Internal.call x : Quiet.RPM α) := by
@@ -606,13 +606,13 @@ theorem cat_nonempty_right {A B : Lang} (h : ∃ u, cat A B u) : ∃ b, B b := b
 end Lang
 
 /-- Results of an action that satisfy each of a family of properties. -/
-theorem Sound.forall {ι α : Type} {P : ι → α → Prop} {Q : ParseErrorCause Unit → Prop}
+theorem Sound.forall {ι α : Type} {P : ι → α → Prop} {Q : ParseErrorKind Unit → Prop}
     {x : Quiet.RPM α} (i₀ : ι) (h : ∀ i, Sound (P i) Q x) : Sound (fun a => ∀ i, P i a) Q x :=
   ⟨fun events a events' hrun i => (h i).ok events a events' hrun,
     fun events e events' hrun => (h i₀).error events e events' hrun, (h i₀).quiet⟩
 
 /-- Results and failures that satisfy two descriptions satisfy both. -/
-theorem Sound.and {α : Type} {P P' : α → Prop} {Q Q' : ParseErrorCause Unit → Prop}
+theorem Sound.and {α : Type} {P P' : α → Prop} {Q Q' : ParseErrorKind Unit → Prop}
     {x : Quiet.RPM α}
     (h : Sound P Q x) (h' : Sound P' Q' x) : Sound (fun a => P a ∧ P' a) (fun e => Q e ∧ Q' e) x :=
   ⟨fun events a events' hrun => ⟨h.ok events a events' hrun, h'.ok events a events' hrun⟩,
@@ -622,7 +622,7 @@ theorem Sound.and {α : Type} {P P' : α → Prop} {Q Q' : ParseErrorCause Unit 
 /-! ## Runs that write no event -/
 
 theorem run_bind_of_error {α β : Type} {x : Quiet.RPM β} {f : β → Quiet.RPM α} {ev ev₁ : List Event}
-    {e : ParseErrorCause Unit} (hx : x.run.run ev = (.error e, ev₁)) :
+    {e : ParseErrorKind Unit} (hx : x.run.run ev = (.error e, ev₁)) :
     (x >>= f).run.run ev = (.error e, ev₁) := by
   simp only [ExceptT.run_bind, StateT.run_bind, hx]
   rfl

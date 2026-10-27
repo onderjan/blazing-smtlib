@@ -5,7 +5,7 @@ public import BSmtLib.ControlFlow
 public import BSmtLib.Span
 public import BSmtLib.Lexicon.Value
 public import BSmtLib.Version
-public import BSmtLib.Token.Reserved
+public import BSmtLib.Lexicon.Reserved
 
 public section
 
@@ -663,7 +663,7 @@ inductive _root_.BSmtLib.Token where
   | string (value : Lexicon.Value.StringContent)
   | keyword (value : Lexicon.Value.Keyword)
   | symbol (value : Lexicon.Value.Symbol)
-  | reserved (value : Reserved)
+  | reserved (value : Lexicon.Reserved)
   | whitespace (value : Lexicon.Value.Whitespace)
   | comment (value : Lexicon.Value.Comment)
   | endOfFile
@@ -689,7 +689,7 @@ def Internal.fromParts (category : TokenCategory) (content : ByteSlice)
   | .binary => .binary (BinDigits.Internal.newUnchecked content)
   | .unquotedSymbol =>
     -- only the words reserved in the version are reserved words
-    match Reserved.fromBytes? content version with
+    match Lexicon.Reserved.fromBytes? content version with
     | some word => .reserved word
     | none => .symbol (Symbol.Internal.newUnchecked false content)
   | .quotedSymbol => .symbol (Symbol.Internal.newUnchecked true content)
@@ -709,43 +709,43 @@ this one. -/
 namespace BSmtLib.Writer
 
 /-- Determines why writing a token has failed. -/
-inductive WriteErrorCause where
+inductive WriteErrorKind where
   /-- Writing to the writer failed. -/
   | io (error : IO.Error)
   /-- The reserved word is not reserved in the version, so no text in it is the token. -/
-  | notInVersion (reserved : Token.Reserved)
+  | notInVersion (reserved : Lexicon.Reserved)
 
 /- LEAN: Rust's derived `Debug`. Lean's `IO.Error` has no `Repr`, so an I/O error is shown by its
 message. -/
-@[no_expose] instance : Repr WriteErrorCause where
-  reprPrec cause prec :=
+@[no_expose] instance : Repr WriteErrorKind where
+  reprPrec kind prec :=
     let app (name : String) (argument : Std.Format) : Std.Format :=
-      Repr.addAppParen (.group (.nest 2 (.text ("BSmtLib.Writer.WriteErrorCause." ++ name) ++
+      Repr.addAppParen (.group (.nest 2 (.text ("BSmtLib.Writer.WriteErrorKind." ++ name) ++
         .line ++ argument))) prec
-    match cause with
+    match kind with
     | .io error => app "io" (reprArg (toString error))
     | .notInVersion reserved => app "notInVersion" (reprArg reserved)
 
-/- LEAN: the constructor is private, as Rust's field is. The field is readable as `error.cause`,
-replacing the getters `cause` and `into_cause`. -/
+/- LEAN: the constructor is private, as Rust's field is. The field is readable as `error.kind`,
+replacing the getters `kind` and `into_kind`. -/
 /-- An error that ended writing a token. -/
 structure WriteError where
   private mk ::
   /-- Determines why writing has failed. -/
-  cause : WriteErrorCause
+  kind : WriteErrorKind
   deriving Repr
 
 /- LEAN: Rust builds the error from its cause in the crate, where its field is visible. -/
 /-- The error of the cause. -/
 @[inline]
-def WriteError.Internal.new (cause : WriteErrorCause) : WriteError := ⟨cause⟩
+def WriteError.Internal.new (kind : WriteErrorKind) : WriteError := ⟨kind⟩
 
-@[no_expose] instance : ToString WriteErrorCause where
+@[no_expose] instance : ToString WriteErrorKind where
   toString
     | .io error => s!"I/O: {error}"
     | .notInVersion reserved => s!"`{reserved.asStr}` is not reserved in written version"
 
-@[no_expose] instance : ToString WriteError := ⟨fun self => toString self.cause⟩
+@[no_expose] instance : ToString WriteError := ⟨fun self => toString self.kind⟩
 
 end BSmtLib.Writer
 
@@ -759,7 +759,7 @@ private def appendSlice (out : ByteArray) (bytes : ByteSlice) : ByteArray :=
 the version; `writeSmt` writes it in one piece. -/
 /-- The token as SMT-LIB text in the version, appended to `out`. -/
 def Internal.appendSmt (self : Token) (out : ByteArray) (version : Version) :
-    Except Reserved ByteArray :=
+    Except Lexicon.Reserved ByteArray :=
   match self with
   | .parenOpen => .ok (out.push (byte! '('))
   | .parenClose => .ok (out.push (byte! ')'))
@@ -783,7 +783,7 @@ def Internal.appendSmt (self : Token) (out : ByteArray) (version : Version) :
   | .symbol name =>
     -- a simple symbol that is a reserved word in the version
     -- would be read as the reserved word, quote it to keep the symbol
-    if name.isQuoted || (Reserved.fromBytes? name.asSlice version).isSome then
+    if name.isQuoted || (Lexicon.Reserved.fromBytes? name.asSlice version).isSome then
       .ok ((appendSlice (out.push (byte! '|')) name.asSlice).push (byte! '|'))
     else
       .ok (appendSlice out name.asSlice)

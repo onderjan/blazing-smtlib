@@ -58,7 +58,7 @@ finishes, or goes on, acting on the cursor as the run asked its producer after t
 processing, a failed parser going on from its reset; the log is the run's with the events that
 are not calls left out. -/
 def paOf {b : Token.BatchTag} (parser : ScriptParser (List Event)) (next : LexerCursor b) :
-    Except (ParseErrorCause Unit) ((Version × ScriptParser (List Event)) ⊕ Unit) × List Event
+    Except (ParseErrorKind Unit) ((Version × ScriptParser (List Event)) ⊕ Unit) × List Event
         →
       (Parser.Internal.After (ScriptParser
           (List Event)) Unit Unit × LexerCursor b) × List Event
@@ -229,7 +229,7 @@ theorem id_bind_eq {α β : Type} (x : α) (f : α → Id β) : (x >>= f : Id β
 
 theorem run_bind_error {α β : Type} {x : Parser.Quiet.RPM α} {f : α → Parser.Quiet.RPM β}
     {events events' : List Event}
-    {e : ParseErrorCause Unit} (h : (x.run.run events) = (.error e, events')) :
+    {e : ParseErrorKind Unit} (h : (x.run.run events) = (.error e, events')) :
     ((x >>= f).run.run events) = (.error e, events') := by
   simp only [ExceptT.run_bind, StateT.run_bind]
   rw [h]

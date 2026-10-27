@@ -1,10 +1,10 @@
 module
 
 public meta import BSmtLib.Token
-public meta import BSmtLib.Token.Reserved
+public meta import BSmtLib.Lexicon.Reserved
 public meta import BSmtLib.Lexer.Internal.CharClass
 public meta import BSmtLib.Lexer.Internal.Helpers
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 import all BSmtLib.Lexer.Internal.CharClass
 
 @[expose] public section
@@ -29,14 +29,14 @@ open BSmtLib.Lexer
     .string, .keyword, .unquotedSymbol, .quotedSymbol, .whitespace, .comment, .endOfFile].all
   fun ty => Token.TokenCategory.Internal.ofUInt8 (Token.TokenCategory.Internal.toUInt8 ty) == ty
 
-/-! The reserved words (`Token/Reserved.lean`). A word that shared a slot would have been
+/-! The reserved words (`Lexicon/Reserved.lean`). A word that shared a slot would have been
 overwritten in the table by a later one. -/
 
 -- the reserved-word hash must be perfect: every word lands in a slot of its own
-#guard Token.Reserved.reservedWords.all fun (word, _) =>
+#guard Lexicon.Reserved.reservedWords.all fun (word, _) =>
   if h : 0 < word.toByteSlice.size then
-    Token.Reserved.Internal.reservedTable[
-        (Token.Reserved.Internal.reservedSlot word.toByteSlice h).val]?.map (·.1) == some word
+    Lexicon.Reserved.Internal.reservedTable[
+        (Lexicon.Reserved.Internal.reservedSlot word.toByteSlice h).val]?.map (·.1) == some word
   else
     false
 

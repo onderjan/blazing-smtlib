@@ -24,7 +24,7 @@ inductive Internal.Kind where
   | keyword
   | unquotedSymbol
   | quotedSymbol
-  | reserved (word : Reserved)
+  | reserved (word : Lexicon.Reserved)
   | whitespace
   | comment
   | endOfFile

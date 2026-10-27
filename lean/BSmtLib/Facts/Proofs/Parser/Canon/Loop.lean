@@ -51,8 +51,8 @@ theorem canonInput_fromParts (category : Token.TokenCategory) (content : ByteSli
         (Token.Internal.fromParts category content version)) =
       canonInput (Internal.Input.ofSyntax
         (Token.Internal.fromParts category (canonSlice content) version)) := by
-  have hr : Token.Reserved.fromBytes? (canonSlice content) version =
-      Token.Reserved.fromBytes? content version :=
+  have hr : Lexicon.Reserved.fromBytes? (canonSlice content) version =
+      Lexicon.Reserved.fromBytes? content version :=
     BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Bytes.fromBytes_toByteArray content version
   cases category <;>
     simp only [Token.Internal.fromParts, Internal.Input.ofSyntax, canonInput,
@@ -60,7 +60,7 @@ theorem canonInput_fromParts (category : Token.TokenCategory) (content : ByteSli
   all_goals first
     | rfl
     | (rw [hr]
-       cases Token.Reserved.fromBytes? content version <;>
+       cases Lexicon.Reserved.fromBytes? content version <;>
          simp only [canon_simps, canonSlice_canonSlice])
 
 variable {g g' : Token.BatchTag}

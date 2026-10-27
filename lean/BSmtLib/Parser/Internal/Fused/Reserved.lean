@@ -1,13 +1,13 @@
 module
 
-public import BSmtLib.Token.Reserved
+public import BSmtLib.Lexicon.Reserved
 
 public section
 
 /-!
 # Reserved words, read from the content's bytes
 
-`Token.Reserved.fromBytes?` with the same table and hash, on the bytes, start and stop of a
+`Lexicon.Reserved.fromBytes?` with the same table and hash, on the bytes, start and stop of a
 token's content instead of its slice, written so that the compiler inlines it: the bytes are read
 from the array directly, and the word is compared byte by byte after its length, without the
 comparison of slices. The bounds are clamped as `ByteArray.toByteSlice` clamps them, so that the
@@ -19,8 +19,8 @@ namespace BSmtLib.Parser.Internal.Fused.Reserved
 open BSmtLib (Version)
 
 /-- The table has a slot for every hash. -/
-theorem size_table : Token.Reserved.Internal.reservedTable.size = 128 :=
-  Token.Reserved.Internal.size_reservedTable
+theorem size_table : Lexicon.Reserved.Internal.reservedTable.size = 128 :=
+  Lexicon.Reserved.Internal.size_reservedTable
 
 /-- Whether the `length` bytes of `word` from 0 equal those of `bytes` from `start`, from the
 index `index` on. -/
@@ -37,7 +37,7 @@ termination_by length - index
 /-- The reserved word that the bytes from `start` to `stop` spell in the version, if any. -/
 @[inline]
 def ofParts? (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ stop)
-    (within : stop ≤ bytes.size) (version : Version) : Option Token.Reserved :=
+    (within : stop ≤ bytes.size) (version : Version) : Option Lexicon.Reserved :=
   if empty : stop - start = 0 then
     none
   else
@@ -49,7 +49,7 @@ def ofParts? (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ stop)
       omega)).toNat
     let slot := (first + last * 4 + length * 34 + mid * 54) % 128
     let (word, reserved, since) :=
-      Token.Reserved.Internal.reservedTable[slot]'(by
+      Lexicon.Reserved.Internal.reservedTable[slot]'(by
         rw [size_table]; exact Nat.mod_lt _ (by decide))
     if sized : word.size = length then
       if bytesEqFrom word bytes start length (by omega) (by omega) 0 &&
@@ -62,7 +62,7 @@ def ofParts? (bytes : ByteArray) (start stop : Nat) (ordered : start ≤ stop)
 any: the bounds clamped as `ByteArray.toByteSlice` clamps them. -/
 @[inline]
 def ofBounds? (bytes : ByteArray) (start stop : Nat) (version : Version) :
-    Option Token.Reserved :=
+    Option Lexicon.Reserved :=
   if within : stop ≤ bytes.size then
     if ordered : start ≤ stop then ofParts? bytes start stop ordered within version
     else none

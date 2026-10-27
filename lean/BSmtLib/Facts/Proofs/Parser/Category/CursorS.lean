@@ -22,7 +22,7 @@ parser on cursors.
 namespace BSmtLib.Facts.Proofs.Parser.Category.CursorS
 
 open BSmtLib.Token (Cursor)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState SyntaxErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Internal (ParseByToken takeOne rest parseByToken After)
 open BSmtLib.Facts.Parser.Adapters.Bridge BSmtLib.Facts.Parser.Adapters.Run
@@ -106,7 +106,7 @@ def outcomeRest {origin : Z} :
   | (.ok (.break result), parser, next) => .finished result parser next.val
   | (.ok .continue, parser, _) => .waits parser
   | (.error error, _, next) =>
-    match error.cause with
+    match error.kind with
     | .syntax kind => .rejected kind next.val
     | .version kind => .rejectedVersion kind next.val
     | .handler error => .failed error
@@ -167,15 +167,15 @@ theorem step_afterS (state : σ) {cursor after : Z}
   refine bind_congr fun e => ?_
   rcases e with (kind | kind | error) | (state' | result)
   · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS, List.length_cons,
-      Parser.ParseError.Internal.cause_new]
+      Parser.ParseError.Internal.kind_new]
     rw [show tokens.length + 1 - tokens.length = 0 + 1 by omega, advance_succ hnext]
     rfl
   · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS, List.length_cons,
-      Parser.ParseError.Internal.cause_new]
+      Parser.ParseError.Internal.kind_new]
     rw [show tokens.length + 1 - tokens.length = 0 + 1 by omega, advance_succ hnext]
     rfl
   · simp only [afterOf, hstop, outcomeRest, onStep, map_pure, convS,
-      Parser.ParseError.Internal.cause_new]
+      Parser.ParseError.Internal.kind_new]
   · simp only [afterOf, onStep]
     rw [hgo state' _ rfl, driveS_proj step tokens state', Functor.map_map, Functor.map_map]
     congr 1
@@ -351,7 +351,7 @@ theorem rejects_of_movesS [Parse P H m (Handler.Error H) R]
     (hmoves : Moves step state tokens last) (hfail : step last token = throw (.syntax kind)) :
     Rejects version (mk state) (tokens ++ [token]) (pure () : PM H Unit) kind := by
   have h₂ : RunsS noPoints step last [token] (do tick noPoints token; (pure () : PM H Unit))
-      fun _ => throw (ParseErrorCause.syntax kind) :=
+      fun _ => throw (ParseErrorKind.syntax kind) :=
     RunsS.token (by simp only [pure_bind]; exact hfail) (handlerOnly_pure ())
   have h := (RunsS.of_moves hmoves).append fun _ => h₂
   have := rejects_of_runsS @hparse sim h
@@ -391,7 +391,7 @@ theorem onStep_mapDone (f : ρ → τ)
     {k : σ → StateT H m (Res σ ρ (Handler.Error H))}
     {k' : σ → StateT H m (Res σ τ (Handler.Error H))}
     (hk : ∀ state, k' state = Res.mapDone f <$> k state) (rest : List Parser.Internal.Input)
-    (e : Except (ParseErrorCause (Handler.Error H)) (Parser.Internal.Step σ ρ)) :
+    (e : Except (ParseErrorKind (Handler.Error H)) (Parser.Internal.Step σ ρ)) :
     onStep k' rest (mapDone f <$> e) = Res.mapDone f <$> onStep k rest e := by
   rcases e with (kind | kind | error) | (state | result)
   · simp [onStep, Res.mapDone]; rfl

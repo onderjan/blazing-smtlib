@@ -47,7 +47,7 @@ variable {α β : Type} {P Q : α → Prop}
 theorem Erasing.pure {a : α} (h : P a) : Erasing P (Pure.pure a : Parser.Quiet.RPM α) :=
   ⟨fun _ => rfl, fun _ => ⟨[], rfl, by simp⟩, fun _ a' ha' => by cases ha'; exact h⟩
 
-theorem Erasing.throw (e : Parser.ParseErrorCause Unit) :
+theorem Erasing.throw (e : Parser.ParseErrorKind Unit) :
     Erasing P (MonadExcept.throw e : Parser.Quiet.RPM α) :=
   ⟨fun _ => rfl, fun _ => ⟨[], rfl, by simp⟩, fun _ _ h => by cases h⟩
 

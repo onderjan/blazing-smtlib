@@ -36,7 +36,7 @@ about both, pinned by `#guard_msgs`. Each of these fails the build:
   `BSmtLib.Lexicon.Value.Versioned`, as the modules of both import `Lexicon.Value.lean`. -/
 
 /--
-info: 8330 declarations in 460 modules; 87 add to a sibling's type:
+info: 8339 declarations in 460 modules; 87 add to a sibling's type:
 BSmtLib.Facts.Proofs.Lexer.VNaive.Prefix:
   BSmtLib.Facts.Proofs.Lexer.VNaive.Run.St.Taken
 BSmtLib.Facts.Proofs.Lexer.VNaiveWRustPort.Pure:
@@ -77,7 +77,7 @@ BSmtLib.Facts.Proofs.Reader.Param.Walk:
   BSmtLib.Facts.Proofs.Reader.Param.Basic.XSim.run_rel
 BSmtLib.Token:
   BSmtLib.Writer.WriteError
-  BSmtLib.Writer.WriteErrorCause
+  BSmtLib.Writer.WriteErrorKind
 BSmtLibSpec.Grammar.File:
   BSmtLibSpec.Grammar.Tree.Command.declaredVersion
   BSmtLibSpec.Grammar.Tree.Command.modeAfter
@@ -164,14 +164,14 @@ BSmtLibSpec.Reader:
 `BSmtLib.Reexports` is what `BSmtLib.Facts.Reexports.render` makes now, and every second name
 resolves. -/
 
-/-- info: 155 items re-exported, with 832 members -/
+/-- info: 159 items re-exported, with 852 members -/
 #guard_msgs in
 #reexports
 
 /-! The names that users of the Rust crate write, without the prefix `Smt`, for the items that
 have a counterpart, and what they resolve to: first the items named like their modules, which
 are the modules' own names (`SmtHandler`, `SmtReader`, `SmtVersion`, `SmtWriter`,
-`grammar::SmtMultiple`, `lexicon::SmtBytes`, `token::SmtToken`, `token::SmtReserved`), then the
+`grammar::SmtMultiple`, `lexicon::SmtBytes`, `lexicon::SmtReserved`, `token::SmtToken`), then the
 items of the `pub use` lines. The items without one: the iterators of `grammar/multiple.rs`
 (`SmtMultipleIntoIter` and the others), whose counterparts are `ForIn` instances. -/
 
@@ -182,8 +182,8 @@ BSmtLib.Version ↦ BSmtLib.Version
 BSmtLib.Writer ↦ BSmtLib.Writer
 BSmtLib.Grammar.Multiple ↦ BSmtLib.Grammar.Multiple
 BSmtLib.Lexicon.Bytes ↦ BSmtLib.Lexicon.Bytes
+BSmtLib.Lexicon.Reserved ↦ BSmtLib.Lexicon.Reserved
 BSmtLib.Token ↦ BSmtLib.Token
-BSmtLib.Token.Reserved ↦ BSmtLib.Token.Reserved
 BSmtLib.CommandHandler ↦ BSmtLib.Handler.CommandHandler
 BSmtLib.NonstandardCommandError ↦ BSmtLib.Handler.NonstandardCommandError
 BSmtLib.PartialCommandError ↦ BSmtLib.Handler.PartialCommandError
@@ -192,12 +192,12 @@ BSmtLib.SyntaxChecker ↦ BSmtLib.Handler.SyntaxChecker
 BSmtLib.readSmt ↦ BSmtLib.Reader.readSmt
 BSmtLib.readSmtFile ↦ BSmtLib.Reader.readSmtFile
 BSmtLib.ReadError ↦ BSmtLib.Reader.ReadError
-BSmtLib.ReadErrorCause ↦ BSmtLib.Reader.ReadErrorCause
+BSmtLib.ReadErrorKind ↦ BSmtLib.Reader.ReadErrorKind
 BSmtLib.ReadFailure ↦ BSmtLib.Reader.ReadFailure
 BSmtLib.VersionPosture ↦ BSmtLib.Version.VersionPosture
 BSmtLib.VersionPostureBuilder ↦ BSmtLib.Version.VersionPostureBuilder
 BSmtLib.WriteError ↦ BSmtLib.Writer.WriteError
-BSmtLib.WriteErrorCause ↦ BSmtLib.Writer.WriteErrorCause
+BSmtLib.WriteErrorKind ↦ BSmtLib.Writer.WriteErrorKind
 BSmtLib.WriteStyle ↦ BSmtLib.Writer.WriteStyle
 BSmtLib.WriterConfig ↦ BSmtLib.Writer.WriterConfig
 BSmtLib.Grammar.Bindings ↦ BSmtLib.Grammar.Multiple.Bindings
@@ -216,6 +216,7 @@ BSmtLib.Grammar.SortedVars ↦ BSmtLib.Grammar.Multiple.SortedVars
 BSmtLib.Grammar.Symbols ↦ BSmtLib.Grammar.Multiple.Symbols
 BSmtLib.Grammar.SymbolsBuf ↦ BSmtLib.Grammar.Multiple.SymbolsBuf
 BSmtLib.Grammar.AttributeValue ↦ BSmtLib.Grammar.Nodes.AttributeValue
+BSmtLib.Grammar.AttributeValueBuf ↦ BSmtLib.Grammar.Nodes.AttributeValueBuf
 BSmtLib.Grammar.EmptyArgumentsError ↦ BSmtLib.Grammar.Nodes.EmptyArgumentsError
 BSmtLib.Grammar.Ident ↦ BSmtLib.Grammar.Nodes.Ident
 BSmtLib.Grammar.IdentBuf ↦ BSmtLib.Grammar.Nodes.IdentBuf
@@ -230,13 +231,18 @@ BSmtLib.Grammar.QualifiedIdent ↦ BSmtLib.Grammar.Nodes.QualifiedIdent
 BSmtLib.Grammar.QualifiedIdentBuf ↦ BSmtLib.Grammar.Nodes.QualifiedIdentBuf
 BSmtLib.Grammar.QuantifierKind ↦ BSmtLib.Grammar.Nodes.QuantifierKind
 BSmtLib.Grammar.SExpr ↦ BSmtLib.Grammar.Nodes.SExpr
+BSmtLib.Grammar.SExprBuf ↦ BSmtLib.Grammar.Nodes.SExprBuf
 BSmtLib.Grammar.SimplePattern ↦ BSmtLib.Grammar.Nodes.SimplePattern
 BSmtLib.Grammar.SimplePatternBuf ↦ BSmtLib.Grammar.Nodes.SimplePatternBuf
 BSmtLib.Grammar.SimplePatternsBuf ↦ BSmtLib.Grammar.Nodes.SimplePatternsBuf
+BSmtLib.Grammar.SortBuf ↦ BSmtLib.Grammar.Nodes.SortBuf
 BSmtLib.Grammar.SpecialConstant ↦ BSmtLib.Grammar.Nodes.SpecialConstant
 BSmtLib.Grammar.SpecialConstantBuf ↦ BSmtLib.Grammar.Nodes.SpecialConstantBuf
 BSmtLib.Grammar.Term ↦ BSmtLib.Grammar.Nodes.Term
+BSmtLib.Grammar.TermBuf ↦ BSmtLib.Grammar.Nodes.TermBuf
 BSmtLib.Lexicon.BytesBuf ↦ BSmtLib.Lexicon.Bytes.BytesBuf
+BSmtLib.Lexicon.CommandNameReserved ↦ BSmtLib.Lexicon.Reserved.CommandNameReserved
+BSmtLib.Lexicon.GeneralReserved ↦ BSmtLib.Lexicon.Reserved.GeneralReserved
 BSmtLib.Lexicon.BinDigits ↦ BSmtLib.Lexicon.Value.BinDigits
 BSmtLib.Lexicon.BinDigitsBuf ↦ BSmtLib.Lexicon.Value.BinDigitsBuf
 BSmtLib.Lexicon.Comment ↦ BSmtLib.Lexicon.Value.Comment
@@ -262,17 +268,15 @@ BSmtLib.Lexer.LexerCursor ↦ BSmtLib.Lexer.Cursor.LexerCursor
 BSmtLib.Lexer.LexerToken ↦ BSmtLib.Lexer.Cursor.LexerToken
 BSmtLib.Lexer.LexerWindow ↦ BSmtLib.Lexer.Cursor.LexerWindow
 BSmtLib.Lexer.LexerError ↦ BSmtLib.Lexer.Error.LexerError
-BSmtLib.Lexer.LexerErrorCause ↦ BSmtLib.Lexer.Error.LexerErrorCause
+BSmtLib.Lexer.LexerErrorKind ↦ BSmtLib.Lexer.Error.LexerErrorKind
 BSmtLib.Lexer.LexerReadError ↦ BSmtLib.Lexer.Error.LexerReadError
-BSmtLib.Lexer.LexerReadErrorCause ↦ BSmtLib.Lexer.Error.LexerReadErrorCause
+BSmtLib.Lexer.LexerReadErrorKind ↦ BSmtLib.Lexer.Error.LexerReadErrorKind
 BSmtLib.Lexer.LexicalErrorKind ↦ BSmtLib.Lexer.Error.LexicalErrorKind
 BSmtLib.Lexer.LexicalExpected ↦ BSmtLib.Lexer.Error.LexicalExpected
 BSmtLib.Lexer.FailFast ↦ BSmtLib.Lexer.Recovery.FailFast
 BSmtLib.Lexer.LexerRecovery ↦ BSmtLib.Lexer.Recovery.LexerRecovery
 BSmtLib.Lexer.Recover ↦ BSmtLib.Lexer.Recovery.Recover
 BSmtLib.Lexer.Recovering ↦ BSmtLib.Lexer.Recovery.Recovering
-BSmtLib.Token.CommandNameReserved ↦ BSmtLib.Token.Reserved.CommandNameReserved
-BSmtLib.Token.GeneralReserved ↦ BSmtLib.Token.Reserved.GeneralReserved
 BSmtLib.Parser.Category.ClosedAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedAttributeParser
 BSmtLib.Parser.Category.ClosedMultipleAttributeParser ↦ BSmtLib.Parser.Category.Attribute.ClosedMultipleAttributeParser
 BSmtLib.Parser.Category.ClosedMaximumParser ↦ BSmtLib.Parser.Category.Combinator.ClosedMaximumParser
@@ -348,8 +352,8 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Writer
   BSmtLib.Grammar.Multiple
   BSmtLib.Lexicon.Bytes
+  BSmtLib.Lexicon.Reserved
   BSmtLib.Token
-  BSmtLib.Token.Reserved
   BSmtLib.CommandHandler
   BSmtLib.NonstandardCommandError
   BSmtLib.PartialCommandError
@@ -358,12 +362,12 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.readSmt
   BSmtLib.readSmtFile
   BSmtLib.ReadError
-  BSmtLib.ReadErrorCause
+  BSmtLib.ReadErrorKind
   BSmtLib.ReadFailure
   BSmtLib.VersionPosture
   BSmtLib.VersionPostureBuilder
   BSmtLib.WriteError
-  BSmtLib.WriteErrorCause
+  BSmtLib.WriteErrorKind
   BSmtLib.WriteStyle
   BSmtLib.WriterConfig
   BSmtLib.Grammar.Bindings
@@ -382,6 +386,7 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Grammar.Symbols
   BSmtLib.Grammar.SymbolsBuf
   BSmtLib.Grammar.AttributeValue
+  BSmtLib.Grammar.AttributeValueBuf
   BSmtLib.Grammar.EmptyArgumentsError
   BSmtLib.Grammar.Ident
   BSmtLib.Grammar.IdentBuf
@@ -396,13 +401,18 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Grammar.QualifiedIdentBuf
   BSmtLib.Grammar.QuantifierKind
   BSmtLib.Grammar.SExpr
+  BSmtLib.Grammar.SExprBuf
   BSmtLib.Grammar.SimplePattern
   BSmtLib.Grammar.SimplePatternBuf
   BSmtLib.Grammar.SimplePatternsBuf
+  BSmtLib.Grammar.SortBuf
   BSmtLib.Grammar.SpecialConstant
   BSmtLib.Grammar.SpecialConstantBuf
   BSmtLib.Grammar.Term
+  BSmtLib.Grammar.TermBuf
   BSmtLib.Lexicon.BytesBuf
+  BSmtLib.Lexicon.CommandNameReserved
+  BSmtLib.Lexicon.GeneralReserved
   BSmtLib.Lexicon.BinDigits
   BSmtLib.Lexicon.BinDigitsBuf
   BSmtLib.Lexicon.Comment
@@ -428,17 +438,15 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   BSmtLib.Lexer.LexerToken
   BSmtLib.Lexer.LexerWindow
   BSmtLib.Lexer.LexerError
-  BSmtLib.Lexer.LexerErrorCause
+  BSmtLib.Lexer.LexerErrorKind
   BSmtLib.Lexer.LexerReadError
-  BSmtLib.Lexer.LexerReadErrorCause
+  BSmtLib.Lexer.LexerReadErrorKind
   BSmtLib.Lexer.LexicalErrorKind
   BSmtLib.Lexer.LexicalExpected
   BSmtLib.Lexer.FailFast
   BSmtLib.Lexer.LexerRecovery
   BSmtLib.Lexer.Recover
   BSmtLib.Lexer.Recovering
-  BSmtLib.Token.CommandNameReserved
-  BSmtLib.Token.GeneralReserved
   BSmtLib.Parser.Category.ClosedAttributeParser
   BSmtLib.Parser.Category.ClosedMultipleAttributeParser
   BSmtLib.Parser.Category.ClosedMaximumParser
@@ -516,9 +524,10 @@ BSmtLib.Parser.ScriptParser ↦ BSmtLib.Parser.Script.ScriptParser
   with a reason are listed. -/
 
 /--
-info: 551 public names with a Rust counterpart; 88 with a `LEAN:` reason instead:
+info: 559 public names with a Rust counterpart; 89 with a `LEAN:` reason instead:
   BSmtLib.ControlFlow
   BSmtLib.Grammar.Nodes.Term.newApplication
+  BSmtLib.Grammar.Nodes.TermBuf.newApplication
   BSmtLib.Lexer.AfterEof
   BSmtLib.Lexer.AfterEofError
   BSmtLib.Lexer.AfterError
@@ -539,6 +548,8 @@ info: 551 public names with a Rust counterpart; 88 with a `LEAN:` reason instead
   BSmtLib.Lexicon.Bytes.BytesBuf.eqView
   BSmtLib.Lexicon.Bytes.eqOwned
   BSmtLib.Lexicon.Bytes.eqSlice
+  BSmtLib.Lexicon.Reserved.CommandNameReserved.all
+  BSmtLib.Lexicon.Reserved.GeneralReserved.all
   BSmtLib.Lexicon.Value.BinDigits.eqOwned
   BSmtLib.Lexicon.Value.BinDigits.eqSlice
   BSmtLib.Lexicon.Value.BinDigits.eqString
@@ -603,10 +614,8 @@ info: 551 public names with a Rust counterpart; 88 with a `LEAN:` reason instead
   BSmtLib.Reader.ReadError.ofParse
   BSmtLib.Reader.ReadFailure
   BSmtLib.Token.BatchTag
-  BSmtLib.Token.Reserved.CommandNameReserved.all
-  BSmtLib.Token.Reserved.GeneralReserved.all
 ---
-info: 789 Rust items, 421 trait implementations with a counterpart class and 104 structures with private fields; 153 without a counterpart, with a reason:
+info: 811 Rust items, 431 trait implementations with a counterpart class and 105 structures with private fields; 169 without a counterpart, with a reason:
   fields of grammar::nodes::SmtPatternApplication
   fields of grammar::nodes::SmtPatternApplicationBuf
   grammar::multiple::SmtConstructors::iter_mut
@@ -635,8 +644,16 @@ info: 789 Rust items, 421 trait implementations with a counterpart class and 104
   grammar::nodes::SmtApplication::args_mut
   grammar::nodes::SmtApplication::function
   grammar::nodes::SmtApplication::function_mut
+  grammar::nodes::SmtApplication::into_owned
   grammar::nodes::SmtApplication::into_parts
   grammar::nodes::SmtApplication::new
+  grammar::nodes::SmtApplicationBuf
+  grammar::nodes::SmtApplicationBuf::args
+  grammar::nodes::SmtApplicationBuf::args_mut
+  grammar::nodes::SmtApplicationBuf::function
+  grammar::nodes::SmtApplicationBuf::function_mut
+  grammar::nodes::SmtApplicationBuf::into_parts
+  grammar::nodes::SmtApplicationBuf::new
   grammar::nodes::SmtIndices
   grammar::nodes::SmtIndices::empty
   grammar::nodes::SmtIndices::get
@@ -651,6 +668,12 @@ info: 789 Rust items, 421 trait implementations with a counterpart class and 104
   grammar::nodes::SmtSimplePatterns::len
   grammar::nodes::SmtSimplePatternsBuf::iter
   grammar::nodes::SmtSort
+  grammar::nodes::SmtSort::into_owned
+  grammar::nodes::SmtSortBuf::view_mut
+  handler::SmtNodeTypes
+  handler::SmtNodeTypes::SExpr
+  handler::SmtNodeTypes::Sort
+  handler::SmtNodeTypes::Term
   impl core::default::Default for parser::category::combinator::SmtTuple3Parser
   impl core::default::Default for parser::category::combinator::SmtTuple4Parser
   impl core::default::Default for parser::category::combinator::SmtTuple5Parser
@@ -666,6 +689,7 @@ info: 789 Rust items, 421 trait implementations with a counterpart class and 104
   impl core::fmt::Debug for grammar::multiple::SmtSortAritiesIter
   impl core::fmt::Debug for grammar::multiple::SmtSymbolsIter
   impl core::fmt::Debug for grammar::nodes::SmtApplication
+  impl core::fmt::Debug for grammar::nodes::SmtApplicationBuf
   impl core::fmt::Debug for grammar::nodes::SmtIndices
   impl core::fmt::Debug for grammar::nodes::SmtSimplePatterns
   impl core::fmt::Debug for grammar::nodes::SmtSort
@@ -717,6 +741,7 @@ info: 789 Rust items, 421 trait implementations with a counterpart class and 104
   impl parser::SmtParse for parser::category::combinator::SmtTuple7Parser
   impl parser::SmtParse for parser::category::combinator::SmtTuple8Parser
   impl token::SmtAppendTokens for grammar::nodes::SmtApplication
+  impl token::SmtAppendTokens for grammar::nodes::SmtApplicationBuf
   impl token::SmtAppendTokens for grammar::nodes::SmtIndices
   impl token::SmtAppendTokens for grammar::nodes::SmtSimplePatterns
   impl token::SmtAppendTokens for grammar::nodes::SmtSort

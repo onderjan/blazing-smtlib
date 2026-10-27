@@ -718,7 +718,7 @@ variable (version : Version) (follows : CmdEnd → Lang)
 /-- A failure of the command parser's step: no rejection of a version declaration, or the
 rejection of one that names no supported version, whose item is the last before what follows
 such a declaration. -/
-def CmdFailure (rem : Lang) (item : Received) (e : Parser.ParseErrorCause Unit) : Prop :=
+def CmdFailure (rem : Lang) (item : Received) (e : Parser.ParseErrorKind Unit) : Prop :=
   Benign e ∨ ((∃ u, rem u) → e = .version .unsupported ∧
     ∀ w, follows .refused w → rem (item :: w))
 

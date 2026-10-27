@@ -4,6 +4,7 @@ public import BSmtLib.ControlFlow
 public import BSmtLib.Lexicon.Bytes
 public import BSmtLib.Lexicon.Value
 public import BSmtLib.Lexicon.Value.Versioned
+public import BSmtLib.Lexicon.Reserved
 public import BSmtLib.Span
 public import BSmtLib.Version
 public import BSmtLib.Grammar.Nodes
@@ -12,7 +13,6 @@ public import BSmtLib.Handler
 public import BSmtLib.Handler.CommandHandler
 public import BSmtLib.Handler.PartialCommandHandler
 public import BSmtLib.Handler.SyntaxChecker
-public import BSmtLib.Token.Reserved
 public import BSmtLib.Token
 public import BSmtLib.Lexer.Cursor
 public import BSmtLib.Token.Lookahead
@@ -157,22 +157,22 @@ end BSmtLib
 
 namespace BSmtLib.ReadError
 
-export BSmtLib.Reader.ReadError (cause location ofLex ofParse span)
+export BSmtLib.Reader.ReadError (kind location ofLex ofParse span)
 
 end BSmtLib.ReadError
 
--- `BSmtLib.Reader.ReadErrorCause`, by `pub use crate::reader::*`
+-- `BSmtLib.Reader.ReadErrorKind`, by `pub use crate::reader::*`
 namespace BSmtLib
 
-export BSmtLib.Reader (ReadErrorCause)
+export BSmtLib.Reader (ReadErrorKind)
 
 end BSmtLib
 
-namespace BSmtLib.ReadErrorCause
+namespace BSmtLib.ReadErrorKind
 
-export BSmtLib.Reader.ReadErrorCause (handler io lexical «syntax» version)
+export BSmtLib.Reader.ReadErrorKind (handler io lexical «syntax» version)
 
-end BSmtLib.ReadErrorCause
+end BSmtLib.ReadErrorKind
 
 -- `BSmtLib.Reader.ReadFailure`, by `pub use crate::reader::*`
 namespace BSmtLib
@@ -230,22 +230,22 @@ end BSmtLib
 
 namespace BSmtLib.WriteError
 
-export BSmtLib.Writer.WriteError (cause)
+export BSmtLib.Writer.WriteError (kind)
 
 end BSmtLib.WriteError
 
--- `BSmtLib.Writer.WriteErrorCause`, by `pub use crate::writer::*`
+-- `BSmtLib.Writer.WriteErrorKind`, by `pub use crate::writer::*`
 namespace BSmtLib
 
-export BSmtLib.Writer (WriteErrorCause)
+export BSmtLib.Writer (WriteErrorKind)
 
 end BSmtLib
 
-namespace BSmtLib.WriteErrorCause
+namespace BSmtLib.WriteErrorKind
 
-export BSmtLib.Writer.WriteErrorCause (io notInVersion)
+export BSmtLib.Writer.WriteErrorKind (io notInVersion)
 
-end BSmtLib.WriteErrorCause
+end BSmtLib.WriteErrorKind
 
 -- `BSmtLib.Writer.WriteStyle`, by `pub use crate::writer::*`
 namespace BSmtLib
@@ -479,9 +479,22 @@ end BSmtLib.Grammar
 
 namespace BSmtLib.Grammar.AttributeValue
 
-export BSmtLib.Grammar.Nodes.AttributeValue (sExprs specialConstant symbol)
+export BSmtLib.Grammar.Nodes.AttributeValue (intoOwned sExprs specialConstant symbol)
 
 end BSmtLib.Grammar.AttributeValue
+
+-- `BSmtLib.Grammar.Nodes.AttributeValueBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (AttributeValueBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.AttributeValueBuf
+
+export BSmtLib.Grammar.Nodes.AttributeValueBuf (sExprs specialConstant symbol viewMut)
+
+end BSmtLib.Grammar.AttributeValueBuf
 
 -- `BSmtLib.Grammar.Nodes.EmptyArgumentsError`, by `pub use nodes::*`
 namespace BSmtLib.Grammar
@@ -662,9 +675,22 @@ end BSmtLib.Grammar
 
 namespace BSmtLib.Grammar.SExpr
 
-export BSmtLib.Grammar.Nodes.SExpr (keyword reserved sExprs specialConstant symbol)
+export BSmtLib.Grammar.Nodes.SExpr (intoOwned keyword reserved sExprs specialConstant symbol)
 
 end BSmtLib.Grammar.SExpr
+
+-- `BSmtLib.Grammar.Nodes.SExprBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SExprBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SExprBuf
+
+export BSmtLib.Grammar.Nodes.SExprBuf (keyword reserved sExprs specialConstant symbol viewMut)
+
+end BSmtLib.Grammar.SExprBuf
 
 -- `BSmtLib.Grammar.Nodes.SimplePattern`, by `pub use nodes::*`
 namespace BSmtLib.Grammar
@@ -706,6 +732,19 @@ export BSmtLib.Grammar.Nodes.SimplePatternsBuf (clear get? instForInSimplePatter
 
 end BSmtLib.Grammar.SimplePatternsBuf
 
+-- `BSmtLib.Grammar.Nodes.SortBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (SortBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.SortBuf
+
+export BSmtLib.Grammar.Nodes.SortBuf (args ident mk)
+
+end BSmtLib.Grammar.SortBuf
+
 -- `BSmtLib.Grammar.Nodes.SpecialConstant`, by `pub use nodes::*`
 namespace BSmtLib.Grammar
 
@@ -741,9 +780,23 @@ end BSmtLib.Grammar
 
 namespace BSmtLib.Grammar.Term
 
-export BSmtLib.Grammar.Nodes.Term (application newApplication qualifiedIdent specialConstant)
+export BSmtLib.Grammar.Nodes.Term (application intoOwned newApplication qualifiedIdent
+  specialConstant)
 
 end BSmtLib.Grammar.Term
+
+-- `BSmtLib.Grammar.Nodes.TermBuf`, by `pub use nodes::*`
+namespace BSmtLib.Grammar
+
+export BSmtLib.Grammar.Nodes (TermBuf)
+
+end BSmtLib.Grammar
+
+namespace BSmtLib.Grammar.TermBuf
+
+export BSmtLib.Grammar.Nodes.TermBuf (application newApplication qualifiedIdent specialConstant)
+
+end BSmtLib.Grammar.TermBuf
 
 /-! `pub use bytes::*` in `lexicon.rs`; `SmtBytes` is itself `BSmtLib.Lexicon.Bytes` -/
 
@@ -760,6 +813,39 @@ export BSmtLib.Lexicon.Bytes.BytesBuf (asSlice eqSlice eqView fromByte fromByteA
   instHashable instRepr intoByteArray isEmpty len new view)
 
 end BSmtLib.Lexicon.BytesBuf
+
+/-! `pub use reserved::*` in `lexicon.rs`; `SmtReserved` is itself `BSmtLib.Lexicon.Reserved` -/
+
+-- `BSmtLib.Lexicon.Reserved.CommandNameReserved`, by `pub use reserved::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Reserved (CommandNameReserved)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.CommandNameReserved
+
+export BSmtLib.Lexicon.Reserved.CommandNameReserved (all asStr assert checkSat checkSatAssuming
+  declareConst declareDatatype declareDatatypes declareFun declareSort declareSortParameter
+  defineConst defineFun defineFunRec defineFunsRec defineSort echo exit fromBytes? getAssertions
+  getAssignment getInfo getModel getOption getProof getUnsatAssumptions getUnsatCore getValue pop
+  push reset resetAssertions setInfo setLogic setOption)
+
+end BSmtLib.Lexicon.CommandNameReserved
+
+-- `BSmtLib.Lexicon.Reserved.GeneralReserved`, by `pub use reserved::*`
+namespace BSmtLib.Lexicon
+
+export BSmtLib.Lexicon.Reserved (GeneralReserved)
+
+end BSmtLib.Lexicon
+
+namespace BSmtLib.Lexicon.GeneralReserved
+
+export BSmtLib.Lexicon.Reserved.GeneralReserved (all as asStr binary decimal exclamationMark
+  «exists» «forall» fromBytes? hexadecimal lambda «let» numeral par string underscore)
+
+end BSmtLib.Lexicon.GeneralReserved
 
 /-! `pub use value::*` in `lexicon.rs` -/
 
@@ -1112,7 +1198,7 @@ export BSmtLib.Lexer.Cursor.LexerWindow.Consumed (trans)
 
 end BSmtLib.Lexer.LexerWindow.Consumed
 
-/-! `pub use error::{SmtLexerError, SmtLexerErrorCause, SmtLexerReadError, SmtLexerReadErrorCause,
+/-! `pub use error::{SmtLexerError, SmtLexerErrorKind, SmtLexerReadError, SmtLexerReadErrorKind,
 SmtLexicalErrorKind, SmtLexicalExpected}` in `lexer.rs` -/
 
 -- `BSmtLib.Lexer.Error.LexerError`, by `pub use error::SmtLexerError`
@@ -1124,22 +1210,22 @@ end BSmtLib.Lexer
 
 namespace BSmtLib.Lexer.LexerError
 
-export BSmtLib.Lexer.Error.LexerError (cause continuesFrom location span)
+export BSmtLib.Lexer.Error.LexerError (continuesFrom kind location span)
 
 end BSmtLib.Lexer.LexerError
 
--- `BSmtLib.Lexer.Error.LexerErrorCause`, by `pub use error::SmtLexerErrorCause`
+-- `BSmtLib.Lexer.Error.LexerErrorKind`, by `pub use error::SmtLexerErrorKind`
 namespace BSmtLib.Lexer
 
-export BSmtLib.Lexer.Error (LexerErrorCause)
+export BSmtLib.Lexer.Error (LexerErrorKind)
 
 end BSmtLib.Lexer
 
-namespace BSmtLib.Lexer.LexerErrorCause
+namespace BSmtLib.Lexer.LexerErrorKind
 
-export BSmtLib.Lexer.Error.LexerErrorCause (consumer lexical)
+export BSmtLib.Lexer.Error.LexerErrorKind (consumer lexical)
 
-end BSmtLib.Lexer.LexerErrorCause
+end BSmtLib.Lexer.LexerErrorKind
 
 -- `BSmtLib.Lexer.Error.LexerReadError`, by `pub use error::SmtLexerReadError`
 namespace BSmtLib.Lexer
@@ -1150,22 +1236,22 @@ end BSmtLib.Lexer
 
 namespace BSmtLib.Lexer.LexerReadError
 
-export BSmtLib.Lexer.Error.LexerReadError (cause location ofLex span)
+export BSmtLib.Lexer.Error.LexerReadError (kind location ofLex span)
 
 end BSmtLib.Lexer.LexerReadError
 
--- `BSmtLib.Lexer.Error.LexerReadErrorCause`, by `pub use error::SmtLexerReadErrorCause`
+-- `BSmtLib.Lexer.Error.LexerReadErrorKind`, by `pub use error::SmtLexerReadErrorKind`
 namespace BSmtLib.Lexer
 
-export BSmtLib.Lexer.Error (LexerReadErrorCause)
+export BSmtLib.Lexer.Error (LexerReadErrorKind)
 
 end BSmtLib.Lexer
 
-namespace BSmtLib.Lexer.LexerReadErrorCause
+namespace BSmtLib.Lexer.LexerReadErrorKind
 
-export BSmtLib.Lexer.Error.LexerReadErrorCause (consumer io lexical)
+export BSmtLib.Lexer.Error.LexerReadErrorKind (consumer io lexical)
 
-end BSmtLib.Lexer.LexerReadErrorCause
+end BSmtLib.Lexer.LexerReadErrorKind
 
 -- `BSmtLib.Lexer.Error.LexicalErrorKind`, by `pub use error::SmtLexicalErrorKind`
 namespace BSmtLib.Lexer
@@ -1237,40 +1323,6 @@ export BSmtLib.Lexer.Recovery (Recovering)
 
 end BSmtLib.Lexer
 
-/-! `pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved}` in `token.rs`;
-`Reserved` is itself `BSmtLib.Token.Reserved` -/
-
--- `BSmtLib.Token.Reserved.CommandNameReserved`, by `pub use reserved::SmtCommandNameReserved`
-namespace BSmtLib.Token
-
-export BSmtLib.Token.Reserved (CommandNameReserved)
-
-end BSmtLib.Token
-
-namespace BSmtLib.Token.CommandNameReserved
-
-export BSmtLib.Token.Reserved.CommandNameReserved (all asStr assert checkSat checkSatAssuming
-  declareConst declareDatatype declareDatatypes declareFun declareSort declareSortParameter
-  defineConst defineFun defineFunRec defineFunsRec defineSort echo exit fromBytes? getAssertions
-  getAssignment getInfo getModel getOption getProof getUnsatAssumptions getUnsatCore getValue pop
-  push reset resetAssertions setInfo setLogic setOption)
-
-end BSmtLib.Token.CommandNameReserved
-
--- `BSmtLib.Token.Reserved.GeneralReserved`, by `pub use reserved::SmtGeneralReserved`
-namespace BSmtLib.Token
-
-export BSmtLib.Token.Reserved (GeneralReserved)
-
-end BSmtLib.Token
-
-namespace BSmtLib.Token.GeneralReserved
-
-export BSmtLib.Token.Reserved.GeneralReserved (all as asStr binary decimal exclamationMark «exists»
-  «forall» fromBytes? hexadecimal lambda «let» numeral par string underscore)
-
-end BSmtLib.Token.GeneralReserved
-
 /-! `pub use {…}` in `parser/category.rs` -/
 
 -- `BSmtLib.Parser.Category.Attribute.ClosedAttributeParser`, by `pub use attribute::SmtClosedAttributeParser`
@@ -1308,7 +1360,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.ClosedMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaxElements)
+export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxItems new setMaxItems)
 
 end BSmtLib.Parser.Category.ClosedMaximumParser
 
@@ -1373,7 +1425,7 @@ end BSmtLib.Parser.Category
 
 namespace BSmtLib.Parser.Category.ParenMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaxElements)
+export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxItems new setMaxItems)
 
 end BSmtLib.Parser.Category.ParenMaximumParser
 
@@ -1716,7 +1768,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.ClosedMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxElements new setMaxElements)
+export BSmtLib.Parser.Category.Combinator.ClosedMaximumParser (maxItems new setMaxItems)
 
 end BSmtLib.Parser.ClosedMaximumParser
 
@@ -1781,7 +1833,7 @@ end BSmtLib.Parser
 
 namespace BSmtLib.Parser.ParenMaximumParser
 
-export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxElements new setMaxElements)
+export BSmtLib.Parser.Category.Combinator.ParenMaximumParser (maxItems new setMaxItems)
 
 end BSmtLib.Parser.ParenMaximumParser
 

@@ -39,7 +39,7 @@ the specification formalism (`BSmtLibSpec`).
 namespace BSmtLib.Facts.Parser.Adapters.Outcome
 
 open BSmtLib.Token (Cursor)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind VersionErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Facts.Parser.Adapters.Cursor (Takes Reads)
 
 /-- What a parse answered, read with the parser and the cursor it gave back. -/
@@ -66,7 +66,7 @@ def outcome : Except (ParseError E) (ControlFlow R) × P × ParseState H ×
   | (.ok (.break result), parser, _, next) => .finished result parser next.val
   | (.ok .continue, parser, _, _) => .waits parser
   | (.error error, _, _, next) =>
-    match error.cause with
+    match error.kind with
     | .syntax kind => .rejected kind next.val
     | .version kind => .rejectedVersion kind next.val
     | .handler error => .failed error
@@ -78,12 +78,12 @@ section
 variable {P H R E : Type} {m : Type → Type} [Monad m]
 
 /-- The program fails, if it does, with the handler's error only. -/
-def HandlerOnly {α : Type} (program : ExceptT (ParseErrorCause E) (StateT H m) α) : Prop :=
-  ∃ calls : ExceptT E (StateT H m) α, program = ExceptT.adapt ParseErrorCause.handler calls
+def HandlerOnly {α : Type} (program : ExceptT (ParseErrorKind E) (StateT H m) α) : Prop :=
+  ∃ calls : ExceptT E (StateT H m) α, program = ExceptT.adapt ParseErrorKind.handler calls
 
 /-- The answer of a handler-only program, its result read as `onResult` says. -/
 def answer {α Z : Type} (onResult : α → Outcome R P Z E) (next : Z) :
-    Except (ParseErrorCause E) α → Outcome R P Z E
+    Except (ParseErrorKind E) α → Outcome R P Z E
   | .ok result => onResult result
   | .error (.handler error) => .failed error
   | .error (.syntax kind) => .rejected kind next
@@ -98,7 +98,7 @@ tokens first and then any tokens, all read in the version. The parser makes the 
 program and fails where the program fails.
 -/
 def Finishes (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
-    (program : ExceptT (ParseErrorCause E) (StateT H m) R) (back : P) : Prop :=
+    (program : ExceptT (ParseErrorKind E) (StateT H m) R) (back : P) : Prop :=
   HandlerOnly program ∧
   ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor next : Z)
     (rest : List Parser.Internal.Input),
@@ -113,7 +113,7 @@ that has exactly the tokens, all read in the version. The parser makes the effec
 and fails where the program fails.
 -/
 def Waits {α : Type} (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
-    (program : ExceptT (ParseErrorCause E) (StateT H m) α) (after : α → P) : Prop :=
+    (program : ExceptT (ParseErrorKind E) (StateT H m) α) (after : α → P) : Prop :=
   HandlerOnly program ∧
   ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor last : Z),
     Takes version cursor tokens last → Cursor.next? last = none →
@@ -127,7 +127,7 @@ tokens, all read in the version. The parser first makes the effects of the handl
 and fails where the program fails.
 -/
 def Rejects (version : Version) (parser : P) (tokens : List Parser.Internal.Input)
-    (program : ExceptT (ParseErrorCause E) (StateT H m) Unit) (kind : SyntaxErrorKind) : Prop :=
+    (program : ExceptT (ParseErrorKind E) (StateT H m) Unit) (kind : SyntaxErrorKind) : Prop :=
   HandlerOnly program ∧
   ∀ {Z : Type} [Cursor Z] (state : ParseState H) (cursor next : Z)
     (rest : List Parser.Internal.Input),

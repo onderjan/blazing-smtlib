@@ -236,7 +236,7 @@ start of its span, with another lexical error, or with the consumer's error. The
 `none`, which its consumer raises if it is handed whitespace or a comment it does not take, is
 given as a lexical error. -/
 def failureOf {ε : Type} (error : LexerError (Option ε)) : BSmtLibSpec.Lexer.Failure ε :=
-  match error.cause with
+  match error.kind with
   | .lexical kind =>
     if kind == .unexpectedTrailingToken then .trailing (toLocation error.span.start)
     else .lexical

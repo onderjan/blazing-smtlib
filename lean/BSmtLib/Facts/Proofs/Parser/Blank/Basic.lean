@@ -217,20 +217,20 @@ instance {σ σ' ρ ρ' : Type} [Blanks σ σ'] [Blanks ρ ρ'] :
 /-! ## Runs related by blanking -/
 
 /-- The cause of a failure with the handler's error replaced by `()`. -/
-def blankCause {ε : Type} : ParseErrorCause ε → ParseErrorCause Unit
+def blankCause {ε : Type} : ParseErrorKind ε → ParseErrorKind Unit
   | .syntax kind => .syntax kind
   | .version kind => .version kind
   | .handler _ => .handler ()
 
 /-- A result of a run, blanked. -/
 def blankResult {ε α β : Type} [Blanks α β] :
-    Except (ParseErrorCause ε) α → Except (ParseErrorCause Unit) β
+    Except (ParseErrorKind ε) α → Except (ParseErrorKind Unit) β
   | .ok a => .ok (blank a)
   | .error e => .error (blankCause e)
 
 /-- A parse error with the handler's error replaced by `()`. -/
 def blankError {ε : Type} (e : ParseError ε) : ParseError Unit :=
-  ParseError.Internal.new (blankCause e.cause)
+  ParseError.Internal.new (blankCause e.kind)
 
 /-- An answer of a parse, its error blanked. -/
 def blankAnswer {ε α : Type} : Except (ParseError ε) α → Except (ParseError Unit) α
@@ -253,7 +253,7 @@ theorem BSim.pure {a : α} {b : β} (h : b = blank a) :
     BSim (Pure.pure a : PM H α) (Pure.pure b : PM Shell β) :=
   ⟨fun _ => by rw [h]; rfl⟩
 
-theorem BSim.throw (e : ParseErrorCause (Handler.Error H)) (e' : ParseErrorCause Unit)
+theorem BSim.throw (e : ParseErrorKind (Handler.Error H)) (e' : ParseErrorKind Unit)
     (h : e' = blankCause e) :
     BSim (MonadExcept.throw e : PM H α) (MonadExcept.throw e' : PM Shell β) :=
   ⟨fun _ => by rw [h]; rfl⟩

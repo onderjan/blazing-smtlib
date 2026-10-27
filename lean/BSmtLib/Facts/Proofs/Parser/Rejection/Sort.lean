@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Rejection.Basic
 import all BSmtLib.Parser
 import all BSmtLib.Parser.Category.Ident
 import all BSmtLib.Parser.Category.Sort
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 
@@ -110,7 +110,7 @@ theorem identLang_indexed {version : BSmtLibSpec.Lexicon.Version} {u : List Rece
   | cons first rest =>
     simp [Tree.Identifier.tokens, paren, word, toks, List.flatMap, Function.comp_def]
 
-theorem isWord_eq {token : Parser.Internal.Input} {w : Token.Reserved.GeneralReserved}
+theorem isWord_eq {token : Parser.Internal.Input} {w : Lexicon.Reserved.GeneralReserved}
     (h : token.isWord w = true) :
     token = .reserved (.general w) := by
   cases token with
@@ -273,7 +273,7 @@ of the innermost open application. -/
 theorem sortComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : SortState Nat}
     {item : Received} {levels : List (SortLevel Nat)} (head : Grammar.Nodes.Ident)
     (arguments : Array Nat)
-    {Q : Parser.ParseErrorCause Unit → Prop}
+    {Q : Parser.ParseErrorKind Unit → Prop}
     (h : ∀ v, sortAfter version levels v → sortRem version state (item :: v)) :
     Sound (Advances (sortRem version) (fun state _ => sortRem version state) state item) Q
       (sortComplete (H := List Event) levels head arguments) := by

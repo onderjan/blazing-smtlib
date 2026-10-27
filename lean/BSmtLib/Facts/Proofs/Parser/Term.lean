@@ -2,7 +2,7 @@ module
 
 public import BSmtLib.Facts.Proofs.Parser.TermHelpers
 import all BSmtLib.Parser.Category.Term
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 import all BSmtLib.Parser.Category.Token
 
 @[expose] public section

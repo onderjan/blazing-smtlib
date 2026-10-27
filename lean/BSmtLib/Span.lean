@@ -2,17 +2,32 @@ module
 
 public section
 
+/-!
+# Locations and spans in a byte stream, used in lexer tokens and errors
+
+A location records an offset in bytes and line/column information, and a span is a half-open
+range `[start, end)` between locations. The span can be empty, which is usually the case if an
+error occurred at the end of input due to some unclosed item.
+
+The locations and spans are given by the lexer for tokens via `LexerCursor.span`. `Lexer` and
+`Reader` produce the result value wrapped in `Located` on success and a spanned error on failure.
+Parsers and handlers do not interact with locations and spans.
+-/
+
 namespace BSmtLib.Span
 
 /--
-A location in an SMT-LIB stream.
+Location in a byte stream.
 
-All counts are in bytes (SMT-LIB works on bytes).
-While SMT-LIB accepts both CR and LF as a comment separator,
-we consider only LF to start a new line for location purposes
-as that is compatible with both LF and CRLF conventions.
+All counts are in bytes. While SMT-LIB accepts both CR and LF as a comment separator, the
+line/column location convention here is that only LF starts a new line, for compatibility with
+both the LF and the CRLF line endings.
 
 The offset, line, and column all start at zero.
+
+The location is guaranteed to be valid with respect to the offset and line/column: as each
+terminated line must contain at least one byte (LF), the offset must be equal to or greater than
+the sum of line and column.
 -/
 /- LEAN: the counts are `Nat`, Lean's arbitrary-precision natural numbers, where Rust has
 `u64`. In Rust, `u64` stands for "big enough"; `Nat` is exactly that, and small values are
@@ -35,8 +50,9 @@ structure Location where
   deriving BEq, Hashable, Repr, Inhabited, Ord
 
 /--
-The line and column cannot be at the offset: every line before
-and every column on the line take at least one byte.
+Error constructing a location that would be invalid.
+
+See `Location` for the validity condition.
 -/
 structure InvalidLocationError where
   deriving BEq, Hashable, Repr, Inhabited
@@ -127,7 +143,7 @@ def afterByte (self : Location) (c : UInt8) : Location :=
 
 end Location
 
-/-- A value located in an SMT-LIB stream. -/
+/-- Value located in a byte stream. -/
 /- LEAN: the constructor is private, as Rust's fields are, and the library builds a located value
 with `Located.Internal.new`. The fields are read-only accessor functions (`located.value`,
 `located.location`); they replace the Rust getters. `into_value` is the same as `value`, since
@@ -171,9 +187,14 @@ theorem Located.Internal.new_inj {V : Type} {value value' : V} {location locatio
     rfl
 
 /--
-Span of an SMT-LIB element.
+Span of an item in a byte stream.
 
 The span is a half-open range `[start, end)` between locations.
+
+The span is guaranteed to be valid with respect to the offsets and line/column of its locations:
+the end is not before the start, and the bytes between them hold what separates them. On the same
+line, the column advances by exactly the number of bytes. On a later line, each line ended takes at
+least one byte (LF), and each column before the end takes one byte.
 -/
 /- LEAN: Rust's span holds its two locations inline. A Lean structure holds a structure field
 as a pointer to a separate object, so a span of two `Location` fields would take three
@@ -190,7 +211,11 @@ structure _root_.BSmtLib.Span where
   private endColumn : Nat
   deriving BEq, Hashable, Inhabited, Ord
 
-/-- The end location is not at or after the start location. -/
+/--
+Error constructing a span that would be invalid.
+
+See `Span` for the validity condition.
+-/
 structure InvalidSpanError where
   deriving BEq, Hashable, Repr, Inhabited
 
@@ -211,14 +236,23 @@ def Internal.newUnchecked (start «end» : Location) : Span :=
   { startOffset := start.offset, startLine := start.line, startColumn := start.column,
     endOffset := «end».offset, endLine := «end».line, endColumn := «end».column }
 
-/-- Whether the end is at or after the start, by the offsets and by the lines and columns. -/
+/-- Whether the end is not before the start and the bytes between them hold what separates them,
+by the offsets and by the lines and columns. -/
 private def isAllowed (start «end» : Location) : Bool :=
-  -- both offsets and line/column information must be consistent
+  -- the end offset must not be less than the start offset; the difference is the number of bytes
+  -- between them
   start.offset ≤ «end».offset &&
-    (start.line < «end».line || (start.line == «end».line && start.column ≤ «end».column))
+    let difference := «end».offset - start.offset
+    match compare «end».line start.line with
+    -- the end line must not be less than the start line
+    | .lt => false
+    -- on the same line, the column advances by exactly the number of bytes
+    | .eq => start.column ≤ «end».column && «end».column - start.column == difference
+    -- on a later line, each line ended takes at least one byte (LF), and each column of the end
+    -- line takes one byte
+    | .gt => «end».line - start.line + «end».column ≤ difference
 
-/-- The span from the start to the end; an error if the end is not at or after the start, by the
-offsets and by the lines and columns. -/
+/-- The span from the start to the end; an error if the span would be invalid. -/
 def new (start «end» : Location) : Except InvalidSpanError Span :=
   if isAllowed start «end» then .ok (Internal.newUnchecked start «end») else .error {}
 
@@ -262,9 +296,6 @@ def Internal.newZero : Span :=
 
 def isEmpty (self : Span) : Bool :=
   self.start == self.end
-
-def join (self other : Span) : Span :=
-  Internal.newUnchecked (min self.start other.start) (max self.end other.end)
 
 /- LEAN: the format is built, not rendered: rendering a format (`Std.Format.pretty`, which `s!`
 and `toString` call) holds a `panic`, which a `Repr` instance is not to reach. -/

@@ -6,7 +6,7 @@ import all BSmtLib.Parser.Category.Attribute
 import all BSmtLib.Parser.Command
 import all BSmtLib.Parser.Command.Internal.Standard
 import all BSmtLib.Parser.Script
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 
@@ -175,10 +175,10 @@ variable {points : Points (StateT H m)} {version : Version}
 variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /-- The frame of a command whose payload parser fails at its end (see `command_frame`). -/
-theorem command_frame_throw {name : Token.Reserved.CommandNameReserved} {s : String}
+theorem command_frame_throw {name : Lexicon.Reserved.CommandNameReserved} {s : String}
     (hname : Bridge.reserved (.commandName name) = BSmtLibSpec.Regex.chars s)
     {payload : List Parser.Internal.Input} {program : PM H Unit}
-    {e : Parser.ParseErrorCause (Handler.Error H)}
+    {e : Parser.ParseErrorKind (Handler.Error H)}
     (hruns : PayloadRuns points version (Payload.init name version) payload program
       fun _ => throw e)
     (rest : List Parser.Internal.Input) :

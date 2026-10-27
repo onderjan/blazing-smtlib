@@ -134,7 +134,7 @@ end
 
 /-! ## Equal results -/
 
-theorem cause_eq {ε : Type} {a b : LexerErrorCause ε} (h : CauseRel (· = ·) a b) : a = b := by
+theorem cause_eq {ε : Type} {a b : LexerErrorKind ε} (h : CauseRel (· = ·) a b) : a = b := by
   rcases a with a | a <;> rcases b with b | b <;> first | exact absurd h id | cases h; rfl
 
 /-- Lexer errors related as `LexErrRel (· = ·)` are the same to the formalism. -/

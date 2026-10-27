@@ -27,7 +27,7 @@ open BSmtLib.Grammar.Nodes BSmtLib.Handler
 open BSmtLib.Lexicon.Value (Keyword Symbol)
 open BSmtLib.Token (TokenCategory)
 open BSmtLib (Version Token)
-open BSmtLib.Token.Reserved (GeneralReserved)
+open BSmtLib.Lexicon.Reserved (GeneralReserved)
 
 
 /-- An item that a parser expected, in `SyntaxErrorKind.expected`. -/
@@ -35,7 +35,7 @@ inductive SyntaxExpected where
   /-- A token of the category. -/
   | token (category : TokenCategory)
   /-- The reserved word. -/
-  | reserved (word : Token.Reserved)
+  | reserved (word : Lexicon.Reserved)
   /-- A symbol, simple or quoted. -/
   | symbol
   /-- An index of an identifier: a numeral or a symbol. -/
@@ -103,7 +103,7 @@ inductive VersionErrorKind where
 The party that failed when a parse failed: the input's syntax, or the handler. The error has no
 location: it is at the last token the parser consumed, which its driver knows.
 -/
-inductive ParseErrorCause (ε : Type) where
+inductive ParseErrorKind (ε : Type) where
   /-- The tokens do not form the syntax the parser accepts. -/
   | syntax (kind : SyntaxErrorKind)
   /-- The script declares a version that cannot be used. -/
@@ -112,39 +112,39 @@ inductive ParseErrorCause (ε : Type) where
   | handler (error : ε)
   deriving BEq, Repr
 
-/- LEAN: Rust's `SmtParseError`, which boxes its cause so that parser results stay small. A
+/- LEAN: Rust's `SmtParseError`, which boxes its kind so that parser results stay small. A
 structure of one field is represented by the field, so no box is needed. The constructor is
 private, as Rust's field is, and the library builds an error with `ParseError.Internal.new`. The
-cause is readable as `error.cause`, replacing the getters `cause` and `into_cause`. -/
+kind is readable as `error.kind`, replacing the getters `kind` and `into_kind`. -/
 /-- Error emitted by a parser. -/
 structure ParseError (E : Type) where
   private mk ::
   /-- Why the parse failed. -/
-  cause : ParseErrorCause E
+  kind : ParseErrorKind E
   deriving BEq, Repr
 
 /-- The error with the given cause. -/
 @[inline]
-def ParseError.Internal.new {E : Type} (cause : ParseErrorCause E) : ParseError E :=
-  { cause }
+def ParseError.Internal.new {E : Type} (kind : ParseErrorKind E) : ParseError E :=
+  { kind }
 
 @[simp]
-theorem ParseError.Internal.cause_new {E : Type} (cause : ParseErrorCause E) :
-    (ParseError.Internal.new cause).cause = cause :=
+theorem ParseError.Internal.kind_new {E : Type} (kind : ParseErrorKind E) :
+    (ParseError.Internal.new kind).kind = kind :=
   (rfl)
 
 /-- An error is the one built from its cause. -/
 @[simp]
 theorem ParseError.Internal.new_eta {E : Type} (error : ParseError E) :
-    ParseError.Internal.new error.cause = error :=
+    ParseError.Internal.new error.kind = error :=
   (rfl)
 
 /-- Two errors built from the same cause are equal. -/
-theorem ParseError.Internal.new_inj {E : Type} {cause cause' : ParseErrorCause E} :
-    ParseError.Internal.new cause = ParseError.Internal.new cause' ↔ cause = cause' := by
+theorem ParseError.Internal.new_inj {E : Type} {kind kind' : ParseErrorKind E} :
+    ParseError.Internal.new kind = ParseError.Internal.new kind' ↔ kind = kind' := by
   constructor
   · intro h
-    exact congrArg ParseError.cause h
+    exact congrArg ParseError.kind h
   · rintro rfl
     rfl
 
@@ -227,14 +227,14 @@ than two; "unexpected token" if none are. -/
     | .unsupported => "unsupported version"
     | .tooManyDeclarations max => s!"too many version declarations (at most {max})"
 
-@[no_expose] instance {E : Type} [ToString E] : ToString (ParseErrorCause E) where
+@[no_expose] instance {E : Type} [ToString E] : ToString (ParseErrorKind E) where
   toString
     | .syntax kind => toString kind
     | .version kind => toString kind
     | .handler error => toString error
 
 @[no_expose] instance {E : Type} [ToString E] : ToString (ParseError E) :=
-  ⟨fun self => toString self.cause⟩
+  ⟨fun self => toString self.kind⟩
 
 /-- The error of the handler's error. -/
 @[inline]
@@ -312,7 +312,7 @@ namespace Internal
 
 /-- The monad of the parsers: the handler's, failing with a parse error. -/
 abbrev PM (H : Type) {m : Type → Type} [Handler H m] :=
-  ExceptT (ParseErrorCause (Handler.Error H)) (StateT H m)
+  ExceptT (ParseErrorKind (Handler.Error H)) (StateT H m)
 
 section
 
@@ -321,7 +321,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 /-- A handler call in a parse: its failure is the handler's. -/
 @[inline]
 def call {α : Type} (action : ExceptT (Handler.Error H) (StateT H m) α) : PM H α :=
-  ExceptT.adapt ParseErrorCause.handler action
+  ExceptT.adapt ParseErrorKind.handler action
 
 /-- A syntax error. -/
 @[inline]
@@ -364,7 +364,7 @@ inductive Input where
   | constant (constant : SpecialConstant)
   | symbol (symbol : Symbol)
   | keyword (name : Keyword)
-  | reserved (word : Token.Reserved)
+  | reserved (word : Lexicon.Reserved)
   /-- The end of the input. -/
   | endOfInput
   /-- Whitespace or a comment, which no parser takes. -/
@@ -488,10 +488,10 @@ A parser that steps by single tokens: the parser of the type `P`, with the handl
 class ParseByToken (P : Type) (H : outParam Type) (m : outParam (Type → Type))
     (E R : outParam Type) where
   /-- The calls due when the token arrives, before the parser takes it. -/
-  arrive : P → Input → ExceptT (ParseErrorCause E) (StateT H m) Unit
+  arrive : P → Input → ExceptT (ParseErrorKind E) (StateT H m) Unit
   /-- The parser takes the token, cut in the version. -/
   step : Version → P → Input →
-    ExceptT (ParseErrorCause E) (StateT H m) (Flow (ExceptT (ParseErrorCause E) (StateT H m)) P R)
+    ExceptT (ParseErrorKind E) (StateT H m) (Flow (ExceptT (ParseErrorKind E) (StateT H m)) P R)
   /-- The parser from which the next value starts, after it finished. -/
   reset : P → P
   /--

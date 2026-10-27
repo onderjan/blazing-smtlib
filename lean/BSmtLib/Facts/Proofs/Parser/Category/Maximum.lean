@@ -21,7 +21,7 @@ continuation when it goes on. Both the first turn and the later ones are read so
 namespace BSmtLib.Facts.Proofs.Parser.Category.Maximum
 
 open BSmtLib.Token (Cursor)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind VersionErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Token.Internal
@@ -597,7 +597,7 @@ and the `)`, and rejects a token not `)` after values that reach the maximum.
 theorem closedMaximum_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values) :
     ∃ after : Nat → List R → ClosedMaximumParser H P,
-      (∀ maximum found n, (after maximum found).setMaxElements n = after n found) ∧
+      (∀ maximum found n, (after maximum found).setMaxItems n = after n found) ∧
       (∀ maximum, values.length ≤ maximum →
         Outcome.Waits version (ClosedMaximumParser.new (H := H) p maximum) (valuesTokens values)
           (values.mapM fun value => value.2) (after maximum)) ∧
@@ -626,13 +626,13 @@ omit [Monad m] [LawfulMonad m] in
 /-- Setting the maximum of a closed list parser with a maximum before its first value: the
 parser with the new maximum. -/
 theorem closedMaximum_setMaximum_new (p : P) (maximum n : Nat) :
-    (ClosedMaximumParser.new (H := H) p maximum).setMaxElements n =
+    (ClosedMaximumParser.new (H := H) p maximum).setMaxItems n =
       ClosedMaximumParser.new (H := H) p n := by rfl
 
 omit [Monad m] [LawfulMonad m] in
 /-- The maximum of a closed list parser with a maximum. -/
-theorem closedMaximum_maxElements_new (p : P) (maximum : Nat) :
-    (ClosedMaximumParser.new (H := H) p maximum).maxElements = maximum := by rfl
+theorem closedMaximum_maxItems_new (p : P) (maximum : Nat) :
+    (ClosedMaximumParser.new (H := H) p maximum).maxItems = maximum := by rfl
 
 /-! ## Within a value -/
 
@@ -815,7 +815,7 @@ theorem closedMaximum_waits_inner {version : Version} {p : P}
     (h : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
     ∃ after' : Nat → List R × α → ClosedMaximumParser H P,
-      (∀ maximum x n, (after' maximum x).setMaxElements n = after' n x) ∧
+      (∀ maximum x n, (after' maximum x).setMaxItems n = after' n x) ∧
       (∀ maximum, values.length < maximum →
         Outcome.Waits version (ClosedMaximumParser.new (H := H) p maximum)
           (valuesTokens values ++ tokens)
@@ -970,13 +970,13 @@ omit [Monad m] [LawfulMonad m] in
 /-- Setting the maximum of a list parser with a maximum and its own `(` before its `(`: the
 parser with the new maximum. -/
 theorem parenMaximum_setMaximum_new (p : P) (maximum n : Nat) :
-    (ParenMaximumParser.new (H := H) p maximum).setMaxElements n =
+    (ParenMaximumParser.new (H := H) p maximum).setMaxItems n =
       ParenMaximumParser.new (H := H) p n := by rfl
 
 omit [Monad m] [LawfulMonad m] in
 /-- The maximum of a list parser with a maximum and its own `(`. -/
-theorem parenMaximum_maxElements_new (p : P) (maximum : Nat) :
-    (ParenMaximumParser.new (H := H) p maximum).maxElements = maximum := by rfl
+theorem parenMaximum_maxItems_new (p : P) (maximum : Nat) :
+    (ParenMaximumParser.new (H := H) p maximum).maxItems = maximum := by rfl
 
 
 /-! ## Waiting with its own `(` -/
@@ -1049,7 +1049,7 @@ maximum of values and the `)`, and rejects a token not `)` after the maximum of 
 -/
 theorem parenMaximum_waits_after_open {version : Version} {p : P} :
     ∃ after : Nat → ParenMaximumParser H P,
-      (∀ maximum n, (after maximum).setMaxElements n = after n) ∧
+      (∀ maximum n, (after maximum).setMaxItems n = after n) ∧
       (∀ maximum, Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum) [.parenOpen]
         (pure () : PM H Unit) fun _ => after maximum) ∧
       (∀ maximum {values : List (List Parser.Internal.Input × PM H R)},
@@ -1095,7 +1095,7 @@ theorem parenMaximum_waits_between {version : Version} {p : P}
     {values : List (List Parser.Internal.Input × PM H R)} (hvalues : ValuesParse version p values)
     (hne : values ≠ []) :
     ∃ after : Nat → List R → ParenMaximumParser H P,
-      (∀ maximum found n, (after maximum found).setMaxElements n = after n found) ∧
+      (∀ maximum found n, (after maximum found).setMaxItems n = after n found) ∧
       (∀ maximum, values.length ≤ maximum →
         Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum)
           (.parenOpen :: valuesTokens values) (values.mapM fun value => value.2)
@@ -1139,7 +1139,7 @@ theorem parenMaximum_waits_inner {version : Version} {p : P}
     (h : Outcome.Waits version p tokens program after)
     (hfirst : ∃ token tokens', tokens = token :: tokens' ∧ token ≠ .parenClose) :
     ∃ after' : Nat → List R × α → ParenMaximumParser H P,
-      (∀ maximum x n, (after' maximum x).setMaxElements n = after' n x) ∧
+      (∀ maximum x n, (after' maximum x).setMaxItems n = after' n x) ∧
       (∀ maximum, values.length < maximum →
         Outcome.Waits version (ParenMaximumParser.new (H := H) p maximum)
           (.parenOpen :: (valuesTokens values ++ tokens))

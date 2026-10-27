@@ -302,7 +302,7 @@ theorem closedAttribute_rejects_close {version : Version}
     ({ mode := .start, attributes := #[handled] } : AttributeState _ _))
     (valued_runs true hA keyword value hvalid hs) hfail
   have hembed := (singleStep_embed hruns).congr
-    (next' := fun _ => throw (Parser.ParseErrorCause.syntax (.expected #[.token .parenClose]))) rfl
+    (next' := fun _ => throw (Parser.ParseErrorKind.syntax (.expected #[.token .parenClose]))) rfl
     (by
       funext a
       apply ExceptT.ext
@@ -540,7 +540,7 @@ theorem closedAttribute_rejects_sExpr {version : Version}
   have hruns := sExpr_value_runs true hA name hitems hsItems hframes hs hopen hclose hconstant
     hsymbol hkeyword hreserved
   have hembed := (singleStep_embed hruns).congr
-    (next' := fun _ => throw (Parser.ParseErrorCause.syntax (.expected #[.sExpr]))) rfl (by
+    (next' := fun _ => throw (Parser.ParseErrorKind.syntax (.expected #[.sExpr]))) rfl (by
       funext a
       apply ExceptT.ext
       simp [ExceptT.run_throw])

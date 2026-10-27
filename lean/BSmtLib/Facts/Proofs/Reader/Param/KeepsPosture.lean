@@ -36,7 +36,7 @@ theorem MPost.pure {α : Type} {P : α → Prop} {a : α} (h : P a) :
   cases hr
   exact h
 
-theorem MPost.throw {α : Type} {P : α → Prop} (e : ParseErrorCause Unit) :
+theorem MPost.throw {α : Type} {P : α → Prop} (e : ParseErrorKind Unit) :
     MPost P (MonadExcept.throw e : RPM α) := by
   intro _ _ _ hr
   cases hr
@@ -131,7 +131,7 @@ theorem recAfter_posture (version : Version) (parser : ScriptParser (List Event)
 
 /-- A recording run that failed or finished does not go on after one more item. -/
 theorem recRun_snoc_stop (version : BSmtLibSpec.Lexicon.Version) (items : List LibItem)
-    (item : LibItem) {r : Except (ParseErrorCause Unit)
+    (item : LibItem) {r : Except (ParseErrorKind Unit)
       ((Version × ScriptParser (List Event)) ⊕ (Unit × List Internal.Input))}
     {log : List Event} (h : recRun version items = (r, log)) (hr : ∀ x, r ≠ .ok (.inl x)) :
     ∀ x log', recRun version (items ++ [item]) ≠ (.ok (.inl x), log') := by

@@ -1,7 +1,7 @@
 module
 
 public import BSmtLib.Lexicon.Value
-public import BSmtLib.Token.Reserved
+public import BSmtLib.Lexicon.Reserved
 public import BSmtLib.Grammar.Multiple
 public import BSmtLib.Token.AppendTokens
 
@@ -22,7 +22,7 @@ points into alive for as long as the view lives. -/
 namespace BSmtLib.Grammar.Nodes
 
 open BSmtLib.Lexicon.Value (SymbolBuf Symbol NumeralBuf Numeral DecimalBuf Decimal HexDigitsBuf
-  HexDigits BinDigitsBuf BinDigits StringContentBuf StringContent Keyword)
+  HexDigits BinDigitsBuf BinDigits StringContentBuf StringContent KeywordBuf Keyword)
 
 inductive IndexBuf where
   | numeral (digits : NumeralBuf)
@@ -145,6 +145,16 @@ structure QualifiedIdent (HandledSort : Type) where
 def QualifiedIdent.intoOwned {HandledSort : Type} (self : QualifiedIdent HandledSort) :
     QualifiedIdentBuf HandledSort :=
   { ident := self.ident.intoOwned, sort := self.sort }
+
+/-- Owned sort. -/
+/- LEAN: parameterised by the handled sorts, as `QualifiedIdentBuf` is. A sort is handed over
+flat, as its identifier and its argument sorts, so there is no view of a sort to convert from or
+to (Rust's `SmtSort::into_owned` and `SmtSortBuf::view_mut`); the fields are built from the
+parts handed over. -/
+structure SortBuf (HandledSort : Type) where
+  ident : IdentBuf
+  args : Array HandledSort
+  deriving Repr
 
 inductive SpecialConstantBuf where
   | numeral (digits : NumeralBuf)
@@ -399,11 +409,44 @@ def Term.newApplication {HandledSort HandledTerm : Type} (function : Ident)
     Except EmptyArgumentsError (Term HandledSort HandledTerm) :=
   if h : 0 < args.len then .ok (.application function sort args h) else .error {}
 
+/-- Owned term (special constant, qualified identifier, or application). -/
+/- LEAN: Rust's variants hold `SmtQualifiedIdentBuf` and `SmtApplicationBuf`; here their fields
+are the constructors' own, as those of `Term` are. -/
+inductive TermBuf (HandledSort HandledTerm : Type) where
+  | specialConstant (constant : SpecialConstantBuf)
+  /-- A qualified identifier: Rust's `SmtQualifiedIdentBuf { ident, sort }`, its fields flat. -/
+  | qualifiedIdent (ident : IdentBuf) (sort : Option HandledSort)
+  /--
+  A term that is an application: Rust's `SmtApplicationBuf { function, args }`, its fields flat,
+  the qualified identifier `function` as `function` and `sort`.
+
+  It is guaranteed that `args` are nonempty.
+  -/
+  | application (function : IdentBuf) (sort : Option HandledSort) (args : Array HandledTerm)
+      (nonempty : 0 < args.size)
+  deriving Repr
+
+def Term.intoOwned {HandledSort HandledTerm : Type} :
+    Term HandledSort HandledTerm → TermBuf HandledSort HandledTerm
+  | .specialConstant constant => .specialConstant constant.intoOwned
+  | .qualifiedIdent ident sort => .qualifiedIdent ident.intoOwned sort
+  | .application function sort args nonempty =>
+    .application function.intoOwned sort args.asSlice
+      (by rw [Grammar.Multiple.size_asSlice]; exact nonempty)
+
+/- LEAN: Rust's `SmtApplicationBuf::new`, which builds the application that
+`SmtTermBuf::Application` holds; here the term, as the application is held flat. -/
+/-- The term that applies the function to the arguments; an error if there are none. -/
+def TermBuf.newApplication {HandledSort HandledTerm : Type} (function : IdentBuf)
+    (sort : Option HandledSort) (args : Array HandledTerm) :
+    Except EmptyArgumentsError (TermBuf HandledSort HandledTerm) :=
+  if h : 0 < args.size then .ok (.application function sort args h) else .error {}
+
 /-- An s-expression as the handler receives it, its items already handled. -/
 inductive SExpr (HandledSExpr : Type) where
   | specialConstant (constant : SpecialConstant)
   | symbol (symbol : Symbol)
-  | reserved (word : Token.Reserved)
+  | reserved (word : Lexicon.Reserved)
   | keyword (name : Keyword)
   | sExprs (items : Multiple HandledSExpr)
   deriving Repr
@@ -417,6 +460,51 @@ inductive AttributeValue (HandledSExpr : Type) where
   | symbol (symbol : Symbol)
   | sExprs (items : Multiple HandledSExpr)
   deriving Repr
+
+/--
+Owned S-expression (special constant, symbol, reserved word, keyword, or a list of
+S-expressions).
+-/
+inductive SExprBuf (HandledSExpr : Type) where
+  | specialConstant (constant : SpecialConstantBuf)
+  | symbol (symbol : SymbolBuf)
+  | reserved (word : Lexicon.Reserved)
+  | keyword (name : KeywordBuf)
+  | sExprs (items : Array HandledSExpr)
+  deriving Repr
+
+def SExpr.intoOwned {HandledSExpr : Type} : SExpr HandledSExpr → SExprBuf HandledSExpr
+  | .specialConstant constant => .specialConstant constant.intoOwned
+  | .symbol name => .symbol name.intoOwned
+  | .reserved word => .reserved word
+  | .keyword name => .keyword name.intoOwned
+  | .sExprs items => .sExprs items.asSlice
+
+def SExprBuf.viewMut {HandledSExpr : Type} : SExprBuf HandledSExpr → SExpr HandledSExpr
+  | .specialConstant constant => .specialConstant constant.view
+  | .symbol name => .symbol name.view
+  | .reserved word => .reserved word
+  | .keyword name => .keyword name.view
+  | .sExprs items => .sExprs (Multiple.new items)
+
+/-- Owned attribute value (special constant, symbol, or a list of S-expressions). -/
+inductive AttributeValueBuf (HandledSExpr : Type) where
+  | specialConstant (constant : SpecialConstantBuf)
+  | symbol (symbol : SymbolBuf)
+  | sExprs (items : Array HandledSExpr)
+  deriving Repr
+
+def AttributeValue.intoOwned {HandledSExpr : Type} :
+    AttributeValue HandledSExpr → AttributeValueBuf HandledSExpr
+  | .specialConstant constant => .specialConstant constant.intoOwned
+  | .symbol name => .symbol name.intoOwned
+  | .sExprs items => .sExprs items.asSlice
+
+def AttributeValueBuf.viewMut {HandledSExpr : Type} :
+    AttributeValueBuf HandledSExpr → AttributeValue HandledSExpr
+  | .specialConstant constant => .specialConstant constant.view
+  | .symbol name => .symbol name.view
+  | .sExprs items => .sExprs (Multiple.new items)
 
 /-! ## Tokens of the nodes -/
 
@@ -522,18 +610,55 @@ append_tokens_by_view Pattern PatternBuf appendPattern
     AppendTokens (QualifiedIdentBuf HandledSort) :=
   ⟨fun self tokens => appendQualifiedIdent self.ident.view self.sort tokens⟩
 
+/-- Appends a sort of the identifier with the arguments. -/
+private def appendSort {HandledSort : Type} [AppendTokens HandledSort] (ident : Ident)
+    (args : Array HandledSort) (tokens : TokensCursor) : TokensCursor :=
+  if args.isEmpty then
+    -- a sort without arguments is represented by its identifier
+    appendIdent ident tokens
+  else
+    -- use the syntax for a sort with arguments: ( identifier sort+ )
+    let tokens := tokens.push .parenOpen
+    let tokens := appendIdent ident tokens
+    let tokens := AppendTokens.appendTokens args tokens
+    tokens.push .parenClose
+
+/-- Appends an application of the potentially qualified identifier to the arguments. -/
+private def appendApplication {HandledSort HandledTerm : Type} [AppendTokens HandledSort]
+    [AppendTokens HandledTerm] (function : Ident) (sort : Option HandledSort)
+    (args : Array HandledTerm) (tokens : TokensCursor) : TokensCursor :=
+  -- use the application syntax: ( function term+ )
+  let tokens := tokens.push .parenOpen
+  let tokens := appendQualifiedIdent function sort tokens
+  let tokens := AppendTokens.appendTokens args tokens
+  tokens.push .parenClose
+
+/-- Appends a list of S-expressions, enclosed in parentheses: ( s_expr* ). -/
+private def appendSExprs {HandledSExpr : Type} [AppendTokens HandledSExpr]
+    (items : Array HandledSExpr) (tokens : TokensCursor) : TokensCursor :=
+  let tokens := tokens.push .parenOpen
+  let tokens := AppendTokens.appendTokens items tokens
+  tokens.push .parenClose
+
+@[no_expose] instance {HandledSort : Type} [AppendTokens HandledSort] :
+    AppendTokens (SortBuf HandledSort) :=
+  ⟨fun self tokens => appendSort self.ident.view self.args tokens⟩
+
 @[no_expose] instance {HandledSort HandledTerm : Type} [AppendTokens HandledSort]
     [AppendTokens HandledTerm] : AppendTokens (Term HandledSort HandledTerm) where
   appendTokens self tokens :=
     match self with
     | .specialConstant constant => appendSpecialConstant constant tokens
     | .qualifiedIdent ident sort => appendQualifiedIdent ident sort tokens
-    | .application function sort args _ =>
-      -- use the application syntax: ( function term+ )
-      let tokens := tokens.push .parenOpen
-      let tokens := appendQualifiedIdent function sort tokens
-      let tokens := AppendTokens.appendTokens args tokens
-      tokens.push .parenClose
+    | .application function sort args _ => appendApplication function sort args.asSlice tokens
+
+@[no_expose] instance {HandledSort HandledTerm : Type} [AppendTokens HandledSort]
+    [AppendTokens HandledTerm] : AppendTokens (TermBuf HandledSort HandledTerm) where
+  appendTokens self tokens :=
+    match self with
+    | .specialConstant constant => appendSpecialConstant constant.view tokens
+    | .qualifiedIdent ident sort => appendQualifiedIdent ident.view sort tokens
+    | .application function sort args _ => appendApplication function.view sort args tokens
 
 @[no_expose] instance {HandledSExpr : Type} [AppendTokens HandledSExpr] :
     AppendTokens (AttributeValue HandledSExpr) where
@@ -541,11 +666,15 @@ append_tokens_by_view Pattern PatternBuf appendPattern
     match self with
     | .specialConstant constant => appendSpecialConstant constant tokens
     | .symbol symbol => tokens.push (.symbol symbol)
-    | .sExprs items =>
-      -- the S-expressions are enclosed in parentheses: ( s_expr* )
-      let tokens := tokens.push .parenOpen
-      let tokens := AppendTokens.appendTokens items tokens
-      tokens.push .parenClose
+    | .sExprs items => appendSExprs items.asSlice tokens
+
+@[no_expose] instance {HandledSExpr : Type} [AppendTokens HandledSExpr] :
+    AppendTokens (AttributeValueBuf HandledSExpr) where
+  appendTokens self tokens :=
+    match self with
+    | .specialConstant constant => appendSpecialConstant constant.view tokens
+    | .symbol symbol => tokens.push (.symbol symbol.view)
+    | .sExprs items => appendSExprs items tokens
 
 @[no_expose] instance {HandledSExpr : Type} [AppendTokens HandledSExpr] :
     AppendTokens (SExpr HandledSExpr) where
@@ -555,11 +684,17 @@ append_tokens_by_view Pattern PatternBuf appendPattern
     | .symbol symbol => tokens.push (.symbol symbol)
     | .reserved word => tokens.push (.reserved word)
     | .keyword name => tokens.push (.keyword name)
-    | .sExprs items =>
-      -- the S-expressions are enclosed in parentheses: ( s_expr* )
-      let tokens := tokens.push .parenOpen
-      let tokens := AppendTokens.appendTokens items tokens
-      tokens.push .parenClose
+    | .sExprs items => appendSExprs items.asSlice tokens
+
+@[no_expose] instance {HandledSExpr : Type} [AppendTokens HandledSExpr] :
+    AppendTokens (SExprBuf HandledSExpr) where
+  appendTokens self tokens :=
+    match self with
+    | .specialConstant constant => appendSpecialConstant constant.view tokens
+    | .symbol symbol => tokens.push (.symbol symbol.view)
+    | .reserved word => tokens.push (.reserved word)
+    | .keyword name => tokens.push (.keyword name.view)
+    | .sExprs items => appendSExprs items tokens
 
 end AppendTokens
 

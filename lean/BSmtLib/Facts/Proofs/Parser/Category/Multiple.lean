@@ -19,7 +19,7 @@ cursor that has that token. The lemmas go by induction over the values, each val
 namespace BSmtLib.Facts.Proofs.Parser.Category.Multiple
 
 open BSmtLib.Token (Cursor)
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState SyntaxErrorKind VersionErrorKind)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState SyntaxErrorKind VersionErrorKind)
 open BSmtLib.Parser.Internal (PM)
 open BSmtLib.Parser.Category.Token BSmtLib.Parser.Category.Combinator
 open BSmtLib.Parser.Category.Token.Internal
@@ -61,7 +61,7 @@ def outcomeAny {H E R S : Type} {Z : Type} {q : Z → Prop} :
   | (.ok (.break result), parser, _, next) => .finished result parser next.val
   | (.ok .continue, parser, _, _) => .waits parser
   | (.error error, _, _, next) =>
-    match error.cause with
+    match error.kind with
     | .syntax kind => .rejected kind next.val
     | .version kind => .rejectedVersion kind next.val
     | .handler error => .failed error
@@ -74,7 +74,7 @@ abbrev valuesTokens {α : Type} (values : List (List Parser.Internal.Input × α
 /-- The values finish with the inner parser, back as it was, and none starts with a `)`. -/
 def ValuesParse {H P R E : Type} {m : Type → Type} [Monad m] [Parse P H m E R]
     (version : Version) (parser : P)
-    (values : List (List Parser.Internal.Input × ExceptT (ParseErrorCause E) (StateT H m) R)) :
+    (values : List (List Parser.Internal.Input × ExceptT (ParseErrorKind E) (StateT H m) R)) :
     Prop :=
   ∀ value ∈ values, Outcome.Finishes version parser value.1 value.2 parser ∧
     ∃ token tokens, value.1 = token :: tokens ∧ token ≠ .parenClose
@@ -111,7 +111,7 @@ macro "loop_resp" : tactic => `(tactic| (
       .rejectedVersion kind z from rfl, onOutcome_rejectedVersion _ _ _ hz]
     simp only [pure_bind, map_pure]
     try rfl
-  · simp only [onOutcome, outcome, pure_bind, map_pure, ParseError.Internal.cause_new]
+  · simp only [onOutcome, outcome, pure_bind, map_pure, ParseError.Internal.kind_new]
     try rfl
   · simp only [onOutcome, outcome, pure_bind, map_pure]
     try rfl

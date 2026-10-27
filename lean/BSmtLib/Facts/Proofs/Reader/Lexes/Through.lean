@@ -76,7 +76,7 @@ theorem eof_stepC (hnl : NoLayout (scriptConsumer version) (toVersion version))
       (Recovery.LexerRecovery.abandon Recovery.FailFast)
           (Recovery.LexerRecovery.recover Recovery.FailFast)).run
         (Internal.core a)).run {} |>.run taken).1.1.1 = .error e →
-      e.cause ≠ .consumer none :=
+      e.kind ≠ .consumer none :=
     fun e he => (hnl _ hR).2 (Internal.held a) taken e he
   unfold irun at hok
   simp only [Param.Flagged.flaggedOps] at hr
@@ -109,7 +109,7 @@ theorem eof_stepC (hnl : NoLayout (scriptConsumer version) (toVersion version))
   obtain ⟨he₁, hs₁⟩ := hok
   dsimp only at hs₁ h2 he₁ halike hA
   obtain ⟨⟨hrel, rfl⟩, hinv', hfail⟩ := h2 hgood (hs₁.trans hsp)
-  have hnone := cause_ne_of_alike halike hA
+  have hnone := kind_ne_of_alike halike hA
   match res, res₂, hrel with
   | .ok flow, .ok flow₂, hh =>
     have hfl : fl'.errored = false := by

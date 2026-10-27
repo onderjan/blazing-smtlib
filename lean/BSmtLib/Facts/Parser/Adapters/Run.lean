@@ -200,7 +200,7 @@ open BSmtLibSpec.Parser.Properties
 open BSmtLib.Parser.Script (ScriptParser)
 
 /-- How the library's run ends, by its result. -/
-def libEnding : Except (Parser.ParseErrorCause Unit) (Option
+def libEnding : Except (Parser.ParseErrorKind Unit) (Option
     (Unit × List Parser.Internal.Input)) → Ending
   | .ok none => .waiting
   | .ok (some _) => .finished

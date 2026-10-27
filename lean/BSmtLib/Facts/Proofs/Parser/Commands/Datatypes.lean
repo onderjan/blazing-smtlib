@@ -4,7 +4,7 @@ public import BSmtLib.Facts.Proofs.Parser.Commands.Parts
 import all BSmtLib.Parser.Category.Combinator
 import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Command.Internal.Datatype
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 

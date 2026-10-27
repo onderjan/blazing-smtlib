@@ -9,7 +9,7 @@ import all BSmtLib.Parser.Category.Token
 import all BSmtLib.Parser.Command.Internal.Datatype
 import all BSmtLib.Parser.Command.Internal.Function
 import all BSmtLib.Parser.Command.Internal.Standard
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 
 @[expose] public section
 

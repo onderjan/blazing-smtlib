@@ -6,7 +6,7 @@ import all BSmtLib.Lexer.Internal.VNaive
 import all BSmtLib.Token
 import all BSmtLib.Version
 import all BSmtLib.Lexer.Cursor
-import all BSmtLib.Token.Reserved
+import all BSmtLib.Lexicon.Reserved
 import all BSmtLib.Lexer
 import all BSmtLib.Span
 
@@ -350,10 +350,10 @@ theorem ofUInt8_toUInt8 (c : Token.TokenCategory) : Token.TokenCategory.Internal
   cases c <;> rfl
 
 theorem reservedSlot_toByteArray (s : ByteSlice) (h : 0 < s.toByteArray.toByteSlice.size) :
-    Token.Reserved.Internal.reservedSlot s.toByteArray.toByteSlice h =
-      Token.Reserved.Internal.reservedSlot s (by rwa [size_toByteArray_toByteSlice] at h) := by
+    Lexicon.Reserved.Internal.reservedSlot s.toByteArray.toByteSlice h =
+      Lexicon.Reserved.Internal.reservedSlot s (by rwa [size_toByteArray_toByteSlice] at h) := by
   apply Fin.ext
-  simp only [Token.Reserved.Internal.reservedSlot, getElem_toByteArray,
+  simp only [Lexicon.Reserved.Internal.reservedSlot, getElem_toByteArray,
       size_toByteArray_toByteSlice]
 
 theorem slotOf_toByteArray (s : ByteSlice) : slotOf s.toByteArray.toByteSlice = slotOf s := by
@@ -367,10 +367,10 @@ theorem slotOf_toByteArray (s : ByteSlice) : slotOf s.toByteArray.toByteSlice = 
 
 /-- The lookup of reserved words reads only the bytes of the slice. -/
 theorem fromBytes_toByteArray (s : ByteSlice) (v : Version) :
-    Token.Reserved.fromBytes? s.toByteArray.toByteSlice v = Token.Reserved.fromBytes? s v := by
+    Lexicon.Reserved.fromBytes? s.toByteArray.toByteSlice v = Lexicon.Reserved.fromBytes? s v := by
   by_cases h0 : s.size = 0
   · have h0' : s.toByteArray.toByteSlice.size = 0 := by rw [size_toByteArray_toByteSlice]; exact h0
-    simp only [Token.Reserved.fromBytes?, h0, h0', dite_true]
+    simp only [Lexicon.Reserved.fromBytes?, h0, h0', dite_true]
   · have h0' : s.toByteArray.toByteSlice.size ≠ 0 := by rw [size_toByteArray_toByteSlice]; exact h0
     rw [fromBytes_eq _ _ h0', fromBytes_eq _ _ h0, slotOf_toByteArray]
     simp only [beq_toByteArray]

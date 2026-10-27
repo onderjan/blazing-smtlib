@@ -31,7 +31,7 @@ open BSmtLibSpec BSmtLibSpec.Grammar
 open BSmtLibSpec.Parser.Properties
 open BSmtLibSpec.Lexer (Handed)
 open BSmtLib.Handler
-open BSmtLib.Parser (Parse ParseError ParseErrorCause ParseState)
+open BSmtLib.Parser (Parse ParseError ParseErrorKind ParseState)
 open BSmtLib.Lexer.Cursor.LexerCursor.Internal (remaining)
 open BSmtLib.Parser.Script (ScriptParser)
 open BSmtLib.Parser.Adapter (ParseAdapter)
