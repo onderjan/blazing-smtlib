@@ -155,21 +155,21 @@ macro_rules! command_starts {
         }
         fn start_define_fun(
             &mut self,
-            _signature: SmtFunctionSignature<'_, ()>,
+            _signature: SmtFunctionSignature<'_, Self>,
         ) -> Result<(), Error> {
             self.log.push("start_define_fun");
             Ok(())
         }
         fn start_define_fun_rec(
             &mut self,
-            _signature: SmtFunctionSignature<'_, ()>,
+            _signature: SmtFunctionSignature<'_, Self>,
         ) -> Result<(), Error> {
             self.log.push("start_define_fun_rec");
             Ok(())
         }
         fn start_define_funs_rec(
             &mut self,
-            _signatures: SmtFunctionSignatures<'_, ()>,
+            _signatures: SmtFunctionSignatures<'_, Self>,
         ) -> Result<(), Error> {
             self.log.push("start_define_funs_rec");
             Ok(())
@@ -197,7 +197,7 @@ macro_rules! inner_starts {
     () => {
         fn start_recursive_body(
             &mut self,
-            _signature: SmtFunctionSignature<'_, ()>,
+            _signature: SmtFunctionSignature<'_, Self>,
         ) -> Result<(), Error> {
             self.log.push("start_recursive_body");
             Ok(())
@@ -221,7 +221,7 @@ macro_rules! inner_ends {
         }
         fn end_datatype_declaration(
             &mut self,
-            _constructors: blazing_smtlib::grammar::SmtConstructors<'_, ()>,
+            _constructors: blazing_smtlib::grammar::SmtConstructors<'_, Self>,
         ) -> Result<(), Error> {
             self.log.push("end_datatype_declaration");
             Ok(())

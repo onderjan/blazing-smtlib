@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
-    SmtHandler,
+    SmtNodeTypes,
     grammar::SmtMultiple,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigits, SmtHexDigitsBuf,
@@ -52,12 +52,12 @@ impl SmtIdentBuf {
 }
 
 /// Owned qualified identifier.
-pub struct SmtQualifiedIdentBuf<H: SmtHandler + ?Sized> {
+pub struct SmtQualifiedIdentBuf<N: SmtNodeTypes + ?Sized> {
     pub ident: SmtIdentBuf,
-    pub sort: Option<H::Sort>,
+    pub sort: Option<N::Sort>,
 }
 
-impl<H: SmtHandler + ?Sized> SmtQualifiedIdentBuf<H> {
+impl<N: SmtNodeTypes + ?Sized> SmtQualifiedIdentBuf<N> {
     pub fn new_simple(name: SmtSymbolBuf) -> Self {
         Self::new_unqualified(SmtIdentBuf::new_simple(name))
     }
@@ -66,7 +66,7 @@ impl<H: SmtHandler + ?Sized> SmtQualifiedIdentBuf<H> {
         Self { ident, sort: None }
     }
 
-    pub fn new_qualified(ident: SmtIdentBuf, sort: H::Sort) -> Self {
+    pub fn new_qualified(ident: SmtIdentBuf, sort: N::Sort) -> Self {
         Self {
             ident,
             sort: Some(sort),
@@ -74,9 +74,9 @@ impl<H: SmtHandler + ?Sized> SmtQualifiedIdentBuf<H> {
     }
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdentBuf<H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtQualifiedIdentBuf<N>
 where
-    H::Sort: Debug,
+    N::Sort: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SmtQualifiedIdentBuf")
@@ -86,9 +86,9 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdentBuf<H>
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtQualifiedIdentBuf<N>
 where
-    H::Sort: Clone,
+    N::Sort: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -243,13 +243,13 @@ impl SmtIdent<'_> {
 }
 
 /// View of a qualified identifier.
-pub struct SmtQualifiedIdent<'a, H: SmtHandler + ?Sized> {
+pub struct SmtQualifiedIdent<'a, N: SmtNodeTypes + ?Sized> {
     pub ident: SmtIdent<'a>,
-    pub sort: Option<H::Sort>,
+    pub sort: Option<N::Sort>,
 }
 
-impl<H: SmtHandler + ?Sized> SmtQualifiedIdent<'_, H> {
-    pub fn into_owned(self) -> SmtQualifiedIdentBuf<H> {
+impl<N: SmtNodeTypes + ?Sized> SmtQualifiedIdent<'_, N> {
+    pub fn into_owned(self) -> SmtQualifiedIdentBuf<N> {
         SmtQualifiedIdentBuf {
             ident: self.ident.into_owned(),
             sort: self.sort,
@@ -257,9 +257,9 @@ impl<H: SmtHandler + ?Sized> SmtQualifiedIdent<'_, H> {
     }
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtQualifiedIdent<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtQualifiedIdent<'_, N>
 where
-    H::Sort: Debug,
+    N::Sort: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SmtQualifiedIdent")
@@ -269,9 +269,9 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtQualifiedIdent<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtQualifiedIdent<'_, N>
 where
-    H::Sort: Clone,
+    N::Sort: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -282,14 +282,14 @@ where
 }
 
 /// View of a sort.
-pub struct SmtSort<'a, H: SmtHandler + ?Sized> {
+pub struct SmtSort<'a, N: SmtNodeTypes + ?Sized> {
     pub ident: SmtIdent<'a>,
-    pub args: SmtMultiple<'a, H::Sort>,
+    pub args: SmtMultiple<'a, N::Sort>,
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtSort<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtSort<'_, N>
 where
-    H::Sort: Debug,
+    N::Sort: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SmtSort")
@@ -302,15 +302,15 @@ where
 /// View of an application.
 ///
 /// It is guaranteed that `args` are nonempty.
-pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
-    function: SmtQualifiedIdent<'a, H>,
-    args: SmtMultiple<'a, H::Term>,
+pub struct SmtApplication<'a, N: SmtNodeTypes + ?Sized> {
+    function: SmtQualifiedIdent<'a, N>,
+    args: SmtMultiple<'a, N::Term>,
 }
 
-impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
+impl<'a, N: SmtNodeTypes + ?Sized> SmtApplication<'a, N> {
     pub fn new(
-        function: SmtQualifiedIdent<'a, H>,
-        args: SmtMultiple<'a, H::Term>,
+        function: SmtQualifiedIdent<'a, N>,
+        args: SmtMultiple<'a, N::Term>,
     ) -> Result<Self, SmtEmptyArgumentsError> {
         if args.is_empty() {
             return Err(SmtEmptyArgumentsError);
@@ -320,30 +320,30 @@ impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
 
     #[inline]
     pub(crate) fn new_unchecked(
-        function: SmtQualifiedIdent<'a, H>,
-        args: SmtMultiple<'a, H::Term>,
+        function: SmtQualifiedIdent<'a, N>,
+        args: SmtMultiple<'a, N::Term>,
     ) -> Self {
         debug_assert!(!args.is_empty(), "an application without arguments");
         Self { function, args }
     }
 
-    pub fn function(&self) -> &SmtQualifiedIdent<'a, H> {
+    pub fn function(&self) -> &SmtQualifiedIdent<'a, N> {
         &self.function
     }
 
-    pub fn function_mut(&mut self) -> &mut SmtQualifiedIdent<'a, H> {
+    pub fn function_mut(&mut self) -> &mut SmtQualifiedIdent<'a, N> {
         &mut self.function
     }
 
-    pub fn args(&self) -> &SmtMultiple<'a, H::Term> {
+    pub fn args(&self) -> &SmtMultiple<'a, N::Term> {
         &self.args
     }
 
-    pub fn args_mut(&mut self) -> &mut [H::Term] {
+    pub fn args_mut(&mut self) -> &mut [N::Term] {
         self.args.as_mut_slice()
     }
 
-    pub fn into_parts(self) -> (SmtQualifiedIdent<'a, H>, SmtMultiple<'a, H::Term>) {
+    pub fn into_parts(self) -> (SmtQualifiedIdent<'a, N>, SmtMultiple<'a, N::Term>) {
         (self.function, self.args)
     }
 }
@@ -360,10 +360,10 @@ impl std::fmt::Display for SmtEmptyArgumentsError {
 
 impl std::error::Error for SmtEmptyArgumentsError {}
 
-impl<H: SmtHandler + ?Sized> Debug for SmtApplication<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtApplication<'_, N>
 where
-    H::Sort: Debug,
-    H::Term: Debug,
+    N::Sort: Debug,
+    N::Term: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SmtApplication")
@@ -418,10 +418,10 @@ impl SmtSpecialConstant<'_> {
 }
 
 /// View of a term (special constant, qualified identifier, or application).
-pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
+pub enum SmtTerm<'a, N: SmtNodeTypes + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
-    QualifiedIdent(SmtQualifiedIdent<'a, H>),
-    Application(SmtApplication<'a, H>),
+    QualifiedIdent(SmtQualifiedIdent<'a, N>),
+    Application(SmtApplication<'a, N>),
 }
 
 /// Kind of a quantifier (existential or universal).
@@ -431,10 +431,10 @@ pub enum SmtQuantifierKind {
     Forall,
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtTerm<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtTerm<'_, N>
 where
-    H::Sort: Debug,
-    H::Term: Debug,
+    N::Sort: Debug,
+    N::Term: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -446,15 +446,15 @@ where
 }
 
 /// View of an attribute value (special constant, symbol, or a list of S-expressions).
-pub enum SmtAttributeValue<'a, H: SmtHandler + ?Sized> {
+pub enum SmtAttributeValue<'a, N: SmtNodeTypes + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     Symbol(SmtSymbol<'a>),
-    SExprs(SmtMultiple<'a, H::SExpr>),
+    SExprs(SmtMultiple<'a, N::SExpr>),
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtAttributeValue<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtAttributeValue<'_, N>
 where
-    H::SExpr: Debug,
+    N::SExpr: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -551,17 +551,17 @@ impl SmtPatternApplicationBuf {
 
 /// View of an S-expression (special constant, symbol, reserved word, keyword, or a list of
 /// S-expressions).
-pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
+pub enum SmtSExpr<'a, N: SmtNodeTypes + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     Symbol(SmtSymbol<'a>),
     Reserved(SmtReserved),
     Keyword(SmtKeyword<'a>),
-    SExprs(SmtMultiple<'a, H::SExpr>),
+    SExprs(SmtMultiple<'a, N::SExpr>),
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtSExpr<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtSExpr<'_, N>
 where
-    H::SExpr: Debug,
+    N::SExpr: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -893,27 +893,27 @@ append_tokens_by_view!(
 );
 append_tokens_by_view!(SmtPattern, SmtPatternBuf, append_pattern);
 
-impl<H: SmtHandler + ?Sized> SmtAppendTokens for SmtQualifiedIdent<'_, H>
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtQualifiedIdent<'_, N>
 where
-    H::Sort: SmtAppendTokens,
+    N::Sort: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         append_qualified_ident(self.ident, self.sort.as_ref(), tokens);
     }
 }
 
-impl<H: SmtHandler + ?Sized> SmtAppendTokens for SmtQualifiedIdentBuf<H>
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtQualifiedIdentBuf<N>
 where
-    H::Sort: SmtAppendTokens,
+    N::Sort: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         append_qualified_ident(self.ident.view(), self.sort.as_ref(), tokens);
     }
 }
 
-impl<H: SmtHandler + ?Sized> SmtAppendTokens for SmtSort<'_, H>
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtSort<'_, N>
 where
-    H::Sort: SmtAppendTokens,
+    N::Sort: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         if self.args.is_empty() {
@@ -929,10 +929,10 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> SmtAppendTokens for SmtApplication<'_, H>
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtApplication<'_, N>
 where
-    H::Sort: SmtAppendTokens,
-    H::Term: SmtAppendTokens,
+    N::Sort: SmtAppendTokens,
+    N::Term: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         // use the application syntax: ( function term+ )
@@ -943,10 +943,10 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> SmtAppendTokens for SmtTerm<'_, H>
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtTerm<'_, N>
 where
-    H::Sort: SmtAppendTokens,
-    H::Term: SmtAppendTokens,
+    N::Sort: SmtAppendTokens,
+    N::Term: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         match self {
@@ -957,9 +957,9 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> SmtAppendTokens for SmtAttributeValue<'_, H>
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtAttributeValue<'_, N>
 where
-    H::SExpr: SmtAppendTokens,
+    N::SExpr: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         match self {
@@ -975,9 +975,9 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> SmtAppendTokens for SmtSExpr<'_, H>
+impl<N: SmtNodeTypes + ?Sized> SmtAppendTokens for SmtSExpr<'_, N>
 where
-    H::SExpr: SmtAppendTokens,
+    N::SExpr: SmtAppendTokens,
 {
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>) {
         match self {

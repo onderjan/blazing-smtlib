@@ -427,29 +427,29 @@ impl<H: SmtHandler + ?Sized> Arena<H> {
             }
         }
     }
+}
 
-    /// Views a match pattern.
-    #[inline]
-    pub(crate) fn pattern_view<'a>(
-        text: &'a [u8],
-        simple_patterns: &'a [SimplePatternHandle],
-        pattern: &PatternHandleBuf,
-    ) -> SmtPattern<'a> {
-        match pattern {
-            PatternHandleBuf::Simple(simple) => SmtPattern::Simple(simple.view(text)),
-            PatternHandleBuf::Application {
-                constructor,
-                args_start,
-                args_end,
-            } => SmtPattern::Application(SmtPatternApplication::new_unchecked(
-                constructor.symbol_view(text),
-                SmtSimplePatterns::new(
-                    ArenaAccess { _priv: () },
-                    text,
-                    &simple_patterns[*args_start..*args_end],
-                ),
-            )),
-        }
+/// Views a match pattern.
+#[inline]
+pub(crate) fn pattern_view<'a>(
+    text: &'a [u8],
+    simple_patterns: &'a [SimplePatternHandle],
+    pattern: &PatternHandleBuf,
+) -> SmtPattern<'a> {
+    match pattern {
+        PatternHandleBuf::Simple(simple) => SmtPattern::Simple(simple.view(text)),
+        PatternHandleBuf::Application {
+            constructor,
+            args_start,
+            args_end,
+        } => SmtPattern::Application(SmtPatternApplication::new_unchecked(
+            constructor.symbol_view(text),
+            SmtSimplePatterns::new(
+                ArenaAccess { _priv: () },
+                text,
+                &simple_patterns[*args_start..*args_end],
+            ),
+        )),
     }
 }
 

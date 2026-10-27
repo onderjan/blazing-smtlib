@@ -12,7 +12,7 @@ use crate::{
         SimplePatternHandle, SmtCloseParenParser, SmtNonEmptyList, SmtOpenParenParser, SmtParse,
         SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected,
         category::{attribute::MultipleAttributes, parse_special_constant},
-        expected, handle_err,
+        expected, handle_err, pattern_view,
     },
     token::{SmtCursor, SmtGeneralReserved, SmtLookahead, SmtReserved, SmtToken},
 };
@@ -736,7 +736,7 @@ impl<H: SmtHandler> TermSlot<H> {
 
                     // handle the match case start
                     let arena = &parse_state.arena;
-                    let view = Arena::<H>::pattern_view(
+                    let view = pattern_view(
                         &arena.text,
                         &arena.simple_patterns,
                         arena

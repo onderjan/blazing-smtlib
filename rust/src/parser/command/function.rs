@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler,
+    SmtCommandHandler, SmtNodeTypes,
     grammar::SmtFunctionSignaturesBuf,
     lexicon::SmtSymbolBuf,
     parser::{
@@ -22,7 +22,10 @@ pub(crate) struct FunctionSignature<S> {
 
 impl<S> FunctionSignature<S> {
     /// Pushes the signature into `signatures`, from which it is viewed.
-    pub(crate) fn push_into(self, signatures: &mut SmtFunctionSignaturesBuf<S>) {
+    pub(crate) fn push_into<N: SmtNodeTypes<Sort = S> + ?Sized>(
+        self,
+        signatures: &mut SmtFunctionSignaturesBuf<N>,
+    ) {
         signatures.push(self.name.view(), self.result_sort);
         for (name, sort) in self.params {
             signatures.push_param(name.view(), sort);
@@ -80,7 +83,7 @@ pub(super) struct RecursiveBodyParser<H: SmtCommandHandler> {
     is_inner: bool,
     term_parser: SmtTermParser<H>,
     /// The signatures of the command, one per body, in order.
-    signatures: SmtFunctionSignaturesBuf<H::Sort>,
+    signatures: SmtFunctionSignaturesBuf<H>,
     /// The index of the body being parsed or about to be.
     index: usize,
 }
@@ -96,7 +99,7 @@ impl<H: SmtCommandHandler> RecursiveBodyParser<H> {
     }
 
     /// Takes the signatures of a command; the first body comes next.
-    fn reset_signatures(&mut self) -> &mut SmtFunctionSignaturesBuf<H::Sort> {
+    fn reset_signatures(&mut self) -> &mut SmtFunctionSignaturesBuf<H> {
         self.signatures.clear();
         self.index = 0;
         &mut self.signatures

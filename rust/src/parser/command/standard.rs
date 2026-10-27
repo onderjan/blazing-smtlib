@@ -264,7 +264,7 @@ standard_commands! {
 impl<H: SmtCommandHandler> Definition<H> for DefineFun {
     type Signature = FunctionSignatureParser<H>;
     type Body = SmtTermParser<H>;
-    type Buffer = SmtFunctionSignaturesBuf<H::Sort>;
+    type Buffer = SmtFunctionSignaturesBuf<H>;
 
     fn start(
         handler: &mut H,
@@ -301,7 +301,7 @@ impl<H: SmtCommandHandler> Definition<H> for DefineSort {
 impl<H: SmtCommandHandler> Definition<H> for DefineFunRec {
     type Signature = FunctionSignatureParser<H>;
     type Body = SmtTermParser<H>;
-    type Buffer = SmtFunctionSignaturesBuf<H::Sort>;
+    type Buffer = SmtFunctionSignaturesBuf<H>;
 
     fn start(
         handler: &mut H,

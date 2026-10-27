@@ -4,7 +4,7 @@
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtCommandHandler, SmtHandler, SmtVersion,
+    SmtCommandHandler, SmtHandler, SmtNodeTypes, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtIdent,
         SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern, SmtQualifiedIdent,
@@ -39,7 +39,9 @@ fn sorted_vars<S>(vars: SmtNamedValues<'_, S>) -> SortedVars<S> {
         .collect()
 }
 
-fn signature<'a, S>(view: SmtFunctionSignature<'a, S>) -> Signature<'a, S> {
+fn signature<'a, N: SmtNodeTypes + ?Sized>(
+    view: SmtFunctionSignature<'a, N>,
+) -> Signature<'a, N::Sort> {
     Signature {
         name: view.name().into_owned(),
         params: view
@@ -50,9 +52,9 @@ fn signature<'a, S>(view: SmtFunctionSignature<'a, S>) -> Signature<'a, S> {
     }
 }
 
-fn constructors<S>(
-    view: SmtConstructors<'_, S>,
-) -> Vec<(blazing_smtlib::lexicon::SmtSymbolBuf, SortedVars<S>)> {
+fn constructors<N: SmtNodeTypes + ?Sized>(
+    view: SmtConstructors<'_, N>,
+) -> Vec<(blazing_smtlib::lexicon::SmtSymbolBuf, SortedVars<N::Sort>)> {
     view.into_iter()
         .map(|(name, selectors)| (name.into_owned(), sorted_vars(selectors)))
         .collect()
@@ -410,7 +412,7 @@ impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
 
     fn start_define_fun(
         &mut self,
-        signature_view: SmtFunctionSignature<'_, H::Sort>,
+        signature_view: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), H::Error> {
         self.0.start_define_fun(signature(signature_view))
     }
@@ -430,7 +432,7 @@ impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
 
     fn start_define_fun_rec(
         &mut self,
-        signature_view: SmtFunctionSignature<'_, H::Sort>,
+        signature_view: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), H::Error> {
         self.0.start_define_fun_rec(signature(signature_view))
     }
@@ -441,7 +443,7 @@ impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
 
     fn start_define_funs_rec(
         &mut self,
-        signatures: SmtFunctionSignatures<'_, H::Sort>,
+        signatures: SmtFunctionSignatures<'_, Self>,
     ) -> Result<(), H::Error> {
         self.0
             .start_define_funs_rec(signatures.into_iter().map(signature).collect())
@@ -453,7 +455,7 @@ impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
 
     fn start_recursive_body(
         &mut self,
-        signature_view: SmtFunctionSignature<'_, H::Sort>,
+        signature_view: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), H::Error> {
         self.0.start_recursive_body(signature(signature_view))
     }
@@ -473,7 +475,7 @@ impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
 
     fn end_declare_datatype(
         &mut self,
-        constructors_view: SmtConstructors<'_, H::Sort>,
+        constructors_view: SmtConstructors<'_, Self>,
     ) -> Result<(), H::Error> {
         self.0.end_declare_datatype(constructors(constructors_view))
     }
@@ -500,7 +502,7 @@ impl<'h, H: CommandHandler> SmtCommandHandler for Adapt<'h, H> {
 
     fn end_datatype_declaration(
         &mut self,
-        constructors_view: SmtConstructors<'_, H::Sort>,
+        constructors_view: SmtConstructors<'_, Self>,
     ) -> Result<(), H::Error> {
         self.0
             .end_datatype_declaration(constructors(constructors_view))

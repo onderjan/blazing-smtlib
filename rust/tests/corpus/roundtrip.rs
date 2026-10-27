@@ -19,7 +19,8 @@ use std::{
 };
 
 use blazing_smtlib::{
-    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtReadError, SmtVersion,
+    SmtCommandHandler, SmtHandler, SmtNodeTypes, SmtNonstandardCommandError, SmtReadError,
+    SmtVersion,
     grammar::{
         SmtAttributeValue, SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtIdent,
         SmtIndex, SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern, SmtQuantifierKind,
@@ -308,7 +309,10 @@ fn sorted_vars<'v>(
 }
 
 /// Writes a signature as `f ((x S)) R`.
-fn signature(out: &mut Vec<u8>, signature: SmtFunctionSignature<'_, Vec<u8>>) {
+fn signature<N: SmtNodeTypes<Sort = Vec<u8>> + ?Sized>(
+    out: &mut Vec<u8>,
+    signature: SmtFunctionSignature<'_, N>,
+) {
     symbol(out, signature.name());
     out.push(b' ');
     sorted_vars(out, signature.params());
@@ -317,7 +321,10 @@ fn signature(out: &mut Vec<u8>, signature: SmtFunctionSignature<'_, Vec<u8>>) {
 }
 
 /// Writes constructors as `(c (s S)) (d)`, separated by spaces.
-fn constructors(out: &mut Vec<u8>, constructors: SmtConstructors<'_, Vec<u8>>) {
+fn constructors<N: SmtNodeTypes<Sort = Vec<u8>> + ?Sized>(
+    out: &mut Vec<u8>,
+    constructors: SmtConstructors<'_, N>,
+) {
     for (i, (name, selectors)) in constructors.into_iter().enumerate() {
         if i > 0 {
             out.push(b' ');
@@ -836,7 +843,7 @@ impl SmtCommandHandler for Reprint {
         self.close_open(&tail)
     }
 
-    fn start_define_fun(&mut self, sig: SmtFunctionSignature<'_, Text>) -> Res<()> {
+    fn start_define_fun(&mut self, sig: SmtFunctionSignature<'_, Self>) -> Res<()> {
         self.open.extend_from_slice(b"(define-fun ");
         signature(&mut self.open, sig);
         self.open.push(b' ');
@@ -861,7 +868,7 @@ impl SmtCommandHandler for Reprint {
         })
     }
 
-    fn start_define_fun_rec(&mut self, sig: SmtFunctionSignature<'_, Text>) -> Res<()> {
+    fn start_define_fun_rec(&mut self, sig: SmtFunctionSignature<'_, Self>) -> Res<()> {
         self.open.extend_from_slice(b"(define-fun-rec ");
         signature(&mut self.open, sig);
         self.open.push(b' ');
@@ -874,7 +881,7 @@ impl SmtCommandHandler for Reprint {
         self.close_open(&tail)
     }
 
-    fn start_define_funs_rec(&mut self, signatures: SmtFunctionSignatures<'_, Text>) -> Res<()> {
+    fn start_define_funs_rec(&mut self, signatures: SmtFunctionSignatures<'_, Self>) -> Res<()> {
         let open = &mut self.open;
         open.extend_from_slice(b"(define-funs-rec (");
         for (i, sig) in signatures.iter().enumerate() {
@@ -889,7 +896,7 @@ impl SmtCommandHandler for Reprint {
         Ok(())
     }
 
-    fn start_recursive_body(&mut self, _signature: SmtFunctionSignature<'_, Text>) -> Res<()> {
+    fn start_recursive_body(&mut self, _signature: SmtFunctionSignature<'_, Self>) -> Res<()> {
         Ok(())
     }
 
@@ -918,7 +925,7 @@ impl SmtCommandHandler for Reprint {
         Ok(())
     }
 
-    fn end_declare_datatype(&mut self, list: SmtConstructors<'_, Text>) -> Res<()> {
+    fn end_declare_datatype(&mut self, list: SmtConstructors<'_, Self>) -> Res<()> {
         constructors(&mut self.open, list);
         let tail: &[u8] = if self.parametric { b")))" } else { b"))" };
         self.close_open(tail)
@@ -957,7 +964,7 @@ impl SmtCommandHandler for Reprint {
         Ok(())
     }
 
-    fn end_datatype_declaration(&mut self, list: SmtConstructors<'_, Text>) -> Res<()> {
+    fn end_datatype_declaration(&mut self, list: SmtConstructors<'_, Self>) -> Res<()> {
         let open = &mut self.open;
         constructors(open, list);
         open.extend_from_slice(if self.parametric { b")) " } else { b") " });

@@ -17,7 +17,7 @@
 use std::convert::Infallible;
 
 use blazing_smtlib::{
-    SmtCommandHandler, SmtHandler, SmtNonstandardCommandError, SmtVersion,
+    SmtCommandHandler, SmtHandler, SmtNodeTypes, SmtNonstandardCommandError, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtConstructors, SmtFunctionSignature, SmtFunctionSignatures, SmtIdent,
         SmtIndex, SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern, SmtQuantifierKind,
@@ -211,7 +211,10 @@ impl TraceHash {
         }
     }
 
-    fn constructors(&mut self, constructors: SmtConstructors<'_, u64>) {
+    fn constructors<N: SmtNodeTypes<Sort = u64> + ?Sized>(
+        &mut self,
+        constructors: SmtConstructors<'_, N>,
+    ) {
         self.count(constructors.len());
         for (name, selectors) in constructors {
             self.symbol(name);
@@ -223,7 +226,10 @@ impl TraceHash {
         }
     }
 
-    fn signature(&mut self, signature: SmtFunctionSignature<'_, u64>) {
+    fn signature<N: SmtNodeTypes<Sort = u64> + ?Sized>(
+        &mut self,
+        signature: SmtFunctionSignature<'_, N>,
+    ) {
         self.symbol(signature.name());
         self.count(signature.params().len());
         for (name, sort) in signature.params() {
@@ -655,7 +661,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_define_fun_rec(
         &mut self,
-        signature: SmtFunctionSignature<'_, u64>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DEFINE_FUN_REC);
         self.signature(signature);
@@ -681,7 +687,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn end_declare_datatype(
         &mut self,
-        constructors: SmtConstructors<'_, u64>,
+        constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::END_DECLARE_DATATYPE);
         self.constructors(constructors);
@@ -734,7 +740,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_define_fun(
         &mut self,
-        signature: SmtFunctionSignature<'_, u64>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DEFINE_FUN);
         self.signature(signature);
@@ -749,7 +755,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_define_funs_rec(
         &mut self,
-        signatures: SmtFunctionSignatures<'_, u64>,
+        signatures: SmtFunctionSignatures<'_, Self>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_DEFINE_FUNS_REC);
         self.count(signatures.len());
@@ -761,7 +767,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn start_recursive_body(
         &mut self,
-        signature: SmtFunctionSignature<'_, u64>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::START_RECURSIVE_BODY);
         self.signature(signature);
@@ -803,7 +809,7 @@ impl SmtCommandHandler for TraceHash {
 
     fn end_datatype_declaration(
         &mut self,
-        constructors: SmtConstructors<'_, u64>,
+        constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         self.byte(tag::END_DATATYPE_DECLARATION);
         self.constructors(constructors);

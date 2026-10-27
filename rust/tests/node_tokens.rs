@@ -9,11 +9,11 @@ use std::convert::Infallible;
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtVersion,
+    SmtHandler, SmtNodeTypes, SmtPartialCommandError, SmtPartialCommandHandler, SmtVersion,
     grammar::{
-        SmtAttributeValue, SmtIndicesBuf, SmtMatchCases, SmtMultiple, SmtNamedValues,
-        SmtNamedValuesBuf, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort,
-        SmtTerm,
+        SmtApplication, SmtAttributeValue, SmtIdent, SmtIndices, SmtIndicesBuf, SmtMatchCases,
+        SmtMultiple, SmtNamedValues, SmtNamedValuesBuf, SmtPattern, SmtQualifiedIdent,
+        SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort, SmtTerm,
     },
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{SmtKeyword, SmtSymbol},
@@ -407,4 +407,31 @@ fn a_list_appends_its_values_without_enclosing_parentheses() {
     assert_same_tokens(&named, &lexed("(x Int) (y (List Int))"));
     // an empty one appends nothing
     assert_same_tokens(&SmtNamedValuesBuf::<SmtTokensBuf>::new(), &lexed(""));
+}
+
+/// Node types of a program that builds terms to write them, without handling any.
+struct WrittenNodes;
+
+impl SmtNodeTypes for WrittenNodes {
+    type SExpr = SmtTokensBuf;
+    type Sort = SmtTokensBuf;
+    type Term = SmtTokensBuf;
+}
+
+/// Tests the Rust interface itself: a term is built from node types alone, without a handler,
+/// and appends its tokens. Calls the library directly.
+#[test]
+fn a_term_built_without_a_handler_appends_its_tokens() {
+    let mut args = vec![lexed("a"), lexed("(g b)")];
+    let function = SmtQualifiedIdent::<WrittenNodes> {
+        ident: SmtIdent {
+            name: SmtSymbol::new_unquoted(b"f").unwrap(),
+            indices: SmtIndices::empty(),
+        },
+        sort: Some(lexed("Int")),
+    };
+    let application = SmtApplication::new(function, SmtMultiple::new(&mut args))
+        .expect("the application has arguments");
+    let term = SmtTerm::<WrittenNodes>::Application(application);
+    assert_same_tokens(&term, &lexed("((as f Int) a (g b))"));
 }

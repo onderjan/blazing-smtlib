@@ -6,10 +6,12 @@ use std::{
 };
 
 use crate::{
-    SmtHandler,
+    SmtNodeTypes,
     grammar::SmtPattern,
     lexicon::{SmtNumeral, SmtSymbol},
-    parser::{Arena, ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle, TextHandle},
+    parser::{
+        ArenaAccess, PatternHandleBuf, SimplePatternHandle, SymbolHandle, TextHandle, pattern_view,
+    },
     token::{SmtAppendTokens, SmtToken, SmtTokensCursor},
 };
 
@@ -180,12 +182,12 @@ pub struct SmtNamedValues<'a, V> {
 /// View of let bindings.
 ///
 /// It holds the names with their terms.
-pub type SmtBindings<'a, T> = SmtNamedValues<'a, T>;
+pub type SmtBindings<'a, N> = SmtNamedValues<'a, <N as SmtNodeTypes>::Term>;
 
 /// View of sorted variables.
 ///
 /// It holds the names with their sorts.
-pub type SmtSortedVars<'a, S> = SmtNamedValues<'a, S>;
+pub type SmtSortedVars<'a, N> = SmtNamedValues<'a, <N as SmtNodeTypes>::Sort>;
 
 impl<'a, V> SmtNamedValues<'a, V> {
     pub(crate) fn new(
@@ -372,20 +374,20 @@ impl<V: Debug> Debug for SmtNamedValuesBuf<V> {
 }
 
 /// View of match cases.
-pub struct SmtMatchCases<'a, H: SmtHandler + ?Sized> {
+pub struct SmtMatchCases<'a, N: SmtNodeTypes + ?Sized> {
     text: &'a [u8],
     simple_patterns: &'a [SimplePatternHandle],
     patterns: SmtMultiple<'a, PatternHandleBuf>,
-    terms: SmtMultiple<'a, H::Term>,
+    terms: SmtMultiple<'a, N::Term>,
 }
 
-impl<'a, H: SmtHandler + ?Sized> SmtMatchCases<'a, H> {
+impl<'a, N: SmtNodeTypes + ?Sized> SmtMatchCases<'a, N> {
     pub(crate) fn new(
         _access: ArenaAccess,
         text: &'a [u8],
         simple_patterns: &'a [SimplePatternHandle],
         patterns: SmtMultiple<'a, PatternHandleBuf>,
-        terms: SmtMultiple<'a, H::Term>,
+        terms: SmtMultiple<'a, N::Term>,
     ) -> Self {
         debug_assert!(
             patterns.len() == terms.len(),
@@ -410,48 +412,45 @@ impl<'a, H: SmtHandler + ?Sized> SmtMatchCases<'a, H> {
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Option<(SmtPattern<'a>, &H::Term)> {
-        let pattern =
-            Arena::<H>::pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
+    pub fn get(&self, index: usize) -> Option<(SmtPattern<'a>, &N::Term)> {
+        let pattern = pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
         Some((pattern, &self.terms[index]))
     }
 
     #[inline]
-    pub fn get_mut(&mut self, index: usize) -> Option<(SmtPattern<'a>, &mut H::Term)> {
-        let pattern =
-            Arena::<H>::pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
+    pub fn get_mut(&mut self, index: usize) -> Option<(SmtPattern<'a>, &mut N::Term)> {
+        let pattern = pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
         Some((pattern, &mut self.terms[index]))
     }
 
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &H::Term)> {
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &N::Term)> {
         self.patterns
             .iter()
-            .map(|pattern| Arena::<H>::pattern_view(self.text, self.simple_patterns, pattern))
+            .map(|pattern| pattern_view(self.text, self.simple_patterns, pattern))
             .zip(self.terms.iter())
     }
 
-    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &mut H::Term)> {
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &mut N::Term)> {
         self.patterns
             .iter()
-            .map(|pattern| Arena::<H>::pattern_view(self.text, self.simple_patterns, pattern))
+            .map(|pattern| pattern_view(self.text, self.simple_patterns, pattern))
             .zip(self.terms.iter_mut())
     }
 }
 
 /// Iterator that moves match cases out in order.
-pub struct SmtMatchCasesIntoIter<'a, H: SmtHandler + ?Sized> {
+pub struct SmtMatchCasesIntoIter<'a, N: SmtNodeTypes + ?Sized> {
     text: &'a [u8],
     simple_patterns: &'a [SimplePatternHandle],
     patterns: SmtMultipleIntoIter<'a, PatternHandleBuf>,
-    terms: SmtMultipleIntoIter<'a, H::Term>,
+    terms: SmtMultipleIntoIter<'a, N::Term>,
 }
 
-impl<'a, H: SmtHandler + ?Sized> Iterator for SmtMatchCasesIntoIter<'a, H> {
-    type Item = (SmtPattern<'a>, H::Term);
+impl<'a, N: SmtNodeTypes + ?Sized> Iterator for SmtMatchCasesIntoIter<'a, N> {
+    type Item = (SmtPattern<'a>, N::Term);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let pattern =
-            Arena::<H>::pattern_view(self.text, self.simple_patterns, &self.patterns.next()?);
+        let pattern = pattern_view(self.text, self.simple_patterns, &self.patterns.next()?);
         let term = self.terms.next()?;
         Some((pattern, term))
     }
@@ -461,11 +460,11 @@ impl<'a, H: SmtHandler + ?Sized> Iterator for SmtMatchCasesIntoIter<'a, H> {
     }
 }
 
-impl<H: SmtHandler + ?Sized> ExactSizeIterator for SmtMatchCasesIntoIter<'_, H> {}
+impl<N: SmtNodeTypes + ?Sized> ExactSizeIterator for SmtMatchCasesIntoIter<'_, N> {}
 
-impl<H: SmtHandler + ?Sized> Debug for SmtMatchCasesIntoIter<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtMatchCasesIntoIter<'_, N>
 where
-    H::Term: Debug,
+    N::Term: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let remaining: Vec<_> = self
@@ -473,7 +472,7 @@ where
             .0
             .as_slice()
             .iter()
-            .map(|pattern| Arena::<H>::pattern_view(self.text, self.simple_patterns, pattern))
+            .map(|pattern| pattern_view(self.text, self.simple_patterns, pattern))
             .zip(self.terms.0.as_slice())
             .collect();
         f.debug_tuple("SmtMatchCasesIntoIter")
@@ -482,18 +481,18 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtMatchCases<'_, H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtMatchCases<'_, N>
 where
-    H::Term: Debug,
+    N::Term: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
 }
 
-impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtMatchCases<'a, H> {
-    type Item = (SmtPattern<'a>, H::Term);
-    type IntoIter = SmtMatchCasesIntoIter<'a, H>;
+impl<'a, N: SmtNodeTypes + ?Sized> IntoIterator for SmtMatchCases<'a, N> {
+    type Item = (SmtPattern<'a>, N::Term);
+    type IntoIter = SmtMatchCasesIntoIter<'a, N>;
 
     fn into_iter(self) -> Self::IntoIter {
         SmtMatchCasesIntoIter {
@@ -506,14 +505,14 @@ impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtMatchCases<'a, H> {
 }
 
 /// Owned match cases.
-pub struct SmtMatchCasesBuf<H: SmtHandler + ?Sized> {
+pub struct SmtMatchCasesBuf<N: SmtNodeTypes + ?Sized> {
     text: Vec<u8>,
     simple_patterns: Vec<SimplePatternHandle>,
     patterns: Vec<PatternHandleBuf>,
-    terms: Vec<H::Term>,
+    terms: Vec<N::Term>,
 }
 
-impl<H: SmtHandler + ?Sized> SmtMatchCasesBuf<H> {
+impl<N: SmtNodeTypes + ?Sized> SmtMatchCasesBuf<N> {
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -523,7 +522,7 @@ impl<H: SmtHandler + ?Sized> SmtMatchCasesBuf<H> {
         }
     }
 
-    pub fn push(&mut self, pattern: SmtPattern, term: H::Term) {
+    pub fn push(&mut self, pattern: SmtPattern, term: N::Term) {
         let pattern = match pattern {
             SmtPattern::Simple(simple) => PatternHandleBuf::Simple(
                 SimplePatternHandle::create_by_push(&mut self.text, simple),
@@ -554,7 +553,7 @@ impl<H: SmtHandler + ?Sized> SmtMatchCasesBuf<H> {
         self.terms.clear();
     }
 
-    pub fn view_mut(&mut self) -> SmtMatchCases<'_, H> {
+    pub fn view_mut(&mut self) -> SmtMatchCases<'_, N> {
         SmtMatchCases {
             text: &self.text,
             simple_patterns: &self.simple_patterns,
@@ -572,15 +571,15 @@ impl<H: SmtHandler + ?Sized> SmtMatchCasesBuf<H> {
     }
 }
 
-impl<H: SmtHandler + ?Sized> Default for SmtMatchCasesBuf<H> {
+impl<N: SmtNodeTypes + ?Sized> Default for SmtMatchCasesBuf<N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H: SmtHandler + ?Sized> Clone for SmtMatchCasesBuf<H>
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtMatchCasesBuf<N>
 where
-    H::Term: Clone,
+    N::Term: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -592,15 +591,15 @@ where
     }
 }
 
-impl<H: SmtHandler + ?Sized> Debug for SmtMatchCasesBuf<H>
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtMatchCasesBuf<N>
 where
-    H::Term: Debug,
+    N::Term: Debug,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let cases = self
             .patterns
             .iter()
-            .map(|pattern| Arena::<H>::pattern_view(&self.text, &self.simple_patterns, pattern))
+            .map(|pattern| pattern_view(&self.text, &self.simple_patterns, pattern))
             .zip(self.terms.iter());
         f.debug_list().entries(cases).finish()
     }
@@ -747,30 +746,32 @@ impl Debug for SmtSymbolsBuf {
 /// It holds the name, the parameters with their sorts, and the result sort.
 ///
 /// The sorts are handed over by reference.
-pub struct SmtFunctionSignature<'a, S> {
+pub struct SmtFunctionSignature<'a, N: SmtNodeTypes + ?Sized> {
     text: &'a [u8],
     name: SymbolHandle,
     param_names: &'a [SymbolHandle],
-    param_sorts: &'a [S],
-    result_sort: &'a S,
+    param_sorts: &'a [N::Sort],
+    result_sort: &'a N::Sort,
 }
 
-impl<S> Clone for SmtFunctionSignature<'_, S> {
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtFunctionSignature<'_, N> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<S> Copy for SmtFunctionSignature<'_, S> {}
+impl<N: SmtNodeTypes + ?Sized> Copy for SmtFunctionSignature<'_, N> {}
 
-impl<'a, S> SmtFunctionSignature<'a, S> {
+impl<'a, N: SmtNodeTypes + ?Sized> SmtFunctionSignature<'a, N> {
     #[inline]
     pub fn name(&self) -> SmtSymbol<'a> {
         self.name.symbol_view(self.text)
     }
 
     /// The parameters with their sorts, in order.
-    pub fn params(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &'a S)> + use<'a, S> {
+    pub fn params(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &'a N::Sort)> + use<'a, N> {
         let text = self.text;
         self.param_names
             .iter()
@@ -779,12 +780,15 @@ impl<'a, S> SmtFunctionSignature<'a, S> {
     }
 
     #[inline]
-    pub fn result_sort(&self) -> &'a S {
+    pub fn result_sort(&self) -> &'a N::Sort {
         self.result_sort
     }
 }
 
-impl<S: Debug> Debug for SmtFunctionSignature<'_, S> {
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtFunctionSignature<'_, N>
+where
+    N::Sort: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SmtFunctionSignature")
             .field("name", &self.name())
@@ -799,19 +803,19 @@ impl<S: Debug> Debug for SmtFunctionSignature<'_, S> {
 /// For example, those of `define-funs-rec`.
 ///
 /// The sorts are handed over by reference.
-pub struct SmtFunctionSignatures<'a, S> {
-    buf: &'a SmtFunctionSignaturesBuf<S>,
+pub struct SmtFunctionSignatures<'a, N: SmtNodeTypes + ?Sized> {
+    buf: &'a SmtFunctionSignaturesBuf<N>,
 }
 
-impl<S> Clone for SmtFunctionSignatures<'_, S> {
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtFunctionSignatures<'_, N> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<S> Copy for SmtFunctionSignatures<'_, S> {}
+impl<N: SmtNodeTypes + ?Sized> Copy for SmtFunctionSignatures<'_, N> {}
 
-impl<'a, S> SmtFunctionSignatures<'a, S> {
+impl<'a, N: SmtNodeTypes + ?Sized> SmtFunctionSignatures<'a, N> {
     #[inline]
     pub fn len(&self) -> usize {
         self.buf.len()
@@ -823,11 +827,11 @@ impl<'a, S> SmtFunctionSignatures<'a, S> {
     }
 
     #[inline]
-    pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'a, S>> {
+    pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'a, N>> {
         self.buf.get(index)
     }
 
-    pub fn iter(&self) -> SmtFunctionSignaturesIter<'a, S> {
+    pub fn iter(&self) -> SmtFunctionSignaturesIter<'a, N> {
         SmtFunctionSignaturesIter {
             buf: self.buf,
             next: 0,
@@ -835,9 +839,9 @@ impl<'a, S> SmtFunctionSignatures<'a, S> {
     }
 }
 
-impl<'a, S> IntoIterator for SmtFunctionSignatures<'a, S> {
-    type Item = SmtFunctionSignature<'a, S>;
-    type IntoIter = SmtFunctionSignaturesIter<'a, S>;
+impl<'a, N: SmtNodeTypes + ?Sized> IntoIterator for SmtFunctionSignatures<'a, N> {
+    type Item = SmtFunctionSignature<'a, N>;
+    type IntoIter = SmtFunctionSignaturesIter<'a, N>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
@@ -845,13 +849,13 @@ impl<'a, S> IntoIterator for SmtFunctionSignatures<'a, S> {
 }
 
 /// Iterator over function signatures.
-pub struct SmtFunctionSignaturesIter<'a, S> {
-    buf: &'a SmtFunctionSignaturesBuf<S>,
+pub struct SmtFunctionSignaturesIter<'a, N: SmtNodeTypes + ?Sized> {
+    buf: &'a SmtFunctionSignaturesBuf<N>,
     next: usize,
 }
 
-impl<'a, S> Iterator for SmtFunctionSignaturesIter<'a, S> {
-    type Item = SmtFunctionSignature<'a, S>;
+impl<'a, N: SmtNodeTypes + ?Sized> Iterator for SmtFunctionSignaturesIter<'a, N> {
+    type Item = SmtFunctionSignature<'a, N>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let signature = self.buf.get(self.next)?;
@@ -865,9 +869,12 @@ impl<'a, S> Iterator for SmtFunctionSignaturesIter<'a, S> {
     }
 }
 
-impl<S> ExactSizeIterator for SmtFunctionSignaturesIter<'_, S> {}
+impl<N: SmtNodeTypes + ?Sized> ExactSizeIterator for SmtFunctionSignaturesIter<'_, N> {}
 
-impl<S: Debug> Debug for SmtFunctionSignaturesIter<'_, S> {
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtFunctionSignaturesIter<'_, N>
+where
+    N::Sort: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let remaining: Vec<_> = (self.next..self.buf.len())
             .filter_map(|index| self.buf.get(index))
@@ -878,7 +885,10 @@ impl<S: Debug> Debug for SmtFunctionSignaturesIter<'_, S> {
     }
 }
 
-impl<S: Debug> Debug for SmtFunctionSignatures<'_, S> {
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtFunctionSignatures<'_, N>
+where
+    N::Sort: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_list().entries(self.iter()).finish()
     }
@@ -887,18 +897,33 @@ impl<S: Debug> Debug for SmtFunctionSignatures<'_, S> {
 /// Owned function signatures.
 ///
 /// For example, those of `define-funs-rec`.
-#[derive(Clone)]
-pub struct SmtFunctionSignaturesBuf<S> {
+pub struct SmtFunctionSignaturesBuf<N: SmtNodeTypes + ?Sized> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
-    result_sorts: Vec<S>,
+    result_sorts: Vec<N::Sort>,
     /// Where the parameters of each signature start.
     param_starts: Vec<usize>,
     param_names: Vec<SymbolHandle>,
-    param_sorts: Vec<S>,
+    param_sorts: Vec<N::Sort>,
 }
 
-impl<S> SmtFunctionSignaturesBuf<S> {
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtFunctionSignaturesBuf<N>
+where
+    N::Sort: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            text: self.text.clone(),
+            names: self.names.clone(),
+            result_sorts: self.result_sorts.clone(),
+            param_starts: self.param_starts.clone(),
+            param_names: self.param_names.clone(),
+            param_sorts: self.param_sorts.clone(),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -911,7 +936,7 @@ impl<S> SmtFunctionSignaturesBuf<S> {
     }
 
     /// Starts a signature with no parameters; [Self::push_param] adds them.
-    pub fn push(&mut self, name: SmtSymbol, result_sort: S) {
+    pub fn push(&mut self, name: SmtSymbol, result_sort: N::Sort) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
         self.result_sorts.push(result_sort);
@@ -919,7 +944,7 @@ impl<S> SmtFunctionSignaturesBuf<S> {
     }
 
     /// Adds a parameter to the last signature pushed.
-    pub fn push_param(&mut self, name: SmtSymbol, sort: S) {
+    pub fn push_param(&mut self, name: SmtSymbol, sort: N::Sort) {
         assert!(
             !self.names.is_empty(),
             "a parameter must be pushed after its signature"
@@ -938,11 +963,11 @@ impl<S> SmtFunctionSignaturesBuf<S> {
         self.param_sorts.clear();
     }
 
-    pub fn view(&self) -> SmtFunctionSignatures<'_, S> {
+    pub fn view(&self) -> SmtFunctionSignatures<'_, N> {
         SmtFunctionSignatures { buf: self }
     }
 
-    pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'_, S>> {
+    pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'_, N>> {
         let name = *self.names.get(index)?;
         let start = self.param_starts[index];
         let end = self
@@ -968,13 +993,16 @@ impl<S> SmtFunctionSignaturesBuf<S> {
     }
 }
 
-impl<S> Default for SmtFunctionSignaturesBuf<S> {
+impl<N: SmtNodeTypes + ?Sized> Default for SmtFunctionSignaturesBuf<N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: Debug> Debug for SmtFunctionSignaturesBuf<S> {
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtFunctionSignaturesBuf<N>
+where
+    N::Sort: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.view(), f)
     }
@@ -1135,13 +1163,13 @@ impl Debug for SmtSortAritiesBuf {
 ///
 /// [IntoIterator] hands over each constructor with its selectors,
 /// whose sorts can be moved out.
-pub struct SmtConstructors<'a, S> {
+pub struct SmtConstructors<'a, N: SmtNodeTypes + ?Sized> {
     text: &'a [u8],
     names: &'a [SymbolHandle],
-    selectors: &'a mut [SmtNamedValuesBuf<S>],
+    selectors: &'a mut [SmtNamedValuesBuf<N::Sort>],
 }
 
-impl<'a, S> SmtConstructors<'a, S> {
+impl<'a, N: SmtNodeTypes + ?Sized> SmtConstructors<'a, N> {
     #[inline]
     pub fn len(&self) -> usize {
         self.names.len()
@@ -1153,7 +1181,7 @@ impl<'a, S> SmtConstructors<'a, S> {
     }
 
     /// The constructors with their selectors, which can be modified in place.
-    pub fn iter_mut(&mut self) -> SmtConstructorsIter<'_, S> {
+    pub fn iter_mut(&mut self) -> SmtConstructorsIter<'_, N> {
         SmtConstructorsIter {
             text: self.text,
             names: self.names.iter(),
@@ -1162,9 +1190,9 @@ impl<'a, S> SmtConstructors<'a, S> {
     }
 }
 
-impl<'a, S> IntoIterator for SmtConstructors<'a, S> {
-    type Item = (SmtSymbol<'a>, SmtNamedValues<'a, S>);
-    type IntoIter = SmtConstructorsIter<'a, S>;
+impl<'a, N: SmtNodeTypes + ?Sized> IntoIterator for SmtConstructors<'a, N> {
+    type Item = (SmtSymbol<'a>, SmtNamedValues<'a, N::Sort>);
+    type IntoIter = SmtConstructorsIter<'a, N>;
 
     fn into_iter(self) -> Self::IntoIter {
         SmtConstructorsIter {
@@ -1176,14 +1204,14 @@ impl<'a, S> IntoIterator for SmtConstructors<'a, S> {
 }
 
 /// Iterator over datatype constructors with their selectors.
-pub struct SmtConstructorsIter<'a, S> {
+pub struct SmtConstructorsIter<'a, N: SmtNodeTypes + ?Sized> {
     text: &'a [u8],
     names: slice::Iter<'a, SymbolHandle>,
-    selectors: slice::IterMut<'a, SmtNamedValuesBuf<S>>,
+    selectors: slice::IterMut<'a, SmtNamedValuesBuf<N::Sort>>,
 }
 
-impl<'a, S> Iterator for SmtConstructorsIter<'a, S> {
-    type Item = (SmtSymbol<'a>, SmtNamedValues<'a, S>);
+impl<'a, N: SmtNodeTypes + ?Sized> Iterator for SmtConstructorsIter<'a, N> {
+    type Item = (SmtSymbol<'a>, SmtNamedValues<'a, N::Sort>);
 
     fn next(&mut self) -> Option<Self::Item> {
         let name = self.names.next()?.symbol_view(self.text);
@@ -1196,9 +1224,12 @@ impl<'a, S> Iterator for SmtConstructorsIter<'a, S> {
     }
 }
 
-impl<S> ExactSizeIterator for SmtConstructorsIter<'_, S> {}
+impl<N: SmtNodeTypes + ?Sized> ExactSizeIterator for SmtConstructorsIter<'_, N> {}
 
-impl<S: Debug> Debug for SmtConstructorsIter<'_, S> {
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtConstructorsIter<'_, N>
+where
+    N::Sort: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let text = self.text;
         let remaining: Vec<_> = self
@@ -1217,7 +1248,10 @@ impl<S: Debug> Debug for SmtConstructorsIter<'_, S> {
     }
 }
 
-impl<S: Debug> Debug for SmtConstructors<'_, S> {
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtConstructors<'_, N>
+where
+    N::Sort: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut list = f.debug_list();
         for (name, selectors) in self.names.iter().zip(self.selectors.iter()) {
@@ -1234,15 +1268,27 @@ impl<S: Debug> Debug for SmtConstructors<'_, S> {
 ///
 /// Each constructor's selectors are kept in storage of their own,
 /// which is reused when the constructors are cleared.
-#[derive(Clone)]
-pub struct SmtConstructorsBuf<S> {
+pub struct SmtConstructorsBuf<N: SmtNodeTypes + ?Sized> {
     text: Vec<u8>,
     names: Vec<SymbolHandle>,
     /// Selector storage, the first `names.len()` in use.
-    selectors: Vec<SmtNamedValuesBuf<S>>,
+    selectors: Vec<SmtNamedValuesBuf<N::Sort>>,
 }
 
-impl<S> SmtConstructorsBuf<S> {
+impl<N: SmtNodeTypes + ?Sized> Clone for SmtConstructorsBuf<N>
+where
+    N::Sort: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            text: self.text.clone(),
+            names: self.names.clone(),
+            selectors: self.selectors.clone(),
+        }
+    }
+}
+
+impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -1262,7 +1308,7 @@ impl<S> SmtConstructorsBuf<S> {
     }
 
     /// Adds a selector to the last constructor pushed.
-    pub fn push_selector(&mut self, name: SmtSymbol, sort: S) {
+    pub fn push_selector(&mut self, name: SmtSymbol, sort: N::Sort) {
         let index = self
             .names
             .len()
@@ -1279,7 +1325,7 @@ impl<S> SmtConstructorsBuf<S> {
         self.names.clear();
     }
 
-    pub fn view_mut(&mut self) -> SmtConstructors<'_, S> {
+    pub fn view_mut(&mut self) -> SmtConstructors<'_, N> {
         let len = self.names.len();
         SmtConstructors {
             text: &self.text,
@@ -1297,13 +1343,16 @@ impl<S> SmtConstructorsBuf<S> {
     }
 }
 
-impl<S> Default for SmtConstructorsBuf<S> {
+impl<N: SmtNodeTypes + ?Sized> Default for SmtConstructorsBuf<N> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: Debug> Debug for SmtConstructorsBuf<S> {
+impl<N: SmtNodeTypes + ?Sized> Debug for SmtConstructorsBuf<N>
+where
+    N::Sort: Debug,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut list = f.debug_list();
         for (name, selectors) in self.names.iter().zip(self.selectors.iter()) {

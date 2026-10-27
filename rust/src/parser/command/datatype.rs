@@ -1,7 +1,7 @@
 use std::ops::ControlFlow;
 
 use crate::{
-    SmtCommandHandler,
+    SmtCommandHandler, SmtNodeTypes,
     grammar::{SmtConstructors, SmtConstructorsBuf, SmtSortAritiesBuf, SmtSymbolsBuf},
     lexicon::SmtSymbolBuf,
     parser::{
@@ -22,10 +22,10 @@ type IntroductionParser<H> = SmtParenParser<H, SmtPairParser<H, SmtSymbolParser,
 pub(crate) type OwnedConstructors<S> = Vec<(SmtSymbolBuf, Vec<(SmtSymbolBuf, S)>)>;
 
 /// Hands the constructors to `f` as a view, through `buf`, which is cleared afterwards.
-pub(crate) fn hand_over_constructors<S, R>(
-    buf: &mut SmtConstructorsBuf<S>,
-    constructors: OwnedConstructors<S>,
-    f: impl FnOnce(SmtConstructors<'_, S>) -> R,
+pub(crate) fn hand_over_constructors<N: SmtNodeTypes + ?Sized, R>(
+    buf: &mut SmtConstructorsBuf<N>,
+    constructors: OwnedConstructors<N::Sort>,
+    f: impl FnOnce(SmtConstructors<'_, N>) -> R,
 ) -> R {
     for (name, selectors) in constructors {
         buf.push(name.view());
@@ -85,7 +85,7 @@ struct DatatypeParser<H: SmtCommandHandler> {
     /// The parameters handed over, reused across datatypes.
     params_buf: SmtSymbolsBuf,
     /// The constructors handed over, reused across datatypes.
-    constructors_buf: SmtConstructorsBuf<H::Sort>,
+    constructors_buf: SmtConstructorsBuf<H>,
 }
 
 impl<H: SmtCommandHandler> DatatypeParser<H> {

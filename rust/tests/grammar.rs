@@ -40,7 +40,7 @@ impl SmtHandler for OpaqueHandler {
     fn handle_term(&mut self, _term: SmtTerm<'_, Self>) -> Result<String, Infallible> {
         Ok(String::new())
     }
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Infallible> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_let(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -66,7 +66,7 @@ impl SmtHandler for OpaqueHandler {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -78,7 +78,7 @@ impl SmtHandler for OpaqueHandler {
     ) -> Result<String, Infallible> {
         Ok(body)
     }
-    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self::Sort>) -> Result<(), Infallible> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<(), Infallible> {
         Ok(())
     }
     fn end_lambda(&mut self, _scope: (), body: String) -> Result<String, Infallible> {
@@ -139,17 +139,17 @@ fn nodes_are_debug_and_clone_with_an_opaque_handler() {
     assert_debug::<SmtApplication<'static, OpaqueHandler>>();
     assert_debug::<SmtTerm<'static, OpaqueHandler>>();
     assert_debug::<SmtNamedValues<'static, String>>();
-    assert_debug::<SmtBindings<'static, String>>();
-    assert_debug::<SmtSortedVars<'static, String>>();
+    assert_debug::<SmtBindings<'static, OpaqueHandler>>();
+    assert_debug::<SmtSortedVars<'static, OpaqueHandler>>();
     assert_debug::<SmtAttributeValue<'static, OpaqueHandler>>();
     assert_debug::<SmtSExpr<'static, OpaqueHandler>>();
     // the signature views hand their sorts over by reference, so they can be copied
-    assert_debug_and_clone::<SmtFunctionSignature<'static, String>>();
-    assert_debug_and_clone::<SmtFunctionSignatures<'static, String>>();
+    assert_debug_and_clone::<SmtFunctionSignature<'static, OpaqueHandler>>();
+    assert_debug_and_clone::<SmtFunctionSignatures<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtSymbols<'static>>();
     assert_debug_and_clone::<SmtSortArities<'static>>();
     // the constructors hand their selector sorts over, so they cannot be cloned
-    assert_debug::<SmtConstructors<'static, String>>();
+    assert_debug::<SmtConstructors<'static, OpaqueHandler>>();
     assert_debug_and_clone::<SmtSimplePatternBuf>();
     assert_debug_and_clone::<SmtPattern>();
     assert_debug_and_clone::<SmtSimplePattern<'static>>();
@@ -175,16 +175,16 @@ fn lists_and_their_iterators_are_debug_with_an_opaque_handler() {
     assert_debug_and_clone::<SmtNamedValuesBuf<String>>();
     assert_debug_and_clone::<SmtMatchCasesBuf<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSymbolsBuf>();
-    assert_debug_and_clone::<SmtFunctionSignaturesBuf<String>>();
+    assert_debug_and_clone::<SmtFunctionSignaturesBuf<OpaqueHandler>>();
     assert_debug_and_clone::<SmtSortAritiesBuf>();
-    assert_debug_and_clone::<SmtConstructorsBuf<String>>();
+    assert_debug_and_clone::<SmtConstructorsBuf<OpaqueHandler>>();
     assert_debug::<SmtMultipleIntoIter<'static, String>>();
     assert_debug::<SmtNamedValuesIntoIter<'static, String>>();
     assert_debug::<SmtMatchCasesIntoIter<'static, OpaqueHandler>>();
     assert_debug::<SmtSymbolsIter<'static>>();
-    assert_debug::<SmtFunctionSignaturesIter<'static, String>>();
+    assert_debug::<SmtFunctionSignaturesIter<'static, OpaqueHandler>>();
     assert_debug::<SmtSortAritiesIter<'static>>();
-    assert_debug::<SmtConstructorsIter<'static, String>>();
+    assert_debug::<SmtConstructorsIter<'static, OpaqueHandler>>();
 }
 
 /// The parsers, the parse state, the adapter, the lexer over it and the
@@ -282,7 +282,7 @@ fn an_owned_list_and_its_clone_print_as_its_view_and_an_iterator_what_is_left() 
         format!("SmtSymbolsIter([{:?}])", y.view())
     );
 
-    let mut signatures = SmtFunctionSignaturesBuf::new();
+    let mut signatures = SmtFunctionSignaturesBuf::<OpaqueHandler>::new();
     signatures.push(x.view(), "Bool".to_string());
     signatures.push_param(y.view(), "Int".to_string());
     signatures.push(y.view(), "Int".to_string());
@@ -308,7 +308,7 @@ fn an_owned_list_and_its_clone_print_as_its_view_and_an_iterator_what_is_left() 
     let last = format!("{:?}", (y.view(), numeral_buf(b"2").view()));
     assert_eq!(format!("{iter:?}"), format!("SmtSortAritiesIter([{last}])"));
 
-    let mut constructors = SmtConstructorsBuf::new();
+    let mut constructors = SmtConstructorsBuf::<OpaqueHandler>::new();
     constructors.push(x.view());
     constructors.push(y.view());
     constructors.push_selector(x.view(), "Int".to_string());

@@ -53,16 +53,13 @@ pub trait SmtHandler {
         attributes: SmtMultiple<'_, Self::Attribute>,
     ) -> Result<Self::Term, Self::Error>;
 
-    fn start_let(
-        &mut self,
-        bindings: SmtBindings<'_, Self::Term>,
-    ) -> Result<Self::Scope, Self::Error>;
+    fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<Self::Scope, Self::Error>;
     fn end_let(&mut self, scope: Self::Scope, body: Self::Term) -> Result<Self::Term, Self::Error>;
 
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
-        vars: SmtSortedVars<'_, Self::Sort>,
+        vars: SmtSortedVars<'_, Self>,
     ) -> Result<Self::Scope, Self::Error>;
     fn end_quantifier(
         &mut self,
@@ -71,10 +68,7 @@ pub trait SmtHandler {
         body: Self::Term,
     ) -> Result<Self::Term, Self::Error>;
 
-    fn start_lambda(
-        &mut self,
-        vars: SmtSortedVars<'_, Self::Sort>,
-    ) -> Result<Self::Scope, Self::Error>;
+    fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error>;
     fn end_lambda(
         &mut self,
         scope: Self::Scope,
@@ -155,6 +149,23 @@ pub trait SmtHandler {
         scrutinee: Self::Term,
         cases: SmtMatchCases<'_, Self>,
     ) -> Result<Self::Term, Self::Error>;
+}
+
+/// Types of handled nodes (S-expressions, sorts, and terms).
+///
+/// The views of nodes are parametrised by these types. Every [SmtHandler] has them as its own
+/// types of the same names. A program that builds views without a handler, e.g. to write them,
+/// implements this trait on a type of its own.
+pub trait SmtNodeTypes {
+    type SExpr;
+    type Sort;
+    type Term;
+}
+
+impl<H: SmtHandler + ?Sized> SmtNodeTypes for H {
+    type SExpr = H::SExpr;
+    type Sort = H::Sort;
+    type Term = H::Term;
 }
 
 /// Handles commands.
@@ -283,7 +294,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Starts the body of a function definition (`define-fun`).
     fn start_define_fun(
         &mut self,
-        signature: SmtFunctionSignature<'_, Self::Sort>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Defines a constant (`define-const`).
@@ -303,7 +314,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Starts a recursive function definition (`define-fun-rec`).
     fn start_define_fun_rec(
         &mut self,
-        signature: SmtFunctionSignature<'_, Self::Sort>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Ends a recursive function definition (`define-fun-rec`).
@@ -331,7 +342,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn start_define_funs_rec(
         &mut self,
-        signatures: SmtFunctionSignatures<'_, Self::Sort>,
+        signatures: SmtFunctionSignatures<'_, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Ends recursive function definitions (`define-funs-rec`).
@@ -361,7 +372,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn start_recursive_body(
         &mut self,
-        signature: SmtFunctionSignature<'_, Self::Sort>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Ends the body of a recursive function (in `define-funs-rec`).
@@ -385,7 +396,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Ends a datatype declaration (`declare-datatype`).
     fn end_declare_datatype(
         &mut self,
-        constructors: SmtConstructors<'_, Self::Sort>,
+        constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Starts datatype declarations (`declare-datatypes`).
@@ -454,7 +465,7 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Consult the standard for proper handling.
     fn end_datatype_declaration(
         &mut self,
-        constructors: SmtConstructors<'_, Self::Sort>,
+        constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error>;
 }
 
@@ -654,7 +665,7 @@ pub trait SmtPartialCommandHandler:
 
     fn start_define_fun(
         &mut self,
-        _signature: SmtFunctionSignature<'_, Self::Sort>,
+        _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFun)
     }
@@ -672,7 +683,7 @@ pub trait SmtPartialCommandHandler:
 
     fn start_define_fun_rec(
         &mut self,
-        _signature: SmtFunctionSignature<'_, Self::Sort>,
+        _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunRec)
     }
@@ -682,7 +693,7 @@ pub trait SmtPartialCommandHandler:
 
     fn start_define_funs_rec(
         &mut self,
-        _signatures: SmtFunctionSignatures<'_, Self::Sort>,
+        _signatures: SmtFunctionSignatures<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunsRec)
     }
@@ -691,7 +702,7 @@ pub trait SmtPartialCommandHandler:
     }
     fn start_recursive_body(
         &mut self,
-        _signature: SmtFunctionSignature<'_, Self::Sort>,
+        _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunsRec)
     }
@@ -708,7 +719,7 @@ pub trait SmtPartialCommandHandler:
     }
     fn end_declare_datatype(
         &mut self,
-        _constructors: SmtConstructors<'_, Self::Sort>,
+        _constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareDatatype)
     }
@@ -730,7 +741,7 @@ pub trait SmtPartialCommandHandler:
     }
     fn end_datatype_declaration(
         &mut self,
-        _constructors: SmtConstructors<'_, Self::Sort>,
+        _constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareDatatypes)
     }
@@ -857,7 +868,7 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
 
     fn start_define_fun(
         &mut self,
-        signature: SmtFunctionSignature<'_, Self::Sort>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         SmtPartialCommandHandler::start_define_fun(self, signature)
     }
@@ -875,7 +886,7 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
 
     fn start_define_fun_rec(
         &mut self,
-        signature: SmtFunctionSignature<'_, Self::Sort>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         SmtPartialCommandHandler::start_define_fun_rec(self, signature)
     }
@@ -885,7 +896,7 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
 
     fn start_define_funs_rec(
         &mut self,
-        signatures: SmtFunctionSignatures<'_, Self::Sort>,
+        signatures: SmtFunctionSignatures<'_, Self>,
     ) -> Result<(), Self::Error> {
         SmtPartialCommandHandler::start_define_funs_rec(self, signatures)
     }
@@ -894,7 +905,7 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
     }
     fn start_recursive_body(
         &mut self,
-        signature: SmtFunctionSignature<'_, Self::Sort>,
+        signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         SmtPartialCommandHandler::start_recursive_body(self, signature)
     }
@@ -911,7 +922,7 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
     }
     fn end_declare_datatype(
         &mut self,
-        constructors: SmtConstructors<'_, Self::Sort>,
+        constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         SmtPartialCommandHandler::end_declare_datatype(self, constructors)
     }
@@ -933,7 +944,7 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
     }
     fn end_datatype_declaration(
         &mut self,
-        constructors: SmtConstructors<'_, Self::Sort>,
+        constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         SmtPartialCommandHandler::end_datatype_declaration(self, constructors)
     }
@@ -1020,7 +1031,7 @@ impl SmtHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn start_let(&mut self, _bindings: SmtBindings<'_, Self::Term>) -> Result<(), Self::Error> {
+    fn start_let(&mut self, _bindings: SmtBindings<'_, Self>) -> Result<(), Self::Error> {
         Ok(())
     }
 
@@ -1035,7 +1046,7 @@ impl SmtHandler for SmtSyntaxChecker {
     fn start_quantifier(
         &mut self,
         _kind: SmtQuantifierKind,
-        _vars: SmtSortedVars<'_, Self::Sort>,
+        _vars: SmtSortedVars<'_, Self>,
     ) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
@@ -1048,10 +1059,7 @@ impl SmtHandler for SmtSyntaxChecker {
         Ok(())
     }
 
-    fn start_lambda(
-        &mut self,
-        _vars: SmtSortedVars<'_, Self::Sort>,
-    ) -> Result<Self::Scope, Self::Error> {
+    fn start_lambda(&mut self, _vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error> {
         Ok(())
     }
     fn end_lambda(
@@ -1221,7 +1229,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn start_define_fun(
         &mut self,
-        _signature: SmtFunctionSignature<'_, Self::Sort>,
+        _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -1232,14 +1240,14 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn start_define_funs_rec(
         &mut self,
-        _signatures: SmtFunctionSignatures<'_, Self::Sort>,
+        _signatures: SmtFunctionSignatures<'_, Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
 
     fn start_recursive_body(
         &mut self,
-        _signature: SmtFunctionSignature<'_, Self::Sort>,
+        _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -1265,7 +1273,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn end_datatype_declaration(
         &mut self,
-        _constructors: SmtConstructors<'_, Self::Sort>,
+        _constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -1300,7 +1308,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn start_define_fun_rec(
         &mut self,
-        _signature: SmtFunctionSignature<'_, Self::Sort>,
+        _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -1319,7 +1327,7 @@ impl SmtCommandHandler for SmtSyntaxChecker {
 
     fn end_declare_datatype(
         &mut self,
-        _constructors: SmtConstructors<'_, Self::Sort>,
+        _constructors: SmtConstructors<'_, Self>,
     ) -> Result<(), Self::Error> {
         Ok(())
     }
