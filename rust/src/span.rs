@@ -1,6 +1,15 @@
 //! Locations and spans in a byte stream, used in lexer tokens and errors.
 //!
+//! A location records an offset in bytes and line/column information, and a
+//! span is a half-open range `[start, end)` between locations. The span can be
+//! empty, which is usually the case if an error occured at the end of input due
+//! to some unclosed item.
 //!
+//! The locations and spans are given by the [lexer](crate::lexer) for tokens
+//! via [SmtLexerToken::span](crate::lexer::SmtLexerToken::span). Lexing and
+//! reading produces the result value wrapped in [SmtLocated] on success and a
+//! spanned error on failure. Parsers and handlers do not interact with
+//! locations and spans.
 
 /// Location in a byte stream.
 ///
