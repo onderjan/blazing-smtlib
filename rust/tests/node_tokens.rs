@@ -16,11 +16,11 @@ use blazing_smtlib::{
         SmtQuantifierKind, SmtSExpr, SmtSimplePatternsBuf, SmtSort, SmtTerm,
     },
     lexer::{SmtLexer, SmtLexerCursor},
-    lexicon::{SmtKeyword, SmtSymbol},
+    lexicon::{SmtGeneralReserved, SmtKeyword, SmtReserved, SmtSymbol},
     read_smt,
     token::{
-        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtToken, SmtTokensBuf, SmtTokensCursor,
+        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokensBuf,
+        SmtTokensCursor,
     },
 };
 

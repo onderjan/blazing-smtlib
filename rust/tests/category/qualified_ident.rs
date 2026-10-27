@@ -2,8 +2,9 @@
 
 use super::*;
 use blazing_smtlib::{
+    lexicon::{SmtGeneralReserved, SmtReserved},
     parser::SmtSyntaxExpected,
-    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+    token::SmtTokenCategory,
 };
 
 fn name(qualified_ident: &QualifiedIdent<String>) -> &[u8] {

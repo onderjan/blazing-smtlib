@@ -10,14 +10,10 @@ use crate::{
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
         SmtHexDigits, SmtHexDigitsBuf, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf,
-        SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace,
+        SmtReserved, SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf, SmtWhitespace,
         SmtWhitespaceBuf,
     },
 };
-
-mod reserved;
-
-pub use reserved::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved};
 
 /// Category of a token.
 ///

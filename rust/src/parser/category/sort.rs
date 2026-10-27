@@ -2,11 +2,12 @@ use std::{fmt, ops::ControlFlow};
 
 use crate::{
     SmtHandler,
+    lexicon::{SmtGeneralReserved, SmtReserved},
     parser::{
         Arena, IdentHandle, IdentSlot, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, SmtSyntaxExpected, expected, handle_err, parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// Parses a sort.

@@ -10,10 +10,9 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerErrorKind, SmtLexicalErrorKind},
+    lexicon::{SmtGeneralReserved, SmtReserved},
     span::SmtSpan,
-    token::{
-        SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved, SmtTokenCategory,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtTokenCategory},
 };
 
 use lex_backend::{Feed, LexedError, LexedToken, Loc, loc};

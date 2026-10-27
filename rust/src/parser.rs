@@ -18,7 +18,8 @@ pub use state::*;
 
 use crate::{
     SmtHandler,
-    token::{SmtCursor, SmtReserved, SmtTokenCategory},
+    lexicon::SmtReserved,
+    token::{SmtCursor, SmtTokenCategory},
 };
 
 /// Parses a grammar item.
@@ -161,7 +162,10 @@ pub enum SmtMissingItem {
 /// The items that the library's parsers expect besides syntactic categories.
 pub(crate) mod expected {
     use super::SmtSyntaxExpected;
-    use crate::token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory};
+    use crate::{
+        lexicon::{SmtGeneralReserved, SmtReserved},
+        token::SmtTokenCategory,
+    };
 
     pub(crate) const PAREN_OPEN: SmtSyntaxExpected =
         SmtSyntaxExpected::Token(SmtTokenCategory::ParenOpen);

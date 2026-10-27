@@ -7,10 +7,8 @@ use std::{
 
 use crate::{
     SmtVersion,
-    token::{
-        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken,
-        SmtTokensCursor,
-    },
+    lexicon::SmtReserved,
+    token::{SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokensCursor},
 };
 
 /// Why writing failed (I/O error or writing impossibility).

@@ -3,8 +3,7 @@ use std::fmt::{Debug, Write};
 use crate::{
     SmtVersion,
     lexer::CharClass,
-    lexicon::{SmtBytes, SmtBytesBuf},
-    token::SmtReserved,
+    lexicon::{SmtBytes, SmtBytesBuf, SmtReserved},
 };
 
 impl SmtStringContentBuf {

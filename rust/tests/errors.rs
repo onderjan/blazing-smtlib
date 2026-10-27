@@ -20,7 +20,8 @@ use blazing_smtlib::{
     grammar::SmtEmptyArgumentsError,
     lexer::{SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
-        SmtDisallowedByteVecError, SmtDisallowedBytesError, SmtNumericOverflowError, SmtSymbolBuf,
+        SmtCommandNameReserved, SmtDisallowedByteVecError, SmtDisallowedBytesError,
+        SmtGeneralReserved, SmtNumericOverflowError, SmtReserved, SmtSymbolBuf,
     },
     parser::{
         SmtMissingItem, SmtNonEmptyList, SmtParseError, SmtSyntaxErrorKind, SmtSyntaxExpected,
@@ -28,10 +29,7 @@ use blazing_smtlib::{
     },
     read_smt,
     span::{SmtInvalidLocationError, SmtInvalidSpanError, SmtLocation},
-    token::{
-        SmtCommandNameReserved, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved,
-        SmtReserved, SmtToken, SmtTokenCategory, SmtVersionRefused,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokenCategory, SmtVersionRefused},
 };
 
 /// The error of a consumer or handler of the tests' own, with a source of its own.

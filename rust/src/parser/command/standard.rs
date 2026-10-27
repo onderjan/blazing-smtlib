@@ -3,7 +3,7 @@ use std::ops::ControlFlow::{self, Break, Continue};
 use crate::{
     SmtCommandHandler, SmtVersion,
     grammar::{SmtConstructorsBuf, SmtFunctionSignaturesBuf, SmtMultiple, SmtSymbolsBuf},
-    lexicon::SmtSymbolBuf,
+    lexicon::{SmtCommandNameReserved, SmtSymbolBuf},
     parser::{
         SmtCloseParenParser, SmtCommandPayloadParser, SmtKeywordParser, SmtNonEmptyList,
         SmtNumeralParser, SmtParenMultipleParser, SmtParse, SmtParseError, SmtParseState,
@@ -21,7 +21,7 @@ use crate::{
         },
         parse_by_token,
     },
-    token::{SmtCommandNameReserved, SmtCursor, SmtToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// Defines the rule of one standard command: its payload parser

@@ -2,8 +2,9 @@
 
 use super::*;
 use blazing_smtlib::{
+    lexicon::{SmtGeneralReserved, SmtReserved},
     parser::{SmtNonEmptyList, SmtSyntaxExpected},
-    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+    token::SmtTokenCategory,
 };
 
 fn indices(ident: &SmtIdentBuf) -> Vec<String> {

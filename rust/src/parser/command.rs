@@ -2,12 +2,12 @@ use std::{convert::Infallible, fmt, ops::ControlFlow};
 
 use crate::{
     SmtCommandHandler, SmtVersion,
-    lexicon::SmtSymbol,
+    lexicon::{SmtReserved, SmtSymbol},
     parser::{
         SmtParse, SmtParseError, SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, expected,
         handle_err,
     },
-    token::{SmtCursor, SmtReserved, SmtToken},
+    token::{SmtCursor, SmtToken},
 };
 
 mod datatype;

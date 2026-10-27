@@ -14,9 +14,9 @@ use blazing_smtlib::{
     SmtVersion,
     lexicon::{
         SmtBinDigitsBuf, SmtCommentBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf,
-        SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
+        SmtNumeralBuf, SmtReserved, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
     },
-    token::{SmtReserved, SmtToken, SmtTokenCategory},
+    token::{SmtToken, SmtTokenCategory},
 };
 use lex_backend::Feed;
 use write_backend::{Answer, Item, WriteFailure, Writing};

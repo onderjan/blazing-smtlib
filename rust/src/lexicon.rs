@@ -3,7 +3,9 @@
 //!
 
 mod bytes;
+mod reserved;
 mod value;
 
 pub use bytes::*;
+pub use reserved::*;
 pub use value::*;

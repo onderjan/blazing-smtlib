@@ -3,12 +3,12 @@ use std::{fmt, ops::ControlFlow};
 use crate::{
     SmtHandler, SmtVersion,
     grammar::SmtIdentBuf,
-    lexicon::SmtSymbol,
+    lexicon::{SmtGeneralReserved, SmtReserved, SmtSymbol},
     parser::{
         Arena, IdentHandle, IndexHandle, SmtNonEmptyList, SmtParse, SmtParseError, SmtParseState,
         SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected, parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// Parses an identifier.

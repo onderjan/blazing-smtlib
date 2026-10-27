@@ -4,8 +4,7 @@ mod reserved_words;
 
 use blazing_smtlib::{
     SmtVersion,
-    lexicon::SmtDecimal,
-    token::{SmtCommandNameReserved, SmtGeneralReserved, SmtReserved},
+    lexicon::{SmtCommandNameReserved, SmtDecimal, SmtGeneralReserved, SmtReserved},
 };
 
 /// Returns every `SmtGeneralReserved` variant, in declaration order.

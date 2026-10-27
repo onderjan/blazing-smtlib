@@ -14,8 +14,7 @@
 use blazing_smtlib::{
     SmtVersion,
     grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind, SmtSpecialConstantBuf},
-    lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
-    token::SmtReserved,
+    lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtReserved, SmtStringContentBuf, SmtSymbolBuf},
 };
 
 /// A qualified identifier, with the sort it is qualified with by `as`.

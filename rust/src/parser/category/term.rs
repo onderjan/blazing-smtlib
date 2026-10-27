@@ -6,7 +6,7 @@ use crate::{
         SmtApplication, SmtNamedValues, SmtQualifiedIdent, SmtQuantifierKind, SmtSimplePattern,
         SmtTerm,
     },
-    lexicon::SmtSymbol,
+    lexicon::{SmtGeneralReserved, SmtReserved, SmtSymbol},
     parser::{
         Arena, MatchCasesStarts, PatternHandle, PatternHandleBuf, QualifiedIdentHandle,
         SimplePatternHandle, SmtCloseParenParser, SmtNonEmptyList, SmtOpenParenParser, SmtParse,
@@ -14,7 +14,7 @@ use crate::{
         category::{attribute::MultipleAttributes, parse_special_constant},
         expected, handle_err, pattern_view,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtLookahead, SmtReserved, SmtToken},
+    token::{SmtCursor, SmtLookahead, SmtToken},
 };
 
 /// Parses a term.

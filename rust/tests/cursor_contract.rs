@@ -22,7 +22,7 @@ use blazing_smtlib::{
     SmtHandler, SmtSyntaxChecker, SmtVersion, SmtVersionPosture,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{
-        SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
+        SmtBinDigitsBuf, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf, SmtReserved,
         SmtStringContentBuf, SmtSymbolBuf,
     },
     parser::{
@@ -35,7 +35,7 @@ use blazing_smtlib::{
         SmtTermParser, SmtTuple3Parser, SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser,
         SmtTuple7Parser, SmtTuple8Parser,
     },
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken, SmtVersionRefused},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtVersionRefused},
 };
 
 // --- Tokens as owned values ---

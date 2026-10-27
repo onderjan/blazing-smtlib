@@ -11,13 +11,13 @@ use blazing_smtlib::{
     SmtSyntaxChecker, SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor},
     lexicon::{
-        SmtBinDigits, SmtComment, SmtDecimal, SmtHexDigits, SmtKeyword, SmtNumeral,
-        SmtStringContent, SmtSymbol, SmtWhitespace,
+        SmtBinDigits, SmtComment, SmtDecimal, SmtGeneralReserved, SmtHexDigits, SmtKeyword,
+        SmtNumeral, SmtReserved, SmtStringContent, SmtSymbol, SmtWhitespace,
     },
     parser::{SmtParse, SmtParseState, SmtTermParser},
     token::{
-        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved,
-        SmtToken, SmtTokenBuf, SmtTokensBuf, SmtTokensCursor,
+        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokenBuf,
+        SmtTokensBuf, SmtTokensCursor,
     },
 };
 

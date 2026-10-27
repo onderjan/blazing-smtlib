@@ -15,9 +15,8 @@ use blazing_smtlib::{
         SmtNamedValues, SmtPattern, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortArities,
         SmtSymbols, SmtTerm,
     },
-    lexicon::{SmtKeyword, SmtSymbol},
+    lexicon::{SmtCommandNameReserved, SmtKeyword, SmtSymbol},
     read_smt,
-    token::SmtCommandNameReserved,
 };
 
 /// The error of the handler's own.

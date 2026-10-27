@@ -18,11 +18,8 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtVersion, SmtWriteStyle, SmtWriter, SmtWriterConfig,
     lexer::{SmtLexer, SmtLexerCursor},
-    lexicon::{SmtCommentBuf, SmtNumeralBuf, SmtSymbol},
-    token::{
-        SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken,
-        SmtTokensBuf,
-    },
+    lexicon::{SmtCommentBuf, SmtGeneralReserved, SmtNumeralBuf, SmtReserved, SmtSymbol},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokensBuf},
 };
 use write_backend::{Answer, Item, WriteFailure, Writing};
 

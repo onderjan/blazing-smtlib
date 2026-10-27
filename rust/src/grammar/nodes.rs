@@ -4,12 +4,12 @@ use crate::{
     SmtNodeTypes,
     grammar::SmtMultiple,
     lexicon::{
-        SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigits, SmtHexDigitsBuf,
-        SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtStringContent,
-        SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
+        SmtBinDigits, SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtGeneralReserved, SmtHexDigits,
+        SmtHexDigitsBuf, SmtKeyword, SmtKeywordBuf, SmtNumeral, SmtNumeralBuf, SmtReserved,
+        SmtStringContent, SmtStringContentBuf, SmtSymbol, SmtSymbolBuf,
     },
     parser::{ArenaAccess, IndexHandle, SimplePatternHandle},
-    token::{SmtAppendTokens, SmtGeneralReserved, SmtReserved, SmtToken, SmtTokensCursor},
+    token::{SmtAppendTokens, SmtToken, SmtTokensCursor},
 };
 
 /// Owned index of an identifier (numeral or symbol).

@@ -25,10 +25,7 @@ use std::ffi::OsString;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
-use blazing_smtlib::{
-    SmtVersion, SmtWriteStyle,
-    token::{SmtReserved, SmtToken},
-};
+use blazing_smtlib::{SmtVersion, SmtWriteStyle, lexicon::SmtReserved, token::SmtToken};
 
 /// How a request writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

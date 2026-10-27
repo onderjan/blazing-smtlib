@@ -16,14 +16,14 @@ use blazing_smtlib::{
     },
     lexer::{SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
-        SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf, SmtNumeralBuf,
-        SmtStringContentBuf, SmtSymbolBuf,
+        SmtBinDigitsBuf, SmtDecimal, SmtDecimalBuf, SmtGeneralReserved, SmtHexDigitsBuf,
+        SmtKeywordBuf, SmtNumeralBuf, SmtReserved, SmtStringContentBuf, SmtSymbolBuf,
     },
     parser::{
         SmtCommandOutcome, SmtMissingItem, SmtNonEmptyList, SmtSyntaxErrorKind, SmtSyntaxExpected,
         SmtVersionErrorKind,
     },
-    token::{SmtGeneralReserved, SmtReserved, SmtTokenCategory},
+    token::SmtTokenCategory,
 };
 
 use super::nodes::{

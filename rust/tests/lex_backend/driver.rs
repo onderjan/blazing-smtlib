@@ -15,12 +15,9 @@ use blazing_smtlib::{
         SmtLexer, SmtLexerCursor, SmtLexerErrorKind, SmtLexerReadErrorKind, SmtLexerRecovery,
         SmtLexerToken, SmtRecover,
     },
-    lexicon::SmtDecimal,
+    lexicon::{SmtDecimal, SmtReserved},
     span::SmtLocation,
-    token::{
-        SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtReserved, SmtToken,
-        SmtTokenCategory,
-    },
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtLookahead, SmtToken, SmtTokenCategory},
 };
 
 /// What the consumer of a request does with one hand-over, by its plan.

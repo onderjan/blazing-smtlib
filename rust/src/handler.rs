@@ -7,9 +7,10 @@ use crate::{
         SmtFunctionSignatures, SmtMatchCases, SmtMultiple, SmtPattern, SmtQuantifierKind, SmtSExpr,
         SmtSort, SmtSortArities, SmtSortedVars, SmtSymbols, SmtTerm,
     },
-    lexicon::{SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol, SmtSymbolBuf},
+    lexicon::{
+        SmtCommandNameReserved, SmtKeyword, SmtNumeral, SmtStringContent, SmtSymbol, SmtSymbolBuf,
+    },
     parser::SmtParse,
-    token::SmtCommandNameReserved,
 };
 
 /// Handles nodes (sorts, terms, etc.).

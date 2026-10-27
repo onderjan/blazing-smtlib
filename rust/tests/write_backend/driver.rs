@@ -13,12 +13,12 @@ use blazing_smtlib::{
     lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorKind},
     lexicon::{
         SmtBinDigitsBuf, SmtCommentBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf,
-        SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
+        SmtNumeralBuf, SmtReserved, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
     },
     span::SmtLocation,
     token::{
-        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken,
-        SmtTokensBuf, SmtTokensCursor,
+        SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokensBuf,
+        SmtTokensCursor,
     },
 };
 

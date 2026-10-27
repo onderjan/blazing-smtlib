@@ -3,7 +3,7 @@ use std::ops::ControlFlow;
 use crate::{
     SmtCommandHandler, SmtNodeTypes,
     grammar::{SmtConstructors, SmtConstructorsBuf, SmtSortAritiesBuf, SmtSymbolsBuf},
-    lexicon::SmtSymbolBuf,
+    lexicon::{SmtGeneralReserved, SmtReserved, SmtSymbolBuf},
     parser::{
         SmtCloseParenParser, SmtClosedMultipleParser, SmtMissingItem, SmtNonEmptyList,
         SmtNumeralParser, SmtOpenParenParser, SmtOpenedParser, SmtParenMaximumParser,
@@ -11,7 +11,7 @@ use crate::{
         SmtSortedVarParser, SmtSymbolParser, SmtSyntaxErrorKind, category::SmtPairParser, expected,
         handle_err, parse_by_token,
     },
-    token::{SingleTokenCursor, SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
+    token::{SingleTokenCursor, SmtCursor, SmtToken},
 };
 
 /// Parser for a single datatype introduction (name and arity in parentheses).

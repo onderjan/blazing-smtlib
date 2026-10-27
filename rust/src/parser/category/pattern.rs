@@ -3,12 +3,13 @@ use std::{fmt, ops::ControlFlow};
 use crate::{
     SmtHandler, SmtVersion,
     grammar::{SmtPatternBuf, SmtSimplePattern, SmtSimplePatternBuf},
+    lexicon::{SmtGeneralReserved, SmtReserved},
     parser::{
         Arena, PatternHandle, SimplePatternHandle, SmtNonEmptyList, SmtParse, SmtParseError,
         SmtParseState, SmtSyntaxErrorKind, SmtSyntaxExpected, SymbolHandle, expected,
         parse_by_token,
     },
-    token::{SmtCursor, SmtGeneralReserved, SmtReserved, SmtToken},
+    token::{SmtCursor, SmtToken},
 };
 
 /// Parses a simple match pattern.

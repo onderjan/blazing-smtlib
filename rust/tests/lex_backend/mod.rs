@@ -38,9 +38,9 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use blazing_smtlib::{
     SmtVersion,
     lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorKind, SmtLexicalErrorKind, SmtLexicalExpected},
-    lexicon::SmtDecimal,
+    lexicon::{SmtDecimal, SmtReserved},
     span::SmtLocation,
-    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken, SmtTokenCategory},
+    token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokenCategory},
 };
 
 /// A location as `(offset, line, column)`, all zero-based.

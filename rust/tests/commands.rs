@@ -7,10 +7,7 @@
 mod common;
 mod parse_backend;
 
-use blazing_smtlib::{
-    parser::{SmtMissingItem, SmtNonEmptyList, SmtSyntaxExpected},
-    token::{SmtGeneralReserved, SmtReserved},
-};
+use blazing_smtlib::parser::{SmtMissingItem, SmtNonEmptyList, SmtSyntaxExpected};
 use common::{assert_error_span, assert_parser_error, parse_with};
 use parse_backend::{
     AttributeValue, Bindings, CommandHandler, Constructors, Handler, MatchCases,
@@ -25,7 +22,10 @@ use blazing_smtlib::{
         SmtSimplePatternBuf, SmtSpecialConstantBuf,
     },
     lexer::SmtLexicalErrorKind,
-    lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
+    lexicon::{
+        SmtGeneralReserved, SmtKeywordBuf, SmtNumeralBuf, SmtReserved, SmtStringContentBuf,
+        SmtSymbolBuf,
+    },
     parser::SmtSyntaxErrorKind,
     token::SmtTokenCategory,
 };
