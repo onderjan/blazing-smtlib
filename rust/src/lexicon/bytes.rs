@@ -1,5 +1,9 @@
 use std::fmt::{Debug, Write};
 
+/// Owned byte content.
+///
+/// A low-level byte buffer used by the lexicon types to hold their content. It
+/// may hold any bytes.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct SmtBytesBuf(Box<[u8]>);
 
@@ -84,6 +88,10 @@ impl Debug for SmtBytesBuf {
     }
 }
 
+/// View of byte content.
+///
+/// A low-level byte view used by the lexicon types to present their content. It
+/// may hold any bytes.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtBytes<'a>(&'a [u8]);
 

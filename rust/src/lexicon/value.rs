@@ -7,13 +7,6 @@ use crate::{
     token::SmtReserved,
 };
 
-/// SMT-LIB string content.
-///
-/// May be empty.
-/// Must contain only SMT-LIB printable or whitespace bytes.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtStringContentBuf(SmtBytesBuf);
-
 impl SmtStringContentBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         value
@@ -23,13 +16,13 @@ impl SmtStringContentBuf {
     }
 }
 
-/// An owned SMT-LIB symbol, quoted or unquoted.
+/// Owned symbol (quoted or unquoted).
 ///
 /// The symbol carries its bytes and whether it is quoted.
 ///
 /// May be empty if quoted.
 /// Must contain only SMT-LIB printable or whitespace bytes
-/// except for pipe (|) and backslash (\), with an additional
+/// except for pipe (`|`) and backslash (`\`), with an additional
 /// restriction for unquoted symbols: they must contain
 /// a nonempty sequence of simple-symbol bytes not starting
 /// with a digit.
@@ -37,7 +30,10 @@ impl SmtStringContentBuf {
 /// Equality and hash are intentionally not implemented:
 /// quoted and unquoted symbols refer to the same value semantically,
 /// so the value without the quoted flag should be compared in that case,
-/// obtained through [`SmtSymbolBuf::bytes`] or [`SmtSymbolBuf::into_bytes_buf`].
+/// obtained through [SmtSymbolBuf::bytes] or [SmtSymbolBuf::into_bytes_buf].
+///
+/// The content is stripped of the enclosing pipes if quoted, e.g. for the token `|a b|`,
+/// [as_slice](Self::as_slice) returns `b"a b"`.
 #[derive(Clone)]
 pub struct SmtSymbolBuf {
     is_quoted: bool,
@@ -160,19 +156,22 @@ impl Debug for SmtSymbolBuf {
     }
 }
 
-/// A view of an SMT-LIB symbol, quoted or unquoted.
+/// View of a symbol (quoted or unquoted).
 ///
 /// The symbol carries its bytes and whether it is quoted.
 ///
 /// May be empty if quoted.
 /// Must contain only SMT-LIB printable or whitespace bytes
-/// except for pipe (|) and backslash (\), with additional
+/// except for pipe (`|`) and backslash (`\`), with additional
 /// restrictions for unquoted symbols.
 ///
 /// Equality and hash are intentionally not implemented:
 /// quoted and unquoted symbols refer to the same value semantically,
 /// so the value without the quoted flag should be compared in that case,
-/// obtained through [`SmtSymbol::bytes`].
+/// obtained through [SmtSymbol::bytes].
+///
+/// The content is stripped of the enclosing pipes if quoted, e.g. for the token `|a b|`,
+/// [as_slice](Self::as_slice) returns `b"a b"`.
 #[derive(Clone, Copy)]
 pub struct SmtSymbol<'a> {
     is_quoted: bool,
@@ -294,22 +293,6 @@ impl Debug for SmtSymbol<'_> {
     }
 }
 
-/// SMT-LIB keyword.
-///
-/// Cannot be empty.
-/// Must contain only SMT-LIB simple-symbol-class bytes.
-///
-/// A keyword may start with a digit and may spell a reserved word.
-/// It is defined in version 2.0 as a colon followed by a non-empty sequence
-/// of simple-symbol-class bytes with no further restriction. From version 2.5 on,
-/// the standard defines it as a colon followed by a simple symbol, which
-/// read literally excludes a leading digit and the reserved words. We consider
-/// this unintended and keep the 2.0 rule in every version: the standard's
-/// own keyword examples include `:56`, and there is no need to exclude
-/// reserved words as the colon already uniquely determines the category.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtKeywordBuf(SmtBytesBuf);
-
 impl SmtKeywordBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty()
@@ -319,14 +302,6 @@ impl SmtKeywordBuf {
                 .all(|c| CharClass::from(c).is_allowed_in_simple_symbol())
     }
 }
-
-/// SMT-LIB numeral (base 10).
-///
-/// Cannot be empty.
-/// Must contain only digits.
-/// Cannot contain any leading zeros except for the constant "0" itself.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtNumeralBuf(SmtBytesBuf);
 
 impl SmtNumeralBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -349,44 +324,17 @@ impl SmtNumeralBuf {
     }
 }
 
-/// SMT-LIB hexadecimal digits (base 16).
-///
-/// Cannot be empty.
-/// Must contain only digits, lower-case letters a-f or upper-case letters A-F.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtHexDigitsBuf(SmtBytesBuf);
-
 impl SmtHexDigitsBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty() && value.iter().all(|c| c.is_ascii_hexdigit())
     }
 }
 
-/// SMT-LIB binary digits (base 2).
-///
-/// Cannot be empty.
-/// Must contain only the digits 0, 1.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtBinDigitsBuf(SmtBytesBuf);
-
 impl SmtBinDigitsBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty() && value.iter().copied().all(|c| c == b'0' || c == b'1')
     }
 }
-
-/// SMT-LIB decimal (a decimal number with whole part, a dot, then a fractional part)
-///
-/// A dot (the character '.') must be present. It divides the decimal into
-/// a whole part (before it) and a fractional part (after it).
-///  
-/// The whole part follows the same rules as `SmtNumeral`:
-/// cannot be empty, must contain only digits, the leading digit must not be zero.
-///
-/// The fractional part cannot be empty and must contain only digits.
-///
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtDecimalBuf(SmtBytesBuf);
 
 impl SmtDecimalBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -415,13 +363,6 @@ impl SmtDecimalBuf {
     }
 }
 
-/// SMT-LIB whitespace (one or more whitespace bytes)
-///
-/// Cannot be empty.
-/// Must contain only tabs, line feeds, carriage returns and spaces.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtWhitespaceBuf(SmtBytesBuf);
-
 impl SmtWhitespaceBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty()
@@ -431,15 +372,6 @@ impl SmtWhitespaceBuf {
                 .all(|c| matches!(c, b'\t' | b'\n' | b'\r' | b' '))
     }
 }
-
-/// SMT-LIB comment (not including starting semicolon, including ending CR/LF)
-///
-/// The semicolon that starts the comment is not a part of it.
-/// The content may be empty.
-/// Only the last byte may be a carriage return (CR) or a line feed (LF).
-/// If the comment runs to the end of the input, there is no ending CR/LF.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SmtCommentBuf(SmtBytesBuf);
 
 impl SmtCommentBuf {
     pub fn is_allowed(value: &[u8]) -> bool {
@@ -455,6 +387,10 @@ impl SmtCommentBuf {
     }
 }
 
+/// Error constructing an owned value from disallowed bytes.
+///
+/// See the type being constructed for the validity condition. The bytes are
+/// returned by [into_vec](Self::into_vec).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SmtDisallowedByteVecError(SmtBytesBuf);
 
@@ -472,6 +408,9 @@ impl std::fmt::Display for SmtDisallowedByteVecError {
 
 impl std::error::Error for SmtDisallowedByteVecError {}
 
+/// Error constructing a view from disallowed bytes.
+///
+/// See the type being constructed for the validity condition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtDisallowedBytesError;
 
@@ -484,7 +423,19 @@ impl std::fmt::Display for SmtDisallowedBytesError {
 impl std::error::Error for SmtDisallowedBytesError {}
 
 macro_rules! string8_newtype {
-    ($buf:ident, $view:ident) => {
+    (
+        $(#[$buf_doc:meta])*
+        $buf:ident,
+        $(#[$view_doc:meta])*
+        $view:ident,
+        $(#[$doc:meta])*
+    ) => {
+        $(#[$buf_doc])*
+        ///
+        $(#[$doc])*
+        #[derive(Clone, PartialEq, Eq, Hash)]
+        pub struct $buf(SmtBytesBuf);
+
         impl $buf {
             pub fn new(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
                 let value = SmtBytesBuf::from_vec(value);
@@ -560,6 +511,9 @@ macro_rules! string8_newtype {
             }
         }
 
+        $(#[$view_doc])*
+        ///
+        $(#[$doc])*
         #[derive(Clone, Copy, PartialEq, Eq, Hash)]
         pub struct $view<'a>(&'a [u8]);
 
@@ -645,16 +599,112 @@ macro_rules! string8_newtype {
     };
 }
 
-string8_newtype!(SmtStringContentBuf, SmtStringContent);
-string8_newtype!(SmtKeywordBuf, SmtKeyword);
-string8_newtype!(SmtNumeralBuf, SmtNumeral);
-string8_newtype!(SmtHexDigitsBuf, SmtHexDigits);
-string8_newtype!(SmtBinDigitsBuf, SmtBinDigits);
-string8_newtype!(SmtDecimalBuf, SmtDecimal);
-string8_newtype!(SmtWhitespaceBuf, SmtWhitespace);
-string8_newtype!(SmtCommentBuf, SmtComment);
+string8_newtype! {
+    /// Owned string content.
+    SmtStringContentBuf,
+    /// View of string content.
+    SmtStringContent,
+    /// May be empty.
+    /// Must contain only SMT-LIB printable or whitespace bytes.
+    ///
+    /// The content is stripped of the enclosing quotes and its escapes are resolved,
+    /// e.g. for the token `"a""b"` in version 2.5 or later, [as_slice](Self::as_slice)
+    /// returns `b"a\"b"`.
+}
 
-/// The numeric value does not fit into the integer type it is converted to.
+string8_newtype! {
+    /// Owned keyword.
+    SmtKeywordBuf,
+    /// View of a keyword.
+    SmtKeyword,
+    /// Cannot be empty.
+    /// Must contain only SMT-LIB simple-symbol-class bytes.
+    ///
+    /// A keyword may start with a digit and may spell a reserved word.
+    /// It is defined in version 2.0 as a colon followed by a non-empty sequence
+    /// of simple-symbol-class bytes with no further restriction. From version 2.5 on,
+    /// the standard defines it as a colon followed by a simple symbol, which
+    /// read literally excludes a leading digit and the reserved words. We consider
+    /// this unintended and keep the 2.0 rule in every version: the standard's
+    /// own keyword examples include `:56`, and there is no need to exclude
+    /// reserved words as the colon already uniquely determines the category.
+    ///
+    /// The content is stripped of the starting colon, e.g. for the token `:named`,
+    /// [as_slice](Self::as_slice) returns `b"named"`.
+}
+
+string8_newtype! {
+    /// Owned numeral (base 10).
+    SmtNumeralBuf,
+    /// View of a numeral (base 10).
+    SmtNumeral,
+    /// Cannot be empty.
+    /// Must contain only digits.
+    /// Cannot contain any leading zeros except for the constant `0` itself.
+}
+
+string8_newtype! {
+    /// Owned hexadecimal digits (base 16).
+    SmtHexDigitsBuf,
+    /// View of hexadecimal digits (base 16).
+    SmtHexDigits,
+    /// Cannot be empty.
+    /// Must contain only digits, lower-case letters `a`-`f` or upper-case letters `A`-`F`.
+    ///
+    /// The content is stripped of the base declaration, e.g. for the token `#xA04`,
+    /// [as_slice](Self::as_slice) returns `b"A04"`.
+}
+
+string8_newtype! {
+    /// Owned binary digits (base 2).
+    SmtBinDigitsBuf,
+    /// View of binary digits (base 2).
+    SmtBinDigits,
+    /// Cannot be empty.
+    /// Must contain only the digits `0`, `1`.
+    ///
+    /// The content is stripped of the base declaration, e.g. for the token `#b0101`,
+    /// [as_slice](Self::as_slice) returns `b"0101"`.
+}
+
+string8_newtype! {
+    /// Owned decimal (base 10).
+    SmtDecimalBuf,
+    /// View of a decimal (base 10).
+    SmtDecimal,
+    /// A dot (the character `.`) must be present. It divides the decimal into
+    /// a whole part (before it) and a fractional part (after it).
+    ///
+    /// The whole part follows the same rules as [SmtNumeral]:
+    /// cannot be empty, must contain only digits, the leading digit must not be zero.
+    ///
+    /// The fractional part cannot be empty and must contain only digits.
+    ///
+}
+
+string8_newtype! {
+    /// Owned whitespace content.
+    SmtWhitespaceBuf,
+    /// View of whitespace content.
+    SmtWhitespace,
+    /// Cannot be empty.
+    /// Must contain only tabs, line feeds, carriage returns and spaces.
+}
+
+string8_newtype! {
+    /// Owned comment.
+    SmtCommentBuf,
+    /// View of a comment.
+    SmtComment,
+    /// The content may be empty.
+    /// Only the last byte may be a carriage return (CR) or a line feed (LF).
+    /// If the comment runs to the end of the input, there is no ending CR/LF.
+    ///
+    /// The content is stripped of the starting semicolon, e.g. for the token `; note`
+    /// followed by a line feed, [as_slice](Self::as_slice) returns `b" note\n"`.
+}
+
+/// Error converting into an unsigned type that cannot hold the numeric value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtNumericOverflowError;
 
@@ -667,12 +717,12 @@ impl std::fmt::Display for SmtNumericOverflowError {
 impl std::error::Error for SmtNumericOverflowError {}
 
 impl<'a> SmtNumeral<'a> {
-    /// The value as `u32`, or `None` if it does not fit.
+    /// The value as [u32], or [None] if it does not fit.
     pub fn to_u32(&self) -> Option<u32> {
         u32::try_from(self.to_u64()?).ok()
     }
 
-    /// The value as `u64`, or `None` if it does not fit.
+    /// The value as [u64], or [None] if it does not fit.
     pub fn to_u64(&self) -> Option<u64> {
         let mut value: u64 = 0;
         for digit in self.iter() {
@@ -683,7 +733,7 @@ impl<'a> SmtNumeral<'a> {
         Some(value)
     }
 
-    /// The value as `u128`, or `None` if it does not fit.
+    /// The value as [u128], or [None] if it does not fit.
     pub fn to_u128(&self) -> Option<u128> {
         let mut value: u128 = 0;
         for digit in self.iter() {
@@ -694,7 +744,7 @@ impl<'a> SmtNumeral<'a> {
         Some(value)
     }
 
-    /// The value as `usize`, or `None` if it does not fit.
+    /// The value as [usize], or [None] if it does not fit.
     ///
     /// Whether a value fits depends on the platform.
     pub fn to_usize(&self) -> Option<usize> {
@@ -703,46 +753,46 @@ impl<'a> SmtNumeral<'a> {
 }
 
 impl SmtNumeralBuf {
-    /// Construct from `u32`.
+    /// Construct from [u32].
     pub fn from_u32(value: u32) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Construct from `u64`.
+    /// Construct from [u64].
     pub fn from_u64(value: u64) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Construct from `u128`.
+    /// Construct from [u128].
     pub fn from_u128(value: u128) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Construct from `usize`.
+    /// Construct from [usize].
     pub fn from_usize(value: usize) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// The value as `u32`, or `None` if it does not fit.
+    /// The value as [u32], or [None] if it does not fit.
     pub fn to_u32(&self) -> Option<u32> {
         self.view().to_u32()
     }
 
-    /// The value as `u64`, or `None` if it does not fit.
+    /// The value as [u64], or [None] if it does not fit.
     pub fn to_u64(&self) -> Option<u64> {
         self.view().to_u64()
     }
 
-    /// The value as `u128`, or `None` if it does not fit.
+    /// The value as [u128], or [None] if it does not fit.
     pub fn to_u128(&self) -> Option<u128> {
         self.view().to_u128()
     }
 
-    /// The value as `usize`, or `None` if it does not fit.
+    /// The value as [usize], or [None] if it does not fit.
     ///
     /// Whether a value fits depends on the platform.
     pub fn to_usize(&self) -> Option<usize> {
@@ -819,12 +869,12 @@ fn bin_digit_value(digit: u8) -> u8 {
 macro_rules! digits_to_int {
     ($view:ident, $buf:ident, $radix:literal, $digit_value:ident) => {
         impl $view<'_> {
-            /// The value as `u32`, or `None` if it does not fit.
+            /// The value as [u32], or [None] if it does not fit.
             pub fn to_u32(&self) -> Option<u32> {
                 u32::try_from(self.to_u64()?).ok()
             }
 
-            /// The value as `u64`, or `None` if it does not fit.
+            /// The value as [u64], or [None] if it does not fit.
             pub fn to_u64(&self) -> Option<u64> {
                 let mut value: u64 = 0;
                 for digit in self.iter() {
@@ -835,7 +885,7 @@ macro_rules! digits_to_int {
                 Some(value)
             }
 
-            /// The value as `u128`, or `None` if it does not fit.
+            /// The value as [u128], or [None] if it does not fit.
             pub fn to_u128(&self) -> Option<u128> {
                 let mut value: u128 = 0;
                 for digit in self.iter() {
@@ -846,7 +896,7 @@ macro_rules! digits_to_int {
                 Some(value)
             }
 
-            /// The value as `usize`, or `None` if it does not fit.
+            /// The value as [usize], or [None] if it does not fit.
             ///
             /// Whether a value fits depends on the platform.
             pub fn to_usize(&self) -> Option<usize> {
@@ -855,22 +905,22 @@ macro_rules! digits_to_int {
         }
 
         impl $buf {
-            /// The value as `u32`, or `None` if it does not fit.
+            /// The value as [u32], or [None] if it does not fit.
             pub fn to_u32(&self) -> Option<u32> {
                 self.view().to_u32()
             }
 
-            /// The value as `u64`, or `None` if it does not fit.
+            /// The value as [u64], or [None] if it does not fit.
             pub fn to_u64(&self) -> Option<u64> {
                 self.view().to_u64()
             }
 
-            /// The value as `u128`, or `None` if it does not fit.
+            /// The value as [u128], or [None] if it does not fit.
             pub fn to_u128(&self) -> Option<u128> {
                 self.view().to_u128()
             }
 
-            /// The value as `usize`, or `None` if it does not fit.
+            /// The value as [usize], or [None] if it does not fit.
             ///
             /// Whether a value fits depends on the platform.
             pub fn to_usize(&self) -> Option<usize> {
