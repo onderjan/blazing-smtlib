@@ -36,8 +36,7 @@ are how agents follow it.
   reword it: report it to the maintainer.
 - Every public item has the prefix `Smt`; in Lean, the namespace `BSmtLib`
   takes its place. A trait is named by its verb (`SmtConsume`, `SmtParse`).
-  An enum that says which party failed is a `Cause`; one that classifies a
-  defect is a `Kind`.
+  An enum that says why something failed or classifies a defect is a `Kind`.
 - Every panic carries a message.
 - What is matched by text is in American English, for compatibility with
   other APIs: identifiers, the names of files and options, and output that
@@ -46,6 +45,46 @@ are how agents follow it.
   such as `Display` implementations, which are not to be matched.
 - The tree stays free of compiler and linter warnings.
 - Tools and test harnesses are written in Rust or Lean, not in Python.
+
+## Documentation comments
+
+- The first line is a short, simple summary. Detail, examples and "such as"
+  go into the paragraphs after it.
+- Data is described by a noun phrase (`SmtNumeralBuf`: "Owned numeral (base
+  10)."), and what performs an action by its verb (`SmtLexer`: "Lexes SMT-LIB
+  input, handing the tokens to a consumer."; `SmtCommandHandler`: "Handles
+  commands."). A type that plays a role named by a trait names the role:
+  "Handler that checks compliance with SMT-LIB syntax.", "Token consumer that
+  adapts a parser to parse the consumed tokens."
+- A noun phrase starts without an article ("Kind of the error."); an article
+  goes inside it where the phrase reads awkwardly without one ("View of a
+  decimal"). A first line that is a full sentence, as for some variants ("The
+  handler failed."), keeps its article.
+- An owned type and its view are "Owned X" and "View of X" ("View of a
+  keyword", "View of whitespace content"). They share the paragraphs after the
+  first line, and neither says which one views the other.
+- An enum with few variants summarises them in parentheses: "Kind of a
+  quantifier (existential or universal)."
+- Errors: a type is "Error that forced lexing to stop." or "Error constructing
+  a span that would be invalid."; the enum read by `kind()` is "Why lexing
+  failed (lexical or consumer error)."; `kind()` is "Kind of the error." and
+  `into_kind()` "Converts into the kind of the error."
+- A handler callback names its command: "(`declare-sort`)" where it stands for
+  the command, "(in `define-funs-rec`)" where it handles a part of it.
+- "SMT-LIB" is written only where the context does not make it obvious: for
+  commands, scripts, input, text, syntax and the standard.
+- A restrictive clause takes "that" and no comma; ", which" opens only a
+  non-restrictive one. A clause is preferred to a participle: "Iterator that
+  moves …", not "Iterator moving …". "Error constructing …" is not such a
+  participle but short for "Error that occurred while constructing …", and
+  stays.
+- Rules and their discussion come before the paragraph on content, which comes
+  last: "The content is stripped of the base declaration, e.g. for the token
+  `#b0101`, [as_slice](Self::as_slice) returns `b"0101"`."
+- Items are linked without code formatting (`[SmtNumeral]`,
+  `[as_slice](Self::as_slice)`, `[u32]`); literal characters, tokens and
+  syntax are in code formatting (`` `0` ``, `` `|` ``, `` `#b0101` ``).
+- Comment lines are at most 100 columns long.
 
 ## Rust (`rust/`)
 

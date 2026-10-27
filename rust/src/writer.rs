@@ -79,7 +79,7 @@ impl Error for SmtWriteError {
     }
 }
 
-/// How tokens are laid out by the writer.
+/// How tokens are laid out by the writer (single line, compact, or as handed over).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SmtWriteStyle {
     /// Writes tokens on a single line, as far as comments allow.

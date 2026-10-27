@@ -20,7 +20,8 @@ pub enum SmtLexicalErrorKind {
     UnexpectedTrailingToken,
 }
 
-/// Character class expected by the lexer.
+/// Character class expected by the lexer (fraction digit, hexadecimal digit, binary digit,
+/// or base).
 ///
 /// This is used in [SmtLexicalErrorKind::Expected].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

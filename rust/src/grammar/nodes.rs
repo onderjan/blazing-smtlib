@@ -12,6 +12,7 @@ use crate::{
     token::{SmtAppendTokens, SmtGeneralReserved, SmtReserved, SmtToken, SmtTokensCursor},
 };
 
+/// Owned index of an identifier (numeral or symbol).
 #[derive(Debug, Clone)]
 pub enum SmtIndexBuf {
     Numeral(SmtNumeralBuf),
@@ -27,6 +28,7 @@ impl SmtIndexBuf {
     }
 }
 
+/// Owned identifier.
 #[derive(Debug, Clone)]
 pub struct SmtIdentBuf {
     pub name: SmtSymbolBuf,
@@ -49,6 +51,7 @@ impl SmtIdentBuf {
     }
 }
 
+/// Owned qualified identifier.
 pub struct SmtQualifiedIdentBuf<H: SmtHandler + ?Sized> {
     pub ident: SmtIdentBuf,
     pub sort: Option<H::Sort>,
@@ -95,7 +98,7 @@ where
     }
 }
 
-/// Index of an identifier to be handled.
+/// View of an index of an identifier (numeral or symbol).
 #[derive(Debug, Clone, Copy)]
 pub enum SmtIndex<'a> {
     Numeral(SmtNumeral<'a>),
@@ -111,7 +114,7 @@ impl SmtIndex<'_> {
     }
 }
 
-/// The indices of an identifier that is to be handled.
+/// View of the indices of an identifier.
 #[derive(Clone, Copy)]
 pub struct SmtIndices<'a> {
     text: &'a [u8],
@@ -157,7 +160,7 @@ impl Debug for SmtIndices<'_> {
     }
 }
 
-/// Owned indices of an identifier, from which [`SmtIndices`] is viewed.
+/// Owned indices of an identifier.
 #[derive(Clone)]
 pub struct SmtIndicesBuf {
     text: Vec<u8>,
@@ -219,7 +222,7 @@ impl Debug for SmtIndicesBuf {
     }
 }
 
-/// Identifier to be handled.
+/// View of an identifier.
 #[derive(Debug, Clone, Copy)]
 pub struct SmtIdent<'a> {
     pub name: SmtSymbol<'a>,
@@ -239,7 +242,7 @@ impl SmtIdent<'_> {
     }
 }
 
-/// A qualified identifier to be handled.
+/// View of a qualified identifier.
 pub struct SmtQualifiedIdent<'a, H: SmtHandler + ?Sized> {
     pub ident: SmtIdent<'a>,
     pub sort: Option<H::Sort>,
@@ -278,7 +281,7 @@ where
     }
 }
 
-/// A sort to be handled.
+/// View of a sort.
 pub struct SmtSort<'a, H: SmtHandler + ?Sized> {
     pub ident: SmtIdent<'a>,
     pub args: SmtMultiple<'a, H::Sort>,
@@ -296,7 +299,7 @@ where
     }
 }
 
-/// A term that is an application.
+/// View of an application.
 ///
 /// It is guaranteed that `args` are nonempty.
 pub struct SmtApplication<'a, H: SmtHandler + ?Sized> {
@@ -345,7 +348,7 @@ impl<'a, H: SmtHandler + ?Sized> SmtApplication<'a, H> {
     }
 }
 
-/// An application or a constructor pattern was to be built without arguments.
+/// Error constructing an application or a constructor pattern without arguments.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtEmptyArgumentsError;
 
@@ -370,6 +373,7 @@ where
     }
 }
 
+/// Owned special constant (numeral, decimal, hexadecimal, binary, or string).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SmtSpecialConstantBuf {
     Numeral(SmtNumeralBuf),
@@ -391,7 +395,7 @@ impl SmtSpecialConstantBuf {
     }
 }
 
-/// A special constant to be handled.
+/// View of a special constant (numeral, decimal, hexadecimal, binary, or string).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSpecialConstant<'a> {
     Numeral(SmtNumeral<'a>),
@@ -413,13 +417,14 @@ impl SmtSpecialConstant<'_> {
     }
 }
 
-/// A term to be handled.
+/// View of a term (special constant, qualified identifier, or application).
 pub enum SmtTerm<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     QualifiedIdent(SmtQualifiedIdent<'a, H>),
     Application(SmtApplication<'a, H>),
 }
 
+/// Kind of a quantifier (existential or universal).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtQuantifierKind {
     Exists,
@@ -440,6 +445,7 @@ where
     }
 }
 
+/// View of an attribute value (special constant, symbol, or a list of S-expressions).
 pub enum SmtAttributeValue<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     Symbol(SmtSymbol<'a>),
@@ -459,10 +465,10 @@ where
     }
 }
 
-/// Simple match pattern: a symbol or a wildcard.
+/// Owned simple match pattern (symbol or wildcard).
 #[derive(Debug, Clone)]
 pub enum SmtSimplePatternBuf {
-    /// A symbol as a pattern.
+    /// Symbol as a pattern.
     ///
     /// In the match pattern position, the symbol should be
     /// either a variable or a nullary constructor, and
@@ -470,7 +476,9 @@ pub enum SmtSimplePatternBuf {
     /// In the constructor application argument position,
     /// it should be a variable.
     Symbol(SmtSymbolBuf),
-    /// A wildcard (reserved word underscore `_`) as a pattern.
+    /// Wildcard as a pattern.
+    ///
+    /// The wildcard is the reserved word `_`.
     Wildcard,
 }
 
@@ -483,12 +491,12 @@ impl SmtSimplePatternBuf {
     }
 }
 
-/// Match pattern: a symbol, a wildcard, or a constructor application.
+/// Owned match pattern (simple or constructor pattern).
 #[derive(Debug, Clone)]
 pub enum SmtPatternBuf {
-    /// A simple match pattern, either a symbol or a wildcard.
+    /// Simple match pattern.
     Simple(SmtSimplePatternBuf),
-    /// A constructor applied to at least one variable or wildcard.
+    /// Constructor pattern.
     Application(SmtPatternApplicationBuf),
 }
 
@@ -501,8 +509,9 @@ impl SmtPatternBuf {
     }
 }
 
-/// A constructor applied to at least one variable or wildcard, from which
-/// [`SmtPatternApplication`] is viewed.
+/// Owned constructor pattern.
+///
+/// It is a constructor applied to at least one variable or wildcard.
 #[derive(Debug, Clone)]
 pub struct SmtPatternApplicationBuf {
     constructor: SmtSymbolBuf,
@@ -540,6 +549,8 @@ impl SmtPatternApplicationBuf {
     }
 }
 
+/// View of an S-expression (special constant, symbol, reserved word, keyword, or a list of
+/// S-expressions).
 pub enum SmtSExpr<'a, H: SmtHandler + ?Sized> {
     SpecialConstant(SmtSpecialConstant<'a>),
     Symbol(SmtSymbol<'a>),
@@ -563,7 +574,7 @@ where
     }
 }
 
-/// Simple match pattern to be handled: a symbol or a wildcard.
+/// View of a simple match pattern (symbol or wildcard).
 #[derive(Debug, Clone, Copy)]
 pub enum SmtSimplePattern<'a> {
     Symbol(SmtSymbol<'a>),
@@ -579,7 +590,7 @@ impl SmtSimplePattern<'_> {
     }
 }
 
-/// The arguments of a constructor pattern to be handled.
+/// View of the arguments of a constructor pattern.
 #[derive(Clone, Copy)]
 pub struct SmtSimplePatterns<'a> {
     text: &'a [u8],
@@ -622,7 +633,7 @@ impl Debug for SmtSimplePatterns<'_> {
     }
 }
 
-/// Owned arguments of a constructor pattern, from which [`SmtSimplePatterns`] is viewed.
+/// Owned arguments of a constructor pattern.
 #[derive(Clone)]
 pub struct SmtSimplePatternsBuf {
     text: Vec<u8>,
@@ -684,12 +695,12 @@ impl Debug for SmtSimplePatternsBuf {
     }
 }
 
-/// Match pattern to be handled: a symbol, a wildcard, or a constructor application.
+/// View of a match pattern (simple or constructor pattern).
 #[derive(Debug, Clone, Copy)]
 pub enum SmtPattern<'a> {
-    /// A simple match pattern, either a symbol or a wildcard.
+    /// Simple match pattern.
     Simple(SmtSimplePattern<'a>),
-    /// A constructor applied to at least one variable or wildcard.
+    /// Constructor pattern.
     Application(SmtPatternApplication<'a>),
 }
 
@@ -702,8 +713,9 @@ impl SmtPattern<'_> {
     }
 }
 
-/// A constructor applied to at least one variable or wildcard, as a match pattern
-/// to be handled.
+/// View of a constructor pattern.
+///
+/// It is a constructor applied to at least one variable or wildcard.
 #[derive(Debug, Clone, Copy)]
 pub struct SmtPatternApplication<'a> {
     constructor: SmtSymbol<'a>,

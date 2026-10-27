@@ -35,7 +35,8 @@ impl<H: SmtCommandHandler> fmt::Debug for SmtCommandParser<H> {
     }
 }
 
-/// Outcome of parsing a command with [SmtCommandParser].
+/// Outcome of parsing a command with [SmtCommandParser] (command, version switch, exit,
+/// or end of file).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtCommandOutcome {
     /// A command other than special ones was parsed.

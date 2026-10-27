@@ -69,7 +69,7 @@ reserved_words! {
         Match = "match",
         Par = "par",
     }
-    /// Reserved word naming a standard command.
+    /// Reserved word that names a standard command.
     ///
     /// Standard SMT-LIB2 commands are reserved words.
     CommandName: SmtCommandNameReserved {

@@ -13,9 +13,9 @@ use crate::{
     token::{SmtAppendTokens, SmtToken, SmtTokensCursor},
 };
 
-/// Multiple values to be handled.
+/// View of multiple values.
 ///
-/// The values can be inspected and modified in place, and [`IntoIterator`]
+/// The values can be inspected and modified in place, and [IntoIterator]
 /// moves them out in order.
 pub struct SmtMultiple<'a, T> {
     stack: &'a mut Vec<T>,
@@ -110,7 +110,7 @@ impl<'a, T> IntoIterator for SmtMultiple<'a, T> {
     }
 }
 
-/// Iterator over multiple values.
+/// Iterator that moves multiple values out in order.
 pub struct SmtMultipleIntoIter<'a, T>(vec::Drain<'a, T>);
 
 impl<T> Iterator for SmtMultipleIntoIter<'_, T> {
@@ -165,10 +165,11 @@ impl<T: Debug> Debug for SmtMultiple<'_, T> {
     }
 }
 
-/// Named values to be handled: each a symbol with a value,
-/// such as let bindings or sorted variables.
+/// View of named values.
 ///
-/// The values can be inspected and modified in place, and [`IntoIterator`]
+/// Each value is named by a symbol, such as in let bindings or sorted variables.
+///
+/// The values can be inspected and modified in place, and [IntoIterator]
 /// moves them out in order.
 pub struct SmtNamedValues<'a, V> {
     text: &'a [u8],
@@ -176,10 +177,14 @@ pub struct SmtNamedValues<'a, V> {
     values: SmtMultiple<'a, V>,
 }
 
-/// Let bindings to be handled: the names with their terms.
+/// View of let bindings.
+///
+/// It holds the names with their terms.
 pub type SmtBindings<'a, T> = SmtNamedValues<'a, T>;
 
-/// Sorted variables to be handled: the names with their sorts.
+/// View of sorted variables.
+///
+/// It holds the names with their sorts.
 pub type SmtSortedVars<'a, S> = SmtNamedValues<'a, S>;
 
 impl<'a, V> SmtNamedValues<'a, V> {
@@ -251,7 +256,7 @@ impl<'a, V> IntoIterator for SmtNamedValues<'a, V> {
     }
 }
 
-/// Iterator moving named values out in order.
+/// Iterator that moves named values out in order.
 pub struct SmtNamedValuesIntoIter<'a, V> {
     text: &'a [u8],
     names: SmtMultipleIntoIter<'a, SymbolHandle>,
@@ -297,7 +302,9 @@ impl<V: Debug> Debug for SmtNamedValues<'_, V> {
     }
 }
 
-/// Owned named values, from which [`SmtNamedValues`] is viewed.
+/// Owned named values.
+///
+/// Each value is named by a symbol, such as in let bindings or sorted variables.
 #[derive(Clone)]
 pub struct SmtNamedValuesBuf<V> {
     text: Vec<u8>,
@@ -364,6 +371,7 @@ impl<V: Debug> Debug for SmtNamedValuesBuf<V> {
     }
 }
 
+/// View of match cases.
 pub struct SmtMatchCases<'a, H: SmtHandler + ?Sized> {
     text: &'a [u8],
     simple_patterns: &'a [SimplePatternHandle],
@@ -430,7 +438,7 @@ impl<'a, H: SmtHandler + ?Sized> SmtMatchCases<'a, H> {
     }
 }
 
-/// Iterator over let bindings.
+/// Iterator that moves match cases out in order.
 pub struct SmtMatchCasesIntoIter<'a, H: SmtHandler + ?Sized> {
     text: &'a [u8],
     simple_patterns: &'a [SimplePatternHandle],
@@ -497,7 +505,7 @@ impl<'a, H: SmtHandler + ?Sized> IntoIterator for SmtMatchCases<'a, H> {
     }
 }
 
-/// Owned match cases, from which [`SmtMatchCases`] is viewed.
+/// Owned match cases.
 pub struct SmtMatchCasesBuf<H: SmtHandler + ?Sized> {
     text: Vec<u8>,
     simple_patterns: Vec<SimplePatternHandle>,
@@ -598,7 +606,9 @@ where
     }
 }
 
-/// Symbols to be handled, such as the parameters of a sort definition.
+/// View of symbols.
+///
+/// For example, the parameters of a sort definition.
 #[derive(Clone, Copy)]
 pub struct SmtSymbols<'a> {
     text: &'a [u8],
@@ -677,7 +687,9 @@ impl Debug for SmtSymbols<'_> {
     }
 }
 
-/// Owned symbols, from which [`SmtSymbols`] is viewed.
+/// Owned symbols.
+///
+/// For example, the parameters of a sort definition.
 #[derive(Clone)]
 pub struct SmtSymbolsBuf {
     text: Vec<u8>,
@@ -730,8 +742,9 @@ impl Debug for SmtSymbolsBuf {
     }
 }
 
-/// A function signature to be handled: the name, the parameters
-/// with their sorts, and the result sort.
+/// View of a function signature.
+///
+/// It holds the name, the parameters with their sorts, and the result sort.
 ///
 /// The sorts are handed over by reference.
 pub struct SmtFunctionSignature<'a, S> {
@@ -781,7 +794,9 @@ impl<S: Debug> Debug for SmtFunctionSignature<'_, S> {
     }
 }
 
-/// Function signatures to be handled, such as those of `define-funs-rec`.
+/// View of function signatures.
+///
+/// For example, those of `define-funs-rec`.
 ///
 /// The sorts are handed over by reference.
 pub struct SmtFunctionSignatures<'a, S> {
@@ -869,8 +884,9 @@ impl<S: Debug> Debug for SmtFunctionSignatures<'_, S> {
     }
 }
 
-/// Owned function signatures, from which [`SmtFunctionSignatures`]
-/// and each [`SmtFunctionSignature`] are viewed.
+/// Owned function signatures.
+///
+/// For example, those of `define-funs-rec`.
 #[derive(Clone)]
 pub struct SmtFunctionSignaturesBuf<S> {
     text: Vec<u8>,
@@ -894,7 +910,7 @@ impl<S> SmtFunctionSignaturesBuf<S> {
         }
     }
 
-    /// Starts a signature with no parameters; [`Self::push_param`] adds them.
+    /// Starts a signature with no parameters; [Self::push_param] adds them.
     pub fn push(&mut self, name: SmtSymbol, result_sort: S) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
@@ -964,8 +980,9 @@ impl<S: Debug> Debug for SmtFunctionSignaturesBuf<S> {
     }
 }
 
-/// Sort names with their arities to be handled, such as those
-/// declared by `declare-datatypes`.
+/// View of sort names with their arities.
+///
+/// For example, those declared by `declare-datatypes`.
 #[derive(Clone, Copy)]
 pub struct SmtSortArities<'a> {
     text: &'a [u8],
@@ -1047,7 +1064,9 @@ impl Debug for SmtSortArities<'_> {
     }
 }
 
-/// Owned sort names with their arities, from which [`SmtSortArities`] is viewed.
+/// Owned sort names with their arities.
+///
+/// For example, those declared by `declare-datatypes`.
 #[derive(Clone)]
 pub struct SmtSortAritiesBuf {
     text: Vec<u8>,
@@ -1110,10 +1129,11 @@ impl Debug for SmtSortAritiesBuf {
     }
 }
 
-/// Datatype constructors to be handled: each a name with its selectors,
-/// the selectors as sorted variables.
+/// View of datatype constructors.
 ///
-/// [`IntoIterator`] hands over each constructor with its selectors,
+/// Each constructor has a name and selectors, the selectors as sorted variables.
+///
+/// [IntoIterator] hands over each constructor with its selectors,
 /// whose sorts can be moved out.
 pub struct SmtConstructors<'a, S> {
     text: &'a [u8],
@@ -1208,7 +1228,9 @@ impl<S: Debug> Debug for SmtConstructors<'_, S> {
     }
 }
 
-/// Owned datatype constructors, from which [`SmtConstructors`] is viewed.
+/// Owned datatype constructors.
+///
+/// Each constructor has a name and selectors, the selectors as sorted variables.
 ///
 /// Each constructor's selectors are kept in storage of their own,
 /// which is reused when the constructors are cleared.
@@ -1229,7 +1251,7 @@ impl<S> SmtConstructorsBuf<S> {
         }
     }
 
-    /// Starts a constructor with no selectors; [`Self::push_selector`] adds them.
+    /// Starts a constructor with no selectors; [Self::push_selector] adds them.
     pub fn push(&mut self, name: SmtSymbol) {
         let index = self.names.len();
         let name = SymbolHandle::create_by_push(&mut self.text, name);

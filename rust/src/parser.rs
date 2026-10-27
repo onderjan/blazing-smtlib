@@ -85,7 +85,7 @@ pub enum SmtParseErrorKind<E> {
     Handler(E),
 }
 
-/// Why a syntax error was returned.
+/// Why a syntax error was returned (expected item, empty list, or missing item).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxErrorKind {
     /// One of the items was expected here.
@@ -143,7 +143,7 @@ pub enum SmtNonEmptyList {
     GetValueTerms,
 }
 
-/// Announced item that did not arrive.
+/// Announced item that did not arrive (function body or datatype).
 ///
 /// Used in [SmtSyntaxErrorKind::Missing].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -173,7 +173,7 @@ pub(crate) mod expected {
         SmtSyntaxExpected::Reserved(SmtReserved::General(SmtGeneralReserved::Par));
 }
 
-/// Why switching the version failed.
+/// Why switching the version failed (unsupported version or too many declarations).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtVersionErrorKind {
     /// The requested version was rejected as not supported.
