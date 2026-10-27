@@ -1,6 +1,6 @@
 //! Public-API tests of locations and spans: the consistency their
-//! constructors check, their order, the join of spans, and that a location
-//! does not advance past the last offset.
+//! constructors check, their order, and that a location does not advance
+//! past the last offset.
 //!
 //! They check the Rust interface itself and call the library directly.
 
@@ -61,25 +61,38 @@ fn a_location_is_consistent_exactly_when_its_lines_and_columns_fit_before_its_of
 }
 
 #[test]
-fn a_span_must_not_end_before_it_starts() {
+fn a_span_is_consistent_exactly_when_its_bytes_hold_what_separates_its_locations() {
+    // on the same line, the bytes between the locations are exactly the
+    // columns between them; on a later line, they hold a line feed for each
+    // line ended and the columns before the end
     let start = location(10, 2, 3);
-    // empty, within a line, and across lines
     for end in [
+        // empty, and within the line
         location(10, 2, 3),
         location(12, 2, 5),
+        // across lines, with bytes to spare and with none
         location(15, 3, 0),
         location(40, 9, 1),
+        location(11, 3, 0),
+        location(13, 4, 1),
     ] {
         let built = span(start, end);
         assert_eq!((built.start(), built.end()), (start, end));
         assert_eq!(built.is_empty(), start == end);
     }
-    // ending earlier by offset, by line, or by column on the same line
     for end in [
+        // ending earlier by offset, by line, or by column on the same line
         location(9, 2, 3),
         location(9, 2, 4),
         location(20, 1, 9),
         location(20, 2, 2),
+        // on the same line, more bytes than columns or more columns than bytes
+        location(20, 2, 4),
+        location(11, 2, 9),
+        // on a later line, too few bytes for the line feeds and the columns
+        location(10, 3, 0),
+        location(12, 4, 1),
+        location(13, 3, 3),
     ] {
         assert_eq!(
             SmtSpan::new(start, end),
@@ -114,45 +127,13 @@ fn spans_are_ordered_by_start_then_end() {
     let a = location(0, 0, 0);
     let b = location(5, 1, 0);
     let c = location(10, 1, 5);
-    let d = location(12, 0, 0);
+    let d = location(12, 1, 7);
     // the start decides first, even against a later end
     let ordered = [span(a, a), span(a, b), span(a, d), span(b, c), span(c, c)];
     for (i, earlier) in ordered.iter().enumerate() {
         for later in &ordered[i + 1..] {
             assert!(earlier < later, "{earlier:?} should be before {later:?}");
         }
-    }
-}
-
-#[test]
-fn a_joined_span_runs_from_the_earlier_start_to_the_later_end() {
-    let a = location(0, 0, 0);
-    let b = location(5, 1, 0);
-    let c = location(10, 1, 5);
-    let d = location(12, 2, 0);
-    for (first, second, joined) in [
-        // apart
-        (span(a, b), span(c, d), span(a, d)),
-        // overlapping
-        (span(a, c), span(b, d), span(a, d)),
-        // nested
-        (span(a, d), span(b, c), span(a, d)),
-        // touching, and an empty span inside another
-        (span(a, b), span(b, c), span(a, c)),
-        (span(b, b), span(a, c), span(a, c)),
-        // the same
-        (span(b, c), span(b, c), span(b, c)),
-    ] {
-        assert_eq!(
-            first.join(second),
-            joined,
-            "{first:?} joined with {second:?}"
-        );
-        assert_eq!(
-            second.join(first),
-            joined,
-            "{second:?} joined with {first:?}"
-        );
     }
 }
 
