@@ -2,23 +2,23 @@
 //!
 //! A location records an offset in bytes and line/column information, and a
 //! span is a half-open range `[start, end)` between locations. The span can be
-//! empty, which is usually the case if an error occured at the end of input due
-//! to some unclosed item.
+//! empty, which is usually the case if an error occurred at the end of input
+//! due to some unclosed item.
 //!
 //! The locations and spans are given by the [lexer](crate::lexer) for tokens
-//! via [`SmtLexerToken::span`](crate::lexer::SmtLexerToken::span). Lexing and
-//! reading produces the result value wrapped in [`SmtLocated`] on success and a
-//! spanned error on failure. Parsers and handlers do not interact with
-//! locations and spans.
+//! via [`SmtLexerToken::span`](crate::lexer::SmtLexerToken::span).
+//! [`SmtLexer`](crate::lexer::SmtLexer) and [`SmtReader`](crate::SmtReader)
+//! produce the result value wrapped in [`SmtLocated`] on success and a spanned
+//! error on failure. Parsers and handlers do not interact with locations and
+//! spans.
 
 /// Location in a byte stream.
 ///
 /// All counts are in bytes. While SMT-LIB accepts both CR and LF as a comment
-/// separator, we consider only LF to start a new line for location purposes as
-/// that is compatible with both LF and CRLF conventions.
+/// separator, the line/column location convention here is that only LF starts a
+/// new line, for compatibility with both the LF and the CRLF line endings.
 ///
-/// The offset, line, and column all start at zero, but are formatted one-based
-/// using [`Display`](std::fmt::Display).
+/// The offset, line, and column all start at zero.
 ///
 /// The location is guaranteed to be valid with respect to the offset and
 /// line/column: as each terminated line must contain at least one byte (LF),
