@@ -1,3 +1,7 @@
+//! Parsers of syntactic categories, commands, and scripts, and parser combinators.
+//!
+//!
+
 mod adapter;
 mod category;
 mod command;

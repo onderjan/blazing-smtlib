@@ -1,3 +1,6 @@
+//! Lexer that produces tokens from input bytes, handing them over to a token consumer.
+//!
+//!
 mod char_class;
 mod cursor;
 mod error;

@@ -1,3 +1,7 @@
+//! Syntax tokens and traits for their manipulation.
+//!
+//!
+
 use std::{collections::VecDeque, error::Error, fmt, io::Write, ops::ControlFlow};
 
 use crate::{

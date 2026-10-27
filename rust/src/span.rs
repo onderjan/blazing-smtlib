@@ -1,3 +1,7 @@
+//! Locations and spans in a byte stream, used in lexer tokens and errors.
+//!
+//!
+
 /// Location in a byte stream.
 ///
 /// All counts are in bytes. While SMT-LIB accepts both CR and LF as a comment

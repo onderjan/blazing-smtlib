@@ -1,3 +1,5 @@
+//! SMT-LIB grammar: identifiers, sorts, terms, attributes etc.
+
 mod multiple;
 mod nodes;
 
