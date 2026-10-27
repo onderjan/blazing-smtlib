@@ -159,8 +159,11 @@ impl<V> SmtLocated<V> {
 ///
 /// The span is a half-open range `[start, end)` between locations.
 ///
-/// The span is guaranteed to be valid: The end location must be at or after the
-/// start location, both in terms of offset and line/column information.
+/// The span is guaranteed to be valid with respect to the offsets and
+/// line/column of its locations: the end is not before the start, and the bytes
+/// between them hold what separates them. On the same line, the column advances
+/// by exactly the number of bytes. On a later line, each line ended takes at
+/// least one byte (LF), and each column before the end takes one byte.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
 pub struct SmtSpan {
     start: SmtLocation,
@@ -201,14 +204,30 @@ impl SmtSpan {
     }
 
     fn is_allowed(start: SmtLocation, end: SmtLocation) -> bool {
-        // both offsets and line/column information must be consistent
-        if end.offset < start.offset {
+        // end offset must be greater than or equal to the start offset,
+        // retain the difference
+        let Some(difference) = end.offset.checked_sub(start.offset) else {
             return false;
-        }
+        };
         match end.line.cmp(&start.line) {
-            std::cmp::Ordering::Less => false,
-            std::cmp::Ordering::Equal => start.column <= end.column,
-            std::cmp::Ordering::Greater => true,
+            std::cmp::Ordering::Less => {
+                // end line must not be less than start line
+                false
+            }
+            std::cmp::Ordering::Equal => {
+                // same line
+                // the column difference must be exactly the byte difference
+                end.column.checked_sub(start.column) == Some(difference)
+            }
+            std::cmp::Ordering::Greater => {
+                // Compute the minimal possible difference that is implied by
+                // line/column information: each terminated line is at least 1
+                // byte (LF) and each column of the end line is 1 byte.
+                // The computation cannot overflow as we know
+                // start.line < end.line and end.line + end.column <= end.offset.
+                let min_implied_difference = (end.line - start.line) + end.column;
+                min_implied_difference <= difference
+            }
         }
     }
 
@@ -244,13 +263,6 @@ impl SmtSpan {
 
     pub fn is_empty(&self) -> bool {
         self.start == self.end
-    }
-
-    pub fn join(self, other: Self) -> Self {
-        Self {
-            start: self.start.min(other.start),
-            end: self.end.max(other.end),
-        }
     }
 }
 
@@ -307,28 +319,6 @@ mod tests {
     fn after_column_advances_without_ending_the_line() {
         let location = location_after(b"abc\nd").after_column();
         assert_eq!(loc(location), (6, 1, 2));
-    }
-
-    #[test]
-    fn join_takes_the_earlier_start_and_the_later_end() {
-        let first = span_between(b"", b"ab");
-        let second = span_between(b"ab\nc", b"ab\ncde");
-        let joined = first.join(second);
-
-        assert_eq!(loc(joined.start()), (0, 0, 0));
-        assert_eq!(loc(joined.end()), (6, 1, 3));
-        // the order of the operands does not matter
-        assert_eq!(second.join(first), joined);
-        // joining a span with itself changes nothing
-        assert_eq!(first.join(first), first);
-    }
-
-    #[test]
-    fn join_with_a_contained_span_is_the_containing_one() {
-        let outer = span_between(b"", b"ab\ncde");
-        let inner = span_between(b"ab", b"ab\nc");
-        assert_eq!(outer.join(inner), outer);
-        assert_eq!(inner.join(outer), outer);
     }
 
     #[test]
