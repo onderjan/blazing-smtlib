@@ -1,5 +1,45 @@
 //! Syntax tokens and traits for their manipulation.
 //!
+//! A token is one unit of SMT-LIB input, e.g. `(`, `|quoted|`, or `"string"`.
+//! It is also a natural point around which **blazing-smtlib** is split: token
+//! consumers implement [SmtConsume] and [SmtConsumeFrom] over a token cursor
+//! type that implements [SmtCursor], and token producers call
+//! [SmtConsumeFrom::consume], giving it the cursor to consume tokens from.
+//!
+//! The most important producer in the library is
+//! [SmtLexer](crate::lexer::SmtLexer), but [SmtTokensCursor] or a custom cursor
+//! can also be used. [SmtConsume] is implemented by
+//! [SmtParseAdapter](crate::parser::SmtParseAdapter) and
+//! [SmtWriter](crate::SmtWriter).
+//!
+//! [SmtToken] itself is an enumeration over lexical categories with a view into
+//! their content, with the end of file marker (EOF) represented as a token to
+//! simplify the API. Whitespace and comments are also [SmtToken] categories,
+//! and a [SmtConsume] implementation can choose whether those should be passed
+//! through via [SmtConsume::IS_CONCRETE]. This can be used e.g. for
+//! pretty-printing while preserving comments.
+//!
+//! ```rust
+//! # use blazing_smtlib::{SmtVersion, SmtWriterConfig, SmtWriteStyle, SmtWriter, lexer::SmtLexer};
+//! let input = b"   ; comment\r  (check-sat    )";
+//! // rewrite in a compact style to get rid of excess whitespace and normalise line endings
+//! let mut output = Vec::new();
+//! let config = SmtWriterConfig::new(SmtVersion::V2_7).with_style(SmtWriteStyle::Compact);
+//! let writer = SmtWriter::new(&mut output, config);
+//! let mut lexer = SmtLexer::new(writer, SmtVersion::V2_7);
+//! lexer.lex_all(input);
+//! assert_eq!(output, b"; comment\n(check-sat)\n")
+//! ```
+//!
+//! The cursor methods do not return [SmtToken] directly, but values of type
+//! [SmtCursor::Token], so that consumers implementing [SmtConsumeFrom] for a
+//! specific cursor type can use its additional token information, e.g.
+//! [span](crate::span) of [SmtLexerToken]. The tokens can be converted to
+//! syntax tokens using [SmtCursor::syntax]. For sanity, the cursor must make
+//! sure that the tokens produced are valid under its version in force announced
+//! by [SmtCursor::version], e.g. unquoted `lambda` must be produced as
+//! [SmtToken::Symbol] in SMT-LIB 2.6, but [SmtToken::Reserved] in SMT-LIB 2.7.
+//! See [SmtCursor] for further information.
 //!
 
 use std::{collections::VecDeque, error::Error, fmt, io::Write, ops::ControlFlow};
@@ -404,6 +444,12 @@ impl Error for SmtVersionRefused {}
 /// tokens must implement [Copy], be viewable as syntax tokens using
 /// [SmtCursor::syntax], and should be implemented as small views for good
 /// performance.
+///
+/// To allow version-switching and discarding after `(exit)` in SMT-LIB scripts,
+/// the version currently in force must be provided by the cursor using
+/// [SmtCursor::version], and the cursor can be requested to switch to another
+/// version by [SmtCursor::set_version] or forced to start discarding tokens
+/// until EOF by [SmtCursor::discard_rest].
 pub trait SmtCursor {
     /// User type of the token.
     ///
@@ -666,7 +712,7 @@ impl<'a> SmtCursor for SmtTokensCursor<'a> {
     }
 }
 
-/// Appends its tokens to a cursor.
+/// Appends tokens representing the value to a cursor.
 pub trait SmtAppendTokens {
     /// Puts the tokens of the value after those in the cursor.
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>);
@@ -752,43 +798,51 @@ plain_append_tokens!(SmtWhitespace, SmtWhitespaceBuf, Whitespace);
 plain_append_tokens!(SmtComment, SmtCommentBuf, Comment);
 
 /// Consumes tokens sequentially.
+///
+/// [SmtConsumeFrom] defines the actual consumption function from a given
+/// cursor.
 pub trait SmtConsume {
-    /// Value the consumer finishes with.
+    /// Result returned by the consumer on success.
     type Result;
-    /// Error emitted by the consumer.
+    /// Error returned by the consumer on failure.
     type Error;
     /// Whether the consumer consumes whitespace and comments.
     ///
-    /// If true, the consumer operates over concrete tokens:
-    /// it can reconstruct the byte stream precisely thanks
-    /// to the whitespace and comments. The caller must hand
-    /// over the whitespace and comment tokens present between
-    /// true syntactic tokens (unless the consumer specifically
-    /// allows them to be omitted, as e.g. [SmtWriter](crate::SmtWriter) does).
+    /// If true, the consumer operates over concrete tokens: it can reconstruct
+    /// the byte stream precisely thanks to the whitespace and comments. The
+    /// caller must hand over the whitespace and comment tokens present between
+    /// true syntactic tokens (unless the consumer specifically allows them to
+    /// be omitted, as e.g. [SmtWriter](crate::SmtWriter) does).
     ///
-    /// If false, the consumer operates over abstract tokens:
-    /// it is not interested in whitespace and comments,
-    /// and the caller must not hand them over for consumption.
+    /// If false, the consumer operates over abstract tokens: it is not
+    /// interested in whitespace and comments, and the caller must not hand them
+    /// over for consumption.
     const IS_CONCRETE: bool;
 }
 
-/// Consumes tokens sequentially from the given producers.
+/// Consumes tokens sequentially from the given cursor.
+///
+/// This is a subtrait of [SmtConsume], which defines the cursor result and
+/// error types and whether the consumer is concrete. If the consumer does not
+/// use cursor-specific data such as token locations from
+/// [SmtLexerCursor](crate::lexer::SmtLexerCursor), [SmtConsumeFrom] can be
+/// implemented generically over all cursors.
 pub trait SmtConsumeFrom<Z: SmtCursor>: SmtConsume {
     /// Consumes the tokens handed over in the cursor, in order.
     ///
-    /// The caller must ensure that the cursor contains at least one token.
-    /// The consumer must ensure that at least one token is consumed before
-    /// return, no matter the result (even when returning an error).
+    /// The caller must ensure that the cursor contains at least one token. The
+    /// consumer must ensure that at least one token is consumed before return,
+    /// no matter the result (even when returning an error).
     ///
-    /// If the consumer returns [ControlFlow::Continue], the consumer is
-    /// not finished yet and is ready to consume more tokens. Tokens that
-    /// remain unconsumed in the cursor must be handed over again before
-    /// any new ones. The consumer must not return [ControlFlow::Continue]
-    /// when an EOF token is encountered.
+    /// If the consumer returns [ControlFlow::Continue], the consumer is not
+    /// finished yet and is ready to consume more tokens. Tokens that remain
+    /// unconsumed in the cursor must be handed over again before any new ones.
+    /// The consumer must not return [ControlFlow::Continue] when an EOF token
+    /// is encountered.
     ///
-    /// If the consumer returns [ControlFlow::Break], it has finished
-    /// consuming the current value, is returning a result, and is ready
-    /// to start consuming a new value.
+    /// If the consumer returns [ControlFlow::Break], it has finished consuming
+    /// the current value, is returning a result, and is ready to start
+    /// consuming a new value.
     ///
     /// If the consumer returns [Result::Err], it has failed at the last
     /// consumed token. The state of the consumer is unspecified.
