@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use blazing_smtlib::{SmtReadErrorCause, SmtSyntaxChecker, read_smt_file};
+use blazing_smtlib::{SmtReadErrorKind, SmtSyntaxChecker, read_smt_file};
 fn main() -> Result<(), u32> {
     let mut args = std::env::args();
     if args.len() != 2 {
@@ -12,24 +12,24 @@ fn main() -> Result<(), u32> {
     let file_path = args.next().unwrap();
 
     match read_smt_file(&mut SmtSyntaxChecker, PathBuf::from(file_path)) {
-        Err(err) => match err.cause() {
-            SmtReadErrorCause::Io(err) => {
+        Err(err) => match err.kind() {
+            SmtReadErrorKind::Io(err) => {
                 eprintln!("Error reading file: {}", err);
                 Err(2)
             }
-            SmtReadErrorCause::Lexical(err) => {
+            SmtReadErrorKind::Lexical(err) => {
                 eprintln!("Error lexing file: {:?}", err);
                 Err(3)
             }
-            SmtReadErrorCause::Syntax(err) => {
+            SmtReadErrorKind::Syntax(err) => {
                 eprintln!("Error parsing file: {:?}", err);
                 Err(4)
             }
-            SmtReadErrorCause::Version(err) => {
+            SmtReadErrorKind::Version(err) => {
                 eprintln!("Unusable version: {:?}", err);
                 Err(6)
             }
-            SmtReadErrorCause::Handler(err) => {
+            SmtReadErrorKind::Handler(err) => {
                 eprintln!("Nonstandard command: {:?}", err.name());
                 Err(5)
             }

@@ -424,7 +424,7 @@ fn violations<P: SmtParse<SmtSyntaxChecker>>(
                 let returned = match &result {
                     Ok(ControlFlow::Continue(())) => "Continue".to_string(),
                     Ok(ControlFlow::Break(_)) => "Break".to_string(),
-                    Err(err) => format!("{:?}", err.cause()),
+                    Err(err) => format!("{:?}", err.kind()),
                 };
                 if piece.taken() == 0 {
                     found.push(format!(

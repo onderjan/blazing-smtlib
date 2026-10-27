@@ -6,7 +6,7 @@ mod recovery;
 
 pub use cursor::{SmtLexerCursor, SmtLexerToken, SmtLexerWindow};
 pub use error::{
-    SmtLexerError, SmtLexerErrorCause, SmtLexerReadError, SmtLexerReadErrorCause,
+    SmtLexerError, SmtLexerErrorKind, SmtLexerReadError, SmtLexerReadErrorKind,
     SmtLexicalErrorKind, SmtLexicalExpected,
 };
 pub use recovery::{SmtFailFast, SmtLexerRecovery, SmtRecover, SmtRecovering};
@@ -300,10 +300,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
                 Ok(buffer) => buffer,
                 Err(err) => {
                     let span = SmtSpan::new_empty(self.current_location());
-                    return Err(SmtLexerReadError::new(
-                        SmtLexerReadErrorCause::Io(err),
-                        span,
-                    ));
+                    return Err(SmtLexerReadError::new(SmtLexerReadErrorKind::Io(err), span));
                 }
             };
             if buffer.is_empty() {
@@ -332,7 +329,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
         path: impl AsRef<Path>,
     ) -> Result<SmtLocated<C::Result>, SmtLexerReadError<C::Error>> {
         let file = File::open(path).map_err(|err| {
-            SmtLexerReadError::new(SmtLexerReadErrorCause::Io(err), SmtSpan::new_zero())
+            SmtLexerReadError::new(SmtLexerReadErrorKind::Io(err), SmtSpan::new_zero())
         })?;
         // a large buffer gives the lexer large batches
         const BUF_READER_CAPACITY: usize = 1024 * 1024;
@@ -1914,7 +1911,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
 
                 return Err(Interrupted {
                     result: Err(SmtLexerError::new(
-                        SmtLexerErrorCause::Lexical(SmtLexicalErrorKind::UnexpectedTrailingToken),
+                        SmtLexerErrorKind::Lexical(SmtLexicalErrorKind::UnexpectedTrailingToken),
                         span,
                         None,
                     )),
@@ -1959,7 +1956,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
                     }
                 }
                 Err(err) => Err(SmtLexerError::new(
-                    SmtLexerErrorCause::Consumer(err),
+                    SmtLexerErrorKind::Consumer(err),
                     consumed_span,
                     None,
                 )),
@@ -2135,7 +2132,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
         // that occurred during lexing
         Interrupted {
             result: Err(SmtLexerError::new(
-                SmtLexerErrorCause::Lexical(kind),
+                SmtLexerErrorKind::Lexical(kind),
                 span,
                 None,
             )),
@@ -2159,8 +2156,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
             RecoveryState::End
         } else {
             // start recovering from inside the string or quoted symbol if necessary
-            match failure.error.cause() {
-                SmtLexerErrorCause::Lexical(kind) => match kind {
+            match failure.error.kind() {
+                SmtLexerErrorKind::Lexical(kind) => match kind {
                     SmtLexicalErrorKind::ForbiddenByteInString => RecoveryState::String,
                     SmtLexicalErrorKind::BackslashInQuotedSymbol
                     | SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol => {
@@ -2169,7 +2166,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
                     _ => RecoveryState::Plain,
                 },
                 // the consumer fails at the boundary after a whole token
-                SmtLexerErrorCause::Consumer(_) => RecoveryState::Boundary,
+                SmtLexerErrorKind::Consumer(_) => RecoveryState::Boundary,
             }
         };
 

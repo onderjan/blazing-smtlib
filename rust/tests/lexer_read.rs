@@ -18,7 +18,7 @@ use std::ops::ControlFlow;
 use blazing_smtlib::{
     SmtVersion,
     lexer::{
-        SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerReadError, SmtLexerReadErrorCause,
+        SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerReadError, SmtLexerReadErrorKind,
         SmtLexicalErrorKind,
     },
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken},
@@ -279,7 +279,7 @@ impl BufRead for Failing<'_> {
     }
 }
 
-/// Tests the Rust interface itself: the cause of the error, its location
+/// Tests the Rust interface itself: the kind of the error, its location
 /// and its `Display`. Calls the lexer directly.
 #[test]
 fn a_failure_of_the_buffered_reader_is_an_io_cause_shown_where_it_failed() {
@@ -288,7 +288,7 @@ fn a_failure_of_the_buffered_reader_is_an_io_cause_shown_where_it_failed() {
             input: b"(check-sat)\n(",
         })
         .expect_err("the reader fails");
-    assert!(matches!(err.cause(), SmtLexerReadErrorCause::Io(_)));
+    assert!(matches!(err.kind(), SmtLexerReadErrorKind::Io(_)));
     assert_eq!(err.location(), err.span().start());
     assert!(
         err.to_string()
@@ -312,11 +312,11 @@ fn a_lexical_error_from_a_buffered_reader_is_shown_as_the_one_of_the_slice() {
             .expect_err("the input does not lex");
         assert!(
             matches!(
-                err.cause(),
-                SmtLexerReadErrorCause::Lexical(SmtLexicalErrorKind::MissingDelimiter)
+                err.kind(),
+                SmtLexerReadErrorKind::Lexical(SmtLexicalErrorKind::MissingDelimiter)
             ),
             "{:?}",
-            err.cause()
+            err.kind()
         );
         assert_eq!(err.span(), from_slice.span(), "buffers of {size}");
         assert_eq!(err.location(), from_slice.location(), "buffers of {size}");
@@ -340,6 +340,6 @@ fn a_file_is_lexed_from_a_path_of_any_of_the_usual_types() {
         lexer.lex_file(path.clone()),
         lexer.lex_file(text.clone()),
     ] {
-        result.unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+        result.unwrap_or_else(|err| panic!("unexpected error {:?}", err.kind()));
     }
 }

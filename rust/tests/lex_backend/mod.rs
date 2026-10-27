@@ -37,9 +37,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use blazing_smtlib::{
     SmtVersion,
-    lexer::{
-        SmtLexer, SmtLexerCursor, SmtLexerErrorCause, SmtLexicalErrorKind, SmtLexicalExpected,
-    },
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorKind, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::SmtDecimal,
     span::SmtLocation,
     token::{SmtConsume, SmtConsumeFrom, SmtCursor, SmtReserved, SmtToken, SmtTokenCategory},
@@ -243,8 +241,8 @@ fn rust_lex_as<const WHITESPACE: bool>(version: SmtVersion, feeds: &[Feed<'_>]) 
             };
             match result {
                 Ok(_) => locations.push(loc(lexer.current_location())),
-                Err(err) => match (err.span(), err.into_cause()) {
-                    (span, SmtLexerErrorCause::Lexical(kind)) => {
+                Err(err) => match (err.span(), err.into_kind()) {
+                    (span, SmtLexerErrorKind::Lexical(kind)) => {
                         error = Some(LexedError {
                             kind,
                             start: loc(span.start()),
@@ -252,7 +250,7 @@ fn rust_lex_as<const WHITESPACE: bool>(version: SmtVersion, feeds: &[Feed<'_>]) 
                         });
                         break;
                     }
-                    (_, SmtLexerErrorCause::Consumer(never)) => match never {},
+                    (_, SmtLexerErrorKind::Consumer(never)) => match never {},
                 },
             }
         }
@@ -279,15 +277,15 @@ pub fn rust_lex_all(version: SmtVersion, input: &[u8]) -> Lexed {
         );
         match lexer.lex_all(input) {
             Ok(_) => locations.push(loc(lexer.current_location())),
-            Err(err) => match (err.span(), err.into_cause()) {
-                (span, SmtLexerErrorCause::Lexical(kind)) => {
+            Err(err) => match (err.span(), err.into_kind()) {
+                (span, SmtLexerErrorKind::Lexical(kind)) => {
                     error = Some(LexedError {
                         kind,
                         start: loc(span.start()),
                         end: loc(span.end()),
                     });
                 }
-                (_, SmtLexerErrorCause::Consumer(never)) => match never {},
+                (_, SmtLexerErrorKind::Consumer(never)) => match never {},
             },
         }
     }

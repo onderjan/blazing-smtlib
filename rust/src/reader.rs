@@ -24,9 +24,9 @@ use std::{
 
 use crate::{
     SmtCommandHandler, SmtHandler,
-    lexer::{SmtLexer, SmtLexerError, SmtLexerErrorCause, SmtLexicalErrorKind},
+    lexer::{SmtLexer, SmtLexerError, SmtLexerErrorKind, SmtLexicalErrorKind},
     parser::{
-        SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorCause, SmtScriptParser,
+        SmtParse, SmtParseAdapter, SmtParseError, SmtParseErrorKind, SmtScriptParser,
         SmtSyntaxErrorKind, SmtVersionErrorKind,
     },
     span::{SmtLocated, SmtSpan},
@@ -35,7 +35,7 @@ use crate::{SmtVersion, SmtVersionPosture, span::SmtLocation};
 
 /// Why reading has failed (I/O, lexical, syntax, version, or handler error).
 #[derive(Debug)]
-pub enum SmtReadErrorCause<E> {
+pub enum SmtReadErrorKind<E> {
     /// Reading from a file or a buffered reader failed.
     Io(std::io::Error),
     /// The input is not a valid sequence of SMT-LIB tokens.
@@ -43,7 +43,7 @@ pub enum SmtReadErrorCause<E> {
     /// The tokens do not form valid SMT-LIB syntactic categories or commands.
     ///
     /// Commands with non-standard names are routed to the handler for
-    /// processing, so they are rejected with a [`SmtReadErrorCause::Handler`]
+    /// processing, so they are rejected with a [`SmtReadErrorKind::Handler`]
     /// error cause instead.
     Syntax(SmtSyntaxErrorKind),
     /// The script declares a version that cannot be used.
@@ -55,18 +55,18 @@ pub enum SmtReadErrorCause<E> {
 /// Error that forced reading to stop.
 #[derive(Debug)]
 pub struct SmtReadError<E> {
-    cause: SmtReadErrorCause<E>,
+    kind: SmtReadErrorKind<E>,
     span: SmtSpan,
 }
 
 impl<E> SmtReadError<E> {
-    pub(crate) fn new(cause: SmtReadErrorCause<E>, span: SmtSpan) -> Self {
-        Self { cause, span }
+    pub(crate) fn new(kind: SmtReadErrorKind<E>, span: SmtSpan) -> Self {
+        Self { kind, span }
     }
 
     /// Determines why reading has failed.
-    pub fn cause(&self) -> &SmtReadErrorCause<E> {
-        &self.cause
+    pub fn kind(&self) -> &SmtReadErrorKind<E> {
+        &self.kind
     }
 
     /// Span where the error occurred.
@@ -81,28 +81,28 @@ impl<E> SmtReadError<E> {
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
-        match &self.cause {
-            SmtReadErrorCause::Lexical(kind) => kind.location_in(self.span),
+        match &self.kind {
+            SmtReadErrorKind::Lexical(kind) => kind.location_in(self.span),
             _ => self.span.start(),
         }
     }
 
     /// Convert into the enumeration that determines why reading has failed.
-    pub fn into_cause(self) -> SmtReadErrorCause<E> {
-        self.cause
+    pub fn into_kind(self) -> SmtReadErrorKind<E> {
+        self.kind
     }
 
     fn from_parse(err: SmtParseError<E>, span: SmtSpan) -> Self {
-        let cause = match err.into_cause() {
-            SmtParseErrorCause::Syntax(err) => SmtReadErrorCause::Syntax(err),
-            SmtParseErrorCause::Version(err) => SmtReadErrorCause::Version(err),
-            SmtParseErrorCause::Handler(err) => SmtReadErrorCause::Handler(err),
+        let kind = match err.into_kind() {
+            SmtParseErrorKind::Syntax(err) => SmtReadErrorKind::Syntax(err),
+            SmtParseErrorKind::Version(err) => SmtReadErrorKind::Version(err),
+            SmtParseErrorKind::Handler(err) => SmtReadErrorKind::Handler(err),
         };
-        SmtReadError::new(cause, span)
+        SmtReadError::new(kind, span)
     }
 }
 
-impl<E: fmt::Display> fmt::Display for SmtReadErrorCause<E> {
+impl<E: fmt::Display> fmt::Display for SmtReadErrorKind<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "I/O: {err}"),
@@ -120,7 +120,7 @@ impl<E: fmt::Display> fmt::Display for SmtReadError<E> {
         write!(
             f,
             "{} at line {}, column {}",
-            self.cause,
+            self.kind,
             location.line() + 1,
             location.column() + 1
         )
@@ -129,12 +129,12 @@ impl<E: fmt::Display> fmt::Display for SmtReadError<E> {
 
 impl<E: Error + 'static> Error for SmtReadError<E> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.cause {
-            SmtReadErrorCause::Io(err) => err.source(),
-            SmtReadErrorCause::Handler(err) => err.source(),
-            SmtReadErrorCause::Lexical(_)
-            | SmtReadErrorCause::Syntax(_)
-            | SmtReadErrorCause::Version(_) => None,
+        match &self.kind {
+            SmtReadErrorKind::Io(err) => err.source(),
+            SmtReadErrorKind::Handler(err) => err.source(),
+            SmtReadErrorKind::Lexical(_)
+            | SmtReadErrorKind::Syntax(_)
+            | SmtReadErrorKind::Version(_) => None,
         }
     }
 }
@@ -142,9 +142,9 @@ impl<E: Error + 'static> Error for SmtReadError<E> {
 impl<E> From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E> {
     fn from(err: SmtLexerError<SmtParseError<E>>) -> Self {
         let span = err.span();
-        match err.into_cause() {
-            SmtLexerErrorCause::Lexical(err) => Self::new(SmtReadErrorCause::Lexical(err), span),
-            SmtLexerErrorCause::Consumer(err) => Self::from_parse(err, span),
+        match err.into_kind() {
+            SmtLexerErrorKind::Lexical(err) => Self::new(SmtReadErrorKind::Lexical(err), span),
+            SmtLexerErrorKind::Consumer(err) => Self::from_parse(err, span),
         }
     }
 }
@@ -266,7 +266,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         path: impl AsRef<Path>,
     ) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
         let file = File::open(path)
-            .map_err(|err| SmtReadError::new(SmtReadErrorCause::Io(err), SmtSpan::new_zero()))?;
+            .map_err(|err| SmtReadError::new(SmtReadErrorKind::Io(err), SmtSpan::new_zero()))?;
 
         // make the bufreader use 1 MiB buffer so that we can
         // lex/parse more efficiently with larger batches
@@ -319,8 +319,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
                     // return an empty span on the current lexer location
                     let location = self.lexer.current_location();
                     let span = SmtSpan::new_empty(location);
-                    let cause = SmtReadErrorCause::Io(err);
-                    return Err(SmtReadError::new(cause, span));
+                    let kind = SmtReadErrorKind::Io(err);
+                    return Err(SmtReadError::new(kind, span));
                 }
             };
 

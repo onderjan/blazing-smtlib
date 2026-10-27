@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, error::Error, fmt, io::Write, ops::ControlFlow};
 
 use crate::{
-    SmtVersion, SmtWriteError, SmtWriteErrorCause,
+    SmtVersion, SmtWriteError, SmtWriteErrorKind,
     lexer::SmtLexerToken,
     lexicon::{
         SmtBinDigits, SmtBinDigitsBuf, SmtComment, SmtCommentBuf, SmtDecimal, SmtDecimalBuf,
@@ -173,7 +173,7 @@ impl<'a> SmtToken<'a> {
                 if !reserved.is_in_version(version) {
                     // the reserved word is not in the version
                     // there is no way to write it
-                    return Err(SmtWriteError::new(SmtWriteErrorCause::NotInVersion(
+                    return Err(SmtWriteError::new(SmtWriteErrorKind::NotInVersion(
                         *reserved,
                     )));
                 }

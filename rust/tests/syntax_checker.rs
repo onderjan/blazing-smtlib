@@ -11,7 +11,7 @@
 mod parse_backend;
 
 use blazing_smtlib::{
-    SmtNonstandardCommandError, SmtReadError, SmtReadErrorCause, SmtReader, SmtSyntaxChecker,
+    SmtNonstandardCommandError, SmtReadError, SmtReadErrorKind, SmtReader, SmtSyntaxChecker,
     SmtVersion, SmtVersionPosture, read_smt,
 };
 use parse_backend::{Adapt, SyntaxChecker};
@@ -94,7 +94,7 @@ fn read_with_stand_in(input: &[u8]) -> Result<(), SmtReadError<SmtNonstandardCom
     read_smt(&mut Adapt(&mut SyntaxChecker), input)
 }
 
-/// The outcome of reading, as text: `ok`, or the cause and the span of the
+/// The outcome of reading, as text: `ok`, or the kind and the span of the
 /// error.
 fn outcome(result: Result<(), SmtReadError<SmtNonstandardCommandError>>) -> String {
     match result {
@@ -104,7 +104,7 @@ fn outcome(result: Result<(), SmtReadError<SmtNonstandardCommandError>>) -> Stri
             let (start, end) = (span.start(), span.end());
             format!(
                 "{:?} at {}:{}:{}..{}:{}:{}",
-                err.cause(),
+                err.kind(),
                 start.offset(),
                 start.line(),
                 start.column(),
@@ -123,8 +123,8 @@ fn rejected(input: &[u8]) -> (Vec<u8>, (u64, u64)) {
     let err = read_with_checker(input).expect_err("expected the checker to reject, got Ok");
     let span = err.span();
     let offsets = (span.start().offset(), span.end().offset());
-    match err.into_cause() {
-        SmtReadErrorCause::Handler(err) => {
+    match err.into_kind() {
+        SmtReadErrorKind::Handler(err) => {
             let name = err.into_name();
             (name.as_slice().to_vec(), offsets)
         }

@@ -1,5 +1,5 @@
 //! Tests of parsers and command rules written outside the library: the
-//! errors such a parser returns reach the reader's caller with their cause
+//! errors such a parser returns reach the reader's caller with their kind
 //! and the span of the token it failed at, and a command rule is a value of
 //! its own for each command, chosen by the handler from the command's name.
 //!
@@ -10,7 +10,7 @@
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
+    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorKind,
     SmtReader, SmtVersion,
     grammar::{
         SmtAttributeValue, SmtMatchCases, SmtMultiple, SmtNamedValues, SmtPattern,
@@ -126,11 +126,11 @@ macro_rules! numbering_handler {
     };
 }
 
-// --- A parser that fails with each cause ---
+// --- A parser that fails with each kind ---
 
 /// A parser of symbols up to a closing parenthesis or the end of file, one
 /// token at a time, that fails at the symbols `syntax`, `handler` and
-/// `version` with an error of that cause.
+/// `version` with an error of that kind.
 #[derive(Default)]
 struct Failing {
     taken: usize,
@@ -225,7 +225,7 @@ fn errors_of_a_parser_read_directly_reach_the_caller_with_their_cause() {
     let mut handler = Custom::default();
     let taken = SmtReader::new(&mut handler, Failing::default(), SmtVersion::V2_7)
         .read_all(&b"a b"[..])
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()))
+        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.kind()))
         .into_value();
     assert_eq!(taken, 3);
 
@@ -236,12 +236,12 @@ fn errors_of_a_parser_read_directly_reach_the_caller_with_their_cause() {
         .expect_err("the parser fails at `syntax`");
     assert!(
         matches!(
-            err.cause(),
-            SmtReadErrorCause::Syntax(kind)
+            err.kind(),
+            SmtReadErrorKind::Syntax(kind)
                 if *kind == SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term])
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
     assert_eq!(offsets(&err), (2, 8));
 
@@ -251,11 +251,11 @@ fn errors_of_a_parser_read_directly_reach_the_caller_with_their_cause() {
         .expect_err("the parser fails at `handler`");
     assert!(
         matches!(
-            err.cause(),
-            SmtReadErrorCause::Handler(SmtPartialCommandError::Handler(Refused))
+            err.kind(),
+            SmtReadErrorKind::Handler(SmtPartialCommandError::Handler(Refused))
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
     assert_eq!(offsets(&err), (4, 11));
 
@@ -265,11 +265,11 @@ fn errors_of_a_parser_read_directly_reach_the_caller_with_their_cause() {
         .expect_err("the parser fails at `version`");
     assert!(
         matches!(
-            err.cause(),
-            SmtReadErrorCause::Version(SmtVersionErrorKind::Unsupported)
+            err.kind(),
+            SmtReadErrorKind::Version(SmtVersionErrorKind::Unsupported)
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
     assert_eq!(offsets(&err), (0, 7));
 }
@@ -278,7 +278,7 @@ fn errors_of_a_parser_read_directly_reach_the_caller_with_their_cause() {
 fn errors_of_a_nonstandard_command_parser_reach_the_caller_with_their_cause() {
     // without an error, the command ends at its closing parenthesis
     read_smt(&mut Custom::default(), &b"(foo a b) (bar)"[..])
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.kind()));
 
     let cases: [(&[u8], (u64, u64)); 3] = [
         (b"(foo) (bar a syntax)", (13, 19)),
@@ -289,20 +289,20 @@ fn errors_of_a_nonstandard_command_parser_reach_the_caller_with_their_cause() {
         let text = String::from_utf8_lossy(input);
         let err = read_smt(&mut Custom::default(), input)
             .expect_err("the nonstandard command parser fails");
-        let cause_matches = match err.cause() {
-            SmtReadErrorCause::Syntax(kind) => {
+        let kind_matches = match err.kind() {
+            SmtReadErrorKind::Syntax(kind) => {
                 input.ends_with(b"syntax)")
                     && *kind == SmtSyntaxErrorKind::Expected(&[SmtSyntaxExpected::Term])
             }
-            SmtReadErrorCause::Handler(SmtPartialCommandError::Handler(Refused)) => {
+            SmtReadErrorKind::Handler(SmtPartialCommandError::Handler(Refused)) => {
                 input.ends_with(b"handler)")
             }
-            SmtReadErrorCause::Version(kind) => {
+            SmtReadErrorKind::Version(kind) => {
                 input.ends_with(b"version)") && *kind == SmtVersionErrorKind::Unsupported
             }
             _ => false,
         };
-        assert!(cause_matches, "{:?} in {text:?}", err.cause());
+        assert!(kind_matches, "{:?} in {text:?}", err.kind());
         assert_eq!(offsets(&err), span, "in {text:?}");
     }
 }
@@ -377,7 +377,7 @@ fn each_command_is_handled_by_its_own_rule_value() {
         &mut handler,
         &b"(minimize x) (maximize |y|) (minimize (f z))"[..],
     )
-    .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+    .unwrap_or_else(|err| panic!("unexpected error {:?}", err.kind()));
 
     let objectives: Vec<(Direction, &[u8], u64)> = handler
         .objectives
@@ -399,12 +399,12 @@ fn each_command_is_handled_by_its_own_rule_value() {
         .expect_err("`optimize` has no rule");
     assert!(
         matches!(
-            err.cause(),
-            SmtReadErrorCause::Handler(SmtPartialCommandError::UnsupportedNonstandard(name))
+            err.kind(),
+            SmtReadErrorKind::Handler(SmtPartialCommandError::UnsupportedNonstandard(name))
                 if name.as_slice() == b"optimize"
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
     assert_eq!(offsets(&err), (14, 22));
 }

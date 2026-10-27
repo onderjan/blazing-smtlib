@@ -9,7 +9,7 @@ use std::ops::ControlFlow;
 
 use blazing_smtlib::{
     SmtVersion,
-    lexer::{SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerErrorCause, SmtLexicalErrorKind},
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerErrorKind, SmtLexicalErrorKind},
     span::SmtSpan,
     token::{
         SmtConsume, SmtConsumeFrom, SmtCursor, SmtGeneralReserved, SmtReserved, SmtTokenCategory,
@@ -40,9 +40,9 @@ impl<'a> SmtConsumeFrom<SmtLexerCursor<'a>> for TakeTokens {
 
 /// Extracts the lexical error kind from a lex error whose handler cannot fail.
 fn into_lexer_error(err: SmtLexerError<Infallible>) -> SmtLexicalErrorKind {
-    match err.into_cause() {
-        SmtLexerErrorCause::Lexical(kind) => kind,
-        SmtLexerErrorCause::Consumer(never) => match never {},
+    match err.into_kind() {
+        SmtLexerErrorKind::Lexical(kind) => kind,
+        SmtLexerErrorKind::Consumer(never) => match never {},
     }
 }
 
@@ -617,7 +617,7 @@ fn handler_error_is_returned_with_the_handled_token() {
     let Err(err) = lexer.lex_slice(b"(") else {
         panic!("expected a handler error");
     };
-    let SmtLexerErrorCause::Consumer(span) = err.into_cause() else {
+    let SmtLexerErrorKind::Consumer(span) = err.into_kind() else {
         panic!("expected a handler error");
     };
     assert_eq!((loc(span.start()), loc(span.end())), ((0, 0, 0), (1, 0, 1)));

@@ -72,11 +72,11 @@ pub(crate) fn parse_by_token<Z: SmtCursor, R, E>(
 
 /// Error returned by a parser.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SmtParseError<E>(Box<SmtParseErrorCause<E>>);
+pub struct SmtParseError<E>(Box<SmtParseErrorKind<E>>);
 
 /// Why a parser error was returned.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SmtParseErrorCause<E> {
+pub enum SmtParseErrorKind<E> {
     /// The tokens do not form the syntax the parser accepts.
     Syntax(SmtSyntaxErrorKind),
     /// The script declares a version that cannot be used.
@@ -198,31 +198,31 @@ pub enum SmtVersionErrorKind {
 impl<E> SmtParseError<E> {
     #[cold]
     #[inline(never)]
-    pub(crate) fn new(cause: SmtParseErrorCause<E>) -> Self {
-        // PERFORMANCE: error cause is boxed
+    pub(crate) fn new(kind: SmtParseErrorKind<E>) -> Self {
+        // PERFORMANCE: error kind is boxed
         // so that parser results are not unnecessarily large
         // this method boxes them, which forces an allocation
         // so it is is marked cold and never-inline
-        Self(Box::new(cause))
+        Self(Box::new(kind))
     }
 
     pub fn handler(err: E) -> Self {
-        Self::new(SmtParseErrorCause::Handler(err))
+        Self::new(SmtParseErrorKind::Handler(err))
     }
 
     pub fn syntax(err: SmtSyntaxErrorKind) -> Self {
-        Self::new(SmtParseErrorCause::Syntax(err))
+        Self::new(SmtParseErrorKind::Syntax(err))
     }
 
     pub fn version(err: SmtVersionErrorKind) -> Self {
-        Self::new(SmtParseErrorCause::Version(err))
+        Self::new(SmtParseErrorKind::Version(err))
     }
 
-    pub fn cause(&self) -> &SmtParseErrorCause<E> {
+    pub fn kind(&self) -> &SmtParseErrorKind<E> {
         &self.0
     }
 
-    pub fn into_cause(self) -> SmtParseErrorCause<E> {
+    pub fn into_kind(self) -> SmtParseErrorKind<E> {
         *self.0
     }
 }
@@ -236,13 +236,13 @@ impl<E: fmt::Display> fmt::Display for SmtParseError<E> {
 impl<E: Error + 'static> Error for SmtParseError<E> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &*self.0 {
-            SmtParseErrorCause::Handler(err) => err.source(),
-            SmtParseErrorCause::Syntax(_) | SmtParseErrorCause::Version(_) => None,
+            SmtParseErrorKind::Handler(err) => err.source(),
+            SmtParseErrorKind::Syntax(_) | SmtParseErrorKind::Version(_) => None,
         }
     }
 }
 
-impl<E: fmt::Display> fmt::Display for SmtParseErrorCause<E> {
+impl<E: fmt::Display> fmt::Display for SmtParseErrorKind<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Syntax(kind) => kind.fmt(f),

@@ -15,7 +15,7 @@ use crate::{
 
 /// Why writing has failed (I/O error or writing impossibility).
 #[derive(Debug)]
-pub enum SmtWriteErrorCause {
+pub enum SmtWriteErrorKind {
     /// Writing to the writer failed.
     Io(io::Error),
     /// The reserved word is not reserved in the version, so no text in it is the token.
@@ -24,32 +24,32 @@ pub enum SmtWriteErrorCause {
 
 /// Error that forced writing to stop.
 #[derive(Debug)]
-pub struct SmtWriteError(SmtWriteErrorCause);
+pub struct SmtWriteError(SmtWriteErrorKind);
 
 impl SmtWriteError {
     #[inline]
-    pub(crate) fn new(cause: SmtWriteErrorCause) -> Self {
-        Self(cause)
+    pub(crate) fn new(kind: SmtWriteErrorKind) -> Self {
+        Self(kind)
     }
 
     /// Determines why writing has failed.
-    pub fn cause(&self) -> &SmtWriteErrorCause {
+    pub fn kind(&self) -> &SmtWriteErrorKind {
         &self.0
     }
 
     /// Convert into the enumeration that determines why writing has failed.
-    pub fn into_cause(self) -> SmtWriteErrorCause {
+    pub fn into_kind(self) -> SmtWriteErrorKind {
         self.0
     }
 }
 
 impl From<io::Error> for SmtWriteError {
     fn from(err: io::Error) -> Self {
-        Self(SmtWriteErrorCause::Io(err))
+        Self(SmtWriteErrorKind::Io(err))
     }
 }
 
-impl fmt::Display for SmtWriteErrorCause {
+impl fmt::Display for SmtWriteErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "I/O: {err}"),
@@ -73,8 +73,8 @@ impl fmt::Display for SmtWriteError {
 impl Error for SmtWriteError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.0 {
-            SmtWriteErrorCause::Io(err) => err.source(),
-            SmtWriteErrorCause::NotInVersion(_) => None,
+            SmtWriteErrorKind::Io(err) => err.source(),
+            SmtWriteErrorKind::NotInVersion(_) => None,
         }
     }
 }

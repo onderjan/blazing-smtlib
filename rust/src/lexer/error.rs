@@ -38,14 +38,14 @@ pub enum SmtLexicalExpected {
 /// Error that forced lexing to stop.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtLexerError<E> {
-    cause: SmtLexerErrorCause<E>,
+    kind: SmtLexerErrorKind<E>,
     span: SmtSpan,
     continues_from: Option<SmtLocation>,
 }
 
 /// Why a lexer error was returned (lexical or consumer error).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SmtLexerErrorCause<E> {
+pub enum SmtLexerErrorKind<E> {
     /// The input is lexically malformed.
     Lexical(SmtLexicalErrorKind),
     /// The token consumer returned an error.
@@ -54,12 +54,12 @@ pub enum SmtLexerErrorCause<E> {
 
 impl<E> SmtLexerError<E> {
     pub(super) fn new(
-        cause: SmtLexerErrorCause<E>,
+        kind: SmtLexerErrorKind<E>,
         span: SmtSpan,
         continues_from: Option<SmtLocation>,
     ) -> Self {
         Self {
-            cause,
+            kind,
             span,
             continues_from,
         }
@@ -72,13 +72,13 @@ impl<E> SmtLexerError<E> {
     }
 
     /// The reason why the lexer call failed: a lexical error or a consumer error.
-    pub fn cause(&self) -> &SmtLexerErrorCause<E> {
-        &self.cause
+    pub fn kind(&self) -> &SmtLexerErrorKind<E> {
+        &self.kind
     }
 
     /// Converts into the reason why the lexer call failed.
-    pub fn into_cause(self) -> SmtLexerErrorCause<E> {
-        self.cause
+    pub fn into_kind(self) -> SmtLexerErrorKind<E> {
+        self.kind
     }
 
     /// Location where the error occurred.
@@ -90,9 +90,9 @@ impl<E> SmtLexerError<E> {
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
-        match &self.cause {
-            SmtLexerErrorCause::Lexical(kind) => kind.location_in(self.span),
-            SmtLexerErrorCause::Consumer(_) => self.span.start(),
+        match &self.kind {
+            SmtLexerErrorKind::Lexical(kind) => kind.location_in(self.span),
+            SmtLexerErrorKind::Consumer(_) => self.span.start(),
         }
     }
 
@@ -168,7 +168,7 @@ impl fmt::Display for SmtLexicalExpected {
     }
 }
 
-impl<E: fmt::Display> fmt::Display for SmtLexerErrorCause<E> {
+impl<E: fmt::Display> fmt::Display for SmtLexerErrorKind<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lexical(kind) => kind.fmt(f),
@@ -183,7 +183,7 @@ impl<E: fmt::Display> fmt::Display for SmtLexerError<E> {
         write!(
             f,
             "{} at line {}, column {}",
-            self.cause,
+            self.kind,
             location.line() + 1,
             location.column() + 1
         )
@@ -192,9 +192,9 @@ impl<E: fmt::Display> fmt::Display for SmtLexerError<E> {
 
 impl<E: Error + 'static> Error for SmtLexerError<E> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.cause {
-            SmtLexerErrorCause::Lexical(_) => None,
-            SmtLexerErrorCause::Consumer(err) => err.source(),
+        match &self.kind {
+            SmtLexerErrorKind::Lexical(_) => None,
+            SmtLexerErrorKind::Consumer(err) => err.source(),
         }
     }
 }
@@ -202,13 +202,13 @@ impl<E: Error + 'static> Error for SmtLexerError<E> {
 /// Error that forced lexing from a buffered reader or a file to stop.
 #[derive(Debug)]
 pub struct SmtLexerReadError<E> {
-    cause: SmtLexerReadErrorCause<E>,
+    kind: SmtLexerReadErrorKind<E>,
     span: SmtSpan,
 }
 
 /// Why a lexer read error was returned (I/O, lexical, or consumer error).
 #[derive(Debug)]
-pub enum SmtLexerReadErrorCause<E> {
+pub enum SmtLexerReadErrorKind<E> {
     /// Reading from the file or the buffered reader failed.
     Io(io::Error),
     /// The input is lexically malformed.
@@ -218,18 +218,18 @@ pub enum SmtLexerReadErrorCause<E> {
 }
 
 impl<E> SmtLexerReadError<E> {
-    pub(super) fn new(cause: SmtLexerReadErrorCause<E>, span: SmtSpan) -> Self {
-        Self { cause, span }
+    pub(super) fn new(kind: SmtLexerReadErrorKind<E>, span: SmtSpan) -> Self {
+        Self { kind, span }
     }
 
     /// The reason why lexing failed.
-    pub fn cause(&self) -> &SmtLexerReadErrorCause<E> {
-        &self.cause
+    pub fn kind(&self) -> &SmtLexerReadErrorKind<E> {
+        &self.kind
     }
 
     /// Converts into the reason why lexing failed.
-    pub fn into_cause(self) -> SmtLexerReadErrorCause<E> {
-        self.cause
+    pub fn into_kind(self) -> SmtLexerReadErrorKind<E> {
+        self.kind
     }
 
     /// Span where the error occurred.
@@ -243,11 +243,9 @@ impl<E> SmtLexerReadError<E> {
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
-        match &self.cause {
-            SmtLexerReadErrorCause::Lexical(kind) => kind.location_in(self.span),
-            SmtLexerReadErrorCause::Io(_) | SmtLexerReadErrorCause::Consumer(_) => {
-                self.span.start()
-            }
+        match &self.kind {
+            SmtLexerReadErrorKind::Lexical(kind) => kind.location_in(self.span),
+            SmtLexerReadErrorKind::Io(_) | SmtLexerReadErrorKind::Consumer(_) => self.span.start(),
         }
     }
 }
@@ -255,15 +253,15 @@ impl<E> SmtLexerReadError<E> {
 impl<E> From<SmtLexerError<E>> for SmtLexerReadError<E> {
     fn from(err: SmtLexerError<E>) -> Self {
         let span = err.span();
-        let cause = match err.into_cause() {
-            SmtLexerErrorCause::Lexical(kind) => SmtLexerReadErrorCause::Lexical(kind),
-            SmtLexerErrorCause::Consumer(err) => SmtLexerReadErrorCause::Consumer(err),
+        let kind = match err.into_kind() {
+            SmtLexerErrorKind::Lexical(kind) => SmtLexerReadErrorKind::Lexical(kind),
+            SmtLexerErrorKind::Consumer(err) => SmtLexerReadErrorKind::Consumer(err),
         };
-        Self::new(cause, span)
+        Self::new(kind, span)
     }
 }
 
-impl<E: fmt::Display> fmt::Display for SmtLexerReadErrorCause<E> {
+impl<E: fmt::Display> fmt::Display for SmtLexerReadErrorKind<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(err) => write!(f, "I/O: {err}"),
@@ -279,7 +277,7 @@ impl<E: fmt::Display> fmt::Display for SmtLexerReadError<E> {
         write!(
             f,
             "{} at line {}, column {}",
-            self.cause,
+            self.kind,
             location.line() + 1,
             location.column() + 1
         )
@@ -288,10 +286,10 @@ impl<E: fmt::Display> fmt::Display for SmtLexerReadError<E> {
 
 impl<E: Error + 'static> Error for SmtLexerReadError<E> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match &self.cause {
-            SmtLexerReadErrorCause::Io(err) => err.source(),
-            SmtLexerReadErrorCause::Lexical(_) => None,
-            SmtLexerReadErrorCause::Consumer(err) => err.source(),
+        match &self.kind {
+            SmtLexerReadErrorKind::Io(err) => err.source(),
+            SmtLexerReadErrorKind::Lexical(_) => None,
+            SmtLexerReadErrorKind::Consumer(err) => err.source(),
         }
     }
 }

@@ -14,8 +14,8 @@ use blazing_smtlib::{
 use common::{assert_error_span, assert_parser_error, parse_with};
 use parse_backend::{
     AttributeValue, Bindings, CommandHandler, Constructors, Handler, MatchCases,
-    NonstandardPayload, ReadErrorCause, SExpr, Signature, Signatures, Sort, SortArities,
-    SortedVars, Symbols, Term,
+    NonstandardPayload, ReadErrorKind, SExpr, Signature, Signatures, Sort, SortArities, SortedVars,
+    Symbols, Term,
 };
 
 use blazing_smtlib::{
@@ -1095,8 +1095,8 @@ fn declare_sort_leading_zero_arity_is_rejected_by_lexer() {
         .expect_err("expected a lexer error");
     // the lexer reports the error as soon as a digit follows the leading zero
     assert_error_span(&err, 16, 18);
-    match err.cause() {
-        ReadErrorCause::Lexical(SmtLexicalErrorKind::NumeralLeadingZero) => {}
+    match err.kind() {
+        ReadErrorKind::Lexical(SmtLexicalErrorKind::NumeralLeadingZero) => {}
         kind => panic!("expected a leading zero lexer error, got {kind:?}"),
     }
 }
@@ -1504,9 +1504,9 @@ fn assert_handler_error(input: &[u8], message: &str, start: u64, end: u64) -> Re
     let mut handler = Resolving::default();
     let err = parse_with(&mut handler, input).expect_err("expected a handler error");
     assert_error_span(&err, start, end);
-    match err.cause() {
-        ReadErrorCause::Handler(handler_message) => assert_eq!(handler_message, message),
-        ReadErrorCause::Syntax(kind) => panic!("expected handler error, got {kind:?}"),
+    match err.kind() {
+        ReadErrorKind::Handler(handler_message) => assert_eq!(handler_message, message),
+        ReadErrorKind::Syntax(kind) => panic!("expected handler error, got {kind:?}"),
         _ => panic!("expected handler error"),
     }
     handler
@@ -2631,11 +2631,11 @@ fn missing_recursive_body_starts_no_body() {
     assert_error_span(&err, 24, 25);
     assert!(
         matches!(
-            err.cause(),
-            ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term]))
+            err.kind(),
+            ReadErrorKind::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term]))
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
     assert_eq!(handler.events, ["start-fun-rec f () Int"]);
 
@@ -2647,11 +2647,11 @@ fn missing_recursive_body_starts_no_body() {
     assert_error_span(&err, 31, 32);
     assert!(
         matches!(
-            err.cause(),
-            ReadErrorCause::Syntax(SmtSyntaxErrorKind::Missing(SmtMissingItem::FunctionBody))
+            err.kind(),
+            ReadErrorKind::Syntax(SmtSyntaxErrorKind::Missing(SmtMissingItem::FunctionBody))
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
     assert_eq!(handler.events, ["start-funs-rec ((f () Int))"]);
 }

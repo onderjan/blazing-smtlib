@@ -984,7 +984,7 @@ pub fn roundtrip_file(path: &Path) -> Result<(), String> {
 }
 
 fn read_error(err: SmtReadError<SmtNonstandardCommandError>) -> String {
-    format!("Read error at {:?}: {:?}", err.span(), err.cause())
+    format!("Read error at {:?}: {:?}", err.span(), err.kind())
 }
 
 /// Describes where the printed tokens first differ from the input's.

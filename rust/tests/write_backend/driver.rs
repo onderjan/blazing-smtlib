@@ -9,8 +9,8 @@ use std::io::{self, Write};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtVersion, SmtWriteError, SmtWriteErrorCause, SmtWriteStyle, SmtWriter, SmtWriterConfig,
-    lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorCause},
+    SmtVersion, SmtWriteError, SmtWriteErrorKind, SmtWriteStyle, SmtWriter, SmtWriterConfig,
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorKind},
     lexicon::{
         SmtBinDigitsBuf, SmtCommentBuf, SmtDecimal, SmtDecimalBuf, SmtHexDigitsBuf, SmtKeywordBuf,
         SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf, SmtWhitespaceBuf,
@@ -231,9 +231,9 @@ fn read_request(line: &str) -> Result<Request, String> {
 
 /// The line of an error of writing.
 fn write_error_line(err: &SmtWriteError) -> String {
-    match err.cause() {
-        SmtWriteErrorCause::Io(io) => format!("werr io x{}", hex(io.to_string().as_bytes())),
-        SmtWriteErrorCause::NotInVersion(reserved) => {
+    match err.kind() {
+        SmtWriteErrorKind::Io(io) => format!("werr io x{}", hex(io.to_string().as_bytes())),
+        SmtWriteErrorKind::NotInVersion(reserved) => {
             format!("werr not-in-version {}", reserved.as_str())
         }
     }
@@ -248,13 +248,13 @@ where
         Ok(_) => return "ok".into(),
         Err(err) => err,
     };
-    match err.cause() {
-        SmtLexerErrorCause::Lexical(kind) => format!(
+    match err.kind() {
+        SmtLexerErrorKind::Lexical(kind) => format!(
             "err {kind:?} {} {}",
             location(err.span().start()),
             location(err.span().end())
         ),
-        SmtLexerErrorCause::Consumer(err) => write_error_line(err),
+        SmtLexerErrorKind::Consumer(err) => write_error_line(err),
     }
 }
 

@@ -40,16 +40,16 @@ use std::ops::ControlFlow;
 use std::path::Path;
 
 use blazing_smtlib::{
-    SmtNonstandardCommandError, SmtReadError, SmtReadErrorCause, SmtReader, SmtVersion,
+    SmtNonstandardCommandError, SmtReadError, SmtReadErrorKind, SmtReader, SmtVersion,
     SmtVersionPosture,
     grammar::{SmtIdentBuf, SmtPatternBuf, SmtQuantifierKind},
-    lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorCause, SmtLexicalErrorKind},
+    lexer::{SmtLexer, SmtLexerCursor, SmtLexerErrorKind, SmtLexicalErrorKind},
     lexicon::{SmtKeywordBuf, SmtNumeralBuf, SmtStringContentBuf, SmtSymbolBuf},
     parser::{
         SmtCloseParenParser, SmtClosedAttributeParser, SmtClosedMultipleAttributeParser,
         SmtClosedMultipleParser, SmtClosedParser, SmtCommandOutcome, SmtCommandParser,
         SmtIdentParser, SmtKeywordParser, SmtOpenParenParser, SmtPairParser,
-        SmtParenMultipleParser, SmtParenParser, SmtParse, SmtParseError, SmtParseErrorCause,
+        SmtParenMultipleParser, SmtParenParser, SmtParse, SmtParseError, SmtParseErrorKind,
         SmtParseState, SmtQualifiedIdentParser, SmtSExprParser, SmtScriptParser, SmtSortParser,
         SmtStringParser, SmtSymbolParser, SmtSyntaxErrorKind, SmtTermParser, SmtTuple3Parser,
         SmtTuple4Parser, SmtTuple5Parser, SmtTuple6Parser, SmtTuple7Parser, SmtTuple8Parser,
@@ -172,10 +172,10 @@ impl From<SmtSpan> for Span {
     }
 }
 
-/// Why reading failed (`SmtReadErrorCause`). An I/O error is reported by its
+/// Why reading failed (`SmtReadErrorKind`). An I/O error is reported by its
 /// message.
 #[derive(Debug)]
-pub enum ReadErrorCause<E> {
+pub enum ReadErrorKind<E> {
     Io(String),
     Lexical(SmtLexicalErrorKind),
     Syntax(SmtSyntaxErrorKind),
@@ -186,39 +186,39 @@ pub enum ReadErrorCause<E> {
 /// An error that ended reading, with its span (`SmtReadError`).
 #[derive(Debug)]
 pub struct ReadError<E> {
-    cause: ReadErrorCause<E>,
+    kind: ReadErrorKind<E>,
     span: Span,
 }
 
 impl<E> ReadError<E> {
-    pub fn new(cause: ReadErrorCause<E>, span: Span) -> Self {
-        ReadError { cause, span }
+    pub fn new(kind: ReadErrorKind<E>, span: Span) -> Self {
+        ReadError { kind, span }
     }
 
-    pub fn cause(&self) -> &ReadErrorCause<E> {
-        &self.cause
+    pub fn kind(&self) -> &ReadErrorKind<E> {
+        &self.kind
     }
 
     pub fn span(&self) -> Span {
         self.span
     }
 
-    pub fn into_cause(self) -> ReadErrorCause<E> {
-        self.cause
+    pub fn into_kind(self) -> ReadErrorKind<E> {
+        self.kind
     }
 }
 
 impl<E> From<SmtReadError<E>> for ReadError<E> {
     fn from(err: SmtReadError<E>) -> Self {
         let span = err.span().into();
-        let cause = match err.into_cause() {
-            SmtReadErrorCause::Io(err) => ReadErrorCause::Io(err.to_string()),
-            SmtReadErrorCause::Lexical(kind) => ReadErrorCause::Lexical(kind),
-            SmtReadErrorCause::Syntax(kind) => ReadErrorCause::Syntax(kind),
-            SmtReadErrorCause::Version(kind) => ReadErrorCause::Version(kind),
-            SmtReadErrorCause::Handler(err) => ReadErrorCause::Handler(err),
+        let kind = match err.into_kind() {
+            SmtReadErrorKind::Io(err) => ReadErrorKind::Io(err.to_string()),
+            SmtReadErrorKind::Lexical(kind) => ReadErrorKind::Lexical(kind),
+            SmtReadErrorKind::Syntax(kind) => ReadErrorKind::Syntax(kind),
+            SmtReadErrorKind::Version(kind) => ReadErrorKind::Version(kind),
+            SmtReadErrorKind::Handler(err) => ReadErrorKind::Handler(err),
         };
-        ReadError::new(cause, span)
+        ReadError::new(kind, span)
     }
 }
 
@@ -1323,19 +1323,19 @@ pub fn drive<H: Handler, P: Category<H>>(
             let mut lexer = SmtLexer::new(&mut drive, SmtVersion::V2_7);
             match lexer
                 .lex_all(input)
-                .map_err(|err| (err.span(), err.into_cause()))
+                .map_err(|err| (err.span(), err.into_kind()))
             {
                 Ok(_) => {}
-                Err((span, SmtLexerErrorCause::Consumer(err))) => match err.into_cause() {
-                    SmtParseErrorCause::Syntax(kind) => return Err((kind, span.into())),
-                    SmtParseErrorCause::Version(kind) => {
+                Err((span, SmtLexerErrorKind::Consumer(err))) => match err.into_kind() {
+                    SmtParseErrorKind::Syntax(kind) => return Err((kind, span.into())),
+                    SmtParseErrorKind::Version(kind) => {
                         panic!("a category parser cannot fail on the version, got {kind:?}")
                     }
-                    SmtParseErrorCause::Handler(_) => {
+                    SmtParseErrorKind::Handler(_) => {
                         panic!("the handler must not fail on {text:?}")
                     }
                 },
-                Err((_, SmtLexerErrorCause::Lexical(kind))) => {
+                Err((_, SmtLexerErrorKind::Lexical(kind))) => {
                     panic!("test input {text:?} must lex, got {kind:?}")
                 }
             }

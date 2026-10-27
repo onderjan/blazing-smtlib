@@ -13,7 +13,7 @@ use std::ops::ControlFlow;
 use common::{assert_error_span, assert_parser_error, parse, parse_with};
 use parse_backend::{
     Adapt, AttributeValue, Bindings, CommandHandler, CommandParser, Constructors, Handler,
-    MatchCases, NonstandardPayload, ReadErrorCause, Reader, SExpr, Signature, Signatures, Sort,
+    MatchCases, NonstandardPayload, ReadErrorKind, Reader, SExpr, Signature, Signatures, Sort,
     SortArities, SortedVars, Symbols, Term,
 };
 
@@ -109,12 +109,12 @@ fn nonstandard_command_is_rejected_by_standard_syntax() {
     // the handler rejects the command by name; the span is that of the name symbol
     let err = parse(b"(frobnicate 1)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 11);
-    match err.cause() {
-        ReadErrorCause::Handler(err) => {
+    match err.kind() {
+        ReadErrorKind::Handler(err) => {
             let name = err.name();
             assert_eq!(name.as_slice(), b"frobnicate");
         }
-        ReadErrorCause::Syntax(kind) => {
+        ReadErrorKind::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -130,12 +130,12 @@ fn quoted_standard_command_name_names_a_nonstandard_command() {
     // a symbol, so it is handed to the handler as a nonstandard command
     let err = parse(b"(|check-sat|)").expect_err("expected a handler error");
     assert_error_span(&err, 1, 12);
-    match err.cause() {
-        ReadErrorCause::Handler(err) => {
+    match err.kind() {
+        ReadErrorKind::Handler(err) => {
             let name = err.name();
             assert_eq!(name.as_slice(), b"check-sat");
         }
-        ReadErrorCause::Syntax(kind) => {
+        ReadErrorKind::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -621,10 +621,10 @@ fn nonstandard_command_body_is_checked() {
     let mut handler = Recording::default();
     let err = parse_with(&mut handler, b"(my-assert )").expect_err("expected a parser error");
     assert_error_span(&err, 11, 12);
-    match err.cause() {
-        ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term])) => {}
-        ReadErrorCause::Syntax(kind) => panic!("unexpected parser error {kind:?}"),
-        ReadErrorCause::Handler(_) => panic!("unexpected handler error"),
+    match err.kind() {
+        ReadErrorKind::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Term])) => {}
+        ReadErrorKind::Syntax(kind) => panic!("unexpected parser error {kind:?}"),
+        ReadErrorKind::Handler(_) => panic!("unexpected handler error"),
         _ => panic!("unexpected error kind"),
     }
     assert!(handler.commands.is_empty());
@@ -639,12 +639,12 @@ fn nonstandard_command_unknown_to_handler_is_rejected() {
     let err =
         parse_with(&mut handler, b"(my-assert x) (other)").expect_err("expected a handler error");
     assert_error_span(&err, 15, 20);
-    match err.cause() {
-        ReadErrorCause::Handler(err) => {
+    match err.kind() {
+        ReadErrorKind::Handler(err) => {
             let name = err.name();
             assert_eq!(name.as_slice(), b"other");
         }
-        ReadErrorCause::Syntax(kind) => {
+        ReadErrorKind::Syntax(kind) => {
             panic!("expected handler error, got parser error {kind:?}")
         }
         _ => panic!("expected handler error"),
@@ -680,11 +680,11 @@ fn a_rejected_version_declaration_is_handled_as_set_info_first() {
             .expect_err("the declared version must be rejected");
         assert!(
             matches!(
-                err.cause(),
-                ReadErrorCause::Version(SmtVersionErrorKind::Unsupported)
+                err.kind(),
+                ReadErrorKind::Version(SmtVersionErrorKind::Unsupported)
             ),
             "{value}: {:?}",
-            err.cause()
+            err.kind()
         );
         let close = input.len() as u64 - 1;
         assert_error_span(&err, close, close + 1);
@@ -812,13 +812,13 @@ fn no_end_call_comes_before_a_missing_closing_parenthesis() {
         assert_error_span(&err, start, end);
         assert!(
             matches!(
-                err.cause(),
-                ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Token(
+                err.kind(),
+                ReadErrorKind::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Token(
                     SmtTokenCategory::ParenClose
                 )]))
             ),
             "{:?} in {:?}",
-            err.cause(),
+            err.kind(),
             String::from_utf8_lossy(input)
         );
         assert_eq!(
@@ -912,8 +912,8 @@ fn define_funs_rec_makes_no_call_for_a_missing_or_an_extra_body() {
         let mut handler = Recording::default();
         let err = parse_with(&mut handler, input).expect_err("expected a parser error");
         assert_error_span(&err, start, end);
-        match err.into_cause() {
-            ReadErrorCause::Syntax(actual) => {
+        match err.into_kind() {
+            ReadErrorKind::Syntax(actual) => {
                 assert_eq!(actual, kind, "in {:?}", String::from_utf8_lossy(input))
             }
             _ => panic!(
@@ -949,13 +949,13 @@ fn a_second_option_or_info_attribute_is_rejected_before_the_first_is_handled() {
         assert_error_span(&err, start, end);
         assert!(
             matches!(
-                err.cause(),
-                ReadErrorCause::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Token(
+                err.kind(),
+                ReadErrorKind::Syntax(SmtSyntaxErrorKind::Expected([SmtSyntaxExpected::Token(
                     SmtTokenCategory::ParenClose
                 )]))
             ),
             "{:?} in {:?}",
-            err.cause(),
+            err.kind(),
             String::from_utf8_lossy(input)
         );
         assert!(
@@ -1098,12 +1098,12 @@ fn read_split(
     for piece in [first, second] {
         reader
             .read_slice(piece)
-            .unwrap_or_else(|err| panic!("error {:?} at {:?}", err.cause(), err.span()));
+            .unwrap_or_else(|err| panic!("error {:?} at {:?}", err.kind(), err.span()));
         after.push((reader.version(), reader.discarded_from()));
     }
     let end = reader
         .read_eof()
-        .unwrap_or_else(|err| panic!("error {:?} at {:?}", err.cause(), err.span()));
+        .unwrap_or_else(|err| panic!("error {:?} at {:?}", err.kind(), err.span()));
     assert_eq!(
         reader.version(),
         SmtVersion::V2_7,

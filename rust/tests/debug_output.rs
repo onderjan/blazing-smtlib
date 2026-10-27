@@ -116,7 +116,7 @@ fn the_lexer_and_its_cursor_print_their_version_and_the_lexer_its_location() {
     let mut lexer = SmtLexer::new(PrintedCursor::default(), SmtVersion::V2_6);
     lexer
         .lex_slice(b"(check-sat)\n(")
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.kind()));
     let location = lexer.current_location();
     assert_ne!(location, SmtLocation::initial(), "the lexer has moved on");
     assert_eq!(
@@ -137,6 +137,6 @@ fn the_reader_prints_the_version_in_force() {
     assert_eq!(format!("{reader:?}"), "SmtReader { version: V2_7, .. }");
     reader
         .read_slice(b"(set-info :smt-lib-version 2.6)")
-        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+        .unwrap_or_else(|err| panic!("unexpected error {:?}", err.kind()));
     assert_eq!(format!("{reader:?}"), "SmtReader { version: V2_6, .. }");
 }

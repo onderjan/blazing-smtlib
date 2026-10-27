@@ -36,7 +36,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use blazing_smtlib::{
     SmtVersion,
     lexer::{
-        SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerErrorCause, SmtLexerToken,
+        SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexerErrorKind, SmtLexerToken,
         SmtLexicalErrorKind,
     },
     span::{SmtLocated, SmtLocation},
@@ -287,16 +287,16 @@ fn assert_at_origin<C: SmtConsume>(lexer: &SmtLexer<C>) {
 /// continues.
 type Failed = (RunError, Option<ErrorSpan>);
 
-fn into_cause(err: SmtLexerError<()>) -> Failed {
+fn into_kind(err: SmtLexerError<()>) -> Failed {
     assert_eq!(
         err.continues_from(),
         None,
         "a lexer that stops at its first error does not continue the input"
     );
     let span = (loc(err.span().start()), loc(err.span().end()));
-    match err.into_cause() {
-        SmtLexerErrorCause::Lexical(kind) => (RunError::Lexical(kind), Some(span)),
-        SmtLexerErrorCause::Consumer(()) => (RunError::Consumer, None),
+    match err.into_kind() {
+        SmtLexerErrorKind::Lexical(kind) => (RunError::Lexical(kind), Some(span)),
+        SmtLexerErrorKind::Consumer(()) => (RunError::Consumer, None),
     }
 }
 
@@ -326,8 +326,8 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
         let mut expected = SmtLocation::initial();
         for chunk in chunks {
             if let Err(err) = lexer.lex_slice(chunk) {
-                let (cause, span) = into_cause(err);
-                error = Some(cause);
+                let (kind, span) = into_kind(err);
+                error = Some(kind);
                 error_span = span;
                 break;
             }
@@ -353,8 +353,8 @@ fn run_direct_from(version: SmtVersion, chunks: &[&[u8]], plan: &[Reply]) -> Run
                     assert_at_origin(&lexer);
                 }
                 Err(err) => {
-                    let (cause, span) = into_cause(err);
-                    error = Some(cause);
+                    let (kind, span) = into_kind(err);
+                    error = Some(kind);
                     error_span = span;
                 }
             }

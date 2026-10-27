@@ -30,7 +30,7 @@ use super::nodes::{
     Application, AttributeValue, CommandHandler, Constructors, Handler, NonstandardPayload,
     QualifiedIdent, SExpr, Signature, Sort, Term,
 };
-use super::{Category, Location, ParseFailure, ReadError, ReadErrorCause, Span, version_name};
+use super::{Category, Location, ParseFailure, ReadError, ReadErrorKind, Span, version_name};
 
 // --- The driver process ---
 
@@ -1003,19 +1003,19 @@ fn read_error<H: Handler>(fields: &mut Fields<'_>, values: &mut Values<H>) -> Re
     let start = fields.location();
     let end = fields.location();
     let line = fields.line;
-    let cause = match fields.next() {
-        "lexical" => ReadErrorCause::Lexical(by_name(&ERROR_KINDS, fields.next(), line)),
-        "syntax" => ReadErrorCause::Syntax(syntax_kind(fields.next(), line)),
-        "version" => ReadErrorCause::Version(version_kind(fields.next(), line)),
-        "handler" => ReadErrorCause::Handler(values.take_error(fields.id())),
+    let kind = match fields.next() {
+        "lexical" => ReadErrorKind::Lexical(by_name(&ERROR_KINDS, fields.next(), line)),
+        "syntax" => ReadErrorKind::Syntax(syntax_kind(fields.next(), line)),
+        "version" => ReadErrorKind::Version(version_kind(fields.next(), line)),
+        "handler" => ReadErrorKind::Handler(values.take_error(fields.id())),
         "io" => {
             let message = unhex(fields.next(), line);
-            ReadErrorCause::Io(String::from_utf8_lossy(&message).into_owned())
+            ReadErrorKind::Io(String::from_utf8_lossy(&message).into_owned())
         }
-        _ => fields.bad("error cause"),
+        _ => fields.bad("error kind"),
     };
     fields.end();
-    ReadError::new(cause, Span::new(start, end))
+    ReadError::new(kind, Span::new(start, end))
 }
 
 // --- Readers ---
@@ -1249,9 +1249,9 @@ pub fn drive<H: Handler, P: Category<H>>(
             "error" => {
                 let err = read_error(&mut fields, &mut values);
                 let span = err.span();
-                return match err.into_cause() {
-                    ReadErrorCause::Syntax(kind) => Err((kind, span)),
-                    ReadErrorCause::Lexical(kind) => {
+                return match err.into_kind() {
+                    ReadErrorKind::Syntax(kind) => Err((kind, span)),
+                    ReadErrorKind::Lexical(kind) => {
                         panic!("test input {text:?} must lex, got {kind:?}")
                     }
                     _ => panic!("the handler must not fail on {text:?}"),

@@ -8,7 +8,7 @@
 use std::collections::HashSet;
 
 use blazing_smtlib::{
-    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorCause,
+    SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadError, SmtReadErrorKind,
     SmtVersion,
     grammar::{
         SmtAttributeValue, SmtFunctionSignature, SmtFunctionSignatures, SmtMatchCases, SmtMultiple,
@@ -309,12 +309,12 @@ where
         let (err, log) = fail::<LEVEL>(command);
         assert!(
             matches!(
-                err.cause(),
-                SmtReadErrorCause::Handler(SmtPartialCommandError::Unsupported(unsupported))
+                err.kind(),
+                SmtReadErrorKind::Handler(SmtPartialCommandError::Unsupported(unsupported))
                     if *unsupported == name
             ),
             "{:?} for {command:?} at level {LEVEL}",
-            err.cause()
+            err.kind()
         );
         assert_eq!(log, callbacks, "for {command:?} at level {LEVEL}");
         names.push(name);
@@ -329,7 +329,7 @@ fn implemented_commands_are_handled() {
         &mut solver,
         &b"(set-logic ALL) (declare-const x Int) (check-sat)"[..],
     )
-    .unwrap_or_else(|err| panic!("unexpected error {:?}", err.cause()));
+    .unwrap_or_else(|err| panic!("unexpected error {:?}", err.kind()));
     assert_eq!(solver.log, ["set-logic", "declare-const", "check-sat"]);
 }
 
@@ -342,11 +342,11 @@ fn an_error_of_an_implemented_callback_is_the_handlers_own() {
     .expect_err("the logic is refused");
     assert!(
         matches!(
-            err.cause(),
-            SmtReadErrorCause::Handler(SmtPartialCommandError::Handler(Refused))
+            err.kind(),
+            SmtReadErrorKind::Handler(SmtPartialCommandError::Handler(Refused))
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
 }
 
@@ -478,12 +478,12 @@ fn a_nonstandard_command_fails_naming_itself() {
     .expect_err("the solver has no nonstandard commands");
     assert!(
         matches!(
-            err.cause(),
-            SmtReadErrorCause::Handler(SmtPartialCommandError::UnsupportedNonstandard(name))
+            err.kind(),
+            SmtReadErrorKind::Handler(SmtPartialCommandError::UnsupportedNonstandard(name))
                 if name.as_slice() == b"minimize"
         ),
         "{:?}",
-        err.cause()
+        err.kind()
     );
     // the error spans the name
     assert_eq!(

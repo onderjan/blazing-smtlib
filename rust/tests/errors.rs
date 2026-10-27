@@ -1,5 +1,5 @@
 //! Public-API tests of the error types as errors: each is a `std::error::Error`,
-//! its message is its cause followed by its location counted from one, its
+//! its message is its kind followed by its location counted from one, its
 //! location points where to look, and its source is that of the error it
 //! carries.
 //!
@@ -15,8 +15,8 @@ use std::io::{self, BufRead, Read};
 use std::ops::ControlFlow;
 
 use blazing_smtlib::{
-    SmtNonstandardCommandError, SmtPartialCommandError, SmtReadError, SmtReadErrorCause,
-    SmtSyntaxChecker, SmtVersion, SmtWriteError, SmtWriteErrorCause,
+    SmtNonstandardCommandError, SmtPartialCommandError, SmtReadError, SmtReadErrorKind,
+    SmtSyntaxChecker, SmtVersion, SmtWriteError, SmtWriteErrorKind,
     grammar::SmtEmptyArgumentsError,
     lexer::{SmtLexer, SmtLexerCursor, SmtLexerError, SmtLexicalErrorKind, SmtLexicalExpected},
     lexicon::{
@@ -91,11 +91,11 @@ fn line_column(location: SmtLocation) -> LineColumn {
     (location.line(), location.column())
 }
 
-/// Checks that the message is the cause's message at the location counted from one.
+/// Checks that the message is the kind's message at the location counted from one.
 #[track_caller]
-fn assert_message(message: String, cause: &impl Display, location: SmtLocation) {
+fn assert_message(message: String, kind: &impl Display, location: SmtLocation) {
     let expected = format!(
-        "{cause} at line {}, column {}",
+        "{kind} at line {}, column {}",
         location.line() + 1,
         location.column() + 1
     );
@@ -133,11 +133,11 @@ fn a_read_error_reads_as_its_cause_at_its_location_counted_from_one() {
         let err = read_error(input);
         let text = String::from_utf8_lossy(input);
         assert_eq!(line_column(err.location()), expected, "{text:?}");
-        assert_message(err.to_string(), err.cause(), err.location());
+        assert_message(err.to_string(), err.kind(), err.location());
         // only the kinds where a byte is at fault look elsewhere than the span start
         let byte_at_fault = matches!(
-            err.cause(),
-            SmtReadErrorCause::Lexical(
+            err.kind(),
+            SmtReadErrorKind::Lexical(
                 SmtLexicalErrorKind::ForbiddenByteInString
                     | SmtLexicalErrorKind::BackslashInQuotedSymbol
                     | SmtLexicalErrorKind::ForbiddenByteInQuotedSymbol
@@ -201,7 +201,7 @@ fn a_lex_error_reads_as_its_cause_at_its_location_counted_from_one() {
         let err = lex_error(input);
         let text = String::from_utf8_lossy(input);
         assert_eq!(line_column(err.location()), expected, "{text:?}");
-        assert_message(err.to_string(), err.cause(), err.location());
+        assert_message(err.to_string(), err.kind(), err.location());
     }
 }
 
@@ -251,7 +251,7 @@ fn the_source_is_the_source_of_the_carried_error() {
     let io = read_smt(&mut SmtSyntaxChecker, FailingReader).expect_err("the reader fails");
     assert!(is_underlying(io.source()));
     assert!(io.to_string().contains(&Rejected.to_string()));
-    assert_message(io.to_string(), io.cause(), io.location());
+    assert_message(io.to_string(), io.kind(), io.location());
 
     let consumer = lex_error(b"42");
     assert!(is_underlying(consumer.source()));
@@ -279,13 +279,13 @@ fn the_source_is_the_source_of_the_carried_error() {
         .write_smt(&mut Vec::new(), SmtVersion::V2_6)
         .expect_err("lambda is not reserved in 2.6");
     assert!(matches!(
-        not_in_version.cause(),
-        SmtWriteErrorCause::NotInVersion(_)
+        not_in_version.kind(),
+        SmtWriteErrorKind::NotInVersion(_)
     ));
     assert!(not_in_version.source().is_none());
     assert_eq!(
         not_in_version.to_string(),
-        not_in_version.cause().to_string()
+        not_in_version.kind().to_string()
     );
 }
 
@@ -300,7 +300,7 @@ fn assert_distinct(messages: impl IntoIterator<Item = String>) {
     }
 }
 
-/// Each kind, cause and item reads as a message of its own.
+/// Each kind and item reads as a message of its own.
 #[test]
 fn every_kind_has_a_message_of_its_own() {
     let expected = [

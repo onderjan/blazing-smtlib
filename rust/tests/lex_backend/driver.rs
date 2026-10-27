@@ -12,7 +12,7 @@ use std::rc::Rc;
 use blazing_smtlib::{
     SmtVersion,
     lexer::{
-        SmtLexer, SmtLexerCursor, SmtLexerErrorCause, SmtLexerReadErrorCause, SmtLexerRecovery,
+        SmtLexer, SmtLexerCursor, SmtLexerErrorKind, SmtLexerReadErrorKind, SmtLexerRecovery,
         SmtLexerToken, SmtRecover,
     },
     lexicon::SmtDecimal,
@@ -497,14 +497,14 @@ fn drive<const WHITESPACE: bool, R: SmtLexerRecovery<Scripted<WHITESPACE>>>(
             };
 
             let continues = err.continues_from();
-            let mut line = match err.cause() {
-                SmtLexerErrorCause::Lexical(kind) => format!(
+            let mut line = match err.kind() {
+                SmtLexerErrorKind::Lexical(kind) => format!(
                     "err {:?} {} {}",
                     kind,
                     location(err.span().start()),
                     location(err.span().end()),
                 ),
-                SmtLexerErrorCause::Consumer(name) => format!("cerr {name}"),
+                SmtLexerErrorKind::Consumer(name) => format!("cerr {name}"),
             };
             if request.recover {
                 // where the input continues from, if it does
@@ -599,15 +599,15 @@ fn read<const WHITESPACE: bool>(request: &Request, out: &Rc<RefCell<String>>) {
             }
             lines
         }
-        Err(err) => match err.cause() {
-            SmtLexerReadErrorCause::Lexical(kind) => format!(
+        Err(err) => match err.kind() {
+            SmtLexerReadErrorKind::Lexical(kind) => format!(
                 "err {:?} {} {}",
                 kind,
                 location(err.span().start()),
                 location(err.span().end()),
             ),
-            SmtLexerReadErrorCause::Consumer(name) => format!("cerr {name}"),
-            SmtLexerReadErrorCause::Io(io) => format!(
+            SmtLexerReadErrorKind::Consumer(name) => format!("cerr {name}"),
+            SmtLexerReadErrorKind::Io(io) => format!(
                 "ioerr {} {} x{}",
                 location(err.span().start()),
                 location(err.span().end()),

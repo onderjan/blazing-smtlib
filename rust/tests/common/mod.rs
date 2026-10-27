@@ -3,7 +3,7 @@
 
 use blazing_smtlib::{SmtNonstandardCommandError, parser::SmtSyntaxErrorKind};
 
-use crate::parse_backend::{CommandHandler, ReadError, ReadErrorCause, SyntaxChecker, read_smt};
+use crate::parse_backend::{CommandHandler, ReadError, ReadErrorKind, SyntaxChecker, read_smt};
 
 /// Parses the whole input, feeding the commands to the given handler.
 pub fn parse_with<H: CommandHandler>(
@@ -34,20 +34,20 @@ pub fn assert_error_span<E>(err: &ReadError<E>, start: u64, end: u64) {
 pub fn assert_parser_error(input: &[u8], start: u64, end: u64) -> SmtSyntaxErrorKind {
     let err = parse(input).expect_err("expected a parser error, got Ok");
     assert_error_span(&err, start, end);
-    match err.into_cause() {
-        ReadErrorCause::Syntax(kind) => kind,
-        ReadErrorCause::Version(kind) => {
+    match err.into_kind() {
+        ReadErrorKind::Syntax(kind) => kind,
+        ReadErrorKind::Version(kind) => {
             panic!("expected parser error, got version error {kind:?}")
         }
-        ReadErrorCause::Handler(err) => {
+        ReadErrorKind::Handler(err) => {
             panic!(
                 "expected parser error, got handler error on {:?}",
                 err.name()
             )
         }
-        ReadErrorCause::Lexical(kind) => {
+        ReadErrorKind::Lexical(kind) => {
             panic!("expected parser error, got lexer error {kind:?}")
         }
-        ReadErrorCause::Io(err) => panic!("expected parser error, got I/O error {err}"),
+        ReadErrorKind::Io(err) => panic!("expected parser error, got I/O error {err}"),
     }
 }
