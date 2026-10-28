@@ -135,7 +135,7 @@ pub enum SmtToken<'a> {
 }
 
 impl<'a> SmtToken<'a> {
-    /// Constructs the syntax token from the lexer token in the version.
+    /// Creates the syntax token from the lexer token in the version.
     #[inline]
     pub fn from_lexer_token(token: SmtLexerToken<'a>, version: SmtVersion) -> Self {
         let content = token.content();
@@ -438,7 +438,7 @@ pub struct SmtTokensBuf {
 }
 
 impl SmtTokensBuf {
-    /// Constructs an empty array.
+    /// Creates an empty array.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -492,7 +492,9 @@ impl fmt::Debug for SmtTokensBuf {
     }
 }
 
-/// Cursor refused to switch to a requested version.
+/// Error due to a refused version switch.
+///
+/// Returned by [`SmtCursor::set_version`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SmtVersionRefused;
 
@@ -685,7 +687,7 @@ pub struct SmtTokensCursor<'a> {
 }
 
 impl<'a> SmtTokensCursor<'a> {
-    /// Constructs an empty cursor.
+    /// Creates an empty cursor.
     pub fn new(version: SmtVersion) -> Self {
         Self {
             tokens: VecDeque::new(),

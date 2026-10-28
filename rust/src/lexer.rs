@@ -329,7 +329,7 @@ enum LexerState {
 }
 
 impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
-    /// Constructs a lexer that stops at its first error.
+    /// Creates a lexer that stops at its first error.
     pub fn new(consumer: C, version: SmtVersion) -> Self {
         // construct the lexer normally
         // fail-fast is selected by the implementation generics
@@ -427,7 +427,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
 }
 
 impl<C: SmtRecover> SmtLexer<C, SmtRecovering> {
-    /// Constructs a lexer that recovers from errors (EXPERIMENTAL).
+    /// Creates a lexer that recovers from errors (EXPERIMENTAL).
     ///
     /// Lexer recovery is implemented but experimental
     /// since the exact semantics have not yet been set in stone.

@@ -48,7 +48,7 @@ impl std::fmt::Display for SmtInvalidLocationError {
 impl std::error::Error for SmtInvalidLocationError {}
 
 impl SmtLocation {
-    /// Constructs a location from its offset, line and column if it is valid.
+    /// Creates a location from its offset, line and column if it is valid.
     #[inline]
     pub fn new(offset: u64, line: u64, column: u64) -> Result<Self, SmtInvalidLocationError> {
         if Self::is_allowed(offset, line, column) {
@@ -204,7 +204,7 @@ impl std::fmt::Display for SmtInvalidSpanError {
 impl std::error::Error for SmtInvalidSpanError {}
 
 impl SmtSpan {
-    /// Constructs a span from its start and end if it is valid.
+    /// Creates a span from its start and end if it is valid.
     #[inline]
     pub fn new(start: SmtLocation, end: SmtLocation) -> Result<Self, SmtInvalidSpanError> {
         if Self::is_allowed(start, end) {

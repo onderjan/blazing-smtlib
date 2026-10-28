@@ -145,7 +145,7 @@ pub struct SmtWriterConfig {
 }
 
 impl SmtWriterConfig {
-    /// Constructs the configuration of writing in the version, in the default style.
+    /// Creates the configuration of writing in the version, in the default style.
     pub fn new(version: SmtVersion) -> Self {
         Self {
             version,
@@ -180,7 +180,7 @@ pub struct SmtWriter<W: Write> {
 }
 
 impl<W: Write> SmtWriter<W> {
-    /// Constructs a writer into `writer` that writes as configured.
+    /// Creates a writer into `writer` that writes as configured.
     pub fn new(writer: W, config: SmtWriterConfig) -> Self {
         let position = match config.style {
             SmtWriteStyle::Line => Position::Line(LinePosition::new()),

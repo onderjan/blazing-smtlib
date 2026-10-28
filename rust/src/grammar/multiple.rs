@@ -25,7 +25,7 @@ pub struct SmtMultiple<'a, T> {
 }
 
 impl<'a, T> SmtMultiple<'a, T> {
-    /// Constructs a view of all values of `stack`.
+    /// Creates a view of all values of `stack`.
     #[inline]
     pub fn new(stack: &'a mut Vec<T>) -> Self {
         Self { stack, start: 0 }
@@ -331,7 +331,7 @@ pub struct SmtNamedValuesBuf<V> {
 }
 
 impl<V> SmtNamedValuesBuf<V> {
-    /// Constructs empty named values.
+    /// Creates empty named values.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -542,7 +542,7 @@ pub struct SmtMatchCasesBuf<N: SmtNodeTypes + ?Sized> {
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtMatchCasesBuf<N> {
-    /// Constructs empty match cases.
+    /// Creates empty match cases.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -735,7 +735,7 @@ pub struct SmtSymbolsBuf {
 }
 
 impl SmtSymbolsBuf {
-    /// Constructs empty symbols.
+    /// Creates empty symbols.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -975,7 +975,7 @@ where
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
-    /// Constructs empty function signatures.
+    /// Creates empty function signatures.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -1164,7 +1164,7 @@ pub struct SmtSortAritiesBuf {
 }
 
 impl SmtSortAritiesBuf {
-    /// Constructs empty sort names with their arities.
+    /// Creates empty sort names with their arities.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -1358,7 +1358,7 @@ where
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
-    /// Constructs empty datatype constructors.
+    /// Creates empty datatype constructors.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),

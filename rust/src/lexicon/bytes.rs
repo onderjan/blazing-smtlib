@@ -8,23 +8,23 @@ use std::fmt::{Debug, Write};
 pub struct SmtBytesBuf(Box<[u8]>);
 
 impl SmtBytesBuf {
-    /// Constructs empty content.
+    /// Creates empty content.
     #[inline]
     pub fn new() -> SmtBytesBuf {
         SmtBytesBuf(Box::new([]))
     }
 
-    /// Constructs from a single byte.
+    /// Converts from a single byte.
     pub fn from_byte(byte: u8) -> Self {
         Self(Box::new([byte]))
     }
 
-    /// Constructs from a boxed byte slice.
+    /// Converts from a boxed byte slice.
     pub fn from_boxed_slice(boxed: Box<[u8]>) -> Self {
         Self(boxed)
     }
 
-    /// Constructs from a byte vector.
+    /// Converts from a byte vector.
     pub fn from_vec(vec: Vec<u8>) -> Self {
         Self(vec.into_boxed_slice())
     }

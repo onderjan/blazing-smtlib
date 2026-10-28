@@ -77,7 +77,7 @@ pub struct SmtVersionPostureBuilder {
 }
 
 impl SmtVersionPostureBuilder {
-    /// Constructs a builder with the default posture.
+    /// Creates a builder with the default posture.
     ///
     /// The default posture allows versions 2.5, 2.6 and 2.7, and at most one version declaration.
     pub fn new() -> Self {

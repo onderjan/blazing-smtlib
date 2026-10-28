@@ -41,7 +41,7 @@ pub struct SmtIdentBuf {
 }
 
 impl SmtIdentBuf {
-    /// Constructs a simple identifier: a name with no indices.
+    /// Creates a simple identifier: a name with no indices.
     pub fn new_simple(name: SmtSymbolBuf) -> SmtIdentBuf {
         SmtIdentBuf {
             name,
@@ -67,17 +67,17 @@ pub struct SmtQualifiedIdentBuf<N: SmtNodeTypes + ?Sized> {
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtQualifiedIdentBuf<N> {
-    /// Constructs a simple identifier with no sort.
+    /// Creates a simple identifier with no sort.
     pub fn new_simple(name: SmtSymbolBuf) -> Self {
         Self::new_unqualified(SmtIdentBuf::new_simple(name))
     }
 
-    /// Constructs an identifier with no sort.
+    /// Creates an identifier with no sort.
     pub fn new_unqualified(ident: SmtIdentBuf) -> Self {
         Self { ident, sort: None }
     }
 
-    /// Constructs an identifier qualified by the sort.
+    /// Creates an identifier qualified by the sort.
     pub fn new_qualified(ident: SmtIdentBuf, sort: N::Sort) -> Self {
         Self {
             ident,
@@ -141,7 +141,7 @@ impl<'a> SmtIndices<'a> {
         Self { text, handles }
     }
 
-    /// Constructs empty indices.
+    /// Creates empty indices.
     pub fn empty() -> Self {
         Self {
             text: &[],
@@ -188,7 +188,7 @@ pub struct SmtIndicesBuf {
 }
 
 impl SmtIndicesBuf {
-    /// Constructs empty indices.
+    /// Creates empty indices.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -396,7 +396,7 @@ pub struct SmtApplicationBuf<N: SmtNodeTypes + ?Sized> {
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtApplicationBuf<N> {
-    /// Constructs an application of `function` to `args` if `args` is nonempty.
+    /// Creates an application of `function` to `args` if `args` is nonempty.
     pub fn new(
         function: SmtQualifiedIdentBuf<N>,
         args: Vec<N::Term>,
@@ -468,7 +468,7 @@ pub struct SmtApplication<'a, N: SmtNodeTypes + ?Sized> {
 }
 
 impl<'a, N: SmtNodeTypes + ?Sized> SmtApplication<'a, N> {
-    /// Constructs an application of `function` to `args` if `args` is nonempty.
+    /// Creates an application of `function` to `args` if `args` is nonempty.
     pub fn new(
         function: SmtQualifiedIdent<'a, N>,
         args: SmtMultiple<'a, N::Term>,
@@ -824,7 +824,7 @@ pub struct SmtPatternApplicationBuf {
 }
 
 impl SmtPatternApplicationBuf {
-    /// Constructs a pattern that applies `constructor` to `args` if `args` is nonempty.
+    /// Creates a pattern that applies `constructor` to `args` if `args` is nonempty.
     pub fn new(
         constructor: SmtSymbolBuf,
         args: SmtSimplePatternsBuf,
@@ -1042,7 +1042,7 @@ pub struct SmtSimplePatternsBuf {
 }
 
 impl SmtSimplePatternsBuf {
-    /// Constructs empty arguments.
+    /// Creates empty arguments.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -1133,7 +1133,7 @@ pub struct SmtPatternApplication<'a> {
 }
 
 impl<'a> SmtPatternApplication<'a> {
-    /// Constructs a pattern that applies `constructor` to `args` if `args` is nonempty.
+    /// Creates a pattern that applies `constructor` to `args` if `args` is nonempty.
     pub fn new(
         constructor: SmtSymbol<'a>,
         args: SmtSimplePatterns<'a>,

@@ -291,18 +291,8 @@ pub(crate) mod expected {
 pub enum SmtVersionErrorKind {
     /// The requested version was rejected as not supported, e.g. `3.0`.
     ///
-    /// This can happen if the parser itself rejects the version or
-    /// [`SmtCursor`] rejects the version switch requested by
-    /// [`set_version`](SmtCursor::set_version), prompting the parser to reject.
-    ///
-    /// The only parser in the library that switches versions is
-    /// [`SmtScriptParser`], and it rejects on versions of SMT-LIB not supported
-    /// by the library, versions not allowed by the posture, and lastly versions
-    /// rejected by the cursor.
-    ///
-    /// [`SmtLexerCursor`](crate::lexer::SmtLexerCursor) never rejects a
-    /// version, and [`SmtTokensCursor`](crate::token::SmtTokensCursor) rejects
-    /// all versions except the one already in force.
+    /// The declared version is unknown (e.g. `3.0` or `foo`), not allowed by the posture, or
+    /// refused by the cursor.
     Unsupported,
     /// The script declares its version more times than allowed.
     TooManyDeclarations(u64),

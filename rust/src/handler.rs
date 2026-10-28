@@ -490,17 +490,17 @@ pub trait SmtHandler {
     ) -> Result<Self::Term, Self::Error>;
 }
 
-/// Types of handled nodes (S-expressions, sorts, and terms).
+/// Types of the children in views of nodes (S-expressions, sorts, and terms).
 ///
 /// The views of nodes are parametrised by these types. Every [`SmtHandler`] has them as its own
 /// types of the same names. A program that builds views without a handler, e.g. to write them,
 /// implements this trait on a type of its own.
 pub trait SmtNodeTypes {
-    /// Handled S-expression.
+    /// Child S-expression.
     type SExpr;
-    /// Handled sort.
+    /// Child sort.
     type Sort;
-    /// Handled term.
+    /// Child term.
     type Term;
 }
 
@@ -1851,7 +1851,7 @@ pub struct SmtSyntaxChecker;
 pub struct SmtNonstandardCommandError(SmtSymbolBuf);
 
 impl SmtNonstandardCommandError {
-    /// Constructs the error for the nonstandard command named `name`.
+    /// Creates the error for the nonstandard command named `name`.
     pub fn new(name: SmtSymbolBuf) -> Self {
         Self(name)
     }

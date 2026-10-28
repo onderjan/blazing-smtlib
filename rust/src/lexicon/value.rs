@@ -20,17 +20,13 @@ impl SmtStringContentBuf {
 ///
 /// The symbol carries its bytes and whether it is quoted.
 ///
-/// May be empty if quoted.
-/// Must contain only SMT-LIB printable or whitespace bytes
-/// except for pipe (`|`) and backslash (`\`), with an additional
-/// restriction for unquoted symbols: they must contain
-/// a nonempty sequence of simple-symbol bytes not starting
-/// with a digit.
+/// A quoted symbol may be empty and contains only printable or whitespace bytes other than `|`
+/// and `\`. An unquoted symbol is not empty, does not start with a digit, and contains only
+/// ASCII letters, digits and the characters `~ ! @ $ % ^ & * _ - + = < > . ? /`.
 ///
-/// Equality and hash are intentionally not implemented:
-/// quoted and unquoted symbols refer to the same value semantically,
-/// so the value without the quoted flag should be compared in that case,
-/// obtained through [`SmtSymbolBuf::bytes`] or [`SmtSymbolBuf::into_bytes_buf`].
+/// Equality and hashing are not implemented, as a quoted and an unquoted symbol with the same
+/// content are the same symbol: compare their content instead, e.g. from
+/// [`bytes`](Self::bytes).
 ///
 /// The content is stripped of the enclosing pipes if quoted, e.g. for the token `|a b|`,
 /// [`as_slice`](Self::as_slice) returns `b"a b"`.
@@ -173,15 +169,13 @@ impl Debug for SmtSymbolBuf {
 ///
 /// The symbol carries its bytes and whether it is quoted.
 ///
-/// May be empty if quoted.
-/// Must contain only SMT-LIB printable or whitespace bytes
-/// except for pipe (`|`) and backslash (`\`), with additional
-/// restrictions for unquoted symbols.
+/// A quoted symbol may be empty and contains only printable or whitespace bytes other than `|`
+/// and `\`. An unquoted symbol is not empty, does not start with a digit, and contains only
+/// ASCII letters, digits and the characters `~ ! @ $ % ^ & * _ - + = < > . ? /`.
 ///
-/// Equality and hash are intentionally not implemented:
-/// quoted and unquoted symbols refer to the same value semantically,
-/// so the value without the quoted flag should be compared in that case,
-/// obtained through [`SmtSymbol::bytes`].
+/// Equality and hashing are not implemented, as a quoted and an unquoted symbol with the same
+/// content are the same symbol: compare their content instead, e.g. from
+/// [`bytes`](Self::bytes).
 ///
 /// The content is stripped of the enclosing pipes if quoted, e.g. for the token `|a b|`,
 /// [`as_slice`](Self::as_slice) returns `b"a b"`.
@@ -468,7 +462,7 @@ macro_rules! string8_newtype {
         pub struct $buf(SmtBytesBuf);
 
         impl $buf {
-            /// Constructs from the bytes if they are allowed.
+            /// Creates from the bytes if they are allowed.
             pub fn new(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
                 let value = SmtBytesBuf::from_vec(value);
                 if Self::is_allowed(value.as_slice()) {
@@ -567,7 +561,7 @@ macro_rules! string8_newtype {
                 Self(value)
             }
 
-            /// Constructs from the bytes if they are allowed.
+            /// Creates from the bytes if they are allowed.
             pub fn new(value: &'a [u8]) -> Result<Self, SmtDisallowedBytesError> {
                 if $buf::is_allowed(value) {
                     Ok(Self(value))
@@ -669,8 +663,8 @@ string8_newtype! {
     /// It is defined in version 2.0 as a colon followed by a non-empty sequence
     /// of simple-symbol-class bytes with no further restriction. From version 2.5 on,
     /// the standard defines it as a colon followed by a simple symbol, which
-    /// read literally excludes a leading digit and the reserved words. We consider
-    /// this unintended and keep the 2.0 rule in every version: the standard's
+    /// read literally excludes a leading digit and the reserved words. This crate
+    /// takes this as unintended and keeps the 2.0 rule in every version: the standard's
     /// own keyword examples include `:56`, and there is no need to exclude
     /// reserved words as the colon already uniquely determines the category.
     ///
@@ -799,25 +793,25 @@ impl<'a> SmtNumeral<'a> {
 }
 
 impl SmtNumeralBuf {
-    /// Constructs from [`u32`].
+    /// Converts from [`u32`].
     pub fn from_u32(value: u32) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Constructs from [`u64`].
+    /// Converts from [`u64`].
     pub fn from_u64(value: u64) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Constructs from [`u128`].
+    /// Converts from [`u128`].
     pub fn from_u128(value: u128) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// Constructs from [`usize`].
+    /// Converts from [`usize`].
     pub fn from_usize(value: usize) -> Self {
         // the decimal string of an integer is a numeral
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
