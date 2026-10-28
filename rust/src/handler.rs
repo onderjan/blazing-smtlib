@@ -1,4 +1,8 @@
-use std::{convert::Infallible, error::Error, fmt, fmt::Debug};
+use std::{
+    convert::Infallible,
+    error::Error,
+    fmt::{self, Debug},
+};
 
 use crate::{
     SmtVersion,
@@ -13,7 +17,268 @@ use crate::{
     parser::SmtParse,
 };
 
-/// Handles nodes (sorts, terms, etc.).
+/// Handles grammar nodes (sorts, terms, etc.).
+///
+/// A handler is called in a post-order traversal over the SMT-LIB abstract
+/// syntax tree, as detailed in the [grammar](crate::grammar) documentation: it
+/// handles the inner items (terms, sorts, etc.) first, then the outer items
+/// that only see the returned values. It can construct the abstract syntax tree
+/// and/or perform any other processing, e.g. immediately evaluating constant
+/// expressions.
+///
+/// The example below sketches a handler for an arithmetic solver that processes
+/// symbols, numerals, and simple operations.
+///
+/// It puts the terms into a [`Vec`] and identifies them by their indices. It
+/// supports `let` bindings, properly stashing shadowed bindings into
+/// [`SmtHandler::Scope`] and restoring them when `let` ends. As a let binding
+/// can be referenced in multiple locations, this means that the terms are no
+/// longer organised in a tree, but a directed acyclic graph.
+///
+/// ```
+/// # use std::collections::HashMap;
+/// #
+/// # use blazing_smtlib::{
+/// #     SmtHandler, SmtReader, SmtVersion,
+/// #     grammar::{
+/// #         SmtAttributeValue, SmtBindings, SmtIdent, SmtMatchCases, SmtMultiple, SmtPattern,
+/// #         SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars,
+/// #         SmtSpecialConstant, SmtTerm,
+/// #     },
+/// #     lexicon::{SmtBytesBuf, SmtKeyword},
+/// #     parser::SmtTermParser,
+/// # };
+///
+/// #[derive(Debug)]
+/// enum TermHandlerError { Unsupported, NonUniqueBindings }
+///
+/// #[derive(Debug, PartialEq, Eq)]
+/// enum Operation { Add, Sub }
+///
+/// #[derive(Debug, PartialEq, Eq)]
+/// enum Term {
+///     Constant(u64),
+///     Variable(SmtBytesBuf),
+///     Operation(Operation, Vec<usize>),
+/// }
+///
+/// struct TermHandler {
+///     terms: Vec<Term>,
+///     mappings: HashMap<SmtBytesBuf, usize>,
+/// }
+///
+/// impl SmtHandler for TermHandler {
+///     type Error = TermHandlerError;
+///
+///     type SExpr = ();
+///     type Attribute = ();
+///     type Sort = ();
+///     type Term = usize;
+///
+///     type Scope = HashMap<SmtBytesBuf, Option<usize>>;
+///
+///     fn set_version(&mut self, _version: SmtVersion) {
+///         // no version-dependent semantics
+///     }
+///
+///     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error> {
+///         if sort.ident.name.bytes().as_slice() == b"Int"
+///             && sort.ident.indices.is_empty()
+///             && sort.args.is_empty()
+///         {
+///             Ok(())
+///         } else {
+///             Err(TermHandlerError::Unsupported)
+///         }
+///     }
+///
+///     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error> {
+///         let term = match term {
+///             SmtTerm::SpecialConstant(SmtSpecialConstant::Numeral(numeral)) => {
+///                 Term::Constant(numeral.to_u64().ok_or(TermHandlerError::Unsupported)?)
+///             }
+///             SmtTerm::QualifiedIdent(SmtQualifiedIdent {
+///                 ident: SmtIdent { name, indices },
+///                 sort: None,
+///             }) if indices.is_empty() => {
+///                 let name = name.bytes();
+///                 // a variable bound by a let stands for the term it is bound to
+///                 if let Some(&index) = self.mappings.get(name.as_slice()) {
+///                     return Ok(index);
+///                 }
+///                 Term::Variable(name.into_owned())
+///             }
+///             SmtTerm::Application(application) => {
+///                 let (function, args) = application.into_parts();
+///                 if !function.ident.indices.is_empty() || function.sort.is_some() {
+///                     return Err(TermHandlerError::Unsupported);
+///                 }
+///                 let op = match function.ident.name.bytes().as_slice() {
+///                     b"+" => Operation::Add,
+///                     b"-" => Operation::Sub,
+///                     _ => return Err(TermHandlerError::Unsupported),
+///                 };
+///                 // the arguments are term indices that have already been handled
+///                 Term::Operation(op, args.into_iter().collect())
+///             }
+///             _ => return Err(TermHandlerError::Unsupported),
+///         };
+///         let index = self.terms.len();
+///         self.terms.push(term);
+///         Ok(index)
+///     }
+///
+///     fn handle_s_expr(&mut self, _expr: SmtSExpr<'_, Self>) -> Result<Self::SExpr, Self::Error> {
+///         Err(TermHandlerError::Unsupported)
+///     }
+///
+///     fn start_let(
+///         &mut self,
+///         bindings: SmtBindings<'_, Self>,
+///     ) -> Result<Self::Scope, Self::Error> {
+///         // put the bindings in the symbol map and remember the replaced bindings
+///         let mut shadowed = HashMap::new();
+///         for (name, term) in bindings {
+///             let name = name.bytes().into_owned();
+///             if shadowed.contains_key(&name) {
+///                 // SMT-LIB prohibits binding a variable twice in one let
+///                 return Err(TermHandlerError::NonUniqueBindings);
+///             }
+///             let previous = self.mappings.insert(name.clone(), term);
+///             shadowed.insert(name, previous);
+///         }
+///         // the previous bindings form the scope that will be given to `end_let`
+///         Ok(shadowed)
+///     }
+///
+///     fn end_let(
+///         &mut self,
+///         scope: Self::Scope,
+///         body: Self::Term,
+///     ) -> Result<Self::Term, Self::Error> {
+///         // restore the previous symbol map from the previous bindings
+///         for (name, term) in scope {
+///             match term {
+///                 Some(term) => {
+///                     // replace with a shadowed binding
+///                     self.mappings.insert(name, term);
+///                 }
+///                 None => {
+///                     // no binding was present, remove it
+///                     self.mappings.remove(&name);
+///                 }
+///             }
+///         }
+///         Ok(body)
+///     }
+///
+///     // ... attributes, annotations, quantifiers, lambda, match returning unsupported ...
+/// #
+/// #     fn handle_attribute(
+/// #         &mut self,
+/// #         _name: SmtKeyword<'_>,
+/// #         _value: Option<SmtAttributeValue<'_, Self>>,
+/// #     ) -> Result<Self::Attribute, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn annotate_term(
+/// #         &mut self,
+/// #         _term: Self::Term,
+/// #         _attributes: SmtMultiple<'_, Self::Attribute>,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn start_quantifier(
+/// #         &mut self,
+/// #         _kind: SmtQuantifierKind,
+/// #         _vars: SmtSortedVars<'_, Self>,
+/// #     ) -> Result<Self::Scope, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn end_quantifier(
+/// #         &mut self,
+/// #         _kind: SmtQuantifierKind,
+/// #         _scope: Self::Scope,
+/// #         _body: Self::Term,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn start_lambda(
+/// #         &mut self,
+/// #         _vars: SmtSortedVars<'_, Self>,
+/// #     ) -> Result<Self::Scope, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn end_lambda(
+/// #         &mut self,
+/// #         _scope: Self::Scope,
+/// #         _body: Self::Term,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn start_match(&mut self, _scrutinee: &Self::Term) -> Result<(), Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn start_match_case(
+/// #         &mut self,
+/// #         _scrutinee: &Self::Term,
+/// #         _pattern: SmtPattern<'_>,
+/// #     ) -> Result<Self::Scope, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn end_match_case(
+/// #         &mut self,
+/// #         _scope: Self::Scope,
+/// #         _scrutinee: &Self::Term,
+/// #         _term: Self::Term,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// #
+/// #     fn end_match(
+/// #         &mut self,
+/// #         _scrutinee: Self::Term,
+/// #         _cases: SmtMatchCases<'_, Self>,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported)
+/// #     }
+/// }
+///
+/// // read a term with subterms and handle it using the custom handler
+/// let mut handler = TermHandler {
+///     terms: Vec::new(),
+///     mappings: HashMap::new(),
+/// };
+/// let mut reader = SmtReader::new(&mut handler, SmtTermParser::new(), SmtVersion::V2_7);
+/// let located_outer_term = reader.read_all(b"(let ((b 5)) (- (+ a b b) c))").unwrap();
+/// let a = SmtBytesBuf::from_vec(b"a".into());
+/// let c = SmtBytesBuf::from_vec(b"c".into());
+/// // `5` was added as a first term, then `a`;
+/// // `b` was not added (twice) as its mapping pointed to index 0;
+/// // then the addition, `c`, and subtraction were added
+/// assert_eq!(
+///     handler.terms,
+///     vec![
+///         Term::Constant(5),
+///         Term::Variable(a),
+///         Term::Operation(Operation::Add, vec![1, 0, 0]),
+///         Term::Variable(c),
+///         Term::Operation(Operation::Sub, vec![2, 3])
+///     ]
+/// );
+/// // reading ends at byte 29, the end of input
+/// assert_eq!(located_outer_term.location().offset(), 29);
+/// // the outer term has index 4
+/// assert_eq!(located_outer_term.into_value(), 4);
+/// ```
 pub trait SmtHandler {
     /// Error returned by the handler on failure.
     type Error;
