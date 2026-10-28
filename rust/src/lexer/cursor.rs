@@ -9,7 +9,7 @@ use crate::{
 /// Lexer token.
 ///
 /// Lexer tokens are given out by [`SmtLexerCursor`]. Each token includes its
-/// location span and can be viewed as [`SmtToken`](crate::token::SmtToken) via
+/// location span and can be viewed as [`SmtToken`] via
 /// [`SmtCursor::syntax`] on [`SmtLexerCursor`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmtLexerToken<'a> {
@@ -102,7 +102,7 @@ pub(crate) enum LexerCursorAction {
 
 /// Cursor into a batch of lexer tokens.
 ///
-/// A parser reads a batch through a cursor: it consumes the tokens one at
+/// A consumer reads a batch through a cursor: it consumes the tokens one at
 /// a time, can look at the next one, and can attempt to take several at once.
 /// However, it is not guaranteed how many tokens the batch will actually have,
 /// so an attempt is only useful for fast paths that fall back to slow paths

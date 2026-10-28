@@ -3,7 +3,7 @@
 //! Each lexical category in SMT-LIB is represented by a type that views its
 //! content (e.g. [`SmtNumeral`]) and a type that owns its content (e.g.
 //! [`SmtNumeralBuf`]), similarly to [`std::path::Path`] and [`std::path::PathBuf`].
-//! Specially, words reserved in any version are represented by [`SmtReserved`].
+//! Words reserved in any version are represented by [`SmtReserved`].
 //!
 //! Only valid SMT-LIB values can be constructed.
 //!
@@ -55,7 +55,6 @@
 //! SMT-LIB output or converting between versions. See documentation on
 //! [tokens](crate::token) and [`SmtWriter`](crate::SmtWriter) for how collisions
 //! between simple symbols and reserved words are handled.
-//!
 //!
 mod bytes;
 mod reserved;

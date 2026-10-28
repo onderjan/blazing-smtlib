@@ -39,7 +39,7 @@ impl<H: SmtCommandHandler> fmt::Debug for SmtCommandParser<H> {
 /// or end of file).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtCommandOutcome {
-    /// A command other than special ones was parsed, e.g. `(check-sat)`.
+    /// A command other than `exit` and a version declaration was parsed, e.g. `(check-sat)`.
     Command,
     /// A version-switch command was parsed, e.g. `(set-info :smt-lib-version 2.6)`.
     SetVersion(SmtVersion),
@@ -65,7 +65,7 @@ impl<H: SmtCommandHandler> SmtCommandParser<H> {
         }
     }
 
-    /// Starts a non-standard command named by a symbol.
+    /// Starts a nonstandard command named by a symbol.
     ///
     /// A command identified by a symbol is never standard,
     /// as standard command names are reserved words.
@@ -180,7 +180,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                             "resources should be pristine after end of non-standard command"
                         );
                         parse_state.clear();
-                        // a non-standard command cannot be the exit command
+                        // a nonstandard command cannot be the exit command
                         self.state = CommandParserState::AwaitingCommand;
                         return Ok(ControlFlow::Break(SmtCommandOutcome::Command));
                     }

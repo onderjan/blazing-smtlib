@@ -57,9 +57,8 @@ use crate::{
 
 /// Category of a token.
 ///
-/// The category does not differentiate between versions:
-/// both simple tokens and reserved words are categorised
-/// as an unquoted symbol.
+/// The category does not depend on the version: simple symbols and reserved words are both
+/// [`UnquotedSymbol`](Self::UnquotedSymbol).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtTokenCategory {
     /// Opening parenthesis (`(`).
@@ -135,7 +134,7 @@ pub enum SmtToken<'a> {
 }
 
 impl<'a> SmtToken<'a> {
-    /// Creates the syntax token from the lexer token in the version.
+    /// Views a lexer token as a syntax token in the version.
     #[inline]
     pub fn from_lexer_token(token: SmtLexerToken<'a>, version: SmtVersion) -> Self {
         let content = token.content();
@@ -520,34 +519,33 @@ impl Error for SmtVersionRefused {}
 /// version by [`SmtCursor::set_version`] or forced to start discarding tokens
 /// until EOF by [`SmtCursor::discard_rest`].
 pub trait SmtCursor {
-    /// User type of the token.
+    /// Token that the cursor hands over.
     ///
-    /// The producer must implement [`SmtCursor::syntax`] to view
-    /// the user token type as a library type.
+    /// It is viewed as a syntax token by [`syntax`](Self::syntax).
     type Token: Copy;
 
     /// Lookahead window, set to `()` if not implementing [`SmtCursor::attempt`].
     type Lookahead: SmtLookahead<Self::Token>;
 
-    /// Views the user token as a syntax token under the version in force.
+    /// Views a token of this cursor as a syntax token in the version in force.
     fn syntax<'t>(&self, token: &'t Self::Token) -> SmtToken<'t>;
 
-    /// Consumes the next token (if any).
+    /// Consumes and returns the next token, or [`None`] if none is left.
     fn next(&mut self) -> Option<Self::Token>;
 
     /// Returns the next token (if any) without consuming it.
     ///
-    /// Peeking must return [`Option::Some`] containing the next token that
+    /// Peeking must return [`Some`] containing the next token that
     /// would be consumed if there is some such token waiting.
     ///
     /// The caller must not forget to consume the token later if it should be
     /// taken.
     fn peek(&self) -> Option<Self::Token>;
 
-    /// Returns `true` if the producer has no tokens left to consume.
+    /// Returns `true` if the cursor has no tokens left.
     ///
-    /// This must be true exactly if [`SmtCursor::peek`] or
-    /// [`SmtCursor::next`] would produce [`Option::None`].
+    /// This must be `true` exactly if [`SmtCursor::peek`] or
+    /// [`SmtCursor::next`] would produce [`None`].
     fn is_empty(&self) -> bool {
         self.peek().is_none()
     }
@@ -555,9 +553,9 @@ pub trait SmtCursor {
     /// Attempts to consume several tokens at once (lookahead).
     ///
     /// The extractor takes tokens from the window ahead of the cursor, in order.
-    /// If it returns [`Option::Some`], exactly the tokens it took are consumed.
-    /// If it returns [`Option::None`], nothing is consumed.
-    /// An extractor that runs out of tokens must return [`Option::None`].
+    /// If it returns [`Some`], exactly the tokens it took are consumed.
+    /// If it returns [`None`], nothing is consumed.
+    /// An extractor that runs out of tokens must return [`None`].
     /// The window may end after any token.
     ///
     /// This function can be provided for ultra-fast processing,
@@ -570,7 +568,7 @@ pub trait SmtCursor {
         None
     }
 
-    /// Consumes all tokens the producer has left to hand over.
+    /// Consumes all tokens the cursor has left.
     #[inline]
     fn consume_all(&mut self) {
         while self.next().is_some() {}
@@ -580,28 +578,28 @@ pub trait SmtCursor {
     ///
     /// The version is guaranteed not to change during a call
     /// to the consumer except as a result of the consumer calling
-    /// [`SmtCursor::set_version`] and the producer accepting.
+    /// [`SmtCursor::set_version`] and the cursor accepting.
     fn version(&self) -> SmtVersion;
 
     /// Sets the version that applies from now on.
     ///
-    /// If the producer returns [`Result::Ok`], it has switched
+    /// If the cursor returns [`Ok`], it has switched
     /// to the new version, and will return it in subsequent
     /// calls of [`SmtCursor::version`]. The version change
     /// applies between the last consumed and first unconsumed
-    /// token, and the producer can adjust the non-consumed tokens
+    /// token, and the cursor can adjust the non-consumed tokens
     /// so they correspond to the set version. There is no guarantee
     /// on their shape or whether any remain at all; the caller must
     /// not use any information gathered on them beforehand.
     ///
-    /// If the producer returns [`Result::Err`], it has refused
+    /// If the cursor returns [`Err`], it has refused
     /// the version set request. It guarantees that no changes
     /// were made, as if the method was never called.
     fn set_version(&mut self, version: SmtVersion) -> Result<(), SmtVersionRefused>;
 
-    /// Forces the producer to discard all tokens before an EOF token.
+    /// Forces the cursor to discard all tokens before an EOF token.
     ///
-    /// It follows that the first produced token, if any, must be EOF.
+    /// It follows that the next token that the cursor hands over, if any, must be EOF.
     fn discard_rest(&mut self);
 }
 
@@ -619,7 +617,6 @@ impl<T> SmtLookahead<T> for () {
         None
     }
 
-    /// Views the user token as a syntax token.
     fn syntax<'t>(&self, _token: &'t T) -> SmtToken<'t> {
         panic!("unit lookahead cannot view user token as it produces no tokens")
     }
@@ -669,7 +666,7 @@ impl<'a, Z: SmtCursor> SmtCursor for SingleTokenCursor<'a, Z> {
     }
 }
 
-/// Cursor over a dynamic array of syntax tokens.
+/// Cursor over a queue of syntax tokens.
 ///
 /// The cursor is consumed under a given version: it accepts a request
 /// for that version and refuses a switch to any other. If the consumer
@@ -687,7 +684,7 @@ pub struct SmtTokensCursor<'a> {
 }
 
 impl<'a> SmtTokensCursor<'a> {
-    /// Creates an empty cursor.
+    /// Creates an empty cursor that hands tokens over in `version`.
     pub fn new(version: SmtVersion) -> Self {
         Self {
             tokens: VecDeque::new(),
@@ -781,7 +778,7 @@ impl<'a> SmtCursor for SmtTokensCursor<'a> {
     }
 }
 
-/// Appends tokens representing the value to a cursor.
+/// Appends the tokens of a value to a cursor.
 pub trait SmtAppendTokens {
     /// Puts the tokens of the value after those in the cursor.
     fn append_tokens<'a>(&'a self, tokens: &mut SmtTokensCursor<'a>);
@@ -877,13 +874,13 @@ pub trait SmtConsume {
     type Error;
     /// Whether the consumer consumes whitespace and comments.
     ///
-    /// If true, the consumer operates over concrete tokens: it can reconstruct
+    /// If `true`, the consumer operates over concrete tokens: it can reconstruct
     /// the byte stream precisely thanks to the whitespace and comments. The
     /// caller must hand over the whitespace and comment tokens present between
     /// true syntactic tokens (unless the consumer specifically allows them to
     /// be omitted, as e.g. [`SmtWriter`](crate::SmtWriter) does).
     ///
-    /// If false, the consumer operates over abstract tokens: it is not
+    /// If `false`, the consumer operates over abstract tokens: it is not
     /// interested in whitespace and comments, and the caller must not hand them
     /// over for consumption.
     const IS_CONCRETE: bool;
@@ -913,7 +910,7 @@ pub trait SmtConsumeFrom<Z: SmtCursor>: SmtConsume {
     /// the current value, is returning a result, and is ready to start
     /// consuming a new value.
     ///
-    /// If the consumer returns [`Result::Err`], it has failed at the last
+    /// If the consumer returns [`Err`], it has failed at the last
     /// consumed token. The state of the consumer is unspecified.
     fn consume(&mut self, cursor: &mut Z) -> Result<ControlFlow<Self::Result>, Self::Error>;
 }

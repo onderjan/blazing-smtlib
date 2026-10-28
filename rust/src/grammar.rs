@@ -42,7 +42,6 @@
 //! [`SmtNodeTypes`](crate::SmtNodeTypes) that defines the handled sort, term
 //! and S-expression types and is blanket-implemented for every
 //! [`SmtHandler`](crate::SmtHandler).
-//!
 
 mod multiple;
 mod nodes;

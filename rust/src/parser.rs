@@ -37,7 +37,7 @@
 //!   [`SmtParenMaximumParser`].
 //!
 //! Additionally, [`SmtCommandPayloadParser`] is provided to simplify
-//! implementing parsing of non-standard commands for handlers that support
+//! implementing parsing of nonstandard commands for handlers that support
 //! them.
 //!
 //! If needed, a parser can also be implemented manually. For example, a parser
@@ -170,7 +170,7 @@ pub enum SmtParseErrorKind<E> {
     Handler(E),
 }
 
-/// Why a syntax error was returned (expected item, empty list, or missing item).
+/// Why the syntax was rejected (expected item, empty list, or missing item).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxErrorKind {
     /// One of the items was expected here, e.g. a term in `(assert)`.
@@ -240,6 +240,8 @@ pub enum SmtNonEmptyList {
     /// Parameters of a datatype, e.g. `(T)` in `(par (T) ((c (f T))))`.
     DatatypeParameters,
     /// Constructors of a datatype, e.g. `((c (f T)))` in `(par (T) ((c (f T))))`.
+    ///
+    /// This arises only in the `par` form: without it, the first `(` opens a constructor.
     DatatypeConstructors,
     /// Arguments of a constructor pattern, e.g. `h t` in `(cons h t)`.
     PatternArguments,
@@ -294,7 +296,9 @@ pub enum SmtVersionErrorKind {
     /// The declared version is unknown (e.g. `3.0` or `foo`), not allowed by the posture, or
     /// refused by the cursor.
     Unsupported,
-    /// The script declares its version more times than allowed.
+    /// The script declared its version more times than allowed.
+    ///
+    /// The number is the maximum that the posture allows.
     TooManyDeclarations(u64),
 }
 

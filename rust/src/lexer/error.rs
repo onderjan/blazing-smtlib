@@ -7,7 +7,7 @@ use crate::span::{SmtLocation, SmtSpan};
 pub enum SmtLexicalErrorKind {
     /// A byte that cannot start any token appears where a token starts, e.g. `\` or `{`.
     UnexpectedByte,
-    /// The item was expected here, e.g. a fraction digit after `7.` in `7.y`.
+    /// A byte of the class was expected here, e.g. a fraction digit after `7.` in `7.y`.
     Expected(SmtLexicalExpected),
     /// A string literal is not closed before the end of the input, e.g. `"abc`.
     UnclosedString,

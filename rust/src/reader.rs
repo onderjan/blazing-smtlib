@@ -173,8 +173,7 @@ pub fn read_smt_file<H: SmtCommandHandler>(
 /// The input is considered to end when the buffered reader returns
 /// a zero-length buffer.
 ///
-/// The buffer content is consumed up to where the parser requests
-/// discarding the rest or fully if no such request was made.
+/// After `(exit)`, the rest of the input is left unread in the buffered reader.
 ///
 /// This is a convenience function over [`SmtReader`]: the parser
 /// is dropped after reading, so its resources cannot be preserved
@@ -193,15 +192,15 @@ pub fn read_smt<H: SmtCommandHandler>(
 ///
 /// A reader owns its lexer, its parser, and the parser resources, and borrows
 /// the handler. Any parser can be used, and a convenience method
-/// [`Self::script`] is provided for the common case of reading SMT-LIB scripts.
+/// [`script`](Self::script) is provided for the common case of reading SMT-LIB scripts.
 ///
 /// The input is read either whole, through [`read_file`](Self::read_file)
 /// or [`read_all`](Self::read_all), or in pieces, using
 /// [`read_slice`](Self::read_slice) sequentially, followed by [`read_eof`](Self::read_eof)
 /// once the input has ended. A piece may end anywhere, even inside a token.
 ///
-/// After a call of [`read_all`](Self::read_all) or [`read_eof`](Self::read_eof)
-/// that does not return an error, the reader is reset and can be reused.
+/// After the end of an input has been read without an error, the reader is reset and can be
+/// reused.
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
 pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParser<H>> {
@@ -219,10 +218,8 @@ impl<H: SmtHandler + ?Sized, P: SmtParse<H>> fmt::Debug for SmtReader<'_, H, P> 
 impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
     /// Creates a reader of an SMT-LIB script, whose commands are delivered to `handler`.
     ///
-    /// The version under which the script is read can be changed
-    /// by `set-info` commands. Therefore, the version-change posture
-    /// and the initial version used before any commands are read
-    /// must be provided.
+    /// The posture limits the versions that the script may declare; `initial_version` is in
+    /// force until it declares one.
     pub fn script(
         handler: &'a mut H,
         posture: SmtVersionPosture,
@@ -238,7 +235,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// The version passed is the initial one.
     /// Parsers may request the lexer to change versions,
     /// and the lexer will always comply.
-    /// No standard parser changes versions except for [`SmtScriptParser`].
+    /// No library parser changes versions except for [`SmtScriptParser`].
     pub fn new(handler: &'a mut H, parser: P, version: SmtVersion) -> Self {
         let lexer = SmtLexer::new(SmtParseAdapter::new(handler, parser), version);
         Self { lexer }
@@ -257,8 +254,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// Returns the located parser result if successful.
     ///
     /// A failure to open the file is reported as an I/O error with an empty
-    /// span at the start of the input. An I/O read error is reported as
-    /// an empty span at the respective position.
+    /// span at the start of the input. A failure while reading is reported as an I/O error
+    /// with an empty span at the position reached.
     ///
     /// Panics if a previous call on this reader returned an error other than an I/O error.
     /// May panic if the parser breaks the contract of [`SmtParse::parse`].
@@ -298,8 +295,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// a zero-length buffer. A failure while reading is reported as
     /// an I/O error with an empty span at the position reached.
     ///
-    /// The buffer content is consumed up to where the parser requests
-    /// discarding the rest or fully if no such request was made.
+    /// Once the parser requests discarding the rest of the input, e.g. after `(exit)` in a
+    /// script, the rest is left unread in the buffered reader.
     ///
     /// Panics if a previous call on this reader returned an error other than an I/O error.
     /// May panic if the parser breaks the contract of [`SmtParse::parse`].

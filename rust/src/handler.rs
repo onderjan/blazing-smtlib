@@ -23,7 +23,7 @@ use crate::{
 /// syntax tree, as detailed in the [grammar](crate::grammar) documentation: it
 /// handles the inner items (terms, sorts, etc.) first, then the outer items
 /// that only see the returned values. It can construct the abstract syntax tree
-/// and/or perform any other processing, e.g. immediately evaluating constant
+/// or perform any other processing, e.g. immediately evaluating constant
 /// expressions.
 ///
 /// The example below sketches a handler for an arithmetic solver that processes

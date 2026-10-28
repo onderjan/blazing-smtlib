@@ -76,8 +76,6 @@ reserved_words! {
         Par = "par",
     }
     /// Reserved word that names a standard command, e.g. `assert` or `check-sat`.
-    ///
-    /// Standard SMT-LIB2 commands are reserved words.
     CommandName: SmtCommandNameReserved {
         Assert = "assert",
         CheckSat = "check-sat",

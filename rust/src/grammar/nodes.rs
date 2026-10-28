@@ -67,12 +67,12 @@ pub struct SmtQualifiedIdentBuf<N: SmtNodeTypes + ?Sized> {
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtQualifiedIdentBuf<N> {
-    /// Creates a simple identifier with no sort.
+    /// Creates a qualified identifier from a simple identifier, without a sort.
     pub fn new_simple(name: SmtSymbolBuf) -> Self {
         Self::new_unqualified(SmtIdentBuf::new_simple(name))
     }
 
-    /// Creates an identifier with no sort.
+    /// Creates a qualified identifier without a sort.
     pub fn new_unqualified(ident: SmtIdentBuf) -> Self {
         Self { ident, sort: None }
     }
@@ -389,7 +389,7 @@ where
 
 /// Owned application.
 ///
-/// It is guaranteed that `args` are nonempty.
+/// The arguments are never empty.
 pub struct SmtApplicationBuf<N: SmtNodeTypes + ?Sized> {
     function: SmtQualifiedIdentBuf<N>,
     args: Vec<N::Term>,
@@ -461,7 +461,7 @@ where
 
 /// View of an application.
 ///
-/// It is guaranteed that `args` are nonempty.
+/// The arguments are never empty.
 pub struct SmtApplication<'a, N: SmtNodeTypes + ?Sized> {
     function: SmtQualifiedIdent<'a, N>,
     args: SmtMultiple<'a, N::Term>,
@@ -782,6 +782,8 @@ pub enum SmtSimplePatternBuf {
     /// Wildcard as a pattern.
     ///
     /// The wildcard is the reserved word `_`.
+    ///
+    /// The wildcard was introduced in SMT-LIB 2.7.
     Wildcard,
 }
 
@@ -974,6 +976,8 @@ pub enum SmtSimplePattern<'a> {
     /// Wildcard as a pattern.
     ///
     /// The wildcard is the reserved word `_`.
+    ///
+    /// The wildcard was introduced in SMT-LIB 2.7.
     Wildcard,
 }
 

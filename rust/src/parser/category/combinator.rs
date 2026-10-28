@@ -299,7 +299,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParse<H> for SmtParenParser<H, P> {
     }
 }
 
-/// Parses multiple items followed by a closing parenthesis.
+/// Parses zero or more items followed by a closing parenthesis.
 pub struct SmtClosedMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: P,
     resource: ClosedMultipleResource<P::Result>,
@@ -388,7 +388,7 @@ impl<T> ClosedMultipleResource<T> {
     }
 }
 
-/// Parses multiple items enclosed in parentheses.
+/// Parses zero or more items enclosed in parentheses.
 pub struct SmtParenMultipleParser<H: SmtHandler, P: SmtParse<H>> {
     inner: SmtOpenedParser<H, SmtClosedMultipleParser<H, P>>,
 }
@@ -464,7 +464,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
     /// The maximum is only applied when deciding whether parsing a next element
     /// is allowed and does not affect previously parsed elements or the
     /// currently parsed element, meaning the parser may return more elements
-    /// than the currently set maximum if this function is called in the middle
+    /// than the currently set maximum if this method is called in the middle
     /// of parsing elements.
     pub fn set_max_items(&mut self, max_items: usize) {
         self.max_items = max_items;
@@ -555,7 +555,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
     /// The maximum is only applied when deciding whether parsing a next element
     /// is allowed and does not affect previously parsed elements or the
     /// currently parsed element, meaning the parser may return more elements
-    /// than the currently set maximum if this function is called in the middle
+    /// than the currently set maximum if this method is called in the middle
     /// of parsing elements.
     pub fn set_max_items(&mut self, max_items: usize) {
         self.inner.set_max_items(max_items);

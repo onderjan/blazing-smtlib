@@ -790,7 +790,7 @@ impl Debug for SmtSymbolsBuf {
 ///
 /// It holds the name, the parameters with their sorts, and the result sort.
 ///
-/// The sorts are handed over by reference.
+/// The sorts are borrowed, so they cannot be moved out.
 pub struct SmtFunctionSignature<'a, N: SmtNodeTypes + ?Sized> {
     text: &'a [u8],
     name: SymbolHandle,
@@ -849,7 +849,7 @@ where
 ///
 /// For example, those of `define-funs-rec`.
 ///
-/// The sorts are handed over by reference.
+/// The sorts are borrowed, so they cannot be moved out.
 pub struct SmtFunctionSignatures<'a, N: SmtNodeTypes + ?Sized> {
     buf: &'a SmtFunctionSignaturesBuf<N>,
 }
@@ -987,7 +987,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
         }
     }
 
-    /// Starts a signature with no parameters; [`Self::push_param`] adds them.
+    /// Starts a signature with no parameters; [`push_param`](Self::push_param) adds them.
     pub fn push(&mut self, name: SmtSymbol, result_sort: N::Sort) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
@@ -1249,7 +1249,8 @@ impl<'a, N: SmtNodeTypes + ?Sized> SmtConstructors<'a, N> {
         self.names.is_empty()
     }
 
-    /// Returns the constructors with their selectors, which can be modified in place.
+    /// Returns an iterator over the constructors with their selectors, whose sorts can be
+    /// modified in place.
     pub fn iter_mut(&mut self) -> SmtConstructorsIter<'_, N> {
         SmtConstructorsIter {
             text: self.text,
@@ -1367,7 +1368,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
         }
     }
 
-    /// Starts a constructor with no selectors; [`Self::push_selector`] adds them.
+    /// Starts a constructor with no selectors; [`push_selector`](Self::push_selector) adds them.
     pub fn push(&mut self, name: SmtSymbol) {
         let index = self.names.len();
         let name = SymbolHandle::create_by_push(&mut self.text, name);

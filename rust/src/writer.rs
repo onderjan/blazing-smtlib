@@ -105,7 +105,7 @@ pub enum SmtWriteStyle {
     ///
     /// The canonical form of tokens is their text with one space between two
     /// tokens, except after an opening and before a closing parenthesis, and
-    /// a line feed after each top-level item, that is, after the closing
+    /// a line feed after each top-level item, i.e. after the closing
     /// parenthesis that closes every open one and after a token outside of
     /// parentheses. The compact form is the canonical form with the comments:
     /// each comment is written on a line of its own, ended by a line feed.
@@ -175,7 +175,7 @@ pub struct SmtWriter<W: Write> {
     writer: W,
     version: SmtVersion,
     position: Position,
-    /// Kept for [`Self::write`] to reuse its allocation, empty between calls.
+    /// Kept for [`write`](Self::write) to reuse its allocation, empty between calls.
     cursor: SmtTokensCursor<'static>,
 }
 

@@ -736,7 +736,7 @@ string8_newtype! {
     SmtCommentBuf,
     /// View of a comment.
     SmtComment,
-    /// The content may be empty.
+    /// May be empty.
     /// Only the last byte may be a carriage return (CR) or a line feed (LF).
     /// If the comment runs to the end of the input, there is no ending CR/LF.
     ///

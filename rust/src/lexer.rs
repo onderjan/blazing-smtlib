@@ -321,7 +321,7 @@ enum LexerState {
     /// Lexing whitespace.
     ///
     /// The lexer can only be set to this state if
-    /// [`SmtConsume::IS_CONCRETE`] is true,
+    /// [`SmtConsume::IS_CONCRETE`] is `true`,
     /// otherwise the whitespace is eagerly discarded without combining it.
     Whitespace,
     /// A lexer or consumer error was returned; lexing cannot continue.
@@ -2264,7 +2264,7 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
     /// Skips the input while recovering.
     ///
     /// Returns the position in the slice where the recovery was made,
-    /// or returns [`Option::None`] if it has not yet been done.
+    /// or returns [`None`] if it has not yet been done.
     fn skip_slice(&mut self, slice: &[u8], mut skip: RecoveryState) -> Option<usize> {
         if let RecoveryState::Boundary = skip {
             if self.consumed_depth == 0 {

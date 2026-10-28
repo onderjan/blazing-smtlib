@@ -9,8 +9,8 @@ use crate::{
 /// Token consumer that adapts a parser to parse the consumed tokens.
 ///
 /// The adapter implements [`SmtConsume`] and hands over to a parser that
-/// implements [`SmtParse`], providing it the handler and additional persistent
-/// resources.
+/// implements [`SmtParse`], providing it the handler and the
+/// [`SmtParseState`].
 pub struct SmtParseAdapter<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> {
     handler: &'a mut H,
     parse_state: SmtParseState<H>,
