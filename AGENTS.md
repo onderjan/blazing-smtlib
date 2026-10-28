@@ -48,15 +48,21 @@ are how agents follow it.
 
 ## Documentation comments
 
-- The first line is a short, simple summary. Detail, examples and "such as"
-  go into the paragraphs after it.
+- The first line is a short, simple summary. Detail, longer examples and
+  "such as" go into the paragraphs after it; a short example may end the first
+  line ("Numeral, e.g. `0` or `42`.").
 - Data is described by a noun phrase (`SmtNumeralBuf`: "Owned numeral (base
   10)."), and what performs an action by its verb (`SmtLexer`: "Lexes SMT-LIB
   input, handing the tokens to a consumer."; `SmtCommandHandler`: "Handles
-  commands."). A type that plays a role named by a trait names the role:
-  "Handler that checks compliance with SMT-LIB syntax.", "Token consumer that
-  adapts a parser to parse the consumed tokens."
-- A noun phrase starts without an article ("Kind of the error."); an article
+  SMT-LIB commands."). A type that plays a role named by a trait names the
+  role: "Handler that checks compliance with SMT-LIB syntax.", "Token consumer
+  that adapts a parser to parse the consumed tokens." A function or method
+  starts with a verb, as in the standard library: an accessor "Returns the
+  number of indices.", a predicate "Returns `true` if the span is empty.", a
+  conversion "Converts into [`SmtSymbolBuf`].", a method that takes a value
+  apart "Destructures into the function and the arguments." ("Consumes" is not
+  used: consuming is what is done to tokens).
+- A noun phrase starts without an article ("Category of a token."); an article
   goes inside it where the phrase reads awkwardly without one ("View of a
   decimal"). A first line that is a full sentence, as for some variants ("The
   handler failed."), keeps its article.
@@ -67,8 +73,8 @@ are how agents follow it.
   quantifier (existential or universal)."
 - Errors: a type is "Error that forced lexing to stop." or "Error constructing
   a span that would be invalid."; the enum read by `kind()` is "Why lexing
-  failed (lexical or consumer error)."; `kind()` is "Kind of the error." and
-  `into_kind()` "Converts into the kind of the error."
+  failed (lexical or consumer error)."; `kind()` is "Returns the kind of the
+  error." and `into_kind()` "Converts into the kind of the error."
 - A handler callback names its command: "(`declare-sort`)" where it stands for
   the command, "(in `define-funs-rec`)" where it handles a part of it.
 - "SMT-LIB" is written only where the context does not make it obvious: for
@@ -86,6 +92,8 @@ are how agents follow it.
   labelled with prose is not ("given by the [lexer](crate::lexer)"). Literal
   characters, tokens and syntax are in code formatting too (`` `0` ``,
   `` `|` ``, `` `#b0101` ``).
+- The prefix `Smt` is read as "es-em-tee", so an item named with it takes
+  "an": "an [`SmtHandler`]", "an [`SmtCommandHandler`]".
 - Comment lines are at most 100 columns long.
 
 ## Rust (`rust/`)
