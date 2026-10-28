@@ -283,65 +283,118 @@ pub trait SmtHandler {
     /// Error returned by the handler on failure.
     type Error;
 
-    /// Handled S-expression.
+    /// S-expression that has been handled.
+    ///
+    /// Returned by [`handle_s_expr`](Self::handle_s_expr).
     type SExpr;
-    /// Handled attribute.
+    /// Attribute that has been handled.
+    ///
+    /// Returned by [`handle_attribute`](Self::handle_attribute).
     type Attribute;
-    /// Handled sort.
+    /// Sort that has been handled.
+    ///
+    /// Returned by [`handle_sort`](Self::handle_sort).
     type Sort;
-    /// Handled term.
+    /// Term that has been handled.
+    ///
+    /// Returned by [`handle_term`](Self::handle_term), [`annotate_term`](Self::annotate_term),
+    /// and the methods that end binders and `match`, such as [`end_let`](Self::end_let).
     type Term;
 
     /// Scope of a binder, returned at its start and given back at its end.
+    ///
+    /// The binders are `let`, the quantifiers, `lambda`, and the cases of `match`. The body of a
+    /// binder is handled between its start and its end, so the handler can bring the bound
+    /// variables into scope at the start and keep in the scope what it needs to restore at the
+    /// end, e.g. the bindings that the bound variables shadow.
+    ///
+    /// A bound variable shadows the variables and user-defined function symbols of the same name
+    /// in the enclosing scopes, but SMT-LIB prohibits it from having the name of a theory function
+    /// symbol of the current logic. Library parsers do not check this.
     type Scope;
 
     /// Informs the handler of the version in force.
     ///
-    /// The caller must set the version before calling
-    /// other methods so the handler can process them
-    /// according to the version semantics.
+    /// A caller must set the version before it calls the other methods, so that the handler can
+    /// process the nodes by the semantics of the version. A handler starts with
+    /// [`SmtVersion::default`] in force.
     ///
-    /// The handler should start in [`SmtVersion::default`].
-    ///
-    /// In the library,
-    /// [`SmtParseAdapter`](crate::parser::SmtParseAdapter)
-    /// calls this method before any other calls, and
-    /// [`SmtScriptParser`](crate::parser::SmtScriptParser)
-    /// calls this method when switching versions.
+    /// [`SmtParseAdapter`](crate::parser::SmtParseAdapter) calls this method before any other,
+    /// and [`SmtScriptParser`](crate::parser::SmtScriptParser) calls it again when a script
+    /// declares its version (`set-info :smt-lib-version`).
     fn set_version(&mut self, version: SmtVersion);
 
     /// Handles a sort.
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error>;
+
     /// Handles a term (special constant, qualified identifier, or application).
+    ///
+    /// Annotations, binders and `match` terms are terms too, but are handled by methods of their
+    /// own because of their structure: annotations by [`annotate_term`](Self::annotate_term),
+    /// binders by pairs of methods that start and end their body, such as
+    /// [`start_let`](Self::start_let) and [`end_let`](Self::end_let), and `match` terms by
+    /// [`start_match`](Self::start_match) and the methods that follow it.
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error>;
+
     /// Handles an S-expression.
+    ///
+    /// S-expressions mainly occur in attribute values, e.g. `a` and `(f x)` in
+    /// `:my-attribute (a (f x))`.
     fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<Self::SExpr, Self::Error>;
+
     /// Handles an attribute.
+    ///
+    /// The value is [`None`] for an attribute without a value, e.g. `:left-assoc`. Library
+    /// parsers do not check well-formedness of the attribute content, e.g. that `:named` has a
+    /// symbol value.
     fn handle_attribute(
         &mut self,
         name: SmtKeyword<'_>,
         value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
 
-    /// Annotates a term with attributes.
+    /// Annotates a term with attributes, e.g. `(! (> x 0) :named p)`.
+    ///
+    /// The caller guarantees that there is at least one attribute.
+    ///
+    /// SMT-LIB defines the name of a `:named` attribute at the annotation: the name can be used
+    /// in what is handled after this method, in the rest of the command and after it. SMT-LIB
+    /// requires the named term to be closed and the name to be fresh, and allows `:pattern` only
+    /// on the body of a quantified term. Library parsers do not check this.
     fn annotate_term(
         &mut self,
         term: Self::Term,
         attributes: SmtMultiple<'_, Self::Attribute>,
     ) -> Result<Self::Term, Self::Error>;
 
-    /// Starts a let term.
+    /// Starts a `let` term.
+    ///
+    /// The bound terms are handled outside the scope of the `let`, before this method is
+    /// called: in `(let ((x 1) (y x)) (+ x y))`, the `x` bound to `y` is not the `x` that this
+    /// `let` binds.
+    ///
+    /// SMT-LIB requires the binding names to be distinct. Library parsers do not check this.
     fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<Self::Scope, Self::Error>;
-    /// Ends a let term.
+
+    /// Ends a `let` term.
+    ///
+    /// Receives the scope returned by the corresponding [`start_let`](Self::start_let).
     fn end_let(&mut self, scope: Self::Scope, body: Self::Term) -> Result<Self::Term, Self::Error>;
 
-    /// Starts a quantified term.
+    /// Starts a quantified term (`forall` or `exists`).
+    ///
+    /// The variable names need not be distinct: the binder stands for nested binders of one
+    /// variable each, so a later variable shadows an earlier one of the same name.
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
         vars: SmtSortedVars<'_, Self>,
     ) -> Result<Self::Scope, Self::Error>;
-    /// Ends a quantified term.
+
+    /// Ends a quantified term (`forall` or `exists`).
+    ///
+    /// Receives the scope returned by the corresponding
+    /// [`start_quantifier`](Self::start_quantifier).
     fn end_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
@@ -349,66 +402,66 @@ pub trait SmtHandler {
         body: Self::Term,
     ) -> Result<Self::Term, Self::Error>;
 
-    /// Starts a lambda term.
+    /// Starts a `lambda` term.
+    ///
+    /// The variable names need not be distinct: the binder stands for nested binders of one
+    /// variable each, so a later variable shadows an earlier one of the same name.
+    ///
+    /// Lambda terms were introduced in SMT-LIB 2.7.
     fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error>;
-    /// Ends a lambda term.
+
+    /// Ends a `lambda` term.
+    ///
+    /// Receives the scope returned by the corresponding [`start_lambda`](Self::start_lambda).
+    ///
+    /// Lambda terms were introduced in SMT-LIB 2.7.
     fn end_lambda(
         &mut self,
         scope: Self::Scope,
         body: Self::Term,
     ) -> Result<Self::Term, Self::Error>;
 
-    /// Starts a match term.
+    /// Starts a `match` term.
     ///
-    /// The parameter `scrutinee` is the term being matched.
-    /// The parser calls this method before any match case is started,
-    /// as the patterns can only be interpreted knowing the scrutinee.
+    /// The scrutinee is the term that is matched, e.g. `l` in
+    /// `(match l ((nil 0) ((cons h t) h)))`. At least one case follows, each case started by
+    /// [`start_match_case`](Self::start_match_case) and ended by
+    /// [`end_match_case`](Self::end_match_case), after which [`end_match`](Self::end_match) ends
+    /// the `match` term. A `match` in the body of a match case is nested properly: it ends
+    /// before the match case does.
     ///
-    /// The parser guarantees:
-    /// 1. If this method is nested, i.e. called again before the corresponding
-    ///    `end_match`, from within a match case body, the nesting is proper:
-    ///    the inner match ends before the outer match continues.
-    /// 2. There is at least one match case, its body handled between
-    ///    `start_match_case` and `end_match_case`, before the corresponding `end_match`.
-    ///
-    /// There are no other guarantees, including on the sort of the scrutinee.
-    ///
-    /// Consult the standard for proper handling.
+    /// Match terms were introduced in SMT-LIB 2.6.
     fn start_match(&mut self, scrutinee: &Self::Term) -> Result<(), Self::Error>;
 
-    /// Starts a match case.
+    /// Starts a case of a `match` term.
     ///
-    /// The parameter `pattern` is the case pattern.
+    /// Returns the scope in which the body of the case is handled, e.g. with `h` and `t` bound
+    /// for the pattern `(cons h t)`. The case belongs to the innermost `match` that has been
+    /// started and not ended. A case ends before the next case of its `match` starts.
     ///
-    /// The parser guarantees:
-    /// 1. This method is only called between `start_match` and `end_match`,
-    ///    and the case semantically belongs to the innermost match.
-    /// 2. This method is never nested before the corresponding `end_match_case`.
-    /// 3. The case body is handled after this method is called
-    ///    and before the respective `end_match_case` is called.
-    /// 4. If `pattern` is a constructor application pattern,
-    ///    it has at least one argument.
+    /// A constructor pattern has at least one argument, and its arguments are variables or the
+    /// wildcard `_`, even if a symbol has the name of a constructor, e.g. `nil` in `(cons h nil)`.
+    /// A simple pattern, e.g. `nil` or `x`, can be a constructor or a variable: library parsers
+    /// do not tell them apart. They do not check the names of constructors or their arities.
     ///
-    /// There are no other guarantees, including on constructor names, arities,
-    /// or distinctness of pattern variables.
+    /// SMT-LIB requires the variables of a constructor pattern to be distinct, e.g. it prohibits
+    /// `(pair x x)`, while the wildcard can repeat, as in `(pair _ _)`. Library parsers do not
+    /// check this.
     ///
-    /// Consult the standard for proper handling.
+    /// Match terms were introduced in SMT-LIB 2.6.
     fn start_match_case(
         &mut self,
         scrutinee: &Self::Term,
         pattern: SmtPattern<'_>,
     ) -> Result<Self::Scope, Self::Error>;
 
-    /// Ends a match case.
+    /// Ends a case of a `match` term.
     ///
-    /// The parameter `term` is the case body result.
+    /// Receives the scope returned by the corresponding
+    /// [`start_match_case`](Self::start_match_case). The result of this method is given to
+    /// [`end_match`](Self::end_match) as the case, next to its pattern.
     ///
-    /// The parser guarantees:
-    /// 1. This method is only called between `start_match` and `end_match`.
-    /// 2. There is a pending unended `start_match_case`,
-    ///    to which this method semantically belongs.
-    ///
-    /// Consult the standard for proper handling.
+    /// Match terms were introduced in SMT-LIB 2.6.
     fn end_match_case(
         &mut self,
         scope: Self::Scope,
@@ -416,17 +469,16 @@ pub trait SmtHandler {
         term: Self::Term,
     ) -> Result<Self::Term, Self::Error>;
 
-    /// Ends a match term.
+    /// Ends a `match` term.
     ///
-    /// The parser guarantees:
-    /// 1. There is a pending unended `start_match`,
-    ///    to which this method semantically belongs.
-    /// 2. There is no pending unended `start_match_case`.
-    /// 3. At least one match case was ended since the corresponding `start_match`.
+    /// The cases are in the order of the input, each with its pattern and the result of
+    /// [`end_match_case`](Self::end_match_case) for it. The caller guarantees that there is at
+    /// least one case.
     ///
-    /// The result of this method should be the handled match term.
+    /// SMT-LIB requires a variable pattern among the cases unless every constructor of the sort
+    /// of the scrutinee has a case. Library parsers do not check this.
     ///
-    /// Consult the standard for proper handling.
+    /// Match terms were introduced in SMT-LIB 2.6.
     fn end_match(
         &mut self,
         scrutinee: Self::Term,
