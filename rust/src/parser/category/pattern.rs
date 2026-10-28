@@ -25,6 +25,7 @@ impl fmt::Debug for SmtSimplePatternParser {
 }
 
 impl SmtSimplePatternParser {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self { _priv: () }
     }
@@ -104,6 +105,7 @@ impl<H: SmtHandler> fmt::Debug for SmtPatternParser<H> {
 }
 
 impl<H: SmtHandler> SmtPatternParser<H> {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,

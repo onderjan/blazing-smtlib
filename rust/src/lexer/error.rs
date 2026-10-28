@@ -5,18 +5,27 @@ use crate::span::{SmtLocation, SmtSpan};
 /// Why the input is lexically malformed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {
+    /// A byte that cannot start any token appears where a token starts.
     UnexpectedByte,
     /// The item was expected here.
     Expected(SmtLexicalExpected),
+    /// A string literal is not closed before the end of the input.
     UnclosedString,
+    /// A string literal contains a byte that is not allowed in it.
     ForbiddenByteInString,
     /// A colon is not followed by a keyword name.
     EmptyKeyword,
+    /// A quoted symbol contains a backslash.
     BackslashInQuotedSymbol,
+    /// A quoted symbol contains a byte that is not allowed in it.
     ForbiddenByteInQuotedSymbol,
+    /// A quoted symbol is not closed before the end of the input.
     UnclosedQuotedSymbol,
+    /// A numeral, or the whole part of a decimal, starts with a zero followed by another digit.
     NumeralLeadingZero,
+    /// A token is followed by a byte that does not delimit it.
     MissingDelimiter,
+    /// A token would be handed over after the consumer broke with a value.
     UnexpectedTrailingToken,
 }
 
@@ -72,7 +81,7 @@ impl<E> SmtLexerError<E> {
         self
     }
 
-    /// Kind of the error.
+    /// Returns the kind of the error.
     pub fn kind(&self) -> &SmtLexerErrorKind<E> {
         &self.kind
     }
@@ -223,7 +232,7 @@ impl<E> SmtLexerReadError<E> {
         Self { kind, span }
     }
 
-    /// Kind of the error.
+    /// Returns the kind of the error.
     pub fn kind(&self) -> &SmtLexerReadErrorKind<E> {
         &self.kind
     }

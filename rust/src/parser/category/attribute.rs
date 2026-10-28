@@ -25,6 +25,7 @@ impl<H: SmtHandler> fmt::Debug for SmtClosedAttributeParser<H> {
 }
 
 impl<H: SmtHandler> SmtClosedAttributeParser<H> {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,
@@ -78,6 +79,7 @@ impl<H: SmtHandler> fmt::Debug for SmtClosedMultipleAttributeParser<H> {
 }
 
 impl<H: SmtHandler> SmtClosedMultipleAttributeParser<H> {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,

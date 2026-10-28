@@ -8,51 +8,62 @@ use std::fmt::{Debug, Write};
 pub struct SmtBytesBuf(Box<[u8]>);
 
 impl SmtBytesBuf {
+    /// Constructs empty content.
     #[inline]
     pub fn new() -> SmtBytesBuf {
         SmtBytesBuf(Box::new([]))
     }
 
+    /// Constructs from a single byte.
     pub fn from_byte(byte: u8) -> Self {
         Self(Box::new([byte]))
     }
 
+    /// Constructs from a boxed byte slice.
     pub fn from_boxed_slice(boxed: Box<[u8]>) -> Self {
         Self(boxed)
     }
 
+    /// Constructs from a byte vector.
     pub fn from_vec(vec: Vec<u8>) -> Self {
         Self(vec.into_boxed_slice())
     }
 
+    /// Converts into a boxed byte slice.
     pub fn into_boxed_slice(self) -> Box<[u8]> {
         self.0
     }
 
+    /// Converts into a byte vector.
     pub fn into_vec(self) -> Vec<u8> {
         self.0.into_vec()
     }
 
+    /// Returns the length of the content in bytes.
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Returns `true` if the content is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns the content as a byte slice.
     #[inline]
     pub fn as_slice(&self) -> &[u8] {
         &self.0
     }
 
+    /// Views as [`SmtBytes`].
     #[inline]
     pub fn view<'a>(&'a self) -> SmtBytes<'a> {
         SmtBytes(&self.0)
     }
 
+    /// Returns an iterator over the bytes of the content.
     pub fn iter(&self) -> impl Iterator<Item = u8> {
         self.0.iter().copied()
     }
@@ -101,25 +112,30 @@ impl<'a> SmtBytes<'a> {
         Self(slice)
     }
 
+    /// Returns the length of the content in bytes.
     #[inline]
     pub fn len(&self) -> usize {
         self.0.len()
     }
 
+    /// Returns `true` if the content is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns the content as a byte slice.
     #[inline]
     pub fn as_slice(&self) -> &'a [u8] {
         self.0
     }
 
+    /// Converts into [`SmtBytesBuf`].
     pub fn into_owned(self) -> SmtBytesBuf {
         SmtBytesBuf::from_boxed_slice(self.as_slice().into())
     }
 
+    /// Returns an iterator over the bytes of the content.
     pub fn iter(&self) -> impl Iterator<Item = u8> {
         self.0.iter().copied()
     }

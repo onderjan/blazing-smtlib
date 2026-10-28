@@ -39,6 +39,7 @@ impl<H: SmtHandler + ?Sized> fmt::Debug for SmtParseState<H> {
 }
 
 impl<H: SmtHandler + ?Sized> SmtParseState<H> {
+    /// Creates the parse state with fresh resources.
     pub fn new() -> Self {
         Self {
             arena: Arena::new(),

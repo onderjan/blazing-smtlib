@@ -103,6 +103,7 @@ use crate::{
 
 /// Parses a grammar item.
 pub trait SmtParse<H: SmtHandler + ?Sized> {
+    /// Result returned by the parser on success.
     type Result;
 
     /// Parses tokens from the cursor, progressing the parser.
@@ -123,9 +124,9 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     ///
     /// The `parse_state` holds the shared resources of standard category parsers.
     /// To keep resources valid, each [`SmtParse`] must be progressed
-    /// until completion once started, i.e. if [SmtParse::parse()]
+    /// until completion once started, i.e. if [`SmtParse::parse`]
     /// returns `Ok(Continue(()))`, the subsequent outer parse call
-    /// must call [SmtParse::parse()] on the same parser, and
+    /// must call [`SmtParse::parse`] on the same parser, and
     /// is forbidden from progressing any other parsers.
     /// Failure to heed this contract may lead to silently wrong parsing
     /// or panics, but never unsafe behaviour.
@@ -193,10 +194,15 @@ pub enum SmtSyntaxExpected {
     Symbol,
     /// Index of an identifier (a numeral or a symbol).
     Index,
+    /// Identifier.
     Ident,
+    /// Sort.
     Sort,
+    /// Term.
     Term,
+    /// S-expression.
     SExpr,
+    /// Attribute.
     Attribute,
     /// What follows the opening parenthesis of a compound term.
     Operator,
@@ -211,19 +217,33 @@ pub enum SmtSyntaxExpected {
 /// Used in [`SmtSyntaxErrorKind::Empty`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtNonEmptyList {
+    /// Indices of an identifier.
     IdentIndices,
+    /// Arguments of a sort.
     SortApplication,
+    /// Arguments of an application.
     TermApplication,
+    /// Bindings of `let`.
     LetBindings,
+    /// Attributes of an annotation.
     Annotation,
+    /// Variables of a quantifier.
     QuantifierVars,
+    /// Variables of `lambda`.
     LambdaVars,
+    /// Functions of `define-funs-rec`.
     FunctionSignatures,
+    /// Sorts of `declare-datatypes`.
     DatatypeIntroductions,
+    /// Parameters of a datatype.
     DatatypeParameters,
+    /// Constructors of a datatype.
     DatatypeConstructors,
+    /// Arguments of a constructor pattern.
     PatternArguments,
+    /// Cases of `match`.
     MatchCases,
+    /// Terms of `get-value`.
     GetValueTerms,
 }
 
@@ -293,22 +313,27 @@ impl<E> SmtParseError<E> {
         Self(Box::new(kind))
     }
 
+    /// Creates a handler error.
     pub fn handler(err: E) -> Self {
         Self::new(SmtParseErrorKind::Handler(err))
     }
 
+    /// Creates a syntax error.
     pub fn syntax(err: SmtSyntaxErrorKind) -> Self {
         Self::new(SmtParseErrorKind::Syntax(err))
     }
 
+    /// Creates a version error.
     pub fn version(err: SmtVersionErrorKind) -> Self {
         Self::new(SmtParseErrorKind::Version(err))
     }
 
+    /// Returns the kind of the error.
     pub fn kind(&self) -> &SmtParseErrorKind<E> {
         &self.0
     }
 
+    /// Converts into the kind of the error.
     pub fn into_kind(self) -> SmtParseErrorKind<E> {
         *self.0
     }

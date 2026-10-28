@@ -57,6 +57,7 @@ enum CommandParserState<H: SmtCommandHandler> {
 }
 
 impl<H: SmtCommandHandler> SmtCommandParser<H> {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self {
             state: CommandParserState::AwaitingCommand,
@@ -172,7 +173,8 @@ impl<H: SmtCommandHandler> SmtParse<H> for SmtCommandParser<H> {
                     let flow = parser.parse(handler, parse_state, cursor)?;
                     if let ControlFlow::Break(()) = flow {
                         // the command has ended, resources should be back in pristine state;
-                        // we do not trust the library users: assert this in debug mode, always clear
+                        // we do not trust the library users:
+                        // assert this in debug mode, always clear
                         debug_assert!(
                             parse_state.is_pristine(),
                             "resources should be pristine after end of non-standard command"
@@ -206,6 +208,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
 
 /// Handles the result of a command parsed by [`SmtCommandPayloadParser`].
 pub trait SmtCommandRule<H: SmtCommandHandler> {
+    /// Parser of the payload.
     type Parser: SmtParse<H>;
 
     /// Handles the result of a command.
@@ -230,6 +233,7 @@ impl<H: SmtCommandHandler, R: SmtCommandRule<H>> fmt::Debug for SmtCommandPayloa
 }
 
 impl<H: SmtCommandHandler, R: SmtCommandRule<H>> SmtCommandPayloadParser<H, R> {
+    /// Creates the parser with the rule and the payload parser.
     pub fn new(rule: R, parser: R::Parser) -> Self {
         Self { rule, parser }
     }

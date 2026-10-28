@@ -19,6 +19,7 @@ impl fmt::Debug for SmtSymbolParser {
 }
 
 impl SmtSymbolParser {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self { _priv: () }
     }
@@ -79,6 +80,7 @@ macro_rules! token_parser {
         }
 
         impl $parser {
+            /// Creates the parser.
             pub fn new() -> Self {
                 Self { _priv: () }
             }

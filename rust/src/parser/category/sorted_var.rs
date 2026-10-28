@@ -23,6 +23,7 @@ impl<H: SmtHandler> fmt::Debug for SmtSortedVarParser<H> {
 }
 
 impl<H: SmtHandler> SmtSortedVarParser<H> {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,

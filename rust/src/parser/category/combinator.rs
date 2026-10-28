@@ -25,6 +25,7 @@ impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> fmt::Debug for SmtPairPars
 }
 
 impl<H: SmtHandler, P1: SmtParse<H>, P2: SmtParse<H>> SmtPairParser<H, P1, P2> {
+    /// Creates the parser of `first` followed by `second`.
     pub fn new(first: P1, second: P2) -> Self {
         Self {
             first,
@@ -117,7 +118,7 @@ macro_rules! nested_pair_pattern {
 macro_rules! tuple_parser {
     ($num:expr; $name:ident: $($parser:ident $value:ident),+) => {
         #[doc = concat!("Parses ", stringify!($num), " items sequentially.")]
-		///
+        ///
         /// The result is a tuple created from the inner parser results.
         pub struct $name<H: SmtHandler, $($parser: SmtParse<H>),+> {
             inner: nested_pair_type!(H; $($parser),+),
@@ -131,6 +132,7 @@ macro_rules! tuple_parser {
 
         impl<H: SmtHandler, $($parser: SmtParse<H>),+> $name<H, $($parser),+> {
             // one argument per parser, as many as the tuple has
+            /// Creates the parser with one inner parser per item, in order.
             #[allow(clippy::too_many_arguments)]
             pub fn new($($value: $parser),+) -> Self {
                 Self {
@@ -183,6 +185,7 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtClosedParser<H, P> {
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedParser<H, P> {
+    /// Creates the parser with the inner parser.
     pub fn new(inner: P) -> Self {
         Self {
             inner: SmtPairParser::new(inner, SmtCloseParenParser::new()),
@@ -225,6 +228,7 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtOpenedParser<H, P> {
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtOpenedParser<H, P> {
+    /// Creates the parser with the inner parser.
     pub fn new(inner: P) -> Self {
         Self {
             inner: SmtPairParser::new(SmtOpenParenParser::new(), inner),
@@ -267,6 +271,7 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtParenParser<H, P> {
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtParenParser<H, P> {
+    /// Creates the parser with the inner parser.
     pub fn new(inner: P) -> Self {
         Self {
             inner: SmtOpenedParser::new(SmtClosedParser::new(inner)),
@@ -308,6 +313,7 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtClosedMultipleParser<H, P>
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMultipleParser<H, P> {
+    /// Creates the parser with the inner parser.
     pub fn new(inner: P) -> Self {
         Self {
             inner,
@@ -395,6 +401,7 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtParenMultipleParser<H, P> 
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtParenMultipleParser<H, P> {
+    /// Creates the parser with the inner parser.
     pub fn new(inner: P) -> Self {
         Self {
             inner: SmtOpenedParser::new(SmtClosedMultipleParser::new(inner)),
@@ -441,6 +448,7 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtClosedMaximumParser<H, P> 
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
+    /// Creates the parser with the inner parser and the maximum number of items.
     pub fn new(inner: P, max_items: usize) -> Self {
         Self {
             max_items,
@@ -462,6 +470,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtClosedMaximumParser<H, P> {
         self.max_items = max_items;
     }
 
+    /// Returns the maximum number of items to be parsed.
     pub fn max_items(&self) -> usize {
         self.max_items
     }
@@ -533,6 +542,7 @@ impl<H: SmtHandler, P: SmtParse<H>> fmt::Debug for SmtParenMaximumParser<H, P> {
 }
 
 impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
+    /// Creates the parser with the inner parser and the maximum number of items.
     pub fn new(inner: P, max_items: usize) -> Self {
         Self {
             is_opened: false,
@@ -551,6 +561,7 @@ impl<H: SmtHandler, P: SmtParse<H>> SmtParenMaximumParser<H, P> {
         self.inner.set_max_items(max_items);
     }
 
+    /// Returns the maximum number of items to be parsed.
     pub fn max_items(&self) -> usize {
         self.inner.max_items()
     }

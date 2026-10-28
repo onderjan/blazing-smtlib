@@ -31,6 +31,7 @@ impl<H: SmtCommandHandler> fmt::Debug for SmtScriptParser<H> {
 }
 
 impl<H: SmtCommandHandler> SmtScriptParser<H> {
+    /// Creates the parser with the version posture.
     pub fn new(posture: SmtVersionPosture) -> Self {
         Self {
             command: SmtCommandParser::new(),

@@ -7,6 +7,7 @@ use crate::{
 };
 
 impl SmtStringContentBuf {
+    /// Returns `true` if the bytes are allowed as string content.
     pub fn is_allowed(value: &[u8]) -> bool {
         value
             .iter()
@@ -40,6 +41,7 @@ pub struct SmtSymbolBuf {
 }
 
 impl SmtSymbolBuf {
+    /// Returns `true` if the bytes are allowed as the content of an unquoted symbol.
     pub fn is_unquoted_allowed(value: &[u8]) -> bool {
         !value.is_empty()
             && !value[0].is_ascii_digit()
@@ -48,6 +50,7 @@ impl SmtSymbolBuf {
                 .all(|c| CharClass::from(*c).is_allowed_in_simple_symbol())
     }
 
+    /// Returns `true` if the bytes are allowed as the content of a quoted symbol.
     pub fn is_quoted_allowed(value: &[u8]) -> bool {
         value
             .iter()
@@ -61,7 +64,8 @@ impl SmtSymbolBuf {
         Self::is_unquoted_allowed(value) && SmtReserved::from_bytes(value, version).is_none()
     }
 
-    /// Whether this is a quoted symbol enclosed in pipes, e.g. `|x|`, or a simple symbol, e.g. `x`.
+    /// Returns `true` if this is a quoted symbol enclosed in pipes, e.g. `|x|`, and `false` if it
+    /// is a simple symbol, e.g. `x`.
     pub fn is_quoted(&self) -> bool {
         self.is_quoted
     }
@@ -82,6 +86,7 @@ impl SmtSymbolBuf {
         }
     }
 
+    /// Creates an unquoted symbol if the bytes are allowed in one.
     pub fn new_unquoted(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
         let value = SmtBytesBuf::from_vec(value);
         if Self::is_unquoted_allowed(value.as_slice()) {
@@ -94,6 +99,7 @@ impl SmtSymbolBuf {
         }
     }
 
+    /// Creates a quoted symbol if the bytes are allowed in one.
     pub fn new_quoted(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
         let value = SmtBytesBuf::from_vec(value);
         if Self::is_quoted_allowed(value.as_slice()) {
@@ -118,32 +124,40 @@ impl SmtSymbolBuf {
         }
     }
 
+    /// Returns the content as [`SmtBytes`].
     pub fn bytes(&self) -> SmtBytes<'_> {
         self.value.view()
     }
 
+    /// Returns the content as a byte slice.
     pub fn as_slice(&self) -> &[u8] {
         self.bytes().as_slice()
     }
 
+    /// Views as [`SmtSymbol`].
     pub fn view(&self) -> SmtSymbol<'_> {
         SmtSymbol {
             is_quoted: self.is_quoted,
             value: self.bytes(),
         }
     }
+    /// Converts into the content as [`SmtBytesBuf`].
     pub fn into_bytes_buf(self) -> SmtBytesBuf {
         self.value
     }
+    /// Converts into the content as a byte vector.
     pub fn into_vec(self) -> Vec<u8> {
         self.value.into_vec()
     }
+    /// Returns the length of the content in bytes.
     pub fn len(&self) -> usize {
         self.value.len()
     }
+    /// Returns `true` if the content is empty.
     pub fn is_empty(&self) -> bool {
         self.value.is_empty()
     }
+    /// Returns an iterator over the bytes of the content.
     pub fn iter(&self) -> impl Iterator<Item = u8> {
         self.value.iter()
     }
@@ -198,6 +212,7 @@ impl<'a> SmtSymbol<'a> {
         }
     }
 
+    /// Creates an unquoted symbol if the bytes are allowed in one.
     pub fn new_unquoted(value: &'a [u8]) -> Result<Self, SmtDisallowedBytesError> {
         if SmtSymbolBuf::is_unquoted_allowed(value) {
             Ok(Self {
@@ -209,6 +224,7 @@ impl<'a> SmtSymbol<'a> {
         }
     }
 
+    /// Creates a quoted symbol if the bytes are allowed in one.
     pub fn new_quoted(value: &'a [u8]) -> Result<Self, SmtDisallowedBytesError> {
         if SmtSymbolBuf::is_quoted_allowed(value) {
             Ok(Self {
@@ -232,6 +248,8 @@ impl<'a> SmtSymbol<'a> {
         }
     }
 
+    /// Returns `true` if this is a quoted symbol enclosed in pipes, e.g. `|x|`, and `false` if it
+    /// is a simple symbol, e.g. `x`.
     pub fn is_quoted(&self) -> bool {
         self.is_quoted
     }
@@ -252,14 +270,17 @@ impl<'a> SmtSymbol<'a> {
         }
     }
 
+    /// Returns the content as [`SmtBytes`].
     pub fn bytes(&self) -> SmtBytes<'a> {
         self.value
     }
 
+    /// Returns the content as a byte slice.
     pub fn as_slice(&self) -> &'a [u8] {
         self.value.as_slice()
     }
 
+    /// Converts into [`SmtSymbolBuf`].
     pub fn into_owned(self) -> SmtSymbolBuf {
         SmtSymbolBuf {
             is_quoted: self.is_quoted,
@@ -267,14 +288,17 @@ impl<'a> SmtSymbol<'a> {
         }
     }
 
+    /// Returns the length of the content in bytes.
     pub fn len(&self) -> usize {
         self.value.len()
     }
 
+    /// Returns `true` if the content is empty.
     pub fn is_empty(&self) -> bool {
         self.value.is_empty()
     }
 
+    /// Returns an iterator over the bytes of the content.
     pub fn iter(&self) -> impl Iterator<Item = u8> {
         self.value.iter()
     }
@@ -293,6 +317,7 @@ impl Debug for SmtSymbol<'_> {
 }
 
 impl SmtKeywordBuf {
+    /// Returns `true` if the bytes are allowed as the content of a keyword.
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty()
             && value
@@ -303,6 +328,7 @@ impl SmtKeywordBuf {
 }
 
 impl SmtNumeralBuf {
+    /// Returns `true` if the bytes are allowed as a numeral.
     pub fn is_allowed(value: &[u8]) -> bool {
         if value.is_empty() {
             return false;
@@ -324,18 +350,21 @@ impl SmtNumeralBuf {
 }
 
 impl SmtHexDigitsBuf {
+    /// Returns `true` if the bytes are allowed as hexadecimal digits.
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty() && value.iter().all(|c| c.is_ascii_hexdigit())
     }
 }
 
 impl SmtBinDigitsBuf {
+    /// Returns `true` if the bytes are allowed as binary digits.
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty() && value.iter().copied().all(|c| c == b'0' || c == b'1')
     }
 }
 
 impl SmtDecimalBuf {
+    /// Returns `true` if the bytes are allowed as a decimal.
     pub fn is_allowed(value: &[u8]) -> bool {
         // split by the dot
         let mut dot_iter = value.split(|c| *c == b'.');
@@ -363,6 +392,7 @@ impl SmtDecimalBuf {
 }
 
 impl SmtWhitespaceBuf {
+    /// Returns `true` if the bytes are allowed as whitespace content.
     pub fn is_allowed(value: &[u8]) -> bool {
         !value.is_empty()
             && value
@@ -373,6 +403,7 @@ impl SmtWhitespaceBuf {
 }
 
 impl SmtCommentBuf {
+    /// Returns `true` if the bytes are allowed as the content of a comment.
     pub fn is_allowed(value: &[u8]) -> bool {
         if value.is_empty() {
             // empty content is allowed (starting semicolon at the end of input)
@@ -394,6 +425,7 @@ impl SmtCommentBuf {
 pub struct SmtDisallowedByteVecError(SmtBytesBuf);
 
 impl SmtDisallowedByteVecError {
+    /// Converts into the disallowed bytes.
     pub fn into_vec(self) -> Vec<u8> {
         self.0.into_vec()
     }
@@ -436,6 +468,7 @@ macro_rules! string8_newtype {
         pub struct $buf(SmtBytesBuf);
 
         impl $buf {
+            /// Constructs from the bytes if they are allowed.
             pub fn new(value: Vec<u8>) -> Result<Self, SmtDisallowedByteVecError> {
                 let value = SmtBytesBuf::from_vec(value);
                 if Self::is_allowed(value.as_slice()) {
@@ -445,24 +478,31 @@ macro_rules! string8_newtype {
                 }
             }
 
+            /// Returns the content as a byte slice.
             pub fn as_slice(&self) -> &[u8] {
                 self.0.as_slice()
             }
+            #[doc = concat!("Views as [`", stringify!($view), "`].")]
             pub fn view(&self) -> $view<'_> {
                 $view(self.0.as_slice())
             }
+            /// Converts into the content as [`SmtBytesBuf`].
             pub fn into_bytes_buf(self) -> SmtBytesBuf {
                 self.0
             }
+            /// Converts into the content as a byte vector.
             pub fn into_vec(self) -> Vec<u8> {
                 self.0.into_vec()
             }
+            /// Returns the length of the content in bytes.
             pub fn len(&self) -> usize {
                 self.0.len()
             }
+            /// Returns `true` if the content is empty.
             pub fn is_empty(&self) -> bool {
                 self.0.is_empty()
             }
+            /// Returns an iterator over the bytes of the content.
             pub fn iter(&self) -> impl Iterator<Item = u8> {
                 self.0.iter()
             }
@@ -527,6 +567,7 @@ macro_rules! string8_newtype {
                 Self(value)
             }
 
+            /// Constructs from the bytes if they are allowed.
             pub fn new(value: &'a [u8]) -> Result<Self, SmtDisallowedBytesError> {
                 if $buf::is_allowed(value) {
                     Ok(Self(value))
@@ -535,20 +576,25 @@ macro_rules! string8_newtype {
                 }
             }
 
+            /// Returns the content as a byte slice.
             #[inline]
             pub fn as_slice(&self) -> &'a [u8] {
                 self.0
             }
+            #[doc = concat!("Converts into [`", stringify!($buf), "`].")]
             #[inline]
             pub fn into_owned(self) -> $buf {
                 $buf(SmtBytes::new(self.0).into_owned())
             }
+            /// Returns the length of the content in bytes.
             pub fn len(&self) -> usize {
                 self.0.len()
             }
+            /// Returns `true` if the content is empty.
             pub fn is_empty(&self) -> bool {
                 self.0.is_empty()
             }
+            /// Returns an iterator over the bytes of the content.
             pub fn iter(&self) -> impl Iterator<Item = u8> {
                 self.0.iter().copied()
             }
@@ -716,12 +762,12 @@ impl std::fmt::Display for SmtNumericOverflowError {
 impl std::error::Error for SmtNumericOverflowError {}
 
 impl<'a> SmtNumeral<'a> {
-    /// The value as [`u32`], or [`None`] if it does not fit.
+    /// Returns the value as [`u32`], or [`None`] if it does not fit.
     pub fn to_u32(&self) -> Option<u32> {
         u32::try_from(self.to_u64()?).ok()
     }
 
-    /// The value as [`u64`], or [`None`] if it does not fit.
+    /// Returns the value as [`u64`], or [`None`] if it does not fit.
     pub fn to_u64(&self) -> Option<u64> {
         let mut value: u64 = 0;
         for digit in self.iter() {
@@ -732,7 +778,7 @@ impl<'a> SmtNumeral<'a> {
         Some(value)
     }
 
-    /// The value as [`u128`], or [`None`] if it does not fit.
+    /// Returns the value as [`u128`], or [`None`] if it does not fit.
     pub fn to_u128(&self) -> Option<u128> {
         let mut value: u128 = 0;
         for digit in self.iter() {
@@ -743,7 +789,7 @@ impl<'a> SmtNumeral<'a> {
         Some(value)
     }
 
-    /// The value as [`usize`], or [`None`] if it does not fit.
+    /// Returns the value as [`usize`], or [`None`] if it does not fit.
     ///
     /// Whether a value fits depends on the platform.
     pub fn to_usize(&self) -> Option<usize> {
@@ -776,22 +822,22 @@ impl SmtNumeralBuf {
         Self(SmtBytesBuf::from_vec(value.to_string().into_bytes()))
     }
 
-    /// The value as [`u32`], or [`None`] if it does not fit.
+    /// Returns the value as [`u32`], or [`None`] if it does not fit.
     pub fn to_u32(&self) -> Option<u32> {
         self.view().to_u32()
     }
 
-    /// The value as [`u64`], or [`None`] if it does not fit.
+    /// Returns the value as [`u64`], or [`None`] if it does not fit.
     pub fn to_u64(&self) -> Option<u64> {
         self.view().to_u64()
     }
 
-    /// The value as [`u128`], or [`None`] if it does not fit.
+    /// Returns the value as [`u128`], or [`None`] if it does not fit.
     pub fn to_u128(&self) -> Option<u128> {
         self.view().to_u128()
     }
 
-    /// The value as [`usize`], or [`None`] if it does not fit.
+    /// Returns the value as [`usize`], or [`None`] if it does not fit.
     ///
     /// Whether a value fits depends on the platform.
     pub fn to_usize(&self) -> Option<usize> {
@@ -868,12 +914,12 @@ fn bin_digit_value(digit: u8) -> u8 {
 macro_rules! digits_to_int {
     ($view:ident, $buf:ident, $radix:literal, $digit_value:ident) => {
         impl $view<'_> {
-            /// The value as [`u32`], or [`None`] if it does not fit.
+            /// Returns the value as [`u32`], or [`None`] if it does not fit.
             pub fn to_u32(&self) -> Option<u32> {
                 u32::try_from(self.to_u64()?).ok()
             }
 
-            /// The value as [`u64`], or [`None`] if it does not fit.
+            /// Returns the value as [`u64`], or [`None`] if it does not fit.
             pub fn to_u64(&self) -> Option<u64> {
                 let mut value: u64 = 0;
                 for digit in self.iter() {
@@ -884,7 +930,7 @@ macro_rules! digits_to_int {
                 Some(value)
             }
 
-            /// The value as [`u128`], or [`None`] if it does not fit.
+            /// Returns the value as [`u128`], or [`None`] if it does not fit.
             pub fn to_u128(&self) -> Option<u128> {
                 let mut value: u128 = 0;
                 for digit in self.iter() {
@@ -895,7 +941,7 @@ macro_rules! digits_to_int {
                 Some(value)
             }
 
-            /// The value as [`usize`], or [`None`] if it does not fit.
+            /// Returns the value as [`usize`], or [`None`] if it does not fit.
             ///
             /// Whether a value fits depends on the platform.
             pub fn to_usize(&self) -> Option<usize> {
@@ -904,22 +950,22 @@ macro_rules! digits_to_int {
         }
 
         impl $buf {
-            /// The value as [`u32`], or [`None`] if it does not fit.
+            /// Returns the value as [`u32`], or [`None`] if it does not fit.
             pub fn to_u32(&self) -> Option<u32> {
                 self.view().to_u32()
             }
 
-            /// The value as [`u64`], or [`None`] if it does not fit.
+            /// Returns the value as [`u64`], or [`None`] if it does not fit.
             pub fn to_u64(&self) -> Option<u64> {
                 self.view().to_u64()
             }
 
-            /// The value as [`u128`], or [`None`] if it does not fit.
+            /// Returns the value as [`u128`], or [`None`] if it does not fit.
             pub fn to_u128(&self) -> Option<u128> {
                 self.view().to_u128()
             }
 
-            /// The value as [`usize`], or [`None`] if it does not fit.
+            /// Returns the value as [`usize`], or [`None`] if it does not fit.
             ///
             /// Whether a value fits depends on the platform.
             pub fn to_usize(&self) -> Option<usize> {
@@ -933,12 +979,12 @@ digits_to_int!(SmtHexDigits, SmtHexDigitsBuf, 16, hex_digit_value);
 digits_to_int!(SmtBinDigits, SmtBinDigitsBuf, 2, bin_digit_value);
 
 impl<'a> SmtDecimal<'a> {
-    /// The whole part, before the dot.
+    /// Returns the whole part, before the dot.
     pub fn whole(&self) -> SmtNumeral<'a> {
         SmtNumeral::new_unchecked(&self.0[..self.dot()])
     }
 
-    /// The digits of the fractional part, after the dot.
+    /// Returns the digits of the fractional part, after the dot.
     ///
     /// They may have leading zeros, so they are not a numeral.
     pub fn fraction(&self) -> &'a [u8] {
@@ -954,12 +1000,12 @@ impl<'a> SmtDecimal<'a> {
 }
 
 impl SmtDecimalBuf {
-    /// The whole part, before the dot.
+    /// Returns the whole part, before the dot.
     pub fn whole(&self) -> SmtNumeral<'_> {
         self.view().whole()
     }
 
-    /// The digits of the fractional part, after the dot.
+    /// Returns the digits of the fractional part, after the dot.
     ///
     /// They may have leading zeros, so they are not a numeral.
     pub fn fraction(&self) -> &[u8] {

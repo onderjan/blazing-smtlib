@@ -55,7 +55,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtParseAdapter<'a, H, P> {
         self.handler
     }
 
-    /// Takes the parser back out of the adapter.
+    /// Destructures into the parser.
     pub fn into_parser(self) -> P {
         self.parser
     }

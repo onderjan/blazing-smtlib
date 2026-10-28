@@ -1150,7 +1150,8 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
                     }
                     match slice.get(after_end) {
                         Some(b'.') => {
-                            // a dot starts a fraction, try to do a subsequent run of fraction digits
+                            // a dot starts a fraction,
+                            // try to do a subsequent run of fraction digits
                             let after_fraction_end =
                                 after_end + 1 + run_end(&slice[after_end + 1..], RUN_DIGIT);
                             if after_fraction_end == slice.len() {

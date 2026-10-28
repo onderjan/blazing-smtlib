@@ -174,6 +174,7 @@ enum Pending<H: SmtHandler + ?Sized> {
 }
 
 impl<H: SmtHandler> SmtTermParser<H> {
+    /// Creates the parser.
     pub fn new() -> Self {
         SmtTermParser {
             _priv: std::marker::PhantomData,

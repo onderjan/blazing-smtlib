@@ -15,11 +15,14 @@ use crate::{
 /// Owned index of an identifier (numeral or symbol).
 #[derive(Debug, Clone)]
 pub enum SmtIndexBuf {
+    /// Numeral, e.g. `32` in `(_ BitVec 32)`.
     Numeral(SmtNumeralBuf),
+    /// Symbol, e.g. `up` in `(_ move up)`.
     Symbol(SmtSymbolBuf),
 }
 
 impl SmtIndexBuf {
+    /// Views as [`SmtIndex`].
     pub fn view(&self) -> SmtIndex<'_> {
         match self {
             SmtIndexBuf::Numeral(numeral) => SmtIndex::Numeral(numeral.view()),
@@ -31,11 +34,14 @@ impl SmtIndexBuf {
 /// Owned identifier.
 #[derive(Debug, Clone)]
 pub struct SmtIdentBuf {
+    /// Name of the identifier.
     pub name: SmtSymbolBuf,
+    /// Indices of the identifier.
     pub indices: SmtIndicesBuf,
 }
 
 impl SmtIdentBuf {
+    /// Constructs a simple identifier: a name with no indices.
     pub fn new_simple(name: SmtSymbolBuf) -> SmtIdentBuf {
         SmtIdentBuf {
             name,
@@ -43,6 +49,7 @@ impl SmtIdentBuf {
         }
     }
 
+    /// Views as [`SmtIdent`].
     pub fn view(&self) -> SmtIdent<'_> {
         SmtIdent {
             name: self.name.view(),
@@ -53,19 +60,24 @@ impl SmtIdentBuf {
 
 /// Owned qualified identifier.
 pub struct SmtQualifiedIdentBuf<N: SmtNodeTypes + ?Sized> {
+    /// Identifier.
     pub ident: SmtIdentBuf,
+    /// Sort that qualifies the identifier, if any.
     pub sort: Option<N::Sort>,
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtQualifiedIdentBuf<N> {
+    /// Constructs a simple identifier with no sort.
     pub fn new_simple(name: SmtSymbolBuf) -> Self {
         Self::new_unqualified(SmtIdentBuf::new_simple(name))
     }
 
+    /// Constructs an identifier with no sort.
     pub fn new_unqualified(ident: SmtIdentBuf) -> Self {
         Self { ident, sort: None }
     }
 
+    /// Constructs an identifier qualified by the sort.
     pub fn new_qualified(ident: SmtIdentBuf, sort: N::Sort) -> Self {
         Self {
             ident,
@@ -101,11 +113,14 @@ where
 /// View of an index of an identifier (numeral or symbol).
 #[derive(Debug, Clone, Copy)]
 pub enum SmtIndex<'a> {
+    /// Numeral, e.g. `32` in `(_ BitVec 32)`.
     Numeral(SmtNumeral<'a>),
+    /// Symbol, e.g. `up` in `(_ move up)`.
     Symbol(SmtSymbol<'a>),
 }
 
 impl SmtIndex<'_> {
+    /// Converts into [`SmtIndexBuf`].
     pub fn into_owned(self) -> SmtIndexBuf {
         match self {
             SmtIndex::Numeral(numeral) => SmtIndexBuf::Numeral(numeral.into_owned()),
@@ -126,6 +141,7 @@ impl<'a> SmtIndices<'a> {
         Self { text, handles }
     }
 
+    /// Constructs empty indices.
     pub fn empty() -> Self {
         Self {
             text: &[],
@@ -133,21 +149,25 @@ impl<'a> SmtIndices<'a> {
         }
     }
 
+    /// Returns the number of indices.
     #[inline]
     pub fn len(&self) -> usize {
         self.handles.len()
     }
 
+    /// Returns `true` if there are no indices.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
 
+    /// Returns the index at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<SmtIndex<'a>> {
         Some(self.handles.get(index)?.view(self.text))
     }
 
+    /// Returns an iterator over the indices.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtIndex<'a>> {
         let text = self.text;
         self.handles.iter().map(move |handle| handle.view(text))
@@ -168,6 +188,7 @@ pub struct SmtIndicesBuf {
 }
 
 impl SmtIndicesBuf {
+    /// Constructs empty indices.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -175,16 +196,19 @@ impl SmtIndicesBuf {
         }
     }
 
+    /// Copies the index after the others.
     pub fn push(&mut self, index: SmtIndex) {
         let index = IndexHandle::create_by_push(&mut self.text, index);
         self.handles.push(index);
     }
 
+    /// Removes all indices.
     pub fn clear(&mut self) {
         self.text.clear();
         self.handles.clear();
     }
 
+    /// Views as [`SmtIndices`].
     pub fn view(&self) -> SmtIndices<'_> {
         SmtIndices {
             text: &self.text,
@@ -192,18 +216,22 @@ impl SmtIndicesBuf {
         }
     }
 
+    /// Returns the number of indices.
     pub fn len(&self) -> usize {
         self.handles.len()
     }
 
+    /// Returns `true` if there are no indices.
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
 
+    /// Returns the index at the position, or [`None`] if it is out of bounds.
     pub fn get(&self, index: usize) -> Option<SmtIndex<'_>> {
         Some(self.handles.get(index)?.view(&self.text))
     }
 
+    /// Returns an iterator over the indices.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtIndex<'_>> {
         let text = self.text.as_slice();
         self.handles.iter().map(move |handle| handle.view(text))
@@ -225,11 +253,14 @@ impl Debug for SmtIndicesBuf {
 /// View of an identifier.
 #[derive(Debug, Clone, Copy)]
 pub struct SmtIdent<'a> {
+    /// Name of the identifier.
     pub name: SmtSymbol<'a>,
+    /// Indices of the identifier.
     pub indices: SmtIndices<'a>,
 }
 
 impl SmtIdent<'_> {
+    /// Converts into [`SmtIdentBuf`].
     pub fn into_owned(self) -> SmtIdentBuf {
         let mut indices = SmtIndicesBuf::new();
         for index in self.indices.iter() {
@@ -244,11 +275,14 @@ impl SmtIdent<'_> {
 
 /// View of a qualified identifier.
 pub struct SmtQualifiedIdent<'a, N: SmtNodeTypes + ?Sized> {
+    /// Identifier.
     pub ident: SmtIdent<'a>,
+    /// Sort that qualifies the identifier, if any.
     pub sort: Option<N::Sort>,
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtQualifiedIdent<'_, N> {
+    /// Converts into [`SmtQualifiedIdentBuf`].
     pub fn into_owned(self) -> SmtQualifiedIdentBuf<N> {
         SmtQualifiedIdentBuf {
             ident: self.ident.into_owned(),
@@ -283,11 +317,14 @@ where
 
 /// Owned sort.
 pub struct SmtSortBuf<N: SmtNodeTypes + ?Sized> {
+    /// Identifier of the sort.
     pub ident: SmtIdentBuf,
+    /// Arguments of the sort.
     pub args: Vec<N::Sort>,
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtSortBuf<N> {
+    /// Views as [`SmtSort`], mutably.
     pub fn view_mut(&mut self) -> SmtSort<'_, N> {
         SmtSort {
             ident: self.ident.view(),
@@ -322,11 +359,14 @@ where
 
 /// View of a sort.
 pub struct SmtSort<'a, N: SmtNodeTypes + ?Sized> {
+    /// Identifier of the sort.
     pub ident: SmtIdent<'a>,
+    /// Arguments of the sort.
     pub args: SmtMultiple<'a, N::Sort>,
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtSort<'_, N> {
+    /// Converts into [`SmtSortBuf`].
     pub fn into_owned(self) -> SmtSortBuf<N> {
         SmtSortBuf {
             ident: self.ident.into_owned(),
@@ -356,6 +396,7 @@ pub struct SmtApplicationBuf<N: SmtNodeTypes + ?Sized> {
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtApplicationBuf<N> {
+    /// Constructs an application of `function` to `args` if `args` is nonempty.
     pub fn new(
         function: SmtQualifiedIdentBuf<N>,
         args: Vec<N::Term>,
@@ -366,22 +407,27 @@ impl<N: SmtNodeTypes + ?Sized> SmtApplicationBuf<N> {
         Ok(Self { function, args })
     }
 
+    /// Returns the applied function.
     pub fn function(&self) -> &SmtQualifiedIdentBuf<N> {
         &self.function
     }
 
+    /// Returns the applied function, mutably.
     pub fn function_mut(&mut self) -> &mut SmtQualifiedIdentBuf<N> {
         &mut self.function
     }
 
+    /// Returns the arguments of the application.
     pub fn args(&self) -> &[N::Term] {
         &self.args
     }
 
+    /// Returns the arguments of the application, mutably.
     pub fn args_mut(&mut self) -> &mut [N::Term] {
         &mut self.args
     }
 
+    /// Destructures into the function and the arguments.
     pub fn into_parts(self) -> (SmtQualifiedIdentBuf<N>, Vec<N::Term>) {
         (self.function, self.args)
     }
@@ -422,6 +468,7 @@ pub struct SmtApplication<'a, N: SmtNodeTypes + ?Sized> {
 }
 
 impl<'a, N: SmtNodeTypes + ?Sized> SmtApplication<'a, N> {
+    /// Constructs an application of `function` to `args` if `args` is nonempty.
     pub fn new(
         function: SmtQualifiedIdent<'a, N>,
         args: SmtMultiple<'a, N::Term>,
@@ -441,26 +488,32 @@ impl<'a, N: SmtNodeTypes + ?Sized> SmtApplication<'a, N> {
         Self { function, args }
     }
 
+    /// Returns the applied function.
     pub fn function(&self) -> &SmtQualifiedIdent<'a, N> {
         &self.function
     }
 
+    /// Returns the applied function, mutably.
     pub fn function_mut(&mut self) -> &mut SmtQualifiedIdent<'a, N> {
         &mut self.function
     }
 
+    /// Returns the arguments of the application.
     pub fn args(&self) -> &SmtMultiple<'a, N::Term> {
         &self.args
     }
 
+    /// Returns the arguments of the application, mutably.
     pub fn args_mut(&mut self) -> &mut [N::Term] {
         self.args.as_mut_slice()
     }
 
+    /// Destructures into the function and the arguments.
     pub fn into_parts(self) -> (SmtQualifiedIdent<'a, N>, SmtMultiple<'a, N::Term>) {
         (self.function, self.args)
     }
 
+    /// Converts into [`SmtApplicationBuf`].
     pub fn into_owned(self) -> SmtApplicationBuf<N> {
         SmtApplicationBuf {
             function: self.function.into_owned(),
@@ -497,14 +550,20 @@ where
 /// Owned special constant (numeral, decimal, hexadecimal, binary, or string).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum SmtSpecialConstantBuf {
+    /// Numeral, e.g. `0` or `42`.
     Numeral(SmtNumeralBuf),
+    /// Decimal, e.g. `0.5` or `3.14`.
     Decimal(SmtDecimalBuf),
+    /// Hexadecimal, e.g. `#xA04`.
     Hexadecimal(SmtHexDigitsBuf),
+    /// Binary, e.g. `#b0101`.
     Binary(SmtBinDigitsBuf),
+    /// String literal, e.g. `"hello"` or `""`.
     String(SmtStringContentBuf),
 }
 
 impl SmtSpecialConstantBuf {
+    /// Views as [`SmtSpecialConstant`].
     pub fn view(&self) -> SmtSpecialConstant<'_> {
         match self {
             Self::Numeral(value) => SmtSpecialConstant::Numeral(value.view()),
@@ -519,14 +578,20 @@ impl SmtSpecialConstantBuf {
 /// View of a special constant (numeral, decimal, hexadecimal, binary, or string).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSpecialConstant<'a> {
+    /// Numeral, e.g. `0` or `42`.
     Numeral(SmtNumeral<'a>),
+    /// Decimal, e.g. `0.5` or `3.14`.
     Decimal(SmtDecimal<'a>),
+    /// Hexadecimal, e.g. `#xA04`.
     Hexadecimal(SmtHexDigits<'a>),
+    /// Binary, e.g. `#b0101`.
     Binary(SmtBinDigits<'a>),
+    /// String literal, e.g. `"hello"` or `""`.
     String(SmtStringContent<'a>),
 }
 
 impl SmtSpecialConstant<'_> {
+    /// Converts into [`SmtSpecialConstantBuf`].
     pub fn into_owned(self) -> SmtSpecialConstantBuf {
         match self {
             Self::Numeral(value) => SmtSpecialConstantBuf::Numeral(value.into_owned()),
@@ -540,8 +605,11 @@ impl SmtSpecialConstant<'_> {
 
 /// Owned term (special constant, qualified identifier, or application).
 pub enum SmtTermBuf<N: SmtNodeTypes + ?Sized> {
+    /// Special constant, e.g. `42` or `"hello"`.
     SpecialConstant(SmtSpecialConstantBuf),
+    /// Qualified identifier, e.g. `x`, `(_ bv0 32)` or `(as nil (List Int))`.
     QualifiedIdent(SmtQualifiedIdentBuf<N>),
+    /// Application, e.g. `(+ x 1)`.
     Application(SmtApplicationBuf<N>),
 }
 
@@ -575,12 +643,16 @@ where
 
 /// View of a term (special constant, qualified identifier, or application).
 pub enum SmtTerm<'a, N: SmtNodeTypes + ?Sized> {
+    /// Special constant, e.g. `42` or `"hello"`.
     SpecialConstant(SmtSpecialConstant<'a>),
+    /// Qualified identifier, e.g. `x`, `(_ bv0 32)` or `(as nil (List Int))`.
     QualifiedIdent(SmtQualifiedIdent<'a, N>),
+    /// Application, e.g. `(+ x 1)`.
     Application(SmtApplication<'a, N>),
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtTerm<'_, N> {
+    /// Converts into [`SmtTermBuf`].
     pub fn into_owned(self) -> SmtTermBuf<N> {
         match self {
             Self::SpecialConstant(constant) => SmtTermBuf::SpecialConstant(constant.into_owned()),
@@ -593,7 +665,9 @@ impl<N: SmtNodeTypes + ?Sized> SmtTerm<'_, N> {
 /// Kind of a quantifier (existential or universal).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtQuantifierKind {
+    /// Existential quantifier (`exists`).
     Exists,
+    /// Universal quantifier (`forall`).
     Forall,
 }
 
@@ -613,12 +687,16 @@ where
 
 /// Owned attribute value (special constant, symbol, or a list of S-expressions).
 pub enum SmtAttributeValueBuf<N: SmtNodeTypes + ?Sized> {
+    /// Special constant, e.g. `2.6` in `:smt-lib-version 2.6`.
     SpecialConstant(SmtSpecialConstantBuf),
+    /// Symbol, e.g. `sat` in `:status sat`.
     Symbol(SmtSymbolBuf),
+    /// List of S-expressions, e.g. `(a 1)` in `:my-attribute (a 1)`.
     SExprs(Vec<N::SExpr>),
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtAttributeValueBuf<N> {
+    /// Views as [`SmtAttributeValue`], mutably.
     pub fn view_mut(&mut self) -> SmtAttributeValue<'_, N> {
         match self {
             Self::SpecialConstant(constant) => SmtAttributeValue::SpecialConstant(constant.view()),
@@ -656,12 +734,16 @@ where
 
 /// View of an attribute value (special constant, symbol, or a list of S-expressions).
 pub enum SmtAttributeValue<'a, N: SmtNodeTypes + ?Sized> {
+    /// Special constant, e.g. `2.6` in `:smt-lib-version 2.6`.
     SpecialConstant(SmtSpecialConstant<'a>),
+    /// Symbol, e.g. `sat` in `:status sat`.
     Symbol(SmtSymbol<'a>),
+    /// List of S-expressions, e.g. `(a 1)` in `:my-attribute (a 1)`.
     SExprs(SmtMultiple<'a, N::SExpr>),
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtAttributeValue<'_, N> {
+    /// Converts into [`SmtAttributeValueBuf`].
     pub fn into_owned(self) -> SmtAttributeValueBuf<N> {
         match self {
             Self::SpecialConstant(constant) => {
@@ -689,7 +771,7 @@ where
 /// Owned simple match pattern (symbol or wildcard).
 #[derive(Debug, Clone)]
 pub enum SmtSimplePatternBuf {
-    /// Symbol as a pattern.
+    /// Symbol as a pattern, e.g. `x` or `nil`.
     ///
     /// In the match pattern position, the symbol should be
     /// either a variable or a nullary constructor, and
@@ -704,6 +786,7 @@ pub enum SmtSimplePatternBuf {
 }
 
 impl SmtSimplePatternBuf {
+    /// Views as [`SmtSimplePattern`].
     pub fn view(&self) -> SmtSimplePattern<'_> {
         match self {
             Self::Symbol(symbol) => SmtSimplePattern::Symbol(symbol.view()),
@@ -715,13 +798,14 @@ impl SmtSimplePatternBuf {
 /// Owned match pattern (simple or constructor pattern).
 #[derive(Debug, Clone)]
 pub enum SmtPatternBuf {
-    /// Simple match pattern.
+    /// Simple match pattern, e.g. `x`, `nil` or `_`.
     Simple(SmtSimplePatternBuf),
-    /// Constructor pattern.
+    /// Constructor pattern, e.g. `(cons h t)`.
     Application(SmtPatternApplicationBuf),
 }
 
 impl SmtPatternBuf {
+    /// Views as [`SmtPattern`].
     pub fn view(&self) -> SmtPattern<'_> {
         match self {
             Self::Simple(simple) => SmtPattern::Simple(simple.view()),
@@ -740,6 +824,7 @@ pub struct SmtPatternApplicationBuf {
 }
 
 impl SmtPatternApplicationBuf {
+    /// Constructs a pattern that applies `constructor` to `args` if `args` is nonempty.
     pub fn new(
         constructor: SmtSymbolBuf,
         args: SmtSimplePatternsBuf,
@@ -750,18 +835,22 @@ impl SmtPatternApplicationBuf {
         Ok(Self { constructor, args })
     }
 
+    /// Returns the applied constructor.
     pub fn constructor(&self) -> &SmtSymbolBuf {
         &self.constructor
     }
 
+    /// Returns the arguments of the pattern.
     pub fn args(&self) -> &SmtSimplePatternsBuf {
         &self.args
     }
 
+    /// Destructures into the constructor and the arguments.
     pub fn into_parts(self) -> (SmtSymbolBuf, SmtSimplePatternsBuf) {
         (self.constructor, self.args)
     }
 
+    /// Views as [`SmtPatternApplication`].
     pub fn view(&self) -> SmtPatternApplication<'_> {
         SmtPatternApplication {
             constructor: self.constructor.view(),
@@ -773,14 +862,20 @@ impl SmtPatternApplicationBuf {
 /// Owned S-expression (special constant, symbol, reserved word, keyword, or a list of
 /// S-expressions).
 pub enum SmtSExprBuf<N: SmtNodeTypes + ?Sized> {
+    /// Special constant, e.g. `42` or `"hello"`.
     SpecialConstant(SmtSpecialConstantBuf),
+    /// Symbol, e.g. `x` or `|a b|`.
     Symbol(SmtSymbolBuf),
+    /// Reserved word, e.g. `let` or `_`.
     Reserved(SmtReserved),
+    /// Keyword, e.g. `:named`.
     Keyword(SmtKeywordBuf),
+    /// List of S-expressions, e.g. `(a (b 1))`.
     SExprs(Vec<N::SExpr>),
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtSExprBuf<N> {
+    /// Views as [`SmtSExpr`], mutably.
     pub fn view_mut(&mut self) -> SmtSExpr<'_, N> {
         match self {
             Self::SpecialConstant(constant) => SmtSExpr::SpecialConstant(constant.view()),
@@ -825,14 +920,20 @@ where
 /// View of an S-expression (special constant, symbol, reserved word, keyword, or a list of
 /// S-expressions).
 pub enum SmtSExpr<'a, N: SmtNodeTypes + ?Sized> {
+    /// Special constant, e.g. `42` or `"hello"`.
     SpecialConstant(SmtSpecialConstant<'a>),
+    /// Symbol, e.g. `x` or `|a b|`.
     Symbol(SmtSymbol<'a>),
+    /// Reserved word, e.g. `let` or `_`.
     Reserved(SmtReserved),
+    /// Keyword, e.g. `:named`.
     Keyword(SmtKeyword<'a>),
+    /// List of S-expressions, e.g. `(a (b 1))`.
     SExprs(SmtMultiple<'a, N::SExpr>),
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtSExpr<'_, N> {
+    /// Converts into [`SmtSExprBuf`].
     pub fn into_owned(self) -> SmtSExprBuf<N> {
         match self {
             Self::SpecialConstant(constant) => SmtSExprBuf::SpecialConstant(constant.into_owned()),
@@ -862,11 +963,22 @@ where
 /// View of a simple match pattern (symbol or wildcard).
 #[derive(Debug, Clone, Copy)]
 pub enum SmtSimplePattern<'a> {
+    /// Symbol as a pattern, e.g. `x` or `nil`.
+    ///
+    /// In the match pattern position, the symbol should be
+    /// either a variable or a nullary constructor, and
+    /// it is not possible to determine syntactically which one it is.
+    /// In the constructor application argument position,
+    /// it should be a variable.
     Symbol(SmtSymbol<'a>),
+    /// Wildcard as a pattern.
+    ///
+    /// The wildcard is the reserved word `_`.
     Wildcard,
 }
 
 impl SmtSimplePattern<'_> {
+    /// Converts into [`SmtSimplePatternBuf`].
     pub fn into_owned(self) -> SmtSimplePatternBuf {
         match self {
             Self::Symbol(symbol) => SmtSimplePatternBuf::Symbol(symbol.into_owned()),
@@ -891,21 +1003,25 @@ impl<'a> SmtSimplePatterns<'a> {
         Self { text, handles }
     }
 
+    /// Returns the number of arguments.
     #[inline]
     pub fn len(&self) -> usize {
         self.handles.len()
     }
 
+    /// Returns `true` if there are no arguments.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
 
+    /// Returns the argument at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<SmtSimplePattern<'a>> {
         Some(self.handles.get(index)?.view(self.text))
     }
 
+    /// Returns an iterator over the arguments.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSimplePattern<'a>> {
         let text = self.text;
         self.handles.iter().map(move |handle| handle.view(text))
@@ -926,6 +1042,7 @@ pub struct SmtSimplePatternsBuf {
 }
 
 impl SmtSimplePatternsBuf {
+    /// Constructs empty arguments.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -933,16 +1050,19 @@ impl SmtSimplePatternsBuf {
         }
     }
 
+    /// Copies the argument after the others.
     pub fn push(&mut self, pattern: SmtSimplePattern) {
         let pattern = SimplePatternHandle::create_by_push(&mut self.text, pattern);
         self.handles.push(pattern);
     }
 
+    /// Removes all arguments.
     pub fn clear(&mut self) {
         self.text.clear();
         self.handles.clear();
     }
 
+    /// Views as [`SmtSimplePatterns`].
     pub fn view(&self) -> SmtSimplePatterns<'_> {
         SmtSimplePatterns {
             text: &self.text,
@@ -950,18 +1070,22 @@ impl SmtSimplePatternsBuf {
         }
     }
 
+    /// Returns the number of arguments.
     pub fn len(&self) -> usize {
         self.handles.len()
     }
 
+    /// Returns `true` if there are no arguments.
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
 
+    /// Returns the argument at the position, or [`None`] if it is out of bounds.
     pub fn get(&self, index: usize) -> Option<SmtSimplePattern<'_>> {
         Some(self.handles.get(index)?.view(&self.text))
     }
 
+    /// Returns an iterator over the arguments.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtSimplePattern<'_>> {
         let text = self.text.as_slice();
         self.handles.iter().map(move |handle| handle.view(text))
@@ -983,13 +1107,14 @@ impl Debug for SmtSimplePatternsBuf {
 /// View of a match pattern (simple or constructor pattern).
 #[derive(Debug, Clone, Copy)]
 pub enum SmtPattern<'a> {
-    /// Simple match pattern.
+    /// Simple match pattern, e.g. `x`, `nil` or `_`.
     Simple(SmtSimplePattern<'a>),
-    /// Constructor pattern.
+    /// Constructor pattern, e.g. `(cons h t)`.
     Application(SmtPatternApplication<'a>),
 }
 
 impl SmtPattern<'_> {
+    /// Converts into [`SmtPatternBuf`].
     pub fn into_owned(self) -> SmtPatternBuf {
         match self {
             Self::Simple(simple) => SmtPatternBuf::Simple(simple.into_owned()),
@@ -1008,6 +1133,7 @@ pub struct SmtPatternApplication<'a> {
 }
 
 impl<'a> SmtPatternApplication<'a> {
+    /// Constructs a pattern that applies `constructor` to `args` if `args` is nonempty.
     pub fn new(
         constructor: SmtSymbol<'a>,
         args: SmtSimplePatterns<'a>,
@@ -1024,14 +1150,17 @@ impl<'a> SmtPatternApplication<'a> {
         Self { constructor, args }
     }
 
+    /// Returns the applied constructor.
     pub fn constructor(&self) -> SmtSymbol<'a> {
         self.constructor
     }
 
+    /// Returns the arguments of the pattern.
     pub fn args(&self) -> SmtSimplePatterns<'a> {
         self.args
     }
 
+    /// Converts into [`SmtPatternApplicationBuf`].
     pub fn into_owned(self) -> SmtPatternApplicationBuf {
         let mut args = SmtSimplePatternsBuf::new();
         for arg in self.args.iter() {

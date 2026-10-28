@@ -25,6 +25,7 @@ impl<H: SmtHandler> fmt::Debug for SmtQualifiedIdentParser<H> {
 }
 
 impl<H: SmtHandler> SmtQualifiedIdentParser<H> {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self {
             _priv: std::marker::PhantomData,

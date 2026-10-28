@@ -392,7 +392,8 @@ impl<H: SmtCommandHandler> DeclareDatatypesParser<H> {
                     parse_state,
                     &mut SingleTokenCursor::new(cursor, token),
                 )? {
-                    // there cannot be more datatypes than sort declarations due to the maximum parser
+                    // there cannot be more datatypes than sort declarations
+                    // due to the maximum parser
                     // ensure there are not more sort declarations than datatypes
                     if datatypes.len() != self.datatypes_parser.max_items() {
                         return Err(SmtParseError::syntax(SmtSyntaxErrorKind::Missing(

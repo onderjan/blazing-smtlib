@@ -3,9 +3,13 @@ use crate::lexicon::SmtDecimal;
 /// Version of the SMT-LIB standard (2.0, 2.5, 2.6, or 2.7).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub enum SmtVersion {
+    /// Version 2.0.
     V2_0,
+    /// Version 2.5.
     V2_5,
+    /// Version 2.6.
     V2_6,
+    /// Version 2.7.
     #[default]
     V2_7,
 }
@@ -42,10 +46,12 @@ pub struct SmtVersionPosture {
 }
 
 impl SmtVersionPosture {
+    /// Returns the allowed versions.
     pub fn allowed(&self) -> &[SmtVersion] {
         &self.allowed
     }
 
+    /// Returns the maximal number of version declarations, or [`None`] if unlimited.
     pub fn max_declarations(&self) -> Option<u64> {
         self.max_declarations
     }
@@ -65,6 +71,9 @@ pub struct SmtVersionPostureBuilder {
 }
 
 impl SmtVersionPostureBuilder {
+    /// Constructs a builder with the default posture.
+    ///
+    /// The default posture allows versions 2.5, 2.6 and 2.7, and at most one version declaration.
     pub fn new() -> Self {
         Self {
             allowed: vec![SmtVersion::V2_5, SmtVersion::V2_6, SmtVersion::V2_7],
@@ -72,24 +81,29 @@ impl SmtVersionPostureBuilder {
         }
     }
 
+    /// Returns the allowed versions.
     pub fn allowed(&self) -> &[SmtVersion] {
         &self.allowed
     }
 
+    /// Returns the maximal number of version declarations, or [`None`] if unlimited.
     pub fn max_declarations(&self) -> Option<u64> {
         self.max_declarations
     }
 
+    /// Disallows every version.
     pub fn clear_allowed(mut self) -> Self {
         self.allowed.clear();
         self
     }
 
+    /// Allows the version.
     pub fn add_allowed(mut self, allowed: SmtVersion) -> Self {
         self.allowed.push(allowed);
         self
     }
 
+    /// Disallows the version.
     pub fn remove_allowed(mut self, allowed: SmtVersion) -> Self {
         while let Some(index) = self.allowed.iter().position(|elem| *elem == allowed) {
             self.allowed.remove(index);
@@ -97,11 +111,13 @@ impl SmtVersionPostureBuilder {
         self
     }
 
+    /// Sets the maximal number of version declarations ([`None`] for unlimited).
     pub fn set_max_declarations(mut self, max_declarations: Option<u64>) -> Self {
         self.max_declarations = max_declarations;
         self
     }
 
+    /// Builds the version posture.
     pub fn build(self) -> SmtVersionPosture {
         SmtVersionPosture {
             allowed: self.allowed,

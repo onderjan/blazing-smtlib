@@ -62,38 +62,75 @@ use crate::{
 /// as an unquoted symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtTokenCategory {
+    /// Opening parenthesis (`(`).
     ParenOpen,
+    /// Closing parenthesis (`)`).
     ParenClose,
+    /// Numeral, e.g. `0` or `42`.
     Numeral,
+    /// Decimal, e.g. `0.5` or `3.14`.
     Decimal,
+    /// Hexadecimal, e.g. `#xA04`.
     Hexadecimal,
+    /// Binary, e.g. `#b0101`.
     Binary,
+    /// String literal, e.g. `"hello"` or `""`.
     String,
+    /// Keyword, e.g. `:named`.
     Keyword,
+    /// Unquoted symbol (simple symbol or reserved word), e.g. `x`, `+`, `let` or `check-sat`.
     UnquotedSymbol,
+    /// Quoted symbol, e.g. `|a b|` or `|let|`.
     QuotedSymbol,
+    /// Whitespace, e.g. the space in `(assert p)`.
     Whitespace,
+    /// Comment, e.g. `; note`.
     Comment,
     // PERFORMANCE: leave EOF last for easy construction
     // from InnerCategory in the lexer
+    /// End of file (EOF).
+    ///
+    /// Marks the end of the input.
     EndOfFile,
 }
 
 /// View of a syntax token.
+///
+/// Unlike [`SmtTokenCategory`], a syntax token depends on the version: an unquoted symbol that
+/// is a reserved word in the version is [`Reserved`](Self::Reserved), and every other symbol is
+/// a [`Symbol`](Self::Symbol).
 #[derive(Debug, Clone, Copy)]
 pub enum SmtToken<'a> {
+    /// Opening parenthesis (`(`).
     ParenOpen,
+    /// Closing parenthesis (`)`).
     ParenClose,
+    /// Numeral, e.g. `0` or `42`.
     Numeral(SmtNumeral<'a>),
+    /// Decimal, e.g. `0.5` or `3.14`.
     Decimal(SmtDecimal<'a>),
+    /// Hexadecimal, e.g. `#xA04`.
     Hexadecimal(SmtHexDigits<'a>),
+    /// Binary, e.g. `#b0101`.
     Binary(SmtBinDigits<'a>),
+    /// String literal, e.g. `"hello"` or `""`.
     String(SmtStringContent<'a>),
+    /// Keyword, e.g. `:named`.
     Keyword(SmtKeyword<'a>),
+    /// Symbol (quoted or unquoted), e.g. `x`, `+` or `|a b|`.
+    ///
+    /// A quoted symbol is a symbol even if its content is a reserved word, such as `|let|`, and
+    /// so is a word reserved only in later versions, such as `lambda` before version 2.7.
     Symbol(SmtSymbol<'a>),
+    /// Reserved word, e.g. `let`, `_`, `check-sat`, or `lambda` from version 2.7.
     Reserved(SmtReserved),
+    /// Whitespace, e.g. the space in `(assert p)`.
     Whitespace(SmtWhitespace<'a>),
+    /// Comment, e.g. `; note`.
     Comment(SmtComment<'a>),
+    /// End of file (EOF).
+    ///
+    /// Marks the end of the input.
     EndOfFile,
 }
 
@@ -231,24 +268,47 @@ impl<'a> SmtToken<'a> {
 }
 
 /// Owned syntax token.
+///
+/// Unlike [`SmtTokenCategory`], a syntax token depends on the version: an unquoted symbol that
+/// is a reserved word in the version is [`Reserved`](Self::Reserved), and every other symbol is
+/// a [`Symbol`](Self::Symbol).
 #[derive(Debug, Clone)]
 pub enum SmtTokenBuf {
+    /// Opening parenthesis (`(`).
     ParenOpen,
+    /// Closing parenthesis (`)`).
     ParenClose,
+    /// Numeral, e.g. `0` or `42`.
     Numeral(SmtNumeralBuf),
+    /// Decimal, e.g. `0.5` or `3.14`.
     Decimal(SmtDecimalBuf),
+    /// Hexadecimal, e.g. `#xA04`.
     Hexadecimal(SmtHexDigitsBuf),
+    /// Binary, e.g. `#b0101`.
     Binary(SmtBinDigitsBuf),
+    /// String literal, e.g. `"hello"` or `""`.
     String(SmtStringContentBuf),
+    /// Keyword, e.g. `:named`.
     Keyword(SmtKeywordBuf),
+    /// Symbol (quoted or unquoted), e.g. `x`, `+` or `|a b|`.
+    ///
+    /// A quoted symbol is a symbol even if its content is a reserved word, such as `|let|`, and
+    /// so is a word reserved only in later versions, such as `lambda` before version 2.7.
     Symbol(SmtSymbolBuf),
+    /// Reserved word, e.g. `let`, `_`, `check-sat`, or `lambda` from version 2.7.
     Reserved(SmtReserved),
+    /// Whitespace, e.g. the space in `(assert p)`.
     Whitespace(SmtWhitespaceBuf),
+    /// Comment, e.g. `; note`.
     Comment(SmtCommentBuf),
+    /// End of file (EOF).
+    ///
+    /// Marks the end of the input.
     EndOfFile,
 }
 
 impl SmtTokenBuf {
+    /// Views as [`SmtToken`].
     pub fn view(&self) -> SmtToken<'_> {
         match self {
             Self::ParenOpen => SmtToken::ParenOpen,
@@ -269,6 +329,7 @@ impl SmtTokenBuf {
 }
 
 impl SmtToken<'_> {
+    /// Converts into [`SmtTokenBuf`].
     pub fn into_owned(self) -> SmtTokenBuf {
         match self {
             Self::ParenOpen => SmtTokenBuf::ParenOpen,
@@ -377,6 +438,7 @@ pub struct SmtTokensBuf {
 }
 
 impl SmtTokensBuf {
+    /// Constructs an empty array.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -390,23 +452,28 @@ impl SmtTokensBuf {
         self.handles.push(token);
     }
 
+    /// Removes all tokens.
     pub fn clear(&mut self) {
         self.text.clear();
         self.handles.clear();
     }
 
+    /// Returns the number of tokens.
     pub fn len(&self) -> usize {
         self.handles.len()
     }
 
+    /// Returns `true` if there are no tokens.
     pub fn is_empty(&self) -> bool {
         self.handles.is_empty()
     }
 
+    /// Returns the token at the position, or [`None`] if it is out of bounds.
     pub fn get(&self, index: usize) -> Option<SmtToken<'_>> {
         Some(self.handles.get(index)?.view(&self.text))
     }
 
+    /// Returns an iterator over the tokens.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = SmtToken<'_>> {
         let text = self.text.as_slice();
         self.handles.iter().map(move |handle| handle.view(text))
@@ -475,7 +542,7 @@ pub trait SmtCursor {
     /// taken.
     fn peek(&self) -> Option<Self::Token>;
 
-    /// Returns whether the producer has no tokens left to consume.
+    /// Returns `true` if the producer has no tokens left to consume.
     ///
     /// This must be true exactly if [`SmtCursor::peek`] or
     /// [`SmtCursor::next`] would produce [`Option::None`].

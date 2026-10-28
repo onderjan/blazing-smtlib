@@ -15,13 +15,19 @@ use crate::{
 
 /// Handles nodes (sorts, terms, etc.).
 pub trait SmtHandler {
+    /// Error returned by the handler on failure.
     type Error;
 
+    /// Handled S-expression.
     type SExpr;
+    /// Handled attribute.
     type Attribute;
+    /// Handled sort.
     type Sort;
+    /// Handled term.
     type Term;
 
+    /// Scope of a binder, returned at its start and given back at its end.
     type Scope;
 
     /// Informs the handler of the version in force.
@@ -39,29 +45,38 @@ pub trait SmtHandler {
     /// calls this method when switching versions.
     fn set_version(&mut self, version: SmtVersion);
 
+    /// Handles a sort.
     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error>;
+    /// Handles a term (special constant, qualified identifier, or application).
     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error>;
+    /// Handles an S-expression.
     fn handle_s_expr(&mut self, expr: SmtSExpr<'_, Self>) -> Result<Self::SExpr, Self::Error>;
+    /// Handles an attribute.
     fn handle_attribute(
         &mut self,
         name: SmtKeyword<'_>,
         value: Option<SmtAttributeValue<'_, Self>>,
     ) -> Result<Self::Attribute, Self::Error>;
 
+    /// Annotates a term with attributes.
     fn annotate_term(
         &mut self,
         term: Self::Term,
         attributes: SmtMultiple<'_, Self::Attribute>,
     ) -> Result<Self::Term, Self::Error>;
 
+    /// Starts a let term.
     fn start_let(&mut self, bindings: SmtBindings<'_, Self>) -> Result<Self::Scope, Self::Error>;
+    /// Ends a let term.
     fn end_let(&mut self, scope: Self::Scope, body: Self::Term) -> Result<Self::Term, Self::Error>;
 
+    /// Starts a quantified term.
     fn start_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
         vars: SmtSortedVars<'_, Self>,
     ) -> Result<Self::Scope, Self::Error>;
+    /// Ends a quantified term.
     fn end_quantifier(
         &mut self,
         kind: SmtQuantifierKind,
@@ -69,7 +84,9 @@ pub trait SmtHandler {
         body: Self::Term,
     ) -> Result<Self::Term, Self::Error>;
 
+    /// Starts a lambda term.
     fn start_lambda(&mut self, vars: SmtSortedVars<'_, Self>) -> Result<Self::Scope, Self::Error>;
+    /// Ends a lambda term.
     fn end_lambda(
         &mut self,
         scope: Self::Scope,
@@ -158,8 +175,11 @@ pub trait SmtHandler {
 /// types of the same names. A program that builds views without a handler, e.g. to write them,
 /// implements this trait on a type of its own.
 pub trait SmtNodeTypes {
+    /// Handled S-expression.
     type SExpr;
+    /// Handled sort.
     type Sort;
+    /// Handled term.
     type Term;
 }
 
@@ -171,6 +191,7 @@ impl<H: SmtHandler + ?Sized> SmtNodeTypes for H {
 
 /// Handles commands.
 pub trait SmtCommandHandler: SmtHandler {
+    /// Parser of a nonstandard command.
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
     /// Returns a parser that parses a nonstandard command with the given name.
@@ -179,21 +200,34 @@ pub trait SmtCommandHandler: SmtHandler {
         name: SmtSymbol<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error>;
 
+    /// Echoes a string (`echo`).
     fn command_echo(&mut self, value: SmtStringContent<'_>) -> Result<(), Self::Error>;
 
+    /// Gets the value of an option (`get-option`).
     fn command_get_option(&mut self, option: SmtKeyword<'_>) -> Result<(), Self::Error>;
+    /// Sets an option (`set-option`).
     fn command_set_option(&mut self, option: Self::Attribute) -> Result<(), Self::Error>;
+    /// Gets information (`get-info`).
     fn command_get_info(&mut self, keyword: SmtKeyword<'_>) -> Result<(), Self::Error>;
+    /// Sets information (`set-info`).
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
+    /// Sets the logic (`set-logic`).
     fn command_set_logic(&mut self, logic: SmtSymbol<'_>) -> Result<(), Self::Error>;
 
+    /// Gets the values of terms (`get-value`).
     fn command_get_value(&mut self, terms: SmtMultiple<'_, Self::Term>) -> Result<(), Self::Error>;
+    /// Gets the assertions (`get-assertions`).
     fn command_get_assertions(&mut self) -> Result<(), Self::Error>;
+    /// Gets the values of the named Boolean terms (`get-assignment`).
     fn command_get_assignment(&mut self) -> Result<(), Self::Error>;
+    /// Gets the model (`get-model`).
     fn command_get_model(&mut self) -> Result<(), Self::Error>;
+    /// Gets a proof (`get-proof`).
     fn command_get_proof(&mut self) -> Result<(), Self::Error>;
+    /// Gets an unsatisfiable subset of the assumptions (`get-unsat-assumptions`).
     fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error>;
+    /// Gets an unsatisfiable core (`get-unsat-core`).
     fn command_get_unsat_core(&mut self) -> Result<(), Self::Error>;
 
     /// Declares a sort with an arity (`declare-sort`).
@@ -231,6 +265,7 @@ pub trait SmtCommandHandler: SmtHandler {
         result_sort: Self::Sort,
     ) -> Result<(), Self::Error>;
 
+    /// Asserts a term (`assert`).
     fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
     /// Checks satisfiability (`check-sat`).
@@ -249,10 +284,13 @@ pub trait SmtCommandHandler: SmtHandler {
         assumptions: SmtMultiple<'_, Self::Term>,
     ) -> Result<(), Self::Error>;
 
+    /// Resets the solver to its initial state (`reset`).
     fn command_reset(&mut self) -> Result<(), Self::Error>;
 
+    /// Empties the assertion stack (`reset-assertions`).
     fn command_reset_assertions(&mut self) -> Result<(), Self::Error>;
 
+    /// Exits the solver (`exit`).
     fn command_exit(&mut self) -> Result<(), Self::Error>;
 
     /// Pushes `amount` empty assertion levels onto the assertion stack (`push`).
@@ -540,6 +578,7 @@ pub trait SmtPartialCommandHandler:
     /// Error of the handler itself.
     type HandlerError;
 
+    /// Parser of a nonstandard command.
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
     /// Returns a parser that parses a nonstandard command with the given name.
@@ -552,52 +591,68 @@ pub trait SmtPartialCommandHandler:
         ))
     }
 
+    /// Echoes a string (`echo`).
     fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Echo)
     }
 
+    /// Gets the value of an option (`get-option`).
     fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetOption)
     }
+    /// Sets an option (`set-option`).
     fn command_set_option(&mut self, _option: Self::Attribute) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::SetOption)
     }
+    /// Gets information (`get-info`).
     fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetInfo)
     }
+    /// Sets information (`set-info`).
     fn command_set_info(&mut self, _attribute: Self::Attribute) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::SetInfo)
     }
 
+    /// Sets the logic (`set-logic`).
     fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::SetLogic)
     }
 
+    /// Gets the values of terms (`get-value`).
     fn command_get_value(
         &mut self,
         _terms: SmtMultiple<'_, Self::Term>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetValue)
     }
+    /// Gets the assertions (`get-assertions`).
     fn command_get_assertions(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetAssertions)
     }
+    /// Gets the values of the named Boolean terms (`get-assignment`).
     fn command_get_assignment(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetAssignment)
     }
+    /// Gets the model (`get-model`).
     fn command_get_model(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetModel)
     }
+    /// Gets a proof (`get-proof`).
     fn command_get_proof(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetProof)
     }
+    /// Gets an unsatisfiable subset of the assumptions (`get-unsat-assumptions`).
     fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetUnsatAssumptions)
     }
+    /// Gets an unsatisfiable core (`get-unsat-core`).
     fn command_get_unsat_core(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetUnsatCore)
     }
 
+    /// Declares a sort with an arity (`declare-sort`).
+    ///
+    /// See [`SmtCommandHandler::command_declare_sort`].
     fn command_declare_sort(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -605,9 +660,15 @@ pub trait SmtPartialCommandHandler:
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareSort)
     }
+    /// Declares a global sort parameter (`declare-sort-parameter`).
+    ///
+    /// See [`SmtCommandHandler::command_declare_sort_parameter`].
     fn command_declare_sort_parameter(&mut self, _name: SmtSymbol<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareSortParameter)
     }
+    /// Declares a constant (`declare-const`).
+    ///
+    /// See [`SmtCommandHandler::command_declare_const`].
     fn command_declare_const(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -615,6 +676,7 @@ pub trait SmtPartialCommandHandler:
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareConst)
     }
+    /// Declares a function (`declare-fun`).
     fn command_declare_fun(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -624,12 +686,19 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DeclareFun)
     }
 
+    /// Asserts a term (`assert`).
     fn command_assert(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Assert)
     }
+    /// Checks satisfiability (`check-sat`).
+    ///
+    /// See [`SmtCommandHandler::command_check_sat`].
     fn command_check_sat(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::CheckSat)
     }
+    /// Checks satisfiability with additional assumptions (`check-sat-assuming`).
+    ///
+    /// See [`SmtCommandHandler::command_check_sat_assuming`].
     fn command_check_sat_assuming(
         &mut self,
         _assumptions: SmtMultiple<'_, Self::Term>,
@@ -637,22 +706,34 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::CheckSatAssuming)
     }
 
+    /// Resets the solver to its initial state (`reset`).
     fn command_reset(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Reset)
     }
+    /// Empties the assertion stack (`reset-assertions`).
     fn command_reset_assertions(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::ResetAssertions)
     }
+    /// Exits the solver (`exit`).
     fn command_exit(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Exit)
     }
+    /// Pushes `amount` empty assertion levels onto the assertion stack (`push`).
+    ///
+    /// See [`SmtCommandHandler::command_push`].
     fn command_push(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Push)
     }
+    /// Pops `amount` assertion levels from the assertion stack (`pop`).
+    ///
+    /// See [`SmtCommandHandler::command_pop`].
     fn command_pop(&mut self, _amount: SmtNumeral<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Pop)
     }
 
+    /// Starts a sort definition (`define-sort`).
+    ///
+    /// See [`SmtCommandHandler::start_define_sort`].
     fn start_define_sort(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -660,19 +741,27 @@ pub trait SmtPartialCommandHandler:
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineSort)
     }
+    /// Ends a sort definition (`define-sort`).
+    ///
+    /// See [`SmtCommandHandler::end_define_sort`].
     fn end_define_sort(&mut self, _sort: Self::Sort) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineSort)
     }
 
+    /// Starts the body of a function definition (`define-fun`).
     fn start_define_fun(
         &mut self,
         _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFun)
     }
+    /// Ends the body of a function definition (`define-fun`).
     fn end_define_fun(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFun)
     }
+    /// Defines a constant (`define-const`).
+    ///
+    /// See [`SmtCommandHandler::command_define_const`].
     fn command_define_const(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -682,35 +771,50 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DefineConst)
     }
 
+    /// Starts a recursive function definition (`define-fun-rec`).
     fn start_define_fun_rec(
         &mut self,
         _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunRec)
     }
+    /// Ends a recursive function definition (`define-fun-rec`).
     fn end_define_fun_rec(&mut self, _body: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunRec)
     }
 
+    /// Starts recursive function definitions (`define-funs-rec`).
+    ///
+    /// See [`SmtCommandHandler::start_define_funs_rec`].
     fn start_define_funs_rec(
         &mut self,
         _signatures: SmtFunctionSignatures<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunsRec)
     }
+    /// Ends recursive function definitions (`define-funs-rec`).
+    ///
+    /// See [`SmtCommandHandler::end_define_funs_rec`].
     fn end_define_funs_rec(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunsRec)
     }
+    /// Starts the body of a recursive function (in `define-funs-rec`).
+    ///
+    /// See [`SmtCommandHandler::start_recursive_body`].
     fn start_recursive_body(
         &mut self,
         _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunsRec)
     }
+    /// Ends the body of a recursive function (in `define-funs-rec`).
+    ///
+    /// See [`SmtCommandHandler::end_recursive_body`].
     fn end_recursive_body(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunsRec)
     }
 
+    /// Starts a datatype declaration (`declare-datatype`).
     fn start_declare_datatype(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -718,6 +822,7 @@ pub trait SmtPartialCommandHandler:
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareDatatype)
     }
+    /// Ends a datatype declaration (`declare-datatype`).
     fn end_declare_datatype(
         &mut self,
         _constructors: SmtConstructors<'_, Self>,
@@ -725,21 +830,33 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DeclareDatatype)
     }
 
+    /// Starts datatype declarations (`declare-datatypes`).
+    ///
+    /// See [`SmtCommandHandler::start_declare_datatypes`].
     fn start_declare_datatypes(
         &mut self,
         _introductions: SmtSortArities<'_>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareDatatypes)
     }
+    /// Ends datatype declarations (`declare-datatypes`).
+    ///
+    /// See [`SmtCommandHandler::end_declare_datatypes`].
     fn end_declare_datatypes(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareDatatypes)
     }
+    /// Starts a datatype declaration (in `declare-datatypes`).
+    ///
+    /// See [`SmtCommandHandler::start_datatype_declaration`].
     fn start_datatype_declaration(
         &mut self,
         _sort_params: SmtSymbols<'_>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DeclareDatatypes)
     }
+    /// Ends a datatype declaration (in `declare-datatypes`).
+    ///
+    /// See [`SmtCommandHandler::end_datatype_declaration`].
     fn end_datatype_declaration(
         &mut self,
         _constructors: SmtConstructors<'_, Self>,
@@ -967,6 +1084,7 @@ pub struct SmtSyntaxChecker;
 pub struct SmtNonstandardCommandError(SmtSymbolBuf);
 
 impl SmtNonstandardCommandError {
+    /// Constructs the error for the nonstandard command named `name`.
     pub fn new(name: SmtSymbolBuf) -> Self {
         Self(name)
     }

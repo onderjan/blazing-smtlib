@@ -3,7 +3,9 @@ use crate::SmtVersion;
 /// Reserved word (general or a command name).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtReserved {
+    /// General reserved word.
     General(SmtGeneralReserved),
+    /// Reserved word that names a standard command.
     CommandName(SmtCommandNameReserved),
 }
 
@@ -23,7 +25,10 @@ macro_rules! reserved_words {
             $(#[$meta])*
             #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
             pub enum $enum_name {
-                $($variant,)*
+                $(
+                    #[doc = concat!("Reserved word `", $word, "`.")]
+                    $variant,
+                )*
             }
 
             impl $enum_name {
@@ -36,6 +41,7 @@ macro_rules! reserved_words {
                     }
                 }
 
+                /// Returns the spelling of the reserved word.
                 pub fn as_str(&self) -> &'static str {
                     match self {
                         $(Self::$variant => $word,)*
@@ -210,6 +216,7 @@ impl SmtReserved {
         }
     }
 
+    /// Returns the spelling of the reserved word.
     pub fn as_str(&self) -> &'static str {
         match self {
             SmtReserved::General(general) => general.as_str(),

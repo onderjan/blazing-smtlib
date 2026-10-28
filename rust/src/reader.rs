@@ -64,7 +64,7 @@ impl<E> SmtReadError<E> {
         Self { kind, span }
     }
 
-    /// Kind of the error.
+    /// Returns the kind of the error.
     pub fn kind(&self) -> &SmtReadErrorKind<E> {
         &self.kind
     }

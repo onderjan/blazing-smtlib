@@ -30,7 +30,7 @@ impl SmtWriteError {
         Self(kind)
     }
 
-    /// Kind of the error.
+    /// Returns the kind of the error.
     pub fn kind(&self) -> &SmtWriteErrorKind {
         &self.0
     }
@@ -209,14 +209,17 @@ impl<W: Write> SmtWriter<W> {
         self.version = version;
     }
 
+    /// Returns a reference to the underlying writer.
     pub fn get_ref(&self) -> &W {
         &self.writer
     }
 
+    /// Returns a mutable reference to the underlying writer.
     pub fn get_mut(&mut self) -> &mut W {
         &mut self.writer
     }
 
+    /// Destructures into the underlying writer.
     pub fn into_inner(self) -> W {
         self.writer
     }

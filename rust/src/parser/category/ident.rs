@@ -23,6 +23,7 @@ impl fmt::Debug for SmtIdentParser {
 }
 
 impl SmtIdentParser {
+    /// Creates the parser.
     pub fn new() -> Self {
         Self { _priv: () }
     }

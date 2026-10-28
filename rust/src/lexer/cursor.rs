@@ -32,6 +32,7 @@ impl<'a> SmtLexerToken<'a> {
         Self { entry, span }
     }
 
+    /// Returns the category of the token.
     #[inline]
     pub fn category(&self) -> SmtTokenCategory {
         match self.entry {
@@ -40,6 +41,7 @@ impl<'a> SmtLexerToken<'a> {
         }
     }
 
+    /// Returns the content of the token.
     #[inline]
     pub fn content(&self) -> &'a [u8] {
         match self.entry {
@@ -48,6 +50,7 @@ impl<'a> SmtLexerToken<'a> {
         }
     }
 
+    /// Returns the span of the token.
     #[inline]
     pub fn span(&self) -> SmtSpan {
         *self.span

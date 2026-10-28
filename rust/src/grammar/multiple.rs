@@ -25,6 +25,7 @@ pub struct SmtMultiple<'a, T> {
 }
 
 impl<'a, T> SmtMultiple<'a, T> {
+    /// Constructs a view of all values of `stack`.
     #[inline]
     pub fn new(stack: &'a mut Vec<T>) -> Self {
         Self { stack, start: 0 }
@@ -44,41 +45,49 @@ impl<'a, T> SmtMultiple<'a, T> {
         Self { stack, start }
     }
 
+    /// Returns the number of values.
     #[inline]
     pub fn len(&self) -> usize {
         self.stack.len() - self.start
     }
 
+    /// Returns `true` if there are no values.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    /// Returns the values as a slice.
     #[inline]
     pub fn as_slice(&self) -> &[T] {
         &self.stack[self.start..]
     }
 
+    /// Returns the values as a mutable slice.
     #[inline]
     pub fn as_mut_slice(&mut self) -> &mut [T] {
         &mut self.stack[self.start..]
     }
 
+    /// Returns the value at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<&T> {
         self.as_slice().get(index)
     }
 
+    /// Returns the value at the position, mutably, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.as_mut_slice().get_mut(index)
     }
 
+    /// Returns an iterator over the values.
     #[inline]
     pub fn iter(&self) -> slice::Iter<'_, T> {
         self.as_slice().iter()
     }
 
+    /// Returns an iterator over the values, mutably.
     #[inline]
     pub fn iter_mut(&mut self) -> slice::IterMut<'_, T> {
         self.as_mut_slice().iter_mut()
@@ -206,28 +215,34 @@ impl<'a, V> SmtNamedValues<'a, V> {
         }
     }
 
+    /// Returns the number of named values.
     #[inline]
     pub fn len(&self) -> usize {
         self.values.len()
     }
 
+    /// Returns `true` if there are no named values.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 
+    /// Returns the name and value at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, &V)> {
         let name = self.names.get(index)?.symbol_view(self.text);
         Some((name, &self.values[index]))
     }
 
+    /// Returns the name and value at the position, the value mutably, or [`None`] if it is out
+    /// of bounds.
     #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<(SmtSymbol<'a>, &mut V)> {
         let name = self.names.get(index)?.symbol_view(self.text);
         Some((name, &mut self.values[index]))
     }
 
+    /// Returns an iterator over the names with their values.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &V)> {
         let text = self.text;
         self.names
@@ -236,6 +251,7 @@ impl<'a, V> SmtNamedValues<'a, V> {
             .zip(self.values.iter())
     }
 
+    /// Returns an iterator over the names with their values, the values mutably.
     pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &mut V)> {
         let text = self.text;
         self.names
@@ -315,6 +331,7 @@ pub struct SmtNamedValuesBuf<V> {
 }
 
 impl<V> SmtNamedValuesBuf<V> {
+    /// Constructs empty named values.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -323,18 +340,21 @@ impl<V> SmtNamedValuesBuf<V> {
         }
     }
 
+    /// Adds the value named by `name` after the others.
     pub fn push(&mut self, name: SmtSymbol, value: V) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
         self.values.push(value);
     }
 
+    /// Removes all named values.
     pub fn clear(&mut self) {
         self.text.clear();
         self.names.clear();
         self.values.clear();
     }
 
+    /// Views as [`SmtNamedValues`], mutably.
     pub fn view_mut(&mut self) -> SmtNamedValues<'_, V> {
         SmtNamedValues::new(
             &self.text,
@@ -343,10 +363,12 @@ impl<V> SmtNamedValuesBuf<V> {
         )
     }
 
+    /// Returns the number of named values.
     pub fn len(&self) -> usize {
         self.values.len()
     }
 
+    /// Returns `true` if there are no named values.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -401,28 +423,34 @@ impl<'a, N: SmtNodeTypes + ?Sized> SmtMatchCases<'a, N> {
         }
     }
 
+    /// Returns the number of match cases.
     #[inline]
     pub fn len(&self) -> usize {
         self.terms.len()
     }
 
+    /// Returns `true` if there are no match cases.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
     }
 
+    /// Returns the pattern and term at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<(SmtPattern<'a>, &N::Term)> {
         let pattern = pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
         Some((pattern, &self.terms[index]))
     }
 
+    /// Returns the pattern and term at the position, the term mutably, or [`None`] if it is out
+    /// of bounds.
     #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<(SmtPattern<'a>, &mut N::Term)> {
         let pattern = pattern_view(self.text, self.simple_patterns, self.patterns.get(index)?);
         Some((pattern, &mut self.terms[index]))
     }
 
+    /// Returns an iterator over the patterns with their terms.
     pub fn iter(&self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &N::Term)> {
         self.patterns
             .iter()
@@ -430,6 +458,7 @@ impl<'a, N: SmtNodeTypes + ?Sized> SmtMatchCases<'a, N> {
             .zip(self.terms.iter())
     }
 
+    /// Returns an iterator over the patterns with their terms, the terms mutably.
     pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = (SmtPattern<'a>, &mut N::Term)> {
         self.patterns
             .iter()
@@ -513,6 +542,7 @@ pub struct SmtMatchCasesBuf<N: SmtNodeTypes + ?Sized> {
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtMatchCasesBuf<N> {
+    /// Constructs empty match cases.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -522,6 +552,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtMatchCasesBuf<N> {
         }
     }
 
+    /// Adds a match case after the others.
     pub fn push(&mut self, pattern: SmtPattern, term: N::Term) {
         let pattern = match pattern {
             SmtPattern::Simple(simple) => PatternHandleBuf::Simple(
@@ -546,6 +577,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtMatchCasesBuf<N> {
         self.terms.push(term);
     }
 
+    /// Removes all match cases.
     pub fn clear(&mut self) {
         self.text.clear();
         self.simple_patterns.clear();
@@ -553,6 +585,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtMatchCasesBuf<N> {
         self.terms.clear();
     }
 
+    /// Views as [`SmtMatchCases`], mutably.
     pub fn view_mut(&mut self) -> SmtMatchCases<'_, N> {
         SmtMatchCases {
             text: &self.text,
@@ -562,10 +595,12 @@ impl<N: SmtNodeTypes + ?Sized> SmtMatchCasesBuf<N> {
         }
     }
 
+    /// Returns the number of match cases.
     pub fn len(&self) -> usize {
         self.terms.len()
     }
 
+    /// Returns `true` if there are no match cases.
     pub fn is_empty(&self) -> bool {
         self.terms.is_empty()
     }
@@ -615,21 +650,25 @@ pub struct SmtSymbols<'a> {
 }
 
 impl<'a> SmtSymbols<'a> {
+    /// Returns the number of symbols.
     #[inline]
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Returns `true` if there are no symbols.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
 
+    /// Returns the symbol at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<SmtSymbol<'a>> {
         Some(self.names.get(index)?.symbol_view(self.text))
     }
 
+    /// Returns an iterator over the symbols.
     pub fn iter(&self) -> SmtSymbolsIter<'a> {
         SmtSymbolsIter {
             text: self.text,
@@ -696,6 +735,7 @@ pub struct SmtSymbolsBuf {
 }
 
 impl SmtSymbolsBuf {
+    /// Constructs empty symbols.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -703,16 +743,19 @@ impl SmtSymbolsBuf {
         }
     }
 
+    /// Copies the symbol after the others.
     pub fn push(&mut self, name: SmtSymbol) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         self.names.push(name);
     }
 
+    /// Removes all symbols.
     pub fn clear(&mut self) {
         self.text.clear();
         self.names.clear();
     }
 
+    /// Views as [`SmtSymbols`].
     pub fn view(&self) -> SmtSymbols<'_> {
         SmtSymbols {
             text: &self.text,
@@ -720,10 +763,12 @@ impl SmtSymbolsBuf {
         }
     }
 
+    /// Returns the number of symbols.
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Returns `true` if there are no symbols.
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
@@ -763,12 +808,13 @@ impl<N: SmtNodeTypes + ?Sized> Clone for SmtFunctionSignature<'_, N> {
 impl<N: SmtNodeTypes + ?Sized> Copy for SmtFunctionSignature<'_, N> {}
 
 impl<'a, N: SmtNodeTypes + ?Sized> SmtFunctionSignature<'a, N> {
+    /// Returns the name of the function.
     #[inline]
     pub fn name(&self) -> SmtSymbol<'a> {
         self.name.symbol_view(self.text)
     }
 
-    /// The parameters with their sorts, in order.
+    /// Returns the parameters with their sorts, in order.
     pub fn params(
         &self,
     ) -> impl ExactSizeIterator<Item = (SmtSymbol<'a>, &'a N::Sort)> + use<'a, N> {
@@ -779,6 +825,7 @@ impl<'a, N: SmtNodeTypes + ?Sized> SmtFunctionSignature<'a, N> {
             .zip(self.param_sorts.iter())
     }
 
+    /// Returns the result sort of the function.
     #[inline]
     pub fn result_sort(&self) -> &'a N::Sort {
         self.result_sort
@@ -816,21 +863,25 @@ impl<N: SmtNodeTypes + ?Sized> Clone for SmtFunctionSignatures<'_, N> {
 impl<N: SmtNodeTypes + ?Sized> Copy for SmtFunctionSignatures<'_, N> {}
 
 impl<'a, N: SmtNodeTypes + ?Sized> SmtFunctionSignatures<'a, N> {
+    /// Returns the number of signatures.
     #[inline]
     pub fn len(&self) -> usize {
         self.buf.len()
     }
 
+    /// Returns `true` if there are no signatures.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.buf.is_empty()
     }
 
+    /// Returns the signature at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'a, N>> {
         self.buf.get(index)
     }
 
+    /// Returns an iterator over the signatures.
     pub fn iter(&self) -> SmtFunctionSignaturesIter<'a, N> {
         SmtFunctionSignaturesIter {
             buf: self.buf,
@@ -924,6 +975,7 @@ where
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
+    /// Constructs empty function signatures.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -954,6 +1006,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
         self.param_sorts.push(sort);
     }
 
+    /// Removes all signatures.
     pub fn clear(&mut self) {
         self.text.clear();
         self.names.clear();
@@ -963,10 +1016,12 @@ impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
         self.param_sorts.clear();
     }
 
+    /// Views as [`SmtFunctionSignatures`].
     pub fn view(&self) -> SmtFunctionSignatures<'_, N> {
         SmtFunctionSignatures { buf: self }
     }
 
+    /// Returns the signature at the position, or [`None`] if it is out of bounds.
     pub fn get(&self, index: usize) -> Option<SmtFunctionSignature<'_, N>> {
         let name = *self.names.get(index)?;
         let start = self.param_starts[index];
@@ -984,10 +1039,12 @@ impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
         })
     }
 
+    /// Returns the number of signatures.
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Returns `true` if there are no signatures.
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
@@ -1019,22 +1076,26 @@ pub struct SmtSortArities<'a> {
 }
 
 impl<'a> SmtSortArities<'a> {
+    /// Returns the number of sort names.
     #[inline]
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Returns `true` if there are no sort names.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
 
+    /// Returns the sort name with its arity at the position, or [`None`] if it is out of bounds.
     #[inline]
     pub fn get(&self, index: usize) -> Option<(SmtSymbol<'a>, SmtNumeral<'a>)> {
         let name = self.names.get(index)?.symbol_view(self.text);
         Some((name, self.arities[index].numeral_view(self.text)))
     }
 
+    /// Returns an iterator over the sort names with their arities.
     pub fn iter(&self) -> SmtSortAritiesIter<'a> {
         SmtSortAritiesIter {
             arities: *self,
@@ -1103,6 +1164,7 @@ pub struct SmtSortAritiesBuf {
 }
 
 impl SmtSortAritiesBuf {
+    /// Constructs empty sort names with their arities.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -1111,6 +1173,7 @@ impl SmtSortAritiesBuf {
         }
     }
 
+    /// Adds a sort name with its arity after the others.
     pub fn push(&mut self, name: SmtSymbol, arity: SmtNumeral) {
         let name = SymbolHandle::create_by_push(&mut self.text, name);
         let start = self.text.len();
@@ -1122,12 +1185,14 @@ impl SmtSortAritiesBuf {
         });
     }
 
+    /// Removes all sort names with their arities.
     pub fn clear(&mut self) {
         self.text.clear();
         self.names.clear();
         self.arities.clear();
     }
 
+    /// Views as [`SmtSortArities`].
     pub fn view(&self) -> SmtSortArities<'_> {
         SmtSortArities {
             text: &self.text,
@@ -1136,10 +1201,12 @@ impl SmtSortAritiesBuf {
         }
     }
 
+    /// Returns the number of sort names.
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Returns `true` if there are no sort names.
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
@@ -1170,17 +1237,19 @@ pub struct SmtConstructors<'a, N: SmtNodeTypes + ?Sized> {
 }
 
 impl<'a, N: SmtNodeTypes + ?Sized> SmtConstructors<'a, N> {
+    /// Returns the number of constructors.
     #[inline]
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Returns `true` if there are no constructors.
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
 
-    /// The constructors with their selectors, which can be modified in place.
+    /// Returns the constructors with their selectors, which can be modified in place.
     pub fn iter_mut(&mut self) -> SmtConstructorsIter<'_, N> {
         SmtConstructorsIter {
             text: self.text,
@@ -1289,6 +1358,7 @@ where
 }
 
 impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
+    /// Constructs empty datatype constructors.
     pub fn new() -> Self {
         Self {
             text: Vec::new(),
@@ -1317,6 +1387,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
         self.selectors[index].push(name, sort);
     }
 
+    /// Removes all constructors.
     pub fn clear(&mut self) {
         for selectors in &mut self.selectors[..self.names.len()] {
             selectors.clear();
@@ -1325,6 +1396,7 @@ impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
         self.names.clear();
     }
 
+    /// Views as [`SmtConstructors`], mutably.
     pub fn view_mut(&mut self) -> SmtConstructors<'_, N> {
         let len = self.names.len();
         SmtConstructors {
@@ -1334,10 +1406,12 @@ impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
         }
     }
 
+    /// Returns the number of constructors.
     pub fn len(&self) -> usize {
         self.names.len()
     }
 
+    /// Returns `true` if there are no constructors.
     pub fn is_empty(&self) -> bool {
         self.names.is_empty()
     }
