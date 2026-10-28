@@ -36,15 +36,16 @@ use crate::{SmtVersion, SmtVersionPosture, span::SmtLocation};
 /// Why reading failed (I/O, lexical, syntax, version, or handler error).
 #[derive(Debug)]
 pub enum SmtReadErrorKind<E> {
-    /// Reading from a file or a buffered reader failed.
+    /// Opening or reading a file, or reading from a buffered reader, failed.
     Io(std::io::Error),
-    /// The input is not a valid sequence of SMT-LIB tokens.
+    /// The input is not a valid sequence of SMT-LIB tokens, or a token follows what the parser
+    /// accepts.
     Lexical(SmtLexicalErrorKind),
     /// The tokens do not form valid SMT-LIB syntactic categories or commands.
     ///
-    /// Commands with non-standard names are routed to the handler for
-    /// processing, so they are rejected with an [`SmtReadErrorKind::Handler`]
-    /// error cause instead.
+    /// A command whose name is not a standard command name of the version in force goes to
+    /// [`nonstandard_command`](crate::SmtCommandHandler::nonstandard_command), so its rejection
+    /// is a [`Handler`](Self::Handler) error, e.g. `define-const` under SMT-LIB 2.6.
     Syntax(SmtSyntaxErrorKind),
     /// The script declares a version that cannot be used.
     Version(SmtVersionErrorKind),
@@ -259,8 +260,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// span at the start of the input. An I/O read error is reported as
     /// an empty span at the respective position.
     ///
-    /// May panic if a previous call on this reader returned an error
-    /// or if the parser breaks its contract.
+    /// Panics if a previous call on this reader returned an error other than an I/O error.
+    /// May panic if the parser breaks the contract of [`SmtParse::parse`].
     pub fn read_file(
         &mut self,
         path: impl AsRef<Path>,
@@ -279,8 +280,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     ///
     /// Returns the located parser result if successful.
     ///
-    /// May panic if a previous call on this reader returned an error
-    /// or if the parser breaks its contract.
+    /// Panics if a previous call on this reader returned an error other than an I/O error.
+    /// May panic if the parser breaks the contract of [`SmtParse::parse`].
     pub fn read_all(
         &mut self,
         input: &[u8],
@@ -300,8 +301,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// The buffer content is consumed up to where the parser requests
     /// discarding the rest or fully if no such request was made.
     ///
-    /// May panic if a previous call on this reader returned an error
-    /// or if the parser breaks its contract.
+    /// Panics if a previous call on this reader returned an error other than an I/O error.
+    /// May panic if the parser breaks the contract of [`SmtParse::parse`].
     pub fn read_from<R: BufRead>(
         &mut self,
         mut buf_reader: R,
@@ -353,8 +354,8 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// The piece may end anywhere, even inside a token: whatever is
     /// unfinished carries over to the next call.
     ///
-    /// May panic if a previous call on this reader returned an error
-    /// or if the parser breaks its contract.
+    /// Panics if a previous call on this reader returned an error other than an I/O error.
+    /// May panic if the parser breaks the contract of [`SmtParse::parse`].
     pub fn read_slice(&mut self, slice: &[u8]) -> Result<(), SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
         self.lexer.lex_slice(slice).map_err(|err| err.into())
@@ -368,17 +369,19 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// [`read_file`](Self::read_file) and [`read_all`](Self::read_all) call
     /// it themselves.
     ///
-    /// May panic if a previous call on this reader returned an error
-    /// or if the parser breaks its contract.
+    /// Panics if a previous call on this reader returned an error other than an I/O error.
+    /// May panic if the parser breaks the contract of [`SmtParse::parse`].
     pub fn read_eof(&mut self) -> Result<SmtLocated<P::Result>, SmtReadError<H::Error>> {
         // parsing goes through lexing, so just call the lexer
         self.lexer.lex_eof().map_err(|err| err.into())
     }
 
-    /// Returns the location from which the input has been discarded, if set.
+    /// Returns the location from which the input is discarded, if any.
     ///
-    /// [`SmtScriptParser`] discards input after the `(exit)` command.
-    /// No other standard parsers discard.
+    /// [`SmtScriptParser`] discards the input after the `(exit)` command; no other library
+    /// parser discards. The end of the input resets it to [`None`], so after a successful
+    /// [`read_all`](Self::read_all), [`read_from`](Self::read_from) or
+    /// [`read_file`](Self::read_file) it is always [`None`].
     pub fn discarded_from(&self) -> Option<SmtLocation> {
         self.lexer.discarded_from()
     }

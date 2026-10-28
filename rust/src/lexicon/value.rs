@@ -721,7 +721,8 @@ string8_newtype! {
     /// a whole part (before it) and a fractional part (after it).
     ///
     /// The whole part follows the same rules as [`SmtNumeral`]:
-    /// cannot be empty, must contain only digits, the leading digit must not be zero.
+    /// cannot be empty, must contain only digits, and
+    /// cannot contain any leading zeros except for the constant `0` itself.
     ///
     /// The fractional part cannot be empty and must contain only digits.
     ///

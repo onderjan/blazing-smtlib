@@ -41,7 +41,10 @@ impl SmtVersion {
     }
 }
 
-/// Version posture (allowed SMT-LIB versions and the maximal number of their declarations).
+/// Version posture (versions a script may declare and how many declarations it may make).
+///
+/// The posture applies to version declarations `(set-info :smt-lib-version …)` only;
+/// the initial version is unaffected by the posture.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtVersionPosture {
     allowed: Vec<SmtVersion>,
@@ -54,7 +57,7 @@ impl SmtVersionPosture {
         &self.allowed
     }
 
-    /// Returns the maximal number of version declarations, or [`None`] if unlimited.
+    /// Returns the maximum number of version declarations, or [`None`] if unlimited.
     pub fn max_declarations(&self) -> Option<u64> {
         self.max_declarations
     }
@@ -89,7 +92,7 @@ impl SmtVersionPostureBuilder {
         &self.allowed
     }
 
-    /// Returns the maximal number of version declarations, or [`None`] if unlimited.
+    /// Returns the maximum number of version declarations, or [`None`] if unlimited.
     pub fn max_declarations(&self) -> Option<u64> {
         self.max_declarations
     }
@@ -114,7 +117,7 @@ impl SmtVersionPostureBuilder {
         self
     }
 
-    /// Sets the maximal number of version declarations ([`None`] for unlimited).
+    /// Sets the maximum number of version declarations ([`None`] for unlimited).
     pub fn set_max_declarations(mut self, max_declarations: Option<u64>) -> Self {
         self.max_declarations = max_declarations;
         self

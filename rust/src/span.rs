@@ -143,6 +143,9 @@ impl SmtLocation {
 }
 
 /// Value located in a byte stream.
+///
+/// The location is where the last token of the value ends, e.g. offset 1 for the term read
+/// from `x   `. It is the end of the input only if the value ends there.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct SmtLocated<V> {
     value: V,
@@ -160,7 +163,7 @@ impl<V> SmtLocated<V> {
         &self.value
     }
 
-    /// Returns the location.
+    /// Returns the location where the last token of the value ends.
     pub fn location(&self) -> SmtLocation {
         self.location
     }

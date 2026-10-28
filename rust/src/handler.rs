@@ -275,7 +275,7 @@ use crate::{
 ///         Term::Operation(Operation::Sub, vec![2, 3])
 ///     ]
 /// );
-/// // reading ends at byte 29, the end of input
+/// // the term ends at byte 29
 /// assert_eq!(located_outer_term.location().offset(), 29);
 /// // the outer term has index 4
 /// assert_eq!(located_outer_term.into_value(), 4);
@@ -1036,8 +1036,9 @@ pub trait SmtCommandHandler: SmtHandler {
     /// while the function parameters are only in scope between the corresponding
     /// `start_recursive_body` and `end_recursive_body`.
     ///
-    /// The command `define-fun-rec` is just syntax sugar for
-    /// `define-funs-rec` with a single function. It is desugared before being handled.
+    /// The command `define-fun-rec` has the same effect as `define-funs-rec` with a single
+    /// function, but is handled by [`start_define_fun_rec`](Self::start_define_fun_rec) and
+    /// [`end_define_fun_rec`](Self::end_define_fun_rec).
     ///
     /// Consult the standard for proper handling.
     fn start_define_funs_rec(
@@ -1051,9 +1052,6 @@ pub trait SmtCommandHandler: SmtHandler {
     /// 1. There is a pending unended `start_define_funs_rec`.
     /// 2. There is no pending unended `start_recursive_body`.
     ///
-    /// The command `define-fun-rec` is just syntax sugar for
-    /// `define-funs-rec` with a single function. It is desugared before being handled.
-    ///
     /// Consult the standard for proper handling.
     fn end_define_funs_rec(&mut self) -> Result<(), Self::Error>;
 
@@ -1065,9 +1063,6 @@ pub trait SmtCommandHandler: SmtHandler {
     /// 3. This body corresponds to the signature at the same index in `start_define_funs_rec`.
     /// 4. The body of this function definition is handled after this method is called
     ///    and before the respective `end_recursive_body` is called.
-    ///
-    /// The command `define-fun-rec` is just syntax sugar for
-    /// `define-funs-rec` with a single function. It is desugared before being handled.
     ///
     /// Consult the standard for proper handling.
     fn start_recursive_body(
@@ -1114,10 +1109,10 @@ pub trait SmtCommandHandler: SmtHandler {
     ///
     /// There are no other guarantees, including on arities.
     ///
-    /// The command `declare-datatype` is just syntax sugar for
-    /// `declare-datatypes` with a single introduction where the
-    /// arity is the number of parameters of the datatype (zero if there are none).
-    /// The command is desugared before being handled.
+    /// The command `declare-datatype` has the same effect as `declare-datatypes` with a single
+    /// introduction whose arity is the number of parameters of the datatype (zero if there are
+    /// none), but is handled by [`start_declare_datatype`](Self::start_declare_datatype) and
+    /// [`end_declare_datatype`](Self::end_declare_datatype).
     ///
     /// Consult the standard for proper handling.
     fn start_declare_datatypes(
@@ -1141,7 +1136,8 @@ pub trait SmtCommandHandler: SmtHandler {
     /// 2. This method is never nested before the corresponding `end_datatype_declaration`.
     /// 3. This declaration corresponds to the introduction at the same index
     ///    in `start_declare_datatypes`.
-    /// 4. The sort parameters (`sort_params`) are nonempty exactly when the datatype is parametric.
+    /// 4. The sort parameters (`sort_params`) are those after `par`, and there are none without
+    ///    `par`. They are not compared with the arity in the introduction.
     /// 5. The selector sorts of the datatype declaration are handled after this method is called
     ///    and before the respective `end_datatype_declaration` is called.
     ///

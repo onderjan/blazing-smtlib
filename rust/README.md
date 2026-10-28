@@ -22,7 +22,7 @@ read_smt_file(&mut SmtSyntaxChecker, "file.smt2").expect("should be a valid SMT-
 ```
 
 [`SmtSyntaxChecker`] implements [`SmtHandler`] that handles SMT-LIB syntactic
-categories (identifiers, sorts, terms, etc.), and [`SmtCommandHandler`] that
+categories (sorts, terms, etc.), and [`SmtCommandHandler`] that
 handles standard SMT-LIB commands (`assert`, `check-sat`, etc.). SMT solvers can
 implement [`SmtHandler`] and [`SmtCommandHandler`] to handle SMT-LIB scripts,
 including custom parsing of non-standard commands. See the handler documentation

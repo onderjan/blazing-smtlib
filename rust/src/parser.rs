@@ -115,21 +115,21 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     /// it finished the input it accepts (consuming exactly its tokens),
     /// is returning a result and waiting for processing of the next value.
     ///
-    /// Returning an error means the handler failed at the token after
-    /// the consumed ones. The state of the parser, cursor, and [`SmtParseState`]
-    /// is unspecified.
+    /// Returning an error means that the tokens do not form what the parser accepts, that
+    /// a version switch failed, or that the handler failed. The state of the parser, cursor,
+    /// and [`SmtParseState`] is then unspecified.
     ///
     /// All library parsers implementing [`SmtParse`] are fully self-resetting:
     /// after returning [`ControlFlow::Break`], they are back in their initial state.
     ///
-    /// The `parse_state` holds the shared resources of standard category parsers.
+    /// The `parse_state` holds the shared resources of library category parsers.
     /// To keep resources valid, each [`SmtParse`] must be progressed
     /// until completion once started, i.e. if [`SmtParse::parse`]
     /// returns `Ok(Continue(()))`, the subsequent outer parse call
     /// must call [`SmtParse::parse`] on the same parser, and
     /// is forbidden from progressing any other parsers.
     /// Failure to heed this contract may lead to silently wrong parsing
-    /// or panics, but never unsafe behaviour.
+    /// or panics.
     fn parse<Z: SmtCursor>(
         &mut self,
         handler: &mut H,

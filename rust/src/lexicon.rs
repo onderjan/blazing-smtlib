@@ -30,7 +30,7 @@
 //! // no symbol can contain a pipe, even when quoted
 //! assert_eq!(SmtSymbol::new_quoted(b"a|b").err(), Some(SmtDisallowedBytesError));
 //!
-//! // `lambda` is a reserved in SMT-LIB 2.7
+//! // `lambda` is a reserved word in SMT-LIB 2.7
 //! let reserved = SmtReserved::General(SmtGeneralReserved::Lambda);
 //! assert!(!reserved.is_in_version(SmtVersion::V2_6));
 //! assert!(reserved.is_in_version(SmtVersion::V2_7));

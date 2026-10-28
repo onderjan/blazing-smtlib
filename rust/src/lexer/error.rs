@@ -17,7 +17,7 @@ pub enum SmtLexicalErrorKind {
     EmptyKeyword,
     /// A quoted symbol contains a backslash, e.g. `|a\b|`.
     BackslashInQuotedSymbol,
-    /// A quoted symbol contains a byte that is not allowed in it, e.g. a backslash.
+    /// A quoted symbol contains a byte that is not allowed in it, e.g. a null byte.
     ForbiddenByteInQuotedSymbol,
     /// A quoted symbol is not closed before the end of the input, e.g. `|abc`.
     UnclosedQuotedSymbol,
@@ -221,7 +221,7 @@ pub struct SmtLexerReadError<E> {
 /// Why lexing from a buffered reader or a file failed (I/O, lexical, or consumer error).
 #[derive(Debug)]
 pub enum SmtLexerReadErrorKind<E> {
-    /// Reading from the file or the buffered reader failed.
+    /// Opening or reading the file, or reading from the buffered reader, failed.
     Io(io::Error),
     /// The input is lexically malformed.
     Lexical(SmtLexicalErrorKind),

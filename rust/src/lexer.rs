@@ -72,7 +72,7 @@
 //!   [`SmtLexer::lex_eof`].
 //!
 //! On successful consumer break, the lexer returns the result value augmented
-//! with the location where lexing ended and resets itself so it is prepared for
+//! with the location where the value's last token ends and resets itself so it is prepared for
 //! lexing another input. On an error, the lexer returns [`SmtLexerError`] or
 //! [`SmtLexerReadError`] and goes into a failure state where subsequent lexing
 //! will panic.
@@ -481,9 +481,11 @@ impl<C: SmtConsume, R: SmtLexerRecovery<C>> SmtLexer<C, R> {
         self.location_at(0)
     }
 
-    /// Returns the location after which bytes have been discarded (if any).
+    /// Returns the location from which the input is discarded (if discarding).
     ///
-    /// Discarding is used to implement the behaviour after `(exit)`.
+    /// A consumer forces discarding from the location after consumed tokens
+    /// by [`discard_rest`](crate::token::SmtCursor::discard_rest).
+    /// The end of the input resets discarding, so it returns [`None`] again.
     pub fn discarded_from(&self) -> Option<SmtLocation> {
         if self.discard {
             Some(self.current_location())
