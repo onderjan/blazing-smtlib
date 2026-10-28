@@ -363,8 +363,8 @@ pub trait SmtHandler {
     ///
     /// SMT-LIB defines the name of a `:named` attribute at the annotation: the name can be used
     /// in what is handled after this method, in the rest of the command and after it. SMT-LIB
-    /// requires the named term to be closed and the name to be fresh, and allows `:pattern` only
-    /// on the body of a quantified term. Library parsers do not check this.
+    /// requires the named term to contain no free variables and the name to be fresh, and allows
+    /// `:pattern` only on the body of a quantified term. Library parsers do not check this.
     fn annotate_term(
         &mut self,
         term: Self::Term,
@@ -863,13 +863,13 @@ impl<H: SmtHandler + ?Sized> SmtNodeTypes for H {
 /// assert_eq!(handler.checks, 1);
 /// ```
 pub trait SmtCommandHandler: SmtHandler {
-    /// Parser of a nonstandard command.
+    /// Parses the tokens after the name of a nonstandard command, up to and including its closing
+    /// parenthesis.
     ///
-    /// The parser gets the tokens after the name of the command, and must consume them up to
-    /// and including the closing parenthesis of the command, e.g. an
-    /// [`SmtCommandPayloadParser`](crate::parser::SmtCommandPayloadParser) with a rule whose
-    /// parser is an [`SmtClosedParser`](crate::parser::SmtClosedParser). A handler that
-    /// refuses every nonstandard command can use [`Infallible`](std::convert::Infallible).
+    /// An example is an [`SmtCommandPayloadParser`](crate::parser::SmtCommandPayloadParser)
+    /// with a rule whose parser is an [`SmtClosedParser`](crate::parser::SmtClosedParser). A
+    /// handler that refuses every nonstandard command can use
+    /// [`Infallible`](std::convert::Infallible).
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
     /// Returns a parser that parses a nonstandard command with the given name.
@@ -1224,8 +1224,6 @@ pub trait SmtCommandHandler: SmtHandler {
 }
 
 /// Error of a partial command handler (unsupported command or handler error).
-///
-/// Unsupported commands come in two varieties: standard and nonstandard.
 #[derive(Debug, Clone)]
 pub enum SmtPartialCommandError<E> {
     /// The handler does not implement the standard command.
@@ -1296,10 +1294,15 @@ pub trait SmtPartialCommandHandler:
     /// Error of the handler itself.
     type HandlerError;
 
-    /// Parser of a nonstandard command.
+    /// Parses the tokens after the name of a nonstandard command, up to and including its closing
+    /// parenthesis.
+    ///
+    /// See [`SmtCommandHandler::NonstandardParser`].
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
     /// Returns a parser that parses a nonstandard command with the given name.
+    ///
+    /// See [`SmtCommandHandler::nonstandard_command`].
     fn nonstandard_command(
         &mut self,
         name: SmtSymbol<'_>,
@@ -1310,33 +1313,47 @@ pub trait SmtPartialCommandHandler:
     }
 
     /// Echoes a string (`echo`).
+    ///
+    /// See [`SmtCommandHandler::command_echo`].
     fn command_echo(&mut self, _value: SmtStringContent<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Echo)
     }
 
     /// Gets the value of an option (`get-option`).
+    ///
+    /// See [`SmtCommandHandler::command_get_option`].
     fn command_get_option(&mut self, _option: SmtKeyword<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetOption)
     }
     /// Sets an option (`set-option`).
+    ///
+    /// See [`SmtCommandHandler::command_set_option`].
     fn command_set_option(&mut self, _option: Self::Attribute) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::SetOption)
     }
     /// Gets information (`get-info`).
+    ///
+    /// See [`SmtCommandHandler::command_get_info`].
     fn command_get_info(&mut self, _keyword: SmtKeyword<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetInfo)
     }
     /// Sets information (`set-info`).
+    ///
+    /// See [`SmtCommandHandler::command_set_info`].
     fn command_set_info(&mut self, _attribute: Self::Attribute) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::SetInfo)
     }
 
     /// Sets the logic (`set-logic`).
+    ///
+    /// See [`SmtCommandHandler::command_set_logic`].
     fn command_set_logic(&mut self, _logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::SetLogic)
     }
 
     /// Gets the values of terms (`get-value`).
+    ///
+    /// See [`SmtCommandHandler::command_get_value`].
     fn command_get_value(
         &mut self,
         _terms: SmtMultiple<'_, Self::Term>,
@@ -1344,26 +1361,38 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::GetValue)
     }
     /// Gets the assertions (`get-assertions`).
+    ///
+    /// See [`SmtCommandHandler::command_get_assertions`].
     fn command_get_assertions(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetAssertions)
     }
     /// Gets the values of the named Boolean terms (`get-assignment`).
+    ///
+    /// See [`SmtCommandHandler::command_get_assignment`].
     fn command_get_assignment(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetAssignment)
     }
     /// Gets the model (`get-model`).
+    ///
+    /// See [`SmtCommandHandler::command_get_model`].
     fn command_get_model(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetModel)
     }
     /// Gets a proof (`get-proof`).
+    ///
+    /// See [`SmtCommandHandler::command_get_proof`].
     fn command_get_proof(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetProof)
     }
     /// Gets an unsatisfiable subset of the assumptions (`get-unsat-assumptions`).
+    ///
+    /// See [`SmtCommandHandler::command_get_unsat_assumptions`].
     fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetUnsatAssumptions)
     }
     /// Gets an unsatisfiable core (`get-unsat-core`).
+    ///
+    /// See [`SmtCommandHandler::command_get_unsat_core`].
     fn command_get_unsat_core(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::GetUnsatCore)
     }
@@ -1395,6 +1424,8 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DeclareConst)
     }
     /// Declares a function (`declare-fun`).
+    ///
+    /// See [`SmtCommandHandler::command_declare_fun`].
     fn command_declare_fun(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -1405,6 +1436,8 @@ pub trait SmtPartialCommandHandler:
     }
 
     /// Asserts a term (`assert`).
+    ///
+    /// See [`SmtCommandHandler::command_assert`].
     fn command_assert(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Assert)
     }
@@ -1425,14 +1458,20 @@ pub trait SmtPartialCommandHandler:
     }
 
     /// Resets the solver to its initial state (`reset`).
+    ///
+    /// See [`SmtCommandHandler::command_reset`].
     fn command_reset(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Reset)
     }
     /// Empties the assertion stack (`reset-assertions`).
+    ///
+    /// See [`SmtCommandHandler::command_reset_assertions`].
     fn command_reset_assertions(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::ResetAssertions)
     }
     /// Exits the solver (`exit`).
+    ///
+    /// See [`SmtCommandHandler::command_exit`].
     fn command_exit(&mut self) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::Exit)
     }
@@ -1467,6 +1506,8 @@ pub trait SmtPartialCommandHandler:
     }
 
     /// Starts a function definition (`define-fun`).
+    ///
+    /// See [`SmtCommandHandler::start_define_fun`].
     fn start_define_fun(
         &mut self,
         _signature: SmtFunctionSignature<'_, Self>,
@@ -1474,6 +1515,8 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DefineFun)
     }
     /// Ends a function definition (`define-fun`).
+    ///
+    /// See [`SmtCommandHandler::end_define_fun`].
     fn end_define_fun(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFun)
     }
@@ -1490,6 +1533,8 @@ pub trait SmtPartialCommandHandler:
     }
 
     /// Starts a recursive function definition (`define-fun-rec`).
+    ///
+    /// See [`SmtCommandHandler::start_define_fun_rec`].
     fn start_define_fun_rec(
         &mut self,
         _signature: SmtFunctionSignature<'_, Self>,
@@ -1497,6 +1542,8 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DefineFunRec)
     }
     /// Ends a recursive function definition (`define-fun-rec`).
+    ///
+    /// See [`SmtCommandHandler::end_define_fun_rec`].
     fn end_define_fun_rec(&mut self, _body: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFunRec)
     }
@@ -1533,6 +1580,8 @@ pub trait SmtPartialCommandHandler:
     }
 
     /// Starts a datatype declaration (`declare-datatype`).
+    ///
+    /// See [`SmtCommandHandler::start_declare_datatype`].
     fn start_declare_datatype(
         &mut self,
         _name: SmtSymbol<'_>,
@@ -1541,6 +1590,8 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DeclareDatatype)
     }
     /// Ends a datatype declaration (`declare-datatype`).
+    ///
+    /// See [`SmtCommandHandler::end_declare_datatype`].
     fn end_declare_datatype(
         &mut self,
         _constructors: SmtConstructors<'_, Self>,
@@ -1788,16 +1839,14 @@ impl<T: SmtPartialCommandHandler> SmtCommandHandler for T {
 
 /// Handler that checks compliance with SMT-LIB syntax.
 ///
-/// This handler quietly swallows all standard categories and commands.
-/// It does not allow any non-standard commands, failing with
-/// [`SmtNonstandardCommandError`].
+/// The checker accepts every node and every standard command, and refuses every nonstandard
+/// command with [`SmtNonstandardCommandError`].
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SmtSyntaxChecker;
 
-/// Error encountering a nonstandard command.
+/// Error due to a nonstandard command.
 ///
-/// Used by [`SmtSyntaxChecker`], which does not
-/// support non-standard commands.
+/// [`SmtSyntaxChecker`] returns it for every nonstandard command.
 #[derive(Debug, Clone)]
 pub struct SmtNonstandardCommandError(SmtSymbolBuf);
 

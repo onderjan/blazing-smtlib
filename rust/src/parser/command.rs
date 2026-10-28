@@ -207,11 +207,31 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
 }
 
 /// Handles the result of a command parsed by [`SmtCommandPayloadParser`].
+///
+/// A rule separates parsing a command from handling it: [`Parser`](Self::Parser) parses the
+/// rest of the command up to and including its closing parenthesis, and only then is
+/// [`handle`](Self::handle) called with the result. A command is thus handled once it has been
+/// read completely, like a standard command, and a command that fails to be read, e.g.
+/// `(minimize c` at the end of the input, is not handled at all.
+///
+/// The documentation of [`SmtCommandHandler`] has an example.
 pub trait SmtCommandRule<H: SmtCommandHandler> {
-    /// Parser of the payload.
+    /// Parses the tokens after the name of the command, up to and including its closing
+    /// parenthesis.
+    ///
+    /// For example, the payload of `(minimize c)` is a term followed by the closing parenthesis,
+    /// which `SmtClosedParser<H, SmtTermParser<H>>` parses.
+    ///
+    /// The closing parenthesis is a part of the payload because a payload that ends with an
+    /// attribute can only end with it: whether an attribute has a value is known only from the
+    /// token after its keyword, e.g. the `)` in `(set-option :print-success)`. Attributes are
+    /// thus parsed together with the closing parenthesis, by
+    /// [`SmtClosedAttributeParser`](crate::parser::SmtClosedAttributeParser) and
+    /// [`SmtClosedMultipleAttributeParser`](crate::parser::SmtClosedMultipleAttributeParser).
     type Parser: SmtParse<H>;
 
-    /// Handles the result of a command.
+    /// Handles the result of the parser once the command has been read to its closing
+    /// parenthesis.
     fn handle(
         &mut self,
         handler: &mut H,
@@ -220,6 +240,11 @@ pub trait SmtCommandRule<H: SmtCommandHandler> {
 }
 
 /// Parses the payload of a single command, starting after its name.
+///
+/// The payload is parsed by the parser of the rule, and its result is handed to
+/// [`handle`](SmtCommandRule::handle) of the rule once the closing parenthesis of the command
+/// has been parsed. The parser can serve as the
+/// [`NonstandardParser`](crate::SmtCommandHandler::NonstandardParser) of a command handler.
 pub struct SmtCommandPayloadParser<H: SmtCommandHandler, R: SmtCommandRule<H>> {
     rule: R,
     parser: R::Parser,
