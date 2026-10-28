@@ -20,7 +20,7 @@ use standard::{StandardCommandKind, StandardCommandParsers};
 /// Parses an SMT-LIB command.
 ///
 /// The parser finishes after every command, returning [`ControlFlow::Break`]
-/// with a [`SmtCommandOutcome`] that distinguishes the command `(exit)`
+/// with an [`SmtCommandOutcome`] that distinguishes the command `(exit)`
 /// and the version-switch command `(set-info :smt-lib-version <version>)`
 /// from the others. It also finishes after an EOF while awaiting a command.
 /// An EOF inside a command is a syntax error.

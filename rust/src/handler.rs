@@ -53,7 +53,7 @@ use crate::{
 /// enum TermHandlerError { Unsupported, NonUniqueBindings }
 ///
 /// #[derive(Debug, PartialEq, Eq)]
-/// enum Operation { Add, Sub }
+/// enum Operation { Add, Sub, Eq }
 ///
 /// #[derive(Debug, PartialEq, Eq)]
 /// enum Term {
@@ -116,6 +116,7 @@ use crate::{
 ///                 let op = match function.ident.name.bytes().as_slice() {
 ///                     b"+" => Operation::Add,
 ///                     b"-" => Operation::Sub,
+///                     b"=" => Operation::Eq,
 ///                     _ => return Err(TermHandlerError::Unsupported),
 ///                 };
 ///                 // the arguments are term indices that have already been handled
@@ -279,6 +280,9 @@ use crate::{
 /// // the outer term has index 4
 /// assert_eq!(located_outer_term.into_value(), 4);
 /// ```
+///
+/// Commands are handled by [`SmtCommandHandler`], which extends this trait. Its documentation
+/// continues the example with a handler of the commands of a script.
 pub trait SmtHandler {
     /// Error returned by the handler on failure.
     type Error;
@@ -506,7 +510,347 @@ impl<H: SmtHandler + ?Sized> SmtNodeTypes for H {
     type Term = H::Term;
 }
 
-/// Handles commands.
+/// Handles SMT-LIB commands.
+///
+/// A command handler is an [`SmtHandler`] that also handles the commands of a script, e.g.
+/// [`command_assert`](Self::command_assert) gets the term that the command asserts.
+///
+/// For only implementing a partial list of SMT-LIB commands, [`SmtPartialCommandHandler`]
+/// can be used: it is a command handler that fails on unimplemented commands with
+/// [`SmtPartialCommandError::Unsupported`].
+///
+/// The example below continues the [`SmtHandler`] example: the term handler becomes a partial
+/// command handler for a solver of integer arithmetic, which implements `set-logic`,
+/// `declare-const`, `assert` and `check-sat`, and the nonstandard command `minimize`.
+///
+/// ```
+/// # use std::collections::HashMap;
+/// #
+/// # use blazing_smtlib::{
+/// #     SmtHandler, SmtPartialCommandError, SmtPartialCommandHandler, SmtReadErrorKind,
+/// #     SmtVersion,
+/// #     grammar::{
+/// #         SmtAttributeValue, SmtBindings, SmtIdent, SmtMatchCases, SmtMultiple, SmtPattern,
+/// #         SmtQualifiedIdent, SmtQuantifierKind, SmtSExpr, SmtSort, SmtSortedVars,
+/// #         SmtSpecialConstant, SmtTerm,
+/// #     },
+/// #     lexicon::{SmtBytesBuf, SmtCommandNameReserved, SmtKeyword, SmtSymbol},
+/// #     parser::{SmtClosedParser, SmtCommandPayloadParser, SmtCommandRule, SmtTermParser},
+/// #     read_smt,
+/// # };
+/// #
+/// # #[derive(Debug)]
+/// # enum TermHandlerError { Unsupported, NonUniqueBindings }
+/// #
+/// # #[derive(Debug, PartialEq, Eq)]
+/// # enum Operation { Add, Sub, Eq }
+/// #
+/// # #[derive(Debug, PartialEq, Eq)]
+/// # enum Term {
+/// #     Constant(u64),
+/// #     Variable(SmtBytesBuf),
+/// #     Operation(Operation, Vec<usize>),
+/// # }
+/// #
+/// struct TermHandler {
+///     terms: Vec<Term>,
+///     mappings: HashMap<SmtBytesBuf, usize>,
+///     // added for the commands
+///     constants: Vec<SmtBytesBuf>,
+///     assertions: Vec<usize>,
+///     checks: usize,
+///     objectives: Vec<usize>,
+/// }
+///
+/// impl SmtHandler for TermHandler {
+///     // a partial command handler also fails on the commands it does not implement
+///     type Error = SmtPartialCommandError<TermHandlerError>;
+///
+///     // ... as in the `SmtHandler` example, with the errors converted by `into()` ...
+/// #     type SExpr = ();
+/// #     type Attribute = ();
+/// #     type Sort = ();
+/// #     type Term = usize;
+/// #
+/// #     type Scope = HashMap<SmtBytesBuf, Option<usize>>;
+/// #
+/// #     fn set_version(&mut self, _version: SmtVersion) {
+/// #         // no version-dependent semantics
+/// #     }
+/// #
+/// #     fn handle_sort(&mut self, sort: SmtSort<'_, Self>) -> Result<Self::Sort, Self::Error> {
+/// #         if sort.ident.name.bytes().as_slice() == b"Int"
+/// #             && sort.ident.indices.is_empty()
+/// #             && sort.args.is_empty()
+/// #         {
+/// #             Ok(())
+/// #         } else {
+/// #             Err(TermHandlerError::Unsupported.into())
+/// #         }
+/// #     }
+/// #
+/// #     fn handle_term(&mut self, term: SmtTerm<'_, Self>) -> Result<Self::Term, Self::Error> {
+/// #         let term = match term {
+/// #             SmtTerm::SpecialConstant(SmtSpecialConstant::Numeral(numeral)) => {
+/// #                 Term::Constant(numeral.to_u64().ok_or(TermHandlerError::Unsupported)?)
+/// #             }
+/// #             SmtTerm::QualifiedIdent(SmtQualifiedIdent {
+/// #                 ident: SmtIdent { name, indices },
+/// #                 sort: None,
+/// #             }) if indices.is_empty() => {
+/// #                 let name = name.bytes();
+/// #                 // a variable bound by a let stands for the term it is bound to
+/// #                 if let Some(&index) = self.mappings.get(name.as_slice()) {
+/// #                     return Ok(index);
+/// #                 }
+/// #                 Term::Variable(name.into_owned())
+/// #             }
+/// #             SmtTerm::Application(application) => {
+/// #                 let (function, args) = application.into_parts();
+/// #                 if !function.ident.indices.is_empty() || function.sort.is_some() {
+/// #                     return Err(TermHandlerError::Unsupported.into());
+/// #                 }
+/// #                 let op = match function.ident.name.bytes().as_slice() {
+/// #                     b"+" => Operation::Add,
+/// #                     b"-" => Operation::Sub,
+/// #                     b"=" => Operation::Eq,
+/// #                     _ => return Err(TermHandlerError::Unsupported.into()),
+/// #                 };
+/// #                 // the arguments are term indices that have already been handled
+/// #                 Term::Operation(op, args.into_iter().collect())
+/// #             }
+/// #             _ => return Err(TermHandlerError::Unsupported.into()),
+/// #         };
+/// #         let index = self.terms.len();
+/// #         self.terms.push(term);
+/// #         Ok(index)
+/// #     }
+/// #
+/// #     fn handle_s_expr(
+/// #         &mut self,
+/// #         _expr: SmtSExpr<'_, Self>,
+/// #     ) -> Result<Self::SExpr, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn start_let(
+/// #         &mut self,
+/// #         bindings: SmtBindings<'_, Self>,
+/// #     ) -> Result<Self::Scope, Self::Error> {
+/// #         // put the bindings in the symbol map and remember the replaced bindings
+/// #         let mut shadowed = HashMap::new();
+/// #         for (name, term) in bindings {
+/// #             let name = name.bytes().into_owned();
+/// #             if shadowed.contains_key(&name) {
+/// #                 // SMT-LIB prohibits binding a variable twice in one let
+/// #                 return Err(TermHandlerError::NonUniqueBindings.into());
+/// #             }
+/// #             let previous = self.mappings.insert(name.clone(), term);
+/// #             shadowed.insert(name, previous);
+/// #         }
+/// #         // the previous bindings form the scope that will be given to `end_let`
+/// #         Ok(shadowed)
+/// #     }
+/// #
+/// #     fn end_let(
+/// #         &mut self,
+/// #         scope: Self::Scope,
+/// #         body: Self::Term,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         // restore the previous symbol map from the previous bindings
+/// #         for (name, term) in scope {
+/// #             match term {
+/// #                 Some(term) => {
+/// #                     // replace with a shadowed binding
+/// #                     self.mappings.insert(name, term);
+/// #                 }
+/// #                 None => {
+/// #                     // no binding was present, remove it
+/// #                     self.mappings.remove(&name);
+/// #                 }
+/// #             }
+/// #         }
+/// #         Ok(body)
+/// #     }
+/// #
+/// #     // ... attributes, annotations, quantifiers, lambda, match returning unsupported ...
+/// #
+/// #     fn handle_attribute(
+/// #         &mut self,
+/// #         _name: SmtKeyword<'_>,
+/// #         _value: Option<SmtAttributeValue<'_, Self>>,
+/// #     ) -> Result<Self::Attribute, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn annotate_term(
+/// #         &mut self,
+/// #         _term: Self::Term,
+/// #         _attributes: SmtMultiple<'_, Self::Attribute>,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn start_quantifier(
+/// #         &mut self,
+/// #         _kind: SmtQuantifierKind,
+/// #         _vars: SmtSortedVars<'_, Self>,
+/// #     ) -> Result<Self::Scope, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn end_quantifier(
+/// #         &mut self,
+/// #         _kind: SmtQuantifierKind,
+/// #         _scope: Self::Scope,
+/// #         _body: Self::Term,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn start_lambda(
+/// #         &mut self,
+/// #         _vars: SmtSortedVars<'_, Self>,
+/// #     ) -> Result<Self::Scope, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn end_lambda(
+/// #         &mut self,
+/// #         _scope: Self::Scope,
+/// #         _body: Self::Term,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn start_match(&mut self, _scrutinee: &Self::Term) -> Result<(), Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn start_match_case(
+/// #         &mut self,
+/// #         _scrutinee: &Self::Term,
+/// #         _pattern: SmtPattern<'_>,
+/// #     ) -> Result<Self::Scope, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn end_match_case(
+/// #         &mut self,
+/// #         _scope: Self::Scope,
+/// #         _scrutinee: &Self::Term,
+/// #         _term: Self::Term,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// #
+/// #     fn end_match(
+/// #         &mut self,
+/// #         _scrutinee: Self::Term,
+/// #         _cases: SmtMatchCases<'_, Self>,
+/// #     ) -> Result<Self::Term, Self::Error> {
+/// #         Err(TermHandlerError::Unsupported.into())
+/// #     }
+/// }
+///
+/// // the rule of the nonstandard command `(minimize t)`
+/// #[derive(Default)]
+/// struct Minimize;
+///
+/// impl SmtCommandRule<TermHandler> for Minimize {
+///     // the payload is a term and the closing parenthesis of the command
+///     type Parser = SmtClosedParser<TermHandler, SmtTermParser<TermHandler>>;
+///
+///     fn handle(
+///         &mut self,
+///         handler: &mut TermHandler,
+///         term: usize,
+///     ) -> Result<(), SmtPartialCommandError<TermHandlerError>> {
+///         handler.objectives.push(term);
+///         Ok(())
+///     }
+/// }
+///
+/// impl SmtPartialCommandHandler for TermHandler {
+///     type HandlerError = TermHandlerError;
+///     type NonstandardParser = SmtCommandPayloadParser<TermHandler, Minimize>;
+///
+///     fn nonstandard_command(
+///         &mut self,
+///         name: SmtSymbol<'_>,
+///     ) -> Result<Self::NonstandardParser, Self::Error> {
+///         if name.bytes().as_slice() == b"minimize" {
+///             Ok(SmtCommandPayloadParser::default())
+///         } else {
+///             Err(SmtPartialCommandError::UnsupportedNonstandard(
+///                 name.into_owned(),
+///             ))
+///         }
+///     }
+///
+///     fn command_set_logic(&mut self, logic: SmtSymbol<'_>) -> Result<(), Self::Error> {
+///         // only quantifier-free linear integer arithmetic
+///         if logic.bytes().as_slice() == b"QF_LIA" {
+///             Ok(())
+///         } else {
+///             Err(TermHandlerError::Unsupported.into())
+///         }
+///     }
+///
+///     fn command_declare_const(
+///         &mut self,
+///         name: SmtSymbol<'_>,
+///         _sort: Self::Sort,
+///     ) -> Result<(), Self::Error> {
+///         // the sort is `Int`, as `handle_sort` refuses the others
+///         self.constants.push(name.bytes().into_owned());
+///         Ok(())
+///     }
+///
+///     fn command_assert(&mut self, term: Self::Term) -> Result<(), Self::Error> {
+///         self.assertions.push(term);
+///         Ok(())
+///     }
+///
+///     fn command_check_sat(&mut self) -> Result<(), Self::Error> {
+///         // a solver would check the assertions here
+///         self.checks += 1;
+///         Ok(())
+///     }
+/// }
+///
+/// let script = b"
+///     (set-logic QF_LIA)
+///     (declare-const a Int)
+///     (declare-const c Int)
+///     (assert (let ((b 5)) (= (- (+ a b b) c) 0)))
+///     (minimize c)
+///     (check-sat)
+///     (get-model)
+/// ";
+/// let mut handler = TermHandler {
+///     terms: Vec::new(),
+///     mappings: HashMap::new(),
+///     constants: Vec::new(),
+///     assertions: Vec::new(),
+///     checks: 0,
+///     objectives: Vec::new(),
+/// };
+/// let error = read_smt(&mut handler, &script[..]).unwrap_err();
+/// // the script is handled up to `get-model`, which the handler does not implement
+/// assert!(matches!(
+///     error.kind(),
+///     SmtReadErrorKind::Handler(SmtPartialCommandError::Unsupported(
+///         SmtCommandNameReserved::GetModel
+///     ))
+/// ));
+/// assert_eq!(handler.constants.len(), 2);
+/// // the equality is the term with index 6, after `0` with index 5
+/// assert_eq!(handler.assertions, vec![6]);
+/// // `c` is the term with index 7
+/// assert_eq!(handler.objectives, vec![7]);
+/// assert_eq!(handler.checks, 1);
+/// ```
 pub trait SmtCommandHandler: SmtHandler {
     /// Parser of a nonstandard command.
     type NonstandardParser: SmtParse<Self, Result = ()>;
@@ -883,12 +1227,15 @@ fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCom
     Err(SmtPartialCommandError::Unsupported(command))
 }
 
-/// Handles a subset of commands.
+/// Handles a subset of SMT-LIB commands.
 ///
-/// Every command it does not implement fails with
-/// [`SmtPartialCommandError::Unsupported`] naming the command, or with
+/// This trait can be used to implement only a subset of SMT-LIB commands without having to
+/// implement the handler methods for the other commands. Every implementation of this trait is
+/// also an [`SmtCommandHandler`], and every command that it does not implement fails with
+/// [`SmtPartialCommandError::Unsupported`] for a standard command or with
 /// [`SmtPartialCommandError::UnsupportedNonstandard`] for a nonstandard command.
-/// Each implementor is a [`SmtCommandHandler`].
+///
+/// The documentation of [`SmtCommandHandler`] has an example.
 pub trait SmtPartialCommandHandler:
     SmtHandler<Error = SmtPartialCommandError<Self::HandlerError>>
 {

@@ -15,7 +15,7 @@
 //! [`SmtToken`] itself is an enumeration over lexical categories with a view into
 //! their content, with the end of file marker (EOF) represented as a token to
 //! simplify the API. Whitespace and comments are also [`SmtToken`] categories,
-//! and a [`SmtConsume`] implementation can choose whether those should be passed
+//! and an [`SmtConsume`] implementation can choose whether those should be passed
 //! through via [`SmtConsume::IS_CONCRETE`]. This can be used e.g. for
 //! pretty-printing while preserving comments.
 //!

@@ -2,7 +2,7 @@
 //!
 //! Reading turns bytes into tokens (the [`lexer`](crate::lexer) module) and tokens into
 //! the syntactic categories and commands of SMT-LIB (the [`parser`](crate::parser) module),
-//! which are delivered to a [`SmtCommandHandler`] in streaming fashion:
+//! which are delivered to an [`SmtCommandHandler`] in streaming fashion:
 //! the input is processed piece by piece and every category or command
 //! to be handled reaches the handler before the next one is read.
 //!
@@ -43,7 +43,7 @@ pub enum SmtReadErrorKind<E> {
     /// The tokens do not form valid SMT-LIB syntactic categories or commands.
     ///
     /// Commands with non-standard names are routed to the handler for
-    /// processing, so they are rejected with a [`SmtReadErrorKind::Handler`]
+    /// processing, so they are rejected with an [`SmtReadErrorKind::Handler`]
     /// error cause instead.
     Syntax(SmtSyntaxErrorKind),
     /// The script declares a version that cannot be used.

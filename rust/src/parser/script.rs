@@ -13,7 +13,7 @@ use crate::{
 ///
 /// An SMT-LIB script is a (possibly empty) sequence of commands.
 ///
-/// The parser is a loop over a [`SmtCommandParser`]. If the `(exit)` command is
+/// The parser is a loop over an [`SmtCommandParser`]. If the `(exit)` command is
 /// encountered, the parser requests the producer to discard everything after
 /// its closing parenthesis.
 ///
