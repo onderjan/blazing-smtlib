@@ -1,5 +1,81 @@
-//! Lexer that produces tokens from input bytes, handing them over to a token consumer.
+//! Lexer that produces tokens from input bytes, handing them over to a token
+//! consumer.
 //!
+//! [`SmtLexer`] hands over [tokens](crate::token) to a consumer that implements
+//! [`SmtConsume`] and [`SmtConsumeFrom`]`<`[`SmtLexerCursor`]`>`. This can be
+//! an [`SmtWriter`](crate::SmtWriter) or a parser adapted to a consumer via
+//! [`SmtParseAdapter`](crate::parser::SmtParseAdapter). The lexer and an
+//! adapted parser together form [`SmtReader`](crate::SmtReader).
+//!
+//! A custom consumer can be used to process the tokens as desired. If
+//! [`SmtConsumeFrom`] is implemented for [`SmtLexerCursor`] specifically rather
+//! than generically over every [`SmtCursor`], the consumer can use the token
+//! spans exposed by the lexer, as in the following example.
+//!
+//! ```rust
+//! # use std::ops::ControlFlow;
+//! # use blazing_smtlib::{SmtVersion, span::{SmtSpan, SmtLocated},
+//! # token::{SmtToken, SmtConsume, SmtConsumeFrom}, lexer::{SmtLexer, SmtLexerCursor}};
+//! // a consumer that finds the span of the first `x` symbol (quoted or unquoted)
+//! struct XFinder(Option<SmtSpan>);
+//! impl SmtConsume for XFinder {
+//!     type Result = Option<SmtSpan>;
+//!     type Error = ();
+//!     const IS_CONCRETE: bool = false; // whitespace and comments are not handed over
+//! }
+//! impl SmtConsumeFrom<SmtLexerCursor<'_>> for XFinder {
+//!     fn consume(&mut self, cursor: &mut SmtLexerCursor)
+//!         -> Result<ControlFlow<Option<SmtSpan>>, ()> {
+//!         // process every token in cursor
+//!         // next() requires the SmtCursor trait in scope
+//!         use blazing_smtlib::token::SmtCursor;
+//!         while let Some(next) = cursor.next() {
+//!             match cursor.syntax(&next) {
+//!                 SmtToken::Symbol(symbol) => {
+//!                     if self.0.is_none() && symbol.bytes().as_slice() == b"x" {
+//!                         // remember the span
+//!                         self.0 = Some(next.span())
+//!                     }
+//!                 }
+//!                 SmtToken::EndOfFile => {
+//!                     // EOF, break with a given value
+//!                     return Ok(ControlFlow::Break(self.0));
+//!                 }
+//!                 _ => {}
+//!             }
+//!         }
+//!         // not enough tokens provided from the cursor yet to end the file
+//!         Ok(ControlFlow::Continue(()))
+//!     }
+//! }
+//! // lex sample input, handing over tokens progressively to the consumer
+//! let input = b"(bvadd x y)";
+//! let mut lexer = SmtLexer::new(XFinder(None), SmtVersion::V2_7);
+//! let result = lexer.lex_all(input).expect("no error").into_value();
+//! let span = result.expect("x should be found");
+//! assert!(span.start().offset() == 7 && span.end().offset() == 8);
+//! ```
+//!
+//! It is unspecified how the lexer batches the tokens, only that it provides at
+//! least one token per call and the consumer must consume at least one. The
+//! consumer is required to return a break value on EOF, and a non-EOF token
+//! that would be handed over after the break value results in an error with
+//! [`SmtLexicalErrorKind::UnexpectedTrailingToken`]. See [`SmtLexer`] and
+//! [`SmtConsumeFrom::consume`] for the details of the handover contract.
+//!
+//! The inputs can be passed to the lexer in two ways:
+//!
+//! - In full (the lexer hands the consumer an EOF token at the end): from a
+//!   file ([`SmtLexer::lex_file`]), a buffered reader ([`SmtLexer::lex_from`]),
+//!   or a full slice ([`SmtLexer::lex_all`]).
+//! - In parts using calls of [`SmtLexer::lex_slice`] followed by
+//!   [`SmtLexer::lex_eof`].
+//!
+//! On successful consumer break, the lexer returns the result value augmented
+//! with the location where lexing ended and resets itself so it is prepared for
+//! lexing another input. On an error, the lexer returns [`SmtLexerError`] or
+//! [`SmtLexerReadError`] and goes into a failure state where subsequent lexing
+//! will panic.
 //!
 mod char_class;
 mod cursor;
