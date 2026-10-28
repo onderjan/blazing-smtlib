@@ -16,7 +16,13 @@ use crate::{
 pub enum SmtWriteErrorKind {
     /// Writing to the writer failed.
     Io(io::Error),
-    /// The reserved word is not reserved in the version, so no text in it is the token.
+    /// The reserved word cannot be written as it is not reserved in the version
+    /// in force.
+    ///
+    /// This happens e.g. when the reserved word `lambda` is sent to be written
+    /// to a writer that operates under version 2.6: there is no way to write
+    /// the reserved word while preserving its semantics as it does not exist in
+    /// the version.
     NotInVersion(SmtReserved),
 }
 
@@ -147,17 +153,17 @@ impl SmtWriterConfig {
         }
     }
 
-    /// Configuration with the style replaced.
+    /// Returns the configuration with the style replaced.
     pub fn with_style(self, style: SmtWriteStyle) -> Self {
         Self { style, ..self }
     }
 
-    /// Version written in.
+    /// Returns the version written in.
     pub fn version(&self) -> SmtVersion {
         self.version
     }
 
-    /// Style written in.
+    /// Returns the style written in.
     pub fn style(&self) -> SmtWriteStyle {
         self.style
     }
@@ -189,7 +195,7 @@ impl<W: Write> SmtWriter<W> {
         }
     }
 
-    /// Configuration the writer writes in.
+    /// Returns the configuration the writer writes in.
     pub fn config(&self) -> SmtWriterConfig {
         let style = match self.position {
             Position::Line(_) => SmtWriteStyle::Line,
@@ -199,7 +205,7 @@ impl<W: Write> SmtWriter<W> {
         SmtWriterConfig::new(self.version).with_style(style)
     }
 
-    /// Version the writer writes in.
+    /// Returns the version the writer writes in.
     pub fn version(&self) -> SmtVersion {
         self.version
     }

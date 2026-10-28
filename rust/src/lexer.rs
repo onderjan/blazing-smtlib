@@ -465,7 +465,7 @@ impl<C: SmtConsume, R: SmtLexerRecovery<C>> SmtLexer<C, R> {
         }
     }
 
-    /// Version currently in force.
+    /// Returns the version currently in force.
     ///
     /// The version can change if the token consumer asks for it from the
     /// cursor. The end of the input resets the version to the initial one.
@@ -481,7 +481,7 @@ impl<C: SmtConsume, R: SmtLexerRecovery<C>> SmtLexer<C, R> {
         self.location_at(0)
     }
 
-    /// Location after which bytes have been discarded (if any).
+    /// Returns the location after which bytes have been discarded (if any).
     ///
     /// Discarding is used to implement the behaviour after `(exit)`.
     pub fn discarded_from(&self) -> Option<SmtLocation> {

@@ -83,22 +83,22 @@ impl SmtLocation {
             .is_some_and(|bytes| bytes <= offset)
     }
 
-    /// Zero-based byte offset.
+    /// Returns the zero-based byte offset.
     pub fn offset(&self) -> u64 {
         self.offset
     }
 
-    /// Zero-based line number.
+    /// Returns the zero-based line number.
     pub fn line(&self) -> u64 {
         self.line
     }
 
-    /// Zero-based column number, measured in bytes.
+    /// Returns the zero-based column number, measured in bytes.
     pub fn column(&self) -> u64 {
         self.column
     }
 
-    /// Location directly at the byte stream start.
+    /// Returns the location directly at the byte stream start.
     #[inline]
     pub fn initial() -> Self {
         Self {

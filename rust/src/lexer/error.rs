@@ -5,27 +5,29 @@ use crate::span::{SmtLocation, SmtSpan};
 /// Why the input is lexically malformed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalErrorKind {
-    /// A byte that cannot start any token appears where a token starts.
+    /// A byte that cannot start any token appears where a token starts, e.g. `\` or `{`.
     UnexpectedByte,
-    /// The item was expected here.
+    /// The item was expected here, e.g. a fraction digit after `7.` in `7.y`.
     Expected(SmtLexicalExpected),
-    /// A string literal is not closed before the end of the input.
+    /// A string literal is not closed before the end of the input, e.g. `"abc`.
     UnclosedString,
-    /// A string literal contains a byte that is not allowed in it.
+    /// A string literal contains a byte that is not allowed in it, e.g. a null byte.
     ForbiddenByteInString,
-    /// A colon is not followed by a keyword name.
+    /// A colon is not followed by a keyword name, e.g. the `:` in `(get-info :)`.
     EmptyKeyword,
-    /// A quoted symbol contains a backslash.
+    /// A quoted symbol contains a backslash, e.g. `|a\b|`.
     BackslashInQuotedSymbol,
-    /// A quoted symbol contains a byte that is not allowed in it.
+    /// A quoted symbol contains a byte that is not allowed in it, e.g. a backslash.
     ForbiddenByteInQuotedSymbol,
-    /// A quoted symbol is not closed before the end of the input.
+    /// A quoted symbol is not closed before the end of the input, e.g. `|abc`.
     UnclosedQuotedSymbol,
-    /// A numeral, or the whole part of a decimal, starts with a zero followed by another digit.
+    /// A numeral, or the whole part of a decimal, starts with a zero followed by another digit,
+    /// e.g. `01` or `00.5`.
     NumeralLeadingZero,
-    /// A token is followed by a byte that does not delimit it.
+    /// A token is followed by a byte that does not delimit it, e.g. `12abc` or `"s"t`.
     MissingDelimiter,
-    /// A token would be handed over after the consumer broke with a value.
+    /// A token would be handed over after the consumer broke with a value, e.g. `y` when one
+    /// term is read from `x y`.
     UnexpectedTrailingToken,
 }
 
@@ -35,11 +37,11 @@ pub enum SmtLexicalErrorKind {
 /// This is used in [`SmtLexicalErrorKind::Expected`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtLexicalExpected {
-    /// Digit of the fractional part of a decimal.
+    /// Digit of the fractional part of a decimal, e.g. `5` in `0.5`.
     FractionDigit,
-    /// Hexadecimal digit after `#x`.
+    /// Hexadecimal digit after `#x`, e.g. `A` in `#xA04`.
     HexadecimalDigit,
-    /// Binary digit after `#b`.
+    /// Binary digit after `#b`, e.g. `1` in `#b10`.
     BinaryDigit,
     /// Base of a number after `#` (`x` or `b`).
     Base,
@@ -91,12 +93,12 @@ impl<E> SmtLexerError<E> {
         self.kind
     }
 
-    /// Span where the error occurred.
+    /// Returns the span where the error occurred.
     pub fn span(&self) -> SmtSpan {
         self.span
     }
 
-    /// Most useful location for deciphering the error.
+    /// Returns the most useful location for deciphering the error.
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
@@ -106,7 +108,7 @@ impl<E> SmtLexerError<E> {
         }
     }
 
-    /// Where the rest of the input is to be fed from if the lexer continues (EXPERIMENTAL).
+    /// Returns where the rest of the input is to be fed from if the lexer continues (EXPERIMENTAL).
     ///
     /// If present, the lexer is recovering: it expects the input from this
     /// location on, and the end of the input once none is left.
@@ -242,14 +244,14 @@ impl<E> SmtLexerReadError<E> {
         self.kind
     }
 
-    /// Span where the error occurred.
+    /// Returns the span where the error occurred.
     ///
     /// For I/O errors, the span is empty, at the position where reading failed.
     pub fn span(&self) -> SmtSpan {
         self.span
     }
 
-    /// Most useful location for deciphering the error.
+    /// Returns the most useful location for deciphering the error.
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {

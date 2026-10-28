@@ -1,6 +1,9 @@
 use crate::lexicon::SmtDecimal;
 
 /// Version of the SMT-LIB standard (2.0, 2.5, 2.6, or 2.7).
+///
+/// A script declares the version it is written in with an attribute, e.g.
+/// `(set-info :smt-lib-version 2.6)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub enum SmtVersion {
     /// Version 2.0.
@@ -15,7 +18,7 @@ pub enum SmtVersion {
 }
 
 impl SmtVersion {
-    /// Version that the decimal names, if any.
+    /// Returns the version that the decimal names, if any.
     pub fn from_decimal(decimal: SmtDecimal<'_>) -> Option<Self> {
         match decimal.as_slice() {
             b"2.0" => Some(SmtVersion::V2_0),
@@ -26,7 +29,7 @@ impl SmtVersion {
         }
     }
 
-    /// Decimal that names the version, as in `:smt-lib-version`.
+    /// Returns the decimal that names the version, as in `:smt-lib-version`.
     pub fn as_decimal(&self) -> SmtDecimal<'static> {
         let decimal: &'static [u8] = match self {
             SmtVersion::V2_0 => b"2.0",

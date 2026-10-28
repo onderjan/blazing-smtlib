@@ -1089,7 +1089,7 @@ impl SmtNonstandardCommandError {
         Self(name)
     }
 
-    /// Name of the nonstandard command.
+    /// Returns the name of the nonstandard command.
     pub fn name(&self) -> &SmtSymbolBuf {
         &self.0
     }

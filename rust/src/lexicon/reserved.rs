@@ -1,11 +1,11 @@
 use crate::SmtVersion;
 
-/// Reserved word (general or a command name).
+/// Reserved word (general or a command name), e.g. `let` or `check-sat`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtReserved {
-    /// General reserved word.
+    /// General reserved word, e.g. `_`, `as` or `let`.
     General(SmtGeneralReserved),
-    /// Reserved word that names a standard command.
+    /// Reserved word that names a standard command, e.g. `assert` or `check-sat`.
     CommandName(SmtCommandNameReserved),
 }
 
@@ -32,7 +32,7 @@ macro_rules! reserved_words {
             }
 
             impl $enum_name {
-                /// Word of this group that the symbol spells in the version, if any.
+                /// Returns the word of this group that the symbol spells in the version, if any.
                 #[inline]
                 pub fn from_bytes(symbol: &[u8], version: SmtVersion) -> Option<Self> {
                     match SmtReserved::from_bytes(symbol, version) {
@@ -58,7 +58,7 @@ macro_rules! reserved_words {
 }
 
 reserved_words! {
-    /// General reserved word.
+    /// General reserved word, e.g. `_`, `as` or `let`.
     General: SmtGeneralReserved {
         Binary = "BINARY",
         Decimal = "DECIMAL",
@@ -75,7 +75,7 @@ reserved_words! {
         Match = "match",
         Par = "par",
     }
-    /// Reserved word that names a standard command.
+    /// Reserved word that names a standard command, e.g. `assert` or `check-sat`.
     ///
     /// Standard SMT-LIB2 commands are reserved words.
     CommandName: SmtCommandNameReserved {
@@ -145,7 +145,7 @@ impl SmtReserved {
         }
     }
 
-    /// Whether the word is reserved in the given version.
+    /// Returns `true` if the word is reserved in the given version.
     #[inline]
     pub fn is_in_version(&self, version: SmtVersion) -> bool {
         version >= self.since()
@@ -198,7 +198,7 @@ static RESERVED_TABLE: [(&[u8], SmtReserved, SmtVersion); RESERVED_SLOTS] = {
 };
 
 impl SmtReserved {
-    /// Reserved word that the symbol spells in the version, if any.
+    /// Returns the reserved word that the symbol spells in the version, if any.
     #[inline]
     pub fn from_bytes(symbol: &[u8], version: SmtVersion) -> Option<SmtReserved> {
         // make sure that the symbol is not an empty word,
@@ -224,7 +224,7 @@ impl SmtReserved {
         }
     }
 
-    /// Whether the reserved word is the name of a standard command.
+    /// Returns `true` if the reserved word is the name of a standard command.
     #[inline]
     pub fn is_command_name(&self) -> bool {
         matches!(self, SmtReserved::CommandName(_))

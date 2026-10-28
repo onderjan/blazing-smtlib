@@ -574,7 +574,7 @@ pub trait SmtCursor {
         while self.next().is_some() {}
     }
 
-    /// SMT-LIB version that applies to the tokens currently consumed.
+    /// Returns the SMT-LIB version that applies to the tokens currently consumed.
     ///
     /// The version is guaranteed not to change during a call
     /// to the consumer except as a result of the consumer calling

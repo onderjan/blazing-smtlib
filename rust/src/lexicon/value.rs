@@ -58,8 +58,8 @@ impl SmtSymbolBuf {
             .all(|c| CharClass::from(c).is_printable_or_whitespace() && c != b'|' && c != b'\\')
     }
 
-    /// Whether the bytes are allowed in a simple symbol and are not a reserved
-    /// word of the given version.
+    /// Returns `true` if the bytes are allowed in a simple symbol and are not a
+    /// reserved word of the given version.
     pub fn is_simple_in(value: &[u8], version: SmtVersion) -> bool {
         Self::is_unquoted_allowed(value) && SmtReserved::from_bytes(value, version).is_none()
     }
@@ -70,7 +70,7 @@ impl SmtSymbolBuf {
         self.is_quoted
     }
 
-    /// Whether the symbol reads back as itself in the given version: it is
+    /// Returns `true` if the symbol reads back as itself in the given version: it is
     /// quoted, or it is simple and not a reserved word of the version.
     pub fn is_symbol_in(&self, version: SmtVersion) -> bool {
         self.view().is_symbol_in(version)
@@ -254,7 +254,7 @@ impl<'a> SmtSymbol<'a> {
         self.is_quoted
     }
 
-    /// Whether the symbol reads back as itself in the given version: it is
+    /// Returns `true` if the symbol reads back as itself in the given version: it is
     /// quoted, or it is simple and not a reserved word of the version.
     pub fn is_symbol_in(&self, version: SmtVersion) -> bool {
         self.is_quoted || SmtReserved::from_bytes(self.as_slice(), version).is_none()

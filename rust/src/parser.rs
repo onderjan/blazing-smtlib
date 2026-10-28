@@ -173,11 +173,12 @@ pub enum SmtParseErrorKind<E> {
 /// Why a syntax error was returned (expected item, empty list, or missing item).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtSyntaxErrorKind {
-    /// One of the items was expected here.
+    /// One of the items was expected here, e.g. a term in `(assert)`.
     Expected(&'static [SmtSyntaxExpected]),
-    /// A list that must not be empty is empty.
+    /// A list that must not be empty is empty, e.g. the indices in `(_ BitVec)`.
     Empty(SmtNonEmptyList),
-    /// Fewer items arrived than were announced.
+    /// Fewer items arrived than were announced, e.g. fewer bodies than functions in
+    /// `define-funs-rec`.
     Missing(SmtMissingItem),
 }
 
@@ -188,27 +189,28 @@ pub enum SmtSyntaxErrorKind {
 pub enum SmtSyntaxExpected {
     /// Token of the given category.
     Token(SmtTokenCategory),
-    /// Reserved word.
+    /// Reserved word, e.g. `_` or `as`.
     Reserved(SmtReserved),
-    /// Symbol (quoted or unquoted).
+    /// Symbol (quoted or unquoted), e.g. `x` or `|a b|`.
     Symbol,
-    /// Index of an identifier (a numeral or a symbol).
+    /// Index of an identifier (a numeral or a symbol), e.g. `32` in `(_ BitVec 32)`.
     Index,
-    /// Identifier.
+    /// Identifier, e.g. `x` or `(_ bv0 32)`.
     Ident,
-    /// Sort.
+    /// Sort, e.g. `Int` or `(Array Int Bool)`.
     Sort,
-    /// Term.
+    /// Term, e.g. `x` or `(+ x 1)`.
     Term,
-    /// S-expression.
+    /// S-expression, e.g. `a` or `(a (b 1))`.
     SExpr,
-    /// Attribute.
+    /// Attribute, e.g. `:status sat` or `:named p`.
     Attribute,
-    /// What follows the opening parenthesis of a compound term.
+    /// What follows the opening parenthesis of a compound term, e.g. `f` in `(f x)` or `let`
+    /// in `(let ((x 1)) x)`.
     Operator,
-    /// Name of a command.
+    /// Name of a command, e.g. `assert` or `check-sat`.
     CommandName,
-    /// Propositional literal (a symbol or its negation).
+    /// Propositional literal (a symbol or its negation), e.g. `p` or `(not p)`.
     PropositionalLiteral,
 }
 
@@ -217,33 +219,33 @@ pub enum SmtSyntaxExpected {
 /// Used in [`SmtSyntaxErrorKind::Empty`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtNonEmptyList {
-    /// Indices of an identifier.
+    /// Indices of an identifier, e.g. `32` in `(_ BitVec 32)`.
     IdentIndices,
-    /// Arguments of a sort.
+    /// Arguments of a sort, e.g. `Int Bool` in `(Array Int Bool)`.
     SortApplication,
-    /// Arguments of an application.
+    /// Arguments of an application, e.g. `x 1` in `(+ x 1)`.
     TermApplication,
-    /// Bindings of `let`.
+    /// Bindings of `let`, e.g. `((x 1))` in `(let ((x 1)) x)`.
     LetBindings,
-    /// Attributes of an annotation.
+    /// Attributes of an annotation, e.g. `:named p` in `(! x :named p)`.
     Annotation,
-    /// Variables of a quantifier.
+    /// Variables of a quantifier, e.g. `((x Int))` in `(forall ((x Int)) p)`.
     QuantifierVars,
-    /// Variables of `lambda`.
+    /// Variables of `lambda`, e.g. `((x Int))` in `(lambda ((x Int)) x)`.
     LambdaVars,
-    /// Functions of `define-funs-rec`.
+    /// Functions of `define-funs-rec`, e.g. `((f () Int) (g () Int))`.
     FunctionSignatures,
-    /// Sorts of `declare-datatypes`.
+    /// Sorts of `declare-datatypes`, e.g. `((A 0) (B 0))`.
     DatatypeIntroductions,
-    /// Parameters of a datatype.
+    /// Parameters of a datatype, e.g. `(T)` in `(par (T) ((c (f T))))`.
     DatatypeParameters,
-    /// Constructors of a datatype.
+    /// Constructors of a datatype, e.g. `((c (f T)))` in `(par (T) ((c (f T))))`.
     DatatypeConstructors,
-    /// Arguments of a constructor pattern.
+    /// Arguments of a constructor pattern, e.g. `h t` in `(cons h t)`.
     PatternArguments,
-    /// Cases of `match`.
+    /// Cases of `match`, e.g. `((nil 0) ((cons h t) h))`.
     MatchCases,
-    /// Terms of `get-value`.
+    /// Terms of `get-value`, e.g. `(x y)` in `(get-value (x y))`.
     GetValueTerms,
 }
 
@@ -253,8 +255,12 @@ pub enum SmtNonEmptyList {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtMissingItem {
     /// Body of a function of `define-funs-rec`.
+    ///
+    /// For example, `(define-funs-rec ((f () Int) (g () Int)) (1))` lacks the body of `g`.
     FunctionBody,
     /// Datatype of `declare-datatypes`.
+    ///
+    /// For example, `(declare-datatypes ((A 0) (B 0)) (((a))))` lacks the datatype `B`.
     Datatype,
 }
 
@@ -283,7 +289,7 @@ pub(crate) mod expected {
 /// Why switching the version failed (unsupported version or too many declarations).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtVersionErrorKind {
-    /// The requested version was rejected as not supported.
+    /// The requested version was rejected as not supported, e.g. `3.0`.
     ///
     /// This can happen if the parser itself rejects the version or
     /// [`SmtCursor`] rejects the version switch requested by

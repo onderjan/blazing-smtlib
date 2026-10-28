@@ -69,7 +69,7 @@ impl<E> SmtReadError<E> {
         &self.kind
     }
 
-    /// Span where the error occurred.
+    /// Returns the span where the error occurred.
     ///
     /// For I/O errors, the returned span is empty,
     /// indicating the position where the reading failed.
@@ -77,7 +77,7 @@ impl<E> SmtReadError<E> {
         self.span
     }
 
-    /// Most useful location for deciphering the error.
+    /// Returns the most useful location for deciphering the error.
     ///
     /// Guaranteed to be within the span.
     pub fn location(&self) -> SmtLocation {
@@ -243,7 +243,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         Self { lexer }
     }
 
-    /// Version currently in force.
+    /// Returns the version currently in force.
     ///
     /// The version can change if the token consumer asks for it from the
     /// cursor. The end of the input resets the version to the initial one.
@@ -375,7 +375,7 @@ impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
         self.lexer.lex_eof().map_err(|err| err.into())
     }
 
-    /// Location from which the input has been discarded, if set.
+    /// Returns the location from which the input has been discarded, if set.
     ///
     /// [`SmtScriptParser`] discards input after the `(exit)` command.
     /// No other standard parsers discard.

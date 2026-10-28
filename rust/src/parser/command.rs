@@ -39,11 +39,11 @@ impl<H: SmtCommandHandler> fmt::Debug for SmtCommandParser<H> {
 /// or end of file).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SmtCommandOutcome {
-    /// A command other than special ones was parsed.
+    /// A command other than special ones was parsed, e.g. `(check-sat)`.
     Command,
-    /// A version-switch command was parsed.
+    /// A version-switch command was parsed, e.g. `(set-info :smt-lib-version 2.6)`.
     SetVersion(SmtVersion),
-    /// The exit command was parsed.
+    /// The exit command `(exit)` was parsed.
     Exit,
     /// The end of the input was reached before a command.
     EndOfFile,
