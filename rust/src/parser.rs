@@ -1,6 +1,85 @@
-//! Parsers of syntactic categories, commands, and scripts, and parser combinators.
+//! Parsers of syntactic categories, commands, and scripts, and parser
+//! combinators.
 //!
+//! A parser implements [`SmtParse`] and parses [tokens](crate::token), calling
+//! a handler that implements [`SmtHandler`] to handle [grammar](crate::grammar)
+//! constructs. The parser can be connected to a token producer through
+//! [`SmtParseAdapter`] that implements [`SmtConsume`](crate::token::SmtConsume)
+//! and [`SmtConsumeFrom`](crate::token::SmtConsumeFrom) for all token cursors,
+//! and passes the handler and the parse state ([`SmtParseState`]) to the
+//! parser.
 //!
+//! Parsers for all SMT-LIB grammar nodes are provided. As it is unknown if an
+//! attribute is a name-only attribute (`:name`) or a name-value attribute
+//! (`:key value`) before the next parsed token, only parsers for attribute and
+//! multiple-attribute occurrences followed by a closing parenthesis are
+//! provided through [`SmtClosedAttributeParser`] and
+//! [`SmtClosedMultipleAttributeParser`]. This is enough to parse all attribute
+//! occurrences in standard SMT-LIB.
+//!
+//! A single SMT-LIB command can be parsed using [`SmtCommandParser`], which
+//! requires the handler to also implement
+//! [`SmtCommandHandler`](crate::SmtCommandHandler).
+//!
+//! A whole SMT-LIB script can be parsed using [`SmtScriptParser`]. It
+//! automatically discards after `(exit)` by calling [`SmtCursor::discard_rest`]
+//! and switches SMT-LIB versions after the SMT-LIB command
+//! `(set-info :smt-lib-version <version>)` by requesting the cursor to switch
+//! through [`SmtCursor::set_version`] and informing the handler of the new
+//! version in force through [`SmtHandler::set_version`] if successful.
+//!
+//! A custom parser can be crafted using combinators:
+//! - sequential combinators [`SmtPairParser`], [`SmtTuple3Parser`] etc.,
+//! - parenthesis enclosers [`SmtOpenedParser`], [`SmtClosedParser`],
+//!   [`SmtParenParser`],
+//! - multiple-item parsers [`SmtClosedMultipleParser`],
+//!   [`SmtParenMultipleParser`], [`SmtClosedMaximumParser`] and
+//!   [`SmtParenMaximumParser`].
+//!
+//! Additionally, [`SmtCommandPayloadParser`] is provided to simplify
+//! implementing parsing of non-standard commands for handlers that support
+//! them.
+//!
+//! If needed, a parser can also be implemented manually. For example, a parser
+//! that expects a simple symbol `sat`, `unsat`, or `unknown`, and extracts the
+//! result:
+//! ```
+//! # use std::ops::ControlFlow;
+//! # use blazing_smtlib::{SmtHandler, parser::{SmtParse, SmtParseState, SmtParseError},
+//! # token::{SmtToken, SmtCursor}};
+//! enum ResponseHandlerError {
+//!     ExpectedSolverResult,
+//!     // ... other error kinds ...
+//! }
+//! struct SolverResultParser;
+//! impl<H: SmtHandler<Error = ResponseHandlerError>> SmtParse<H> for SolverResultParser {
+//!     type Result = Option<bool>;
+//!
+//!     fn parse<Z: SmtCursor>(
+//!         &mut self,
+//!         _handler: &mut H,
+//!         _parse_state: &mut SmtParseState<H>,
+//!         cursor: &mut Z,
+//!     ) -> Result<ControlFlow<Option<bool>>, SmtParseError<H::Error>> {
+//!         let token = cursor
+//!             .next()
+//!             .expect("cursor should provide at least one token");
+//!         if let SmtToken::Symbol(symbol) = cursor.syntax(&token)
+//!             && !symbol.is_quoted()
+//!         {
+//!             match symbol.bytes().as_slice() {
+//!                 b"sat" => return Ok(ControlFlow::Break(Some(true))),
+//!                 b"unsat" => return Ok(ControlFlow::Break(Some(false))),
+//!                 b"unknown" => return Ok(ControlFlow::Break(None)),
+//!                 _ => {}
+//!             }
+//!         }
+//!         Err(SmtParseError::handler(
+//!             ResponseHandlerError::ExpectedSolverResult,
+//!         ))
+//!     }
+//! }
+//! ```
 
 mod adapter;
 mod category;
@@ -36,7 +115,7 @@ pub trait SmtParse<H: SmtHandler + ?Sized> {
     /// is returning a result and waiting for processing of the next value.
     ///
     /// Returning an error means the handler failed at the token after
-    /// the consumed ones. The state of the parser, cursor, and resources
+    /// the consumed ones. The state of the parser, cursor, and [`SmtParseState`]
     /// is unspecified.
     ///
     /// All library parsers implementing [`SmtParse`] are fully self-resetting:
