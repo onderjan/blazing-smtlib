@@ -513,7 +513,18 @@ impl<H: SmtHandler + ?Sized> SmtNodeTypes for H {
 /// Handles SMT-LIB commands.
 ///
 /// A command handler is an [`SmtHandler`] that also handles the commands of a script, e.g.
-/// [`command_assert`](Self::command_assert) gets the term that the command asserts.
+/// [`command_assert`](Self::command_assert) gets the term that the command asserts. Such a
+/// method is called once the command has been read to its closing parenthesis.
+///
+/// A definition or a datatype declaration is handled by a pair of methods instead, e.g.
+/// [`start_define_fun`](Self::start_define_fun) and [`end_define_fun`](Self::end_define_fun):
+/// the start method is called before the body is handled, so that the handler can bring the
+/// parameters into scope, and the end method, like the other methods, once the command has been
+/// read to its closing parenthesis. If reading fails within a command, the methods that would
+/// follow are not called.
+///
+/// A command introduced in a later version than the one in force is not standard: its name is
+/// a symbol, so it is handled by [`nonstandard_command`](Self::nonstandard_command).
 ///
 /// For only implementing a partial list of SMT-LIB commands, [`SmtPartialCommandHandler`]
 /// can be used: it is a command handler that fails on unimplemented commands with
@@ -853,15 +864,32 @@ impl<H: SmtHandler + ?Sized> SmtNodeTypes for H {
 /// ```
 pub trait SmtCommandHandler: SmtHandler {
     /// Parser of a nonstandard command.
+    ///
+    /// The parser gets the tokens after the name of the command, and must consume them up to
+    /// and including the closing parenthesis of the command, e.g. an
+    /// [`SmtCommandPayloadParser`](crate::parser::SmtCommandPayloadParser) with a rule whose
+    /// parser is an [`SmtClosedParser`](crate::parser::SmtClosedParser). A handler that
+    /// refuses every nonstandard command can use [`Infallible`](std::convert::Infallible).
     type NonstandardParser: SmtParse<Self, Result = ()>;
 
     /// Returns a parser that parses a nonstandard command with the given name.
+    ///
+    /// A command is nonstandard if its name is a symbol rather than the reserved word of a
+    /// standard command. This includes a quoted symbol spelled like one, e.g. `|assert|`, and
+    /// the name of a command introduced in a later version than the one in force, e.g.
+    /// `define-const` before SMT-LIB 2.7.
     fn nonstandard_command(
         &mut self,
         name: SmtSymbol<'_>,
     ) -> Result<Self::NonstandardParser, Self::Error>;
 
     /// Echoes a string (`echo`).
+    ///
+    /// The string is given with its escapes resolved. SMT-LIB requires the string literal to be
+    /// printed back as-is (with its quotation marks and properly escaped), so a handler that
+    /// prints it must escape it again.
+    ///
+    /// The command was introduced in SMT-LIB 2.5.
     fn command_echo(&mut self, value: SmtStringContent<'_>) -> Result<(), Self::Error>;
 
     /// Gets the value of an option (`get-option`).
@@ -871,30 +899,43 @@ pub trait SmtCommandHandler: SmtHandler {
     /// Gets information (`get-info`).
     fn command_get_info(&mut self, keyword: SmtKeyword<'_>) -> Result<(), Self::Error>;
     /// Sets information (`set-info`).
+    ///
+    /// When a script is read, a version declaration `(set-info :smt-lib-version …)` is handled
+    /// by this method before the version is switched: [`set_version`](SmtHandler::set_version)
+    /// follows if the version is accepted, and reading fails otherwise.
     fn command_set_info(&mut self, attribute: Self::Attribute) -> Result<(), Self::Error>;
 
     /// Sets the logic (`set-logic`).
     fn command_set_logic(&mut self, logic: SmtSymbol<'_>) -> Result<(), Self::Error>;
 
     /// Gets the values of terms (`get-value`).
+    ///
+    /// The caller guarantees that there is at least one term.
+    ///
+    /// SMT-LIB requires the terms to contain no free variables and no quantifiers. Library
+    /// parsers do not check this.
     fn command_get_value(&mut self, terms: SmtMultiple<'_, Self::Term>) -> Result<(), Self::Error>;
     /// Gets the assertions (`get-assertions`).
     fn command_get_assertions(&mut self) -> Result<(), Self::Error>;
     /// Gets the values of the named Boolean terms (`get-assignment`).
     fn command_get_assignment(&mut self) -> Result<(), Self::Error>;
     /// Gets the model (`get-model`).
+    ///
+    /// The command was introduced in SMT-LIB 2.5.
     fn command_get_model(&mut self) -> Result<(), Self::Error>;
     /// Gets a proof (`get-proof`).
     fn command_get_proof(&mut self) -> Result<(), Self::Error>;
     /// Gets an unsatisfiable subset of the assumptions (`get-unsat-assumptions`).
+    ///
+    /// The command was introduced in SMT-LIB 2.5.
     fn command_get_unsat_assumptions(&mut self) -> Result<(), Self::Error>;
     /// Gets an unsatisfiable core (`get-unsat-core`).
     fn command_get_unsat_core(&mut self) -> Result<(), Self::Error>;
 
     /// Declares a sort with an arity (`declare-sort`).
     ///
-    /// As per the standard, the handler should return an error if `name`
-    /// is a sort symbol or parameter that is already present in the current signature.
+    /// SMT-LIB prohibits the name from being a sort symbol or sort parameter that is already in
+    /// the current signature. Library parsers do not check this.
     fn command_declare_sort(
         &mut self,
         name: SmtSymbol<'_>,
@@ -903,15 +944,18 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Declares a global sort parameter (`declare-sort-parameter`).
     ///
-    /// As per the standard, the handler should return an error
-    /// if `name` is a sort symbol, sort parameter, or theory symbol
-    /// that is already present in the current signature.
+    /// SMT-LIB prohibits the name from being a sort symbol, sort parameter or theory symbol that
+    /// is already in the current signature. Library parsers do not check this.
+    ///
+    /// The command was introduced in SMT-LIB 2.7.
     fn command_declare_sort_parameter(&mut self, name: SmtSymbol<'_>) -> Result<(), Self::Error>;
 
     /// Declares a constant (`declare-const`).
     ///
-    /// Semantically, `declare-const` is syntax sugar for
-    /// `declare-fun` without any parameters.
+    /// The command has the same semantic effect as `declare-fun` without parameters, e.g.
+    /// `(declare-const c Int)` as `(declare-fun c () Int)`.
+    ///
+    /// The command was introduced in SMT-LIB 2.5.
     fn command_declare_const(
         &mut self,
         name: SmtSymbol<'_>,
@@ -919,6 +963,9 @@ pub trait SmtCommandHandler: SmtHandler {
     ) -> Result<(), Self::Error>;
 
     /// Declares a function (`declare-fun`).
+    ///
+    /// SMT-LIB prohibits the name from being a function symbol that is already in the current
+    /// signature. Library parsers do not check this.
     fn command_declare_fun(
         &mut self,
         name: SmtSymbol<'_>,
@@ -931,53 +978,59 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Checks satisfiability (`check-sat`).
     ///
-    /// Semantically, command `check-sat` is syntax sugar for
-    /// `check-sat-assuming` without additional assumptions.
+    /// The command has the same semantic effect as `check-sat-assuming` without assumptions.
     fn command_check_sat(&mut self) -> Result<(), Self::Error>;
 
     /// Checks satisfiability with additional assumptions (`check-sat-assuming`).
     ///
-    /// The command `check-sat-assuming` triggers checking satisfiability
-    /// of the conjunction of the assertions in the current context
-    /// and additional assumptions given within the command.
+    /// The assumptions hold for this check only, together with the assertions. There may be
+    /// none.
+    ///
+    /// The command was introduced in SMT-LIB 2.5. Before SMT-LIB 2.7, an assumption must be
+    /// a symbol or its negation, e.g. `p` or `(not p)`: library parsers accept no other term
+    /// there, and hand over each assumption as a term.
     fn command_check_sat_assuming(
         &mut self,
         assumptions: SmtMultiple<'_, Self::Term>,
     ) -> Result<(), Self::Error>;
 
     /// Resets the solver to its initial state (`reset`).
+    ///
+    /// The command was introduced in SMT-LIB 2.5.
     fn command_reset(&mut self) -> Result<(), Self::Error>;
 
     /// Empties the assertion stack (`reset-assertions`).
+    ///
+    /// The command was introduced in SMT-LIB 2.5.
     fn command_reset_assertions(&mut self) -> Result<(), Self::Error>;
 
     /// Exits the solver (`exit`).
+    ///
+    /// After calling this method, [`SmtScriptParser`](crate::parser::SmtScriptParser) discards
+    /// the rest of the input, so no handler method is called for it.
     fn command_exit(&mut self) -> Result<(), Self::Error>;
 
     /// Pushes `amount` empty assertion levels onto the assertion stack (`push`).
     ///
-    /// If `amount` is 0, no levels are pushed (i.e. successful no-op).
+    /// If `amount` is `0`, no levels are pushed.
     fn command_push(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error>;
 
     /// Pops `amount` assertion levels from the assertion stack (`pop`).
     ///
-    /// If `amount` is 0, no levels are popped (i.e. successful no-op).
+    /// If `amount` is `0`, no levels are popped.
     ///
-    /// As per the standard, the handler should return an error
-    /// when popping more than the amount of remaining assertion levels
-    /// beyond the inherent first assertion level.
+    /// SMT-LIB requires `amount` to be smaller than the number of assertion levels, as the first
+    /// level cannot be popped. Library parsers do not check this.
     fn command_pop(&mut self, amount: SmtNumeral<'_>) -> Result<(), Self::Error>;
 
     /// Starts a sort definition (`define-sort`).
     ///
-    /// The handler should bring `params` into scope as local sort parameters
-    /// before the body sort is handled. As per the standard, they shadow
-    /// previously user-declared sort symbols and parameters of the same name,
-    /// but not theory sort symbols.
+    /// The parameters are in scope in the sort that follows, where they shadow the user-declared
+    /// sort symbols and sort parameters of the same names, but not the theory sort symbols.
     ///
-    /// As per the standard, the handler should return an error
-    /// 1. if `name` is a sort symbol or parameter already present in the current signature,
-    /// 2. if a theory sort symbol is used as a sort parameter.
+    /// SMT-LIB prohibits a parameter from being a theory sort symbol, and the name from being a
+    /// sort symbol or sort parameter that is already in the current signature. Library parsers
+    /// do not check this.
     fn start_define_sort(
         &mut self,
         name: SmtSymbol<'_>,
@@ -986,12 +1039,16 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Ends a sort definition (`define-sort`).
     ///
-    /// As per the standard, the handler should return an error
-    /// if `sort` is not a well-defined (polymorphic) sort with respect to the
-    /// current signature extended with the sort parameters.
+    /// SMT-LIB treats a later sort `(s t1 … tn)` of the defined sort symbol `s` as an
+    /// abbreviation of this sort, with `t1`, …, `tn` substituted for the parameters.
     fn end_define_sort(&mut self, sort: Self::Sort) -> Result<(), Self::Error>;
 
-    /// Starts the body of a function definition (`define-fun`).
+    /// Starts a function definition (`define-fun`).
+    ///
+    /// The parameters are in scope in the body, which is handled between this method and
+    /// [`end_define_fun`](Self::end_define_fun). The function itself is not: SMT-LIB prohibits
+    /// the body from containing it, and the name from being a function symbol that is already
+    /// in the current signature. Library parsers do not check this.
     fn start_define_fun(
         &mut self,
         signature: SmtFunctionSignature<'_, Self>,
@@ -999,8 +1056,10 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Defines a constant (`define-const`).
     ///
-    /// The command `define-const` is syntax sugar for `define-fun`
-    /// without parameters.
+    /// The command has the same semantic effect as `define-fun` without parameters, e.g.
+    /// `(define-const c Int 1)` as `(define-fun c () Int 1)`.
+    ///
+    /// The command was introduced in SMT-LIB 2.7.
     fn command_define_const(
         &mut self,
         name: SmtSymbol<'_>,
@@ -1008,39 +1067,46 @@ pub trait SmtCommandHandler: SmtHandler {
         body: Self::Term,
     ) -> Result<(), Self::Error>;
 
-    /// Ends the body of a function definition (`define-fun`).
+    /// Ends a function definition (`define-fun`).
     fn end_define_fun(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
     /// Starts a recursive function definition (`define-fun-rec`).
+    ///
+    /// The function and its parameters are in scope in the body, which is handled between this
+    /// method and [`end_define_fun_rec`](Self::end_define_fun_rec).
+    ///
+    /// SMT-LIB prohibits the name from being a function symbol that is already in the current
+    /// signature. Library parsers do not check this.
+    ///
+    /// The command has the same semantic effect as `define-funs-rec` with one function.
+    ///
+    /// Recursive function definitions were introduced in SMT-LIB 2.5.
     fn start_define_fun_rec(
         &mut self,
         signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error>;
 
     /// Ends a recursive function definition (`define-fun-rec`).
+    ///
+    /// Recursive function definitions were introduced in SMT-LIB 2.5.
     fn end_define_fun_rec(&mut self, body: Self::Term) -> Result<(), Self::Error>;
 
     /// Starts recursive function definitions (`define-funs-rec`).
     ///
-    /// The parser guarantees:
-    /// 1. This method is never nested before the corresponding `end_define_funs_rec`.
-    /// 2. The parameter `signatures` is nonempty and contains all signatures
-    ///    of functions to be defined.
-    /// 3. Exactly one body per signature, in the same order, is delivered
-    ///    between `start_recursive_body` and `end_recursive_body` before
-    ///    the corresponding `end_define_funs_rec`.
+    /// The bodies follow in the order of the signatures, each started by
+    /// [`start_recursive_body`](Self::start_recursive_body) and ended by
+    /// [`end_recursive_body`](Self::end_recursive_body), after which
+    /// [`end_define_funs_rec`](Self::end_define_funs_rec) ends the command. The caller
+    /// guarantees that there is at least one signature, starts no more bodies than there are
+    /// signatures, and ends the command only after one body per signature.
     ///
-    /// All signatures arrive before any body is started, as every body may
-    /// refer to every defined function within the recursive function definitions.
-    /// The function names in `signatures` are in scope from this method call onwards,
-    /// while the function parameters are only in scope between the corresponding
-    /// `start_recursive_body` and `end_recursive_body`.
+    /// The functions are in scope in every body, and the parameters of a function in its body.
     ///
-    /// The command `define-fun-rec` has the same effect as `define-funs-rec` with a single
-    /// function, but is handled by [`start_define_fun_rec`](Self::start_define_fun_rec) and
-    /// [`end_define_fun_rec`](Self::end_define_fun_rec).
+    /// SMT-LIB requires the names of the functions to be distinct and prohibits them from being
+    /// function symbols that are already in the current signature. Library parsers do not check
+    /// this.
     ///
-    /// Consult the standard for proper handling.
+    /// Recursive function definitions were introduced in SMT-LIB 2.5.
     fn start_define_funs_rec(
         &mut self,
         signatures: SmtFunctionSignatures<'_, Self>,
@@ -1048,23 +1114,14 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Ends recursive function definitions (`define-funs-rec`).
     ///
-    /// The parser guarantees:
-    /// 1. There is a pending unended `start_define_funs_rec`.
-    /// 2. There is no pending unended `start_recursive_body`.
-    ///
-    /// Consult the standard for proper handling.
+    /// Recursive function definitions were introduced in SMT-LIB 2.5.
     fn end_define_funs_rec(&mut self) -> Result<(), Self::Error>;
 
     /// Starts the body of a recursive function (in `define-funs-rec`).
     ///
-    /// The parser guarantees:
-    /// 1. This method is only called between `start_define_funs_rec` and `end_define_funs_rec`.
-    /// 2. This method is never nested before the corresponding `end_recursive_body`.
-    /// 3. This body corresponds to the signature at the same index in `start_define_funs_rec`.
-    /// 4. The body of this function definition is handled after this method is called
-    ///    and before the respective `end_recursive_body` is called.
-    ///
-    /// Consult the standard for proper handling.
+    /// Receives the signature of the function whose body follows, the one at the same index in
+    /// [`start_define_funs_rec`](Self::start_define_funs_rec), so that the handler can bring its
+    /// parameters into scope.
     fn start_recursive_body(
         &mut self,
         signature: SmtFunctionSignature<'_, Self>,
@@ -1072,16 +1129,23 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Ends the body of a recursive function (in `define-funs-rec`).
     ///
-    /// The parameter `term` is the result term of the function definition body.
-    ///
-    /// The parser guarantees:
-    /// 1. This method is only called between `start_define_funs_rec` and `end_define_funs_rec`.
-    /// 2. There is a pending unended `start_recursive_body`.
-    ///
-    /// Consult the standard for proper handling.
+    /// Receives the body of the function whose signature
+    /// [`start_recursive_body`](Self::start_recursive_body) received.
     fn end_recursive_body(&mut self, term: Self::Term) -> Result<(), Self::Error>;
 
     /// Starts a datatype declaration (`declare-datatype`).
+    ///
+    /// The parameters are those after `par`, and there are none for a declaration without
+    /// `par`. The datatype and its parameters are in scope in the selector sorts, which are
+    /// handled between this method and [`end_declare_datatype`](Self::end_declare_datatype).
+    ///
+    /// SMT-LIB prohibits the name from being a sort symbol that is already in the current
+    /// signature. Library parsers do not check this.
+    ///
+    /// The command has the same semantic effect as `declare-datatypes` with one datatype whose
+    /// arity is the number of parameters.
+    ///
+    /// Datatypes were introduced in SMT-LIB 2.6.
     fn start_declare_datatype(
         &mut self,
         name: SmtSymbol<'_>,
@@ -1089,6 +1153,16 @@ pub trait SmtCommandHandler: SmtHandler {
     ) -> Result<(), Self::Error>;
 
     /// Ends a datatype declaration (`declare-datatype`).
+    ///
+    /// The constructors are in the order of the input, each with its selectors. The caller
+    /// guarantees that there is at least one constructor. For each constructor `c`, SMT-LIB
+    /// also declares the tester `(_ is c)`.
+    ///
+    /// SMT-LIB prohibits the constructors and selectors from being function symbols that are
+    /// already in the current signature, which also prohibits repeating one. Library parsers do
+    /// not check this.
+    ///
+    /// Datatypes were introduced in SMT-LIB 2.6.
     fn end_declare_datatype(
         &mut self,
         constructors: SmtConstructors<'_, Self>,
@@ -1096,25 +1170,18 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Starts datatype declarations (`declare-datatypes`).
     ///
-    /// The parameter `introductions` contains ordered introductions of
-    /// the name and arity of datatypes. The parser calls this method before any
-    /// datatype declaration is started, as the sorts can be referenced by selector
-    /// sorts of the datatypes.
+    /// Receives the name and arity of each datatype, so that every datatype is in scope in every
+    /// declaration. The declarations follow in the same order, each started by
+    /// [`start_datatype_declaration`](Self::start_datatype_declaration) and ended by
+    /// [`end_datatype_declaration`](Self::end_datatype_declaration), after which
+    /// [`end_declare_datatypes`](Self::end_declare_datatypes) ends the command. The caller
+    /// guarantees that there is at least one datatype, starts no more declarations than there
+    /// are datatypes, and ends the command only after one declaration per datatype.
     ///
-    /// The parser guarantees:
-    /// 1. This method is never nested before the corresponding `end_declare_datatypes`.
-    /// 2. There is at least one datatype introduction, i.e. `introductions` is nonempty.
-    /// 3. There is exactly one datatype per introduction,
-    ///    arriving in the same order as the introductions.
+    /// SMT-LIB prohibits the names of the datatypes from being sort symbols that are already in
+    /// the current signature. Library parsers do not check this.
     ///
-    /// There are no other guarantees, including on arities.
-    ///
-    /// The command `declare-datatype` has the same effect as `declare-datatypes` with a single
-    /// introduction whose arity is the number of parameters of the datatype (zero if there are
-    /// none), but is handled by [`start_declare_datatype`](Self::start_declare_datatype) and
-    /// [`end_declare_datatype`](Self::end_declare_datatype).
-    ///
-    /// Consult the standard for proper handling.
+    /// Datatypes were introduced in SMT-LIB 2.6.
     fn start_declare_datatypes(
         &mut self,
         introductions: SmtSortArities<'_>,
@@ -1122,28 +1189,20 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Ends datatype declarations (`declare-datatypes`).
     ///
-    /// The parser guarantees:
-    /// 1. There is a pending unended `start_declare_datatypes`.
-    /// 2. There is no pending unended `start_datatype_declaration`.
-    ///
-    /// Consult the standard for proper handling.
+    /// Datatypes were introduced in SMT-LIB 2.6.
     fn end_declare_datatypes(&mut self) -> Result<(), Self::Error>;
 
     /// Starts a datatype declaration (in `declare-datatypes`).
     ///
-    /// The parser guarantees:
-    /// 1. This method is only called between `start_declare_datatypes` and `end_declare_datatypes`.
-    /// 2. This method is never nested before the corresponding `end_datatype_declaration`.
-    /// 3. This declaration corresponds to the introduction at the same index
-    ///    in `start_declare_datatypes`.
-    /// 4. The sort parameters (`sort_params`) are those after `par`, and there are none without
-    ///    `par`. They are not compared with the arity in the introduction.
-    /// 5. The selector sorts of the datatype declaration are handled after this method is called
-    ///    and before the respective `end_datatype_declaration` is called.
+    /// The declaration is of the datatype at the same index in
+    /// [`start_declare_datatypes`](Self::start_declare_datatypes). The parameters are those
+    /// after `par`, and there are none for a declaration without `par`. They are in scope in the
+    /// selector sorts, which are handled between this method and
+    /// [`end_datatype_declaration`](Self::end_datatype_declaration).
     ///
-    /// There are no other guarantees, including on arities.
-    ///
-    /// Consult the standard for proper handling.
+    /// SMT-LIB requires a declaration to have `par` with as many parameters as the arity of its
+    /// datatype if the arity is positive, and no `par` otherwise. Library parsers do not check
+    /// this.
     fn start_datatype_declaration(
         &mut self,
         sort_params: SmtSymbols<'_>,
@@ -1151,14 +1210,13 @@ pub trait SmtCommandHandler: SmtHandler {
 
     /// Ends a datatype declaration (in `declare-datatypes`).
     ///
-    /// The parser guarantees:
-    /// 1. This method is only called between `start_declare_datatypes` and `end_declare_datatypes`.
-    /// 2. There is a pending unended `start_datatype_declaration`.
-    /// 3. There is at least one datatype constructor, i.e. `constructors` is nonempty.
+    /// The constructors are in the order of the input, each with its selectors. The caller
+    /// guarantees that there is at least one constructor. For each constructor `c`, SMT-LIB
+    /// also declares the tester `(_ is c)`.
     ///
-    /// There are no other guarantees, including on arities.
-    ///
-    /// Consult the standard for proper handling.
+    /// SMT-LIB prohibits the constructors and selectors from being function symbols that are
+    /// already in the current signature, which also prohibits repeating one. Library parsers do
+    /// not check this.
     fn end_datatype_declaration(
         &mut self,
         constructors: SmtConstructors<'_, Self>,
@@ -1408,14 +1466,14 @@ pub trait SmtPartialCommandHandler:
         unsupported(SmtCommandNameReserved::DefineSort)
     }
 
-    /// Starts the body of a function definition (`define-fun`).
+    /// Starts a function definition (`define-fun`).
     fn start_define_fun(
         &mut self,
         _signature: SmtFunctionSignature<'_, Self>,
     ) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFun)
     }
-    /// Ends the body of a function definition (`define-fun`).
+    /// Ends a function definition (`define-fun`).
     fn end_define_fun(&mut self, _term: Self::Term) -> Result<(), Self::Error> {
         unsupported(SmtCommandNameReserved::DefineFun)
     }
