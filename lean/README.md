@@ -77,9 +77,9 @@ panic-free, as it requires its contracts to be met by proof objects.
 
 ## Specification and Proofs
 
-The package also holds `BSmtLibSpec`, a formal specification of our reading of
-the SMT-LIB standard, versions 2.0, 2.5, 2.6, and 2.7, independent of the
-**BSmtLib**. It is checked against the standard's examples in
+The package also holds `BSmtLibSpec`, our formalised reading of the SMT-LIB
+standard, versions 2.0, 2.5, 2.6, and 2.7, independent of **BSmtLib**. It is
+checked against the standard's examples in
 [`BSmtLibSpec/Facts.lean`](BSmtLibSpec/Facts.lean) and its submodules.
 
 Various theorems about **BSmtLib** are stated and proven in
