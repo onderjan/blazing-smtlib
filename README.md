@@ -2,6 +2,17 @@
 
 Under construction.
 
+## Speed
+
+| Library                   | Lexing (MB/s) | Parsing (MB/s) |
+| ------------------------- | ------------: | -------------: |
+| **blazing-smtlib** (Rust) |          1134 |            497 |
+| **BSmtLib** (Lean)        |           273 |            116 |
+
+The figures are geometric means over 9201 files from the 2025 SMT-LIB benchmark
+corpus from 200 kB to 200 MB drawn by SMT-COMP-style rules, each read from
+memory, in a 14-job parallel run on an AMD Ryzen 9 9950X3D.
+
 ## Licence
 
 Licensed under either of Apache License, Version 2.0 or MIT licence at your

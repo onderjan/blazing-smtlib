@@ -37,35 +37,38 @@ pretty-printing or parsing user-constructed tokens.
 Tokens and syntactic nodes can be written using [`SmtWriter`], which is
 configurable for various whitespace formats including 1:1 reconstruction.
 
+See the documentation of crate modules and types for additional information and
+examples. For the usual use case, reading SMT-LIB scripts in an SMT solver, see
+[`SmtReader`] for reading and [`SmtHandler`] and [`SmtCommandHandler`] for a
+sketch of a typical handler.
+
+## Usability
+
+The library implements the whole syntax of SMT-LIB scripts for versions 2.0,
+2.5, 2.6, and 2.7, including switching between versions, and can parse all files
+from the 2025 SMT-LIB benchmark corpus. Additional SMT-LIB grammar constructs
+such as nonstandard commands or solver responses can be read using custom
+parsers.
+
+The library does not use any unsafe code and does not overflow the stack on
+deeply nested input as its parsers nest into SMT-LIB constructs on the heap.
+
 ## Speed and Memory Consumption
 
-The library contains a hand-written speed-optimised lexer and parsers with token
-batching, zero-copy tokens, and resource arenas, making parsing on the SMT-LIB
-corpus typically more than an order of magnitude faster than other commonly used
-Rust SMT-LIB parsing libraries on medium-sized files.
+The library is optimised for speed, with a custom-written fast-path lexer, token
+batching, zero-copy tokens, and resource arenas. In a 14-job parallel run on AMD
+Ryzen 9 9950X3D, given 9201 files sized from 200 kB to 200 MB from the 2025
+SMT-LIB benchmark corpus, each read from memory, it lexed at 1134 MB/s and
+parsed at 497 MB/s (geometric mean over files).
 
-| Library                                                              | Lexing (MB/s) | Parsing (MB/s) | Relative parsing time |
-| -------------------------------------------------------------------- | ------------: | -------------: | --------------------: |
-| **blazing-smtlib**                                                   |          1150 |            498 |                    1× |
-| [**yaspar 2.7.2**](https://docs.rs/yaspar/2.7.2/yaspar/)             |            77 |             41 |                12.24× |
-| [**smt2parser 0.6.1**](https://docs.rs/smt2parser/0.6.1/smt2parser/) |               |             29 |                17.41× |
+As the library parsers do not construct an abstract syntax tree, but instead
+call handlers in a streaming fashion, the library's memory consumption tends to
+be negligible compared to a handler that stores mappings of declared or defined
+symbols and terms, such as ones used for SMT solvers.
 
-The figures are geometric means over 9201 files from the 2025 SMT-LIB benchmark
-corpus from 200 kB to 200 MB drawn by SMT-COMP-style rules, each read from
-memory on an AMD Ryzen 9 9950X3D; the parsing comparisons are over 8856 files
-both **yaspar** and **smt2parser** accepted[^1] (**blazing-smtlib** accepted all
-9201). The lexer of **smt2parser** was not measured on its own.
+## Minimum Supported Rust Version
 
-As **blazing-smtlib** parsers do not construct an abstract syntax tree, but
-instead call handlers in a streaming fashion, the library's memory consumption
-tends to be negligible compared to a handler that stores mappings of declared or
-defined symbols and terms, such as ones used for SMT solvers.
-
-[^1]: **smt2parser** crashed on 8 files due to stack overflow; **yaspar**
-    rejected 337 files, almost all of which declare the quoted symbol
-    `|STRING|`, which it mistakes for the reserved word `STRING`; as **yaspar**
-    only supports SMT-LIB 2.7 where `lambda` is a reserved word, it also
-    rejected a few SMT-LIB 2.6 files that use `lambda` as a symbol.
+The MSRV of this library is Rust 1.88.
 
 ## Licence
 
