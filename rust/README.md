@@ -61,10 +61,10 @@ Ryzen 9 9950X3D, given 9201 files sized from 200 kB to 200 MB from the 2025
 SMT-LIB benchmark corpus, each read from memory, it lexed at 1134 MB/s and
 parsed at 497 MB/s (geometric mean over files).
 
-As the library parsers do not construct an abstract syntax tree, but instead
-call handlers in a streaming fashion, the library's memory consumption tends to
-be negligible compared to a handler that stores mappings of declared or defined
-symbols and terms, such as ones used for SMT solvers.
+Parsers provided by the library call handlers in a streaming fashion. A parser
+thus typically consumes a negligible amount of memory compared to a
+user-provided handler that keeps lists or maps of symbols and terms or
+constructs an abstract syntax tree.
 
 ## Minimum Supported Rust Version
 
