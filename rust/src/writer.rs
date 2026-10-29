@@ -134,7 +134,7 @@ pub struct SmtWriterConfig {
 }
 
 impl SmtWriterConfig {
-    /// Creates a writer configuration with the given version
+    /// Creates a writer configuration with the given version and
     /// the [default style](SmtWriteStyle::Layout).
     pub fn new(version: SmtVersion) -> Self {
         Self {
