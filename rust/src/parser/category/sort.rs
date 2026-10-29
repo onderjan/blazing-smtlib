@@ -18,8 +18,8 @@ use crate::{
 /// For example, checking the syntax of a single sort:
 ///
 /// ```
-/// use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, parser::SmtSortParser};
-///
+/// # use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, parser::SmtSortParser};
+/// #
 /// let mut handler = SmtSyntaxChecker;
 /// let mut reader = SmtReader::new(&mut handler, SmtSortParser::new(), SmtVersion::V2_7);
 /// reader.read_all(b"(Array Int Bool)").unwrap();

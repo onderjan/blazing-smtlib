@@ -83,8 +83,8 @@ impl Default for SmtVersionPosture {
 /// For example, a posture that also allows SMT-LIB 2.0 and any number of version declarations:
 ///
 /// ```
-/// use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, SmtVersionPostureBuilder};
-///
+/// # use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, SmtVersionPostureBuilder};
+/// #
 /// let posture = SmtVersionPostureBuilder::new()
 ///     .add_allowed(SmtVersion::V2_0)
 ///     .set_max_declarations(None)

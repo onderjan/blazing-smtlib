@@ -170,17 +170,13 @@ impl<'a> SmtToken<'a> {
 
     /// Writes the token as SMT-LIB text in the given version.
     ///
-    /// No delimiter is written, only the SMT-LIB token as
-    /// it should appear in a byte stream.
-    /// 2.0 string literals have backslashes always written escaped
-    /// for sanity even if a single backslash would have been acceptable.
+    /// Only the token is written, without delimiters. A symbol that spells a reserved word of the
+    /// version is written quoted, so that it is read back as a symbol, e.g. `|lambda|` in SMT-LIB
+    /// 2.7. In SMT-LIB 2.0, every backslash in a string is written escaped, e.g. `"a\\q"` for the
+    /// content `a\q`.
     ///
-    /// If a simple symbol collides with a reserved word in the given
-    /// version, it is written as a quoted symbol, so version upgrades
-    /// are possible without problems.
-    ///
-    /// Returns an error if the reserved word is not present
-    /// in the given version or if the underlying writer returns one.
+    /// Returns an error if the token is a reserved word that is not reserved in the given version,
+    /// or if writing fails.
     pub fn write_smt<W: Write + ?Sized>(
         &self,
         writer: &mut W,

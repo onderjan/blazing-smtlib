@@ -216,8 +216,8 @@ pub fn read_smt<H: SmtCommandHandler>(
 /// For example, reading a script in pieces, then another script with the same reader:
 ///
 /// ```
-/// use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, SmtVersionPosture};
-///
+/// # use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, SmtVersionPosture};
+/// #
 /// let mut handler = SmtSyntaxChecker;
 /// let mut reader =
 ///     SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);

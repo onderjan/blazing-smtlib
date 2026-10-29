@@ -11,18 +11,15 @@ use crate::{
     token::{SmtAppendTokens, SmtConsume, SmtConsumeFrom, SmtCursor, SmtToken, SmtTokensCursor},
 };
 
-/// Why writing failed (I/O error or writing impossibility).
+/// Why writing failed (I/O error or a reserved word not in the version).
 #[derive(Debug)]
 pub enum SmtWriteErrorKind {
     /// Writing to the writer failed.
     Io(io::Error),
-    /// The reserved word cannot be written as it is not reserved in the version
-    /// in force.
+    /// The reserved word is not reserved in the version written in.
     ///
-    /// This happens e.g. when the reserved word `lambda` is sent to be written
-    /// to a writer that operates under version 2.6: there is no way to write
-    /// the reserved word while preserving its semantics as it does not exist in
-    /// the version.
+    /// There is no way to write the reserved word, as its text would be read as a symbol,
+    /// e.g. the reserved word `lambda` in SMT-LIB 2.6.
     NotInVersion(SmtReserved),
 }
 
@@ -84,55 +81,47 @@ impl Error for SmtWriteError {
 }
 
 /// How tokens are laid out by the writer (single line, compact, or as handed over).
+///
+/// Independently of the style chosen, new input started after EOF is separated by
+/// a line feed (LF). LF is not added if nothing has been written or the previous input
+/// ended with LF.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum SmtWriteStyle {
-    /// Writes tokens on a single line, as far as comments allow.
+    /// Writes tokens separated by spaces, without unnecessary line breaks.
     ///
-    /// Tokens are written with one space between two tokens, except after an
-    /// opening and before a closing parenthesis, top-level items included.
-    /// Whitespace is not written. A comment is written after a space, without
-    /// its line ending; a line feed ends it only if a token follows it.
+    /// Tokens are separated by spaces. As conventional, no space follows an opening or precedes
+    /// a closing parenthesis. Unnecessary whitespace is dropped. A comment is separated by a space
+    /// at its start and is terminated by LF only if another token follows it.
     ///
-    /// The writer can be handed tokens without their whitespace and comments;
-    /// it then writes them all on one line, with no line feed at the end.
-    ///
-    /// At the end of an input, the writer writes nothing, and starts the next
-    /// input on a new line: it writes a line feed before the next token unless
-    /// it has written nothing yet. The output thus never ends with a line feed,
-    /// and can end with a comment without its line ending.
+    /// ```text
+    /// (assert x) (assert y) ; comment
+    /// (check-sat) junk ; no line ending at the end
+    /// ```
     Line,
-    /// Writes tokens in the compact form.
+    /// Writes each top-level item and comment on a line of its own.
     ///
-    /// The canonical form of tokens is their text with one space between two
-    /// tokens, except after an opening and before a closing parenthesis, and
-    /// a line feed after each top-level item, i.e. after the closing
-    /// parenthesis that closes every open one and after a token outside of
-    /// parentheses. The compact form is the canonical form with the comments:
-    /// each comment is written on a line of its own, ended by a line feed.
-    /// Whitespace is not written.
+    /// Within an item, tokens are separated as in [`Line`](Self::Line). A line feed follows each
+    /// top-level item.
+    /// Whitespace is fully reformatted, and each comment is written on a line of
+    /// its own, ended by a line feed.
     ///
-    /// The writer can be handed tokens without their whitespace and comments;
-    /// it then writes the canonical form.
+    /// ```text
+    /// (assert x)
+    /// (assert y)
+    /// ; comment
+    /// (check-sat)
+    /// junk
+    /// ; LF at the end
     ///
-    /// At the end of the input, the writer ends the line it is on and starts
-    /// anew, as if no parenthesis were open.
+    /// ```
     Compact,
     /// Writes tokens in the layout they are handed over in.
     ///
-    /// Whitespace and comments are written as they are. A space is written
-    /// only between two tokens that would otherwise run together, and a line
-    /// feed only after a comment without a line ending that is followed by a
-    /// token. Tokens read from a script and written in the version they were
-    /// read in are written back as the script was, except that in SMT-LIB 2.0,
-    /// every backslash in a string is written escaped: `"a\q"` is written back
-    /// as `"a\\q"`, which is read as the same string.
-    ///
-    /// The writer can be handed tokens without their whitespace and comments;
-    /// it then writes only the spaces that keep the tokens apart.
-    ///
-    /// At the end of an input, the writer starts the next input on a new
-    /// line: it writes a line feed before the next token unless what it wrote
-    /// ends with one.
+    /// Whitespace and comments are written as they are. A space is added only between two tokens
+    /// that would otherwise run together, and a line feed only after a comment without a line
+    /// ending followed by a token. A script lexed and written in the version it was read in is
+    /// thus written back as it was, except that in SMT-LIB 2.0, every backslash in a string is
+    /// written escaped: `"a\q"` is written back as `"a\\q"`, which is read as the same string.
     #[default]
     Layout,
 }
@@ -145,7 +134,8 @@ pub struct SmtWriterConfig {
 }
 
 impl SmtWriterConfig {
-    /// Creates the configuration of writing in the version, in the default style.
+    /// Creates a writer configuration with the given version
+    /// the [default style](SmtWriteStyle::Layout).
     pub fn new(version: SmtVersion) -> Self {
         Self {
             version,
@@ -170,6 +160,94 @@ impl SmtWriterConfig {
 }
 
 /// Writes nodes or tokens as SMT-LIB text.
+///
+/// The writer can write any value that implements [`SmtAppendTokens`] in its SMT-LIB
+/// text representation.
+///
+/// For example, writing a token, a reserved word, a term and a slice of tokens:
+///
+/// ```
+/// # use blazing_smtlib::{
+/// #     SmtNodeTypes, SmtVersion, SmtWriteStyle, SmtWriter, SmtWriterConfig,
+/// #     grammar::{SmtApplicationBuf, SmtQualifiedIdentBuf, SmtTermBuf},
+/// #     lexicon::{SmtCommandNameReserved, SmtNumeralBuf, SmtReserved, SmtSymbolBuf},
+/// #     token::SmtToken,
+/// # };
+/// #
+/// // node types whose children are written as single tokens
+/// struct Flat;
+/// impl SmtNodeTypes for Flat {
+///     type SExpr = ();
+///     type Sort = SmtSymbolBuf;
+///     type Term = SmtNumeralBuf;
+/// }
+///
+/// let config = SmtWriterConfig::new(SmtVersion::V2_7).with_style(SmtWriteStyle::Line);
+/// let mut writer = SmtWriter::new(Vec::new(), config);
+/// writer.write(&SmtToken::ParenOpen).unwrap();
+/// writer.write(&SmtReserved::CommandName(SmtCommandNameReserved::Assert)).unwrap();
+///
+/// let f = SmtQualifiedIdentBuf::new_simple(SmtSymbolBuf::new_unquoted(b"f".to_vec()).unwrap());
+/// let args = vec![SmtNumeralBuf::from_u32(42)];
+/// let term: SmtTermBuf<Flat> = SmtTermBuf::Application(SmtApplicationBuf::new(f, args).unwrap());
+/// writer.write(&term).unwrap();
+///
+/// writer.write(&[SmtToken::ParenClose]).unwrap();
+/// assert_eq!(writer.into_inner(), b"(assert (f 42))");
+/// ```
+///
+/// The writer also implements [`SmtConsume`] and [`SmtConsumeFrom`] for any [`SmtCursor`],
+/// so it can e.g. rewrite tokens from a lexer in a given [`SmtWriteStyle`].
+///
+/// For example, reformatting a script in the compact style:
+///
+/// ```
+/// # use blazing_smtlib::{
+/// #     SmtVersion, SmtWriteStyle, SmtWriter, SmtWriterConfig, lexer::SmtLexer,
+/// # };
+/// #
+/// let config = SmtWriterConfig::new(SmtVersion::V2_7).with_style(SmtWriteStyle::Compact);
+/// let mut lexer = SmtLexer::new(SmtWriter::new(Vec::new(), config), SmtVersion::V2_7);
+/// lexer.lex_all(b"(assert  (> x 0)) ; positive\n(check-sat)").unwrap();
+/// assert_eq!(
+///     lexer.consumer().get_ref().as_slice(),
+///     b"(assert (> x 0))\n; positive\n(check-sat)\n"
+/// );
+/// ```
+///
+/// The writer writes to the underlying byte writer immediately, without a buffer of its own,
+/// and does not flush it. It writes under its SMT-LIB version in force, which is not affected
+/// by the cursor version. To change the version in force, [`set_version`](Self::set_version)
+/// can be used.
+///
+/// On encountering an unquoted symbol that is a reserved word in the version in force,
+/// the writer recovers gracefully by quoting it. On encountering a reserved word which
+/// is not reserved in the version in force, the writer fails with
+/// [`SmtWriteErrorKind::NotInVersion`] as the reserved word cannot be represented
+/// in the version.
+///
+/// ```
+/// # use blazing_smtlib::{
+/// #     SmtVersion, SmtWriteErrorKind, SmtWriter, SmtWriterConfig,
+/// #     lexicon::{SmtGeneralReserved, SmtReserved, SmtSymbolBuf},
+/// #     token::SmtToken,
+/// # };
+/// #
+/// let mut writer = SmtWriter::new(Vec::new(), SmtWriterConfig::new(SmtVersion::V2_7));
+/// // the symbol `lambda` of SMT-LIB 2.6 is written quoted in 2.7
+/// let lambda = SmtSymbolBuf::new_unquoted(b"lambda".to_vec()).unwrap();
+/// let tokens = [SmtToken::ParenOpen, SmtToken::Symbol(lambda.view()), SmtToken::ParenClose];
+/// writer.write(&tokens).unwrap();
+///
+/// // the reserved word `lambda` of SMT-LIB 2.7 cannot be written in 2.6
+/// writer.set_version(SmtVersion::V2_6);
+/// let reserved = SmtToken::Reserved(SmtReserved::General(SmtGeneralReserved::Lambda));
+/// let err = writer.write(&[SmtToken::ParenOpen, reserved]).unwrap_err();
+/// assert!(matches!(err.kind(), SmtWriteErrorKind::NotInVersion(_)));
+///
+/// // the tokens before the failing one have been written
+/// assert_eq!(writer.into_inner(), b"(|lambda|)(");
+/// ```
 #[derive(Debug)]
 pub struct SmtWriter<W: Write> {
     writer: W,
@@ -211,6 +289,9 @@ impl<W: Write> SmtWriter<W> {
     }
 
     /// Sets the version the writer writes the following tokens in.
+    ///
+    /// This is the only way the version in force can be changed:
+    /// the writer does not follow the version of [`SmtCursor`].
     pub fn set_version(&mut self, version: SmtVersion) {
         self.version = version;
     }
@@ -231,6 +312,14 @@ impl<W: Write> SmtWriter<W> {
     }
 
     /// Writes the tokens of the value.
+    ///
+    /// The value does not end an input: values written one after another are laid out as
+    /// consecutive tokens, e.g. `(a)(b)` in the [`Layout`](SmtWriteStyle::Layout) style. An
+    /// [`SmtToken::EndOfFile`] among the tokens ends an input.
+    ///
+    /// Returns an error if a reserved word is not reserved in the version written in, or if
+    /// writing to the underlying writer fails. The tokens before the failing one have been
+    /// written.
     pub fn write<V: SmtAppendTokens + ?Sized>(&mut self, value: &V) -> Result<(), SmtWriteError> {
         let kept = std::mem::replace(&mut self.cursor, SmtTokensCursor::new(self.version));
         let mut cursor = kept.recycle(self.version);
