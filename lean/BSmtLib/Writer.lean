@@ -17,60 +17,54 @@ open BSmtLib.Token
 
 namespace BSmtLib.Writer
 
-/-- How a writer lays out the tokens it writes. -/
+/--
+How tokens are laid out by the writer (single line, compact, or as handed over).
+
+Independently of the style chosen, new input started after EOF is separated by
+a line feed (LF). LF is not added if nothing has been written or the previous input
+ended with LF.
+-/
 inductive WriteStyle where
   /--
-  Writes tokens on a single line, as far as comments allow.
+  Writes tokens separated by spaces, without unnecessary line breaks.
 
-  Tokens are written with one space between two tokens, except after an
-  opening and before a closing parenthesis, top-level items included.
-  Whitespace is not written. A comment is written after a space, without
-  its line ending; a line feed ends it only if a token follows it.
+  Tokens are separated by spaces. As conventional, no space follows an opening or precedes
+  a closing parenthesis. Unnecessary whitespace is dropped. A comment is separated by a space
+  at its start and is terminated by LF only if another token follows it.
 
-  The writer can be handed tokens without their whitespace and comments;
-  it then writes them all on one line, with no line feed at the end.
-
-  At the end of an input, the writer writes nothing, and starts the next
-  input on a new line: it writes a line feed before the next token unless
-  it has written nothing yet. The output thus never ends with a line feed,
-  and can end with a comment without its line ending.
+  ```text
+  (assert x) (assert y) ; comment
+  (check-sat) junk ; no line ending at the end
+  ```
   -/
   | line
   /--
-  Writes tokens in the compact form.
+  Writes each top-level item and comment on a line of its own.
 
-  The canonical form of tokens is their text with one space between two
-  tokens, except after an opening and before a closing parenthesis, and
-  a line feed after each top-level item, that is, after the closing
-  parenthesis that closes every open one and after a token outside of
-  parentheses. The compact form is the canonical form with the comments:
-  each comment is written on a line of its own, ended by a line feed.
-  Whitespace is not written.
+  Within an item, tokens are separated as in `line`. A line feed follows each
+  top-level item.
+  Whitespace is fully reformatted, and each comment is written on a line of
+  its own, ended by a line feed.
 
-  The writer can be handed tokens without their whitespace and comments;
-  it then writes the canonical form.
+  ```text
+  (assert x)
+  (assert y)
+  ; comment
+  (check-sat)
+  junk
+  ; LF at the end
 
-  At the end of the input, the writer ends the line it is on and starts
-  anew, as if no parenthesis were open.
+  ```
   -/
   | compact
   /--
   Writes tokens in the layout they are handed over in.
 
-  Whitespace and comments are written as they are. A space is written
-  only between two tokens that would otherwise run together, and a line
-  feed only after a comment without a line ending that is followed by a
-  token. Tokens read from a script and written in the version they were
-  read in are written back as the script was, except that in SMT-LIB 2.0,
-  every backslash in a string is written escaped: `"a\q"` is written back
-  as `"a\\q"`, which is read as the same string.
-
-  The writer can be handed tokens without their whitespace and comments;
-  it then writes only the spaces that keep the tokens apart.
-
-  At the end of an input, the writer starts the next input on a new
-  line: it writes a line feed before the next token unless what it wrote
-  ends with one.
+  Whitespace and comments are written as they are. A space is added only between two tokens
+  that would otherwise run together, and a line feed only after a comment without a line
+  ending followed by a token. A script lexed and written in the version it was read in is
+  thus written back as it was, except that in SMT-LIB 2.0, every backslash in a string is
+  written escaped: `"a\q"` is written back as `"a\\q"`, which is read as the same string.
   -/
   | layout
   deriving BEq, Hashable, Repr
@@ -81,22 +75,25 @@ instance : Inhabited WriteStyle := ⟨.layout⟩
 /- LEAN: Rust's fields are private and read through the getters `version()` and `style()`. Here
 the constructor is private, so a configuration is made only by `new` and `withStyle`, and the
 fields are read-only: their projections are the getters. -/
-/-- How a writer writes: the version it writes in and its style. -/
+/-- Writer configuration (version in force and writing style). -/
 structure WriterConfig where
   private mk ::
-  /-- The version written in. -/
+  /-- Returns the version written in. -/
   version : Version
-  /-- The style written in. -/
+  /-- Returns the style written in. -/
   style : WriteStyle
   deriving BEq, Hashable, Repr
 
 namespace WriterConfig
 
-/-- Constructs the configuration of writing in the version, in the default style. -/
+/--
+Creates a writer configuration with the given version and the default style
+(`WriteStyle.layout`).
+-/
 def new (version : Version) : WriterConfig :=
   { version, style := default }
 
-/-- The configuration with the style replaced. -/
+/-- Returns the configuration with the style replaced. -/
 def withStyle (self : WriterConfig) (style : WriteStyle) : WriterConfig :=
   { self with style }
 
@@ -330,7 +327,26 @@ end BSmtLib.Writer
 
 namespace BSmtLib
 
-/-- Writes tokens as SMT-LIB text, in the version and the style of its configuration. -/
+/--
+Writes nodes or tokens as SMT-LIB text.
+
+The writer can write any value that implements `Token.AppendTokens` in its SMT-LIB
+text representation.
+
+The writer also implements `Token.Consume` and `Token.ConsumeFrom` for any `Token.Cursor`,
+so it can e.g. rewrite tokens from a lexer in a given `Writer.WriteStyle`.
+
+The writer writes to the underlying byte writer immediately, without a buffer of its own,
+and does not flush it. It writes under its SMT-LIB version in force, which is not affected
+by the cursor version. To change the version in force, `Writer.setVersion`
+can be used.
+
+On encountering an unquoted symbol that is a reserved word in the version in force,
+the writer recovers gracefully by quoting it. On encountering a reserved word which
+is not reserved in the version in force, the writer fails with
+`Writer.WriteErrorKind.notInVersion` as the reserved word cannot be represented
+in the version.
+-/
 structure Writer where
   private mk ::
   private writer : IO.FS.Stream
@@ -341,7 +357,7 @@ end BSmtLib
 
 namespace BSmtLib.Writer
 
-/-- Constructs a writer into `writer` that writes as configured. -/
+/-- Creates a writer into `writer` that writes as configured. -/
 def new (writer : IO.FS.Stream) (config : WriterConfig) : Writer :=
   let position : Internal.Position := match config.style with
     | .line => .line .start
@@ -349,7 +365,7 @@ def new (writer : IO.FS.Stream) (config : WriterConfig) : Writer :=
     | .compact => .compact { depth := 0, line := .start }
   ⟨writer, config.version, position⟩
 
-/-- The configuration the writer writes in. -/
+/-- Returns the configuration the writer writes in. -/
 def config (self : Writer) : WriterConfig :=
   let style : WriteStyle := match self.position with
     | .line _ => .line
@@ -357,15 +373,22 @@ def config (self : Writer) : WriterConfig :=
     | .compact _ => .compact
   (WriterConfig.new self.versionInForce).withStyle style
 
-/-- The version the writer writes in. -/
+/-- Returns the version the writer writes in. -/
 def version (self : Writer) : Version := self.versionInForce
 
-/-- Sets the version the writer writes the following tokens in. -/
+/--
+Sets the version the writer writes the following tokens in.
+
+This is the only way the version in force can be changed:
+the writer does not follow the version of `Token.Cursor`.
+-/
 def setVersion (self : Writer) (version : Version) : Writer :=
   { self with versionInForce := version }
 
+/-- Returns the underlying writer. -/
 def getRef (self : Writer) : IO.FS.Stream := self.writer
 
+/-- Destructures into the underlying writer. -/
 def intoInner (self : Writer) : IO.FS.Stream := self.writer
 
 /- LEAN: Rust's private `write_token`, which returns the writer as it is after the token. -/
@@ -397,7 +420,17 @@ termination_by (⟨cursor⟩ :
   Cursor.Internal.Draining (Z := TokensCursor) Cursor.Consumed Cursor.consumed_wf)
 decreasing_by assumption
 
-/-- Writes the tokens of the value. -/
+/--
+Writes the tokens of the value.
+
+The value does not end an input: values written one after another are laid out as
+consecutive tokens, e.g. `(a)(b)` in the `WriteStyle.layout` style. A
+`Token.endOfFile` among the tokens ends an input.
+
+Returns an error if a reserved word is not reserved in the version written in, or if
+writing to the underlying writer fails. The tokens before the failing one have been
+written.
+-/
 def write {n : Type → Type} [Monad n] [MonadLiftT IO n] {V : Type} [AppendTokens V]
     (self : Writer) (value : V) : n (Except WriteError Unit × Writer) :=
   writeTokens self (AppendTokens.appendTokens value (TokensCursor.new self.versionInForce))

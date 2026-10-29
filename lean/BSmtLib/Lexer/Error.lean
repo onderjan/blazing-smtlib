@@ -6,36 +6,55 @@ public section
 
 namespace BSmtLib.Lexer.Error
 
-/-- What the lexer expected, in `LexicalErrorKind.expected`. -/
+/--
+Character class expected by the lexer (fraction digit, hexadecimal digit, binary digit, or base).
+
+This is used in `LexicalErrorKind.expected`.
+-/
 inductive LexicalExpected where
-  /-- A digit of the fractional part of a decimal. -/
+  /-- Digit of the fractional part of a decimal, e.g. `5` in `0.5`. -/
   | fractionDigit
-  /-- A hexadecimal digit after `#x`. -/
+  /-- Hexadecimal digit after `#x`, e.g. `A` in `#xA04`. -/
   | hexadecimalDigit
-  /-- A binary digit after `#b`. -/
+  /-- Binary digit after `#b`, e.g. `1` in `#b10`. -/
   | binaryDigit
-  /-- The base of a number after `#`: `x` or `b`. -/
+  /-- Base of a number after `#` (`x` or `b`). -/
   | base
   deriving BEq, Hashable, Repr, Inhabited
 
+/-- Why the input is lexically malformed. -/
 inductive LexicalErrorKind where
+  /-- A byte that cannot start any token appears where a token starts, e.g. `\` or `{`. -/
   | unexpectedByte
-  /-- The item was expected here. -/
+  /-- A byte of the class was expected here, e.g. a fraction digit after `7.` in `7.y`. -/
   | expected (item : LexicalExpected)
+  /-- A string literal is not closed before the end of the input, e.g. `"abc`. -/
   | unclosedString
+  /-- A string literal contains a byte that is not allowed in it, e.g. a null byte. -/
   | forbiddenByteInString
-  /-- A colon is not followed by a keyword name. -/
+  /-- A colon is not followed by a keyword name, e.g. the `:` in `(get-info :)`. -/
   | emptyKeyword
+  /-- A quoted symbol contains a backslash, e.g. `|a\b|`. -/
   | backslashInQuotedSymbol
+  /-- A quoted symbol contains a byte that is not allowed in it, e.g. a null byte. -/
   | forbiddenByteInQuotedSymbol
+  /-- A quoted symbol is not closed before the end of the input, e.g. `|abc`. -/
   | unclosedQuotedSymbol
+  /--
+  A numeral, or the whole part of a decimal, starts with a zero followed by another digit, e.g.
+  `01` or `00.5`.
+  -/
   | numeralLeadingZero
+  /-- A token is followed by a byte that does not delimit it, e.g. `12abc` or `"s"t`. -/
   | missingDelimiter
-  /-- An entry was to be handed over after the value the consumer broke with. -/
+  /--
+  A token would be handed over after the consumer broke with a value, e.g. `y` when one term is
+  read from `x y`.
+  -/
   | unexpectedTrailingToken
   deriving BEq, Hashable, Repr, Inhabited
 
-/-- The reason why a lexer call failed: a lexical error or a consumer error. -/
+/-- Why lexing failed (lexical or consumer error). -/
 inductive LexerErrorKind (E : Type) where
   /-- The input is lexically malformed. -/
   | lexical (kind : LexicalErrorKind)
@@ -46,15 +65,20 @@ inductive LexerErrorKind (E : Type) where
 /- LEAN: the constructor is private, as Rust's fields are, and the lexers build an error with
 `LexerError.Internal.new`. The fields are readable as `error.kind`, `error.span` and
 `error.continuesFrom`, replacing the getters. -/
-/-- Error that caused lexing to stop. -/
+/--
+Error that forced lexing to stop.
+
+Its `ToString` gives the line and the column counted from one, while `Span.Location` counts
+them from zero.
+-/
 structure LexerError (E : Type) where
   private mk ::
-  /-- The reason why the lexer call failed: a lexical error or a consumer error. -/
+  /-- Returns the kind of the error. -/
   kind : LexerErrorKind E
-  /-- Location where the error occurred. -/
+  /-- Returns the span where the error occurred. -/
   span : Span
   /--
-  Where the rest of the input is to be fed from if the lexer continues (EXPERIMENTAL).
+  Returns where the rest of the input is to be fed from if the lexer continues (EXPERIMENTAL).
 
   If present, the lexer is recovering: it expects the input from this
   location on, and the end of the input once none is left.
@@ -123,7 +147,7 @@ def LexicalErrorKind.Internal.locationIn (kind : LexicalErrorKind) (span : Span)
   | _ => span.start
 
 /--
-The most useful location for deciphering the error.
+Returns the most useful location for deciphering the error.
 
 Guaranteed to be within the span.
 -/
@@ -159,18 +183,14 @@ def LexerError.location {E : Type} (self : LexerError E) : Span.Location :=
     | .lexical kind => toString kind
     | .consumer error => toString error
 
-/-- The cause, at the line and the column of `location`, counted from one. -/
 @[no_expose] instance {E : Type} [ToString E] : ToString (LexerError E) where
   toString self :=
     let location := self.location
     s!"{self.kind} at line {location.line + 1}, column {location.column + 1}"
 
-/--
-The reason why lexing from a buffered reader or a file failed: an I/O error, a lexical error or
-a consumer error.
--/
+/-- Why lexing from a buffered reader or a file failed (I/O, lexical, or consumer error). -/
 inductive LexerReadErrorKind (E : Type) where
-  /-- Reading from the file or the buffered reader failed. -/
+  /-- Opening or reading the file, or reading from the buffered reader, failed. -/
   | io (error : IO.Error)
   /-- The input is lexically malformed. -/
   | lexical (kind : LexicalErrorKind)
@@ -191,13 +211,18 @@ message. -/
 
 /- LEAN: the constructor is private, as Rust's fields are. The fields are readable as
 `error.kind` and `error.span`, replacing the getters `kind`, `into_kind` and `span`. -/
-/-- Error that ended lexing the input from a buffered reader or a file. -/
+/--
+Error that forced lexing from a buffered reader or a file to stop.
+
+Its `ToString` gives the line and the column counted from one, while `Span.Location` counts
+them from zero.
+-/
 structure LexerReadError (E : Type) where
   private mk ::
-  /-- The reason why lexing failed. -/
+  /-- Returns the kind of the error. -/
   kind : LexerReadErrorKind E
   /--
-  Span where the error occurred.
+  Returns the span where the error occurred.
 
   For I/O errors, the span is empty, at the position where reading failed.
   -/
@@ -212,7 +237,7 @@ def LexerReadError.Internal.new {E : Type} (kind : LexerReadErrorKind E) (span :
   { kind, span }
 
 /--
-The most useful location for deciphering the error.
+Returns the most useful location for deciphering the error.
 
 Guaranteed to be within the span.
 -/
@@ -236,7 +261,6 @@ def LexerReadError.ofLex {E : Type} (error : LexerError E) : LexerReadError E :=
     | .lexical kind => toString kind
     | .consumer error => toString error
 
-/-- The cause, at the line and the column of `location`, counted from one. -/
 @[no_expose] instance {E : Type} [ToString E] : ToString (LexerReadError E) where
   toString self :=
     let location := self.location

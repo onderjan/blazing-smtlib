@@ -2613,8 +2613,8 @@ info: 'BSmtLib.Facts.Parser.qualifiedIdent_parser_parses' depends on axioms: [pr
 #print axioms qualifiedIdent_parser_parses
 
 /--
-After a keyword, `(` and the tokens of valid items and of open lists of s-expressions, the parser
-of one attribute rejects a token that starts no s-expression and does not end a list. It rejects
+After a keyword, `(` and the tokens of valid items and of open lists of S-expressions, the parser
+of one attribute rejects a token that starts no S-expression and does not end a list. It rejects
 it with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedAttribute_parser_rejects_sExpr {version : Version}
@@ -2646,8 +2646,8 @@ info: 'BSmtLib.Facts.Parser.closedAttribute_parser_rejects_sExpr' depends on axi
 #print axioms closedAttribute_parser_rejects_sExpr
 
 /--
-After a keyword, `(` and the tokens of valid items and of open lists of s-expressions, the parser
-of attributes up to a `)` rejects a token that starts no s-expression and does not end a list. It
+After a keyword, `(` and the tokens of valid items and of open lists of S-expressions, the parser
+of attributes up to a `)` rejects a token that starts no S-expression and does not end a list. It
 rejects it with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedMultipleAttribute_parser_rejects_sExpr {version : Version}

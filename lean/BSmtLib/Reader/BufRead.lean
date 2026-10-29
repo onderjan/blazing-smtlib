@@ -14,7 +14,7 @@ namespace BSmtLib.Reader
 `&mut self` return the updated reader; an I/O error is returned rather than thrown, as Rust
 returns it. -/
 /--
-A source of bytes read through a buffer, in the monad `n`.
+Source of bytes read through a buffer, in the monad `n`.
 
 `fillBuf` returns the bytes buffered and not consumed yet, filling the buffer from the source
 first if none are left; it returns no bytes at the end of the input. `consume` marks the given
@@ -35,14 +35,13 @@ class BufRead (B : Type) (n : Type → Type) where
   consume : B → Nat → B
 
 /- LEAN: Rust's `impl BufRead for &[u8]`. -/
-/-- Bytes in memory read as a whole: the buffer is the bytes not consumed yet. -/
 instance {n : Type → Type} [Monad n] : BufRead ByteSlice n where
   fillBuf slice := pure (.ok (slice, slice))
   consume slice amount := slice.slice amount
 
 /- LEAN: Rust's `std::io::BufReader`, over a stream, which Lean's file handles and in-memory
 buffers both give (`IO.FS.Stream.ofHandle`, `IO.FS.Stream.ofBuffer`). -/
-/-- A stream read through a buffer of a fixed capacity. -/
+/-- Stream read through a buffer of a fixed capacity. -/
 structure BufReader where
   private mk ::
   private stream : IO.FS.Stream
@@ -52,8 +51,8 @@ structure BufReader where
   /-- The number of bytes of the buffer consumed. -/
   private position : Nat
 
-/-- Creates a reader of `stream` through a buffer of `capacity` bytes. -/
 /- LEAN: Rust's `BufReader::with_capacity`. -/
+/-- Creates a reader of `stream` through a buffer of `capacity` bytes. -/
 def BufReader.new (stream : IO.FS.Stream) (capacity : Nat) : BufReader :=
   { stream, capacity, buffer := ByteArray.empty, position := 0 }
 

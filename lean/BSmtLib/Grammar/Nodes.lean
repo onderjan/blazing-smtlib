@@ -8,11 +8,41 @@ public import BSmtLib.Token.AppendTokens
 public section
 
 /-!
-# What the parser hands over
+SMT-LIB grammar: identifiers, sorts, terms, attributes etc.
 
-The data that the parser hands to its handler: names and constants as views of the bytes they
-were written with, the nodes of terms, s-expressions and attribute values with their parts
-already handled, and the parts of commands.
+SMT-LIB grammar encodes an abstract syntax tree. For example, the input `(- (+ a b) c)` read as a
+term has the meaning of a rooted tree of subterms.
+
+```text
+a   b   c
+ \ /   /
+  +   /
+   \ /
+    -
+```
+
+As **BSmtLib** is a streaming library, it never constructs the tree. Instead, parsers call
+handlers that implement `Handler` in post-order traversal through the tree. For the given example,
+`TermParser` calls `Handler.handleTerm` multiple times with the following arguments:
+1. `Term.qualifiedIdent` for `a`.
+2. `Term.qualifiedIdent` for `b`.
+3. `Term.application` with the function `+` and the 2 `Handler.Term` results returned for `a`
+   and `b`.
+4. `Term.qualifiedIdent` for `c`.
+5. `Term.application` with the function `-` and the 2 `Handler.Term` results returned for
+   `(+ a b)` and `c`.
+
+Other grammar nodes such as `let` and quantifier binders are handled through `Handler` methods of
+their own.
+
+The handler could construct the abstract syntax tree from the traversal, but does not have to: it
+can act on the terms as they come, improving speed and lowering memory consumption.
+
+The types in this module and in `Grammar.Multiple` are views into the grammar nodes seen by the
+handler (the node has information only about itself and the result values for its already
+handled children) and their owned versions. They take the types of the handled children (sorts,
+terms, and S-expressions) as parameters, which a handler instantiates with its own `Sort`, `Term`
+and `SExpr`.
 -/
 
 /- LEAN: Rust hands borrowed views (`SmtSymbol<'a>`) over and keeps owned twins
@@ -24,21 +54,28 @@ namespace BSmtLib.Grammar.Nodes
 open BSmtLib.Lexicon.Value (SymbolBuf Symbol NumeralBuf Numeral DecimalBuf Decimal HexDigitsBuf
   HexDigits BinDigitsBuf BinDigits StringContentBuf StringContent KeywordBuf Keyword)
 
+/-- Owned index of an identifier (numeral or symbol). -/
 inductive IndexBuf where
+  /-- Numeral, e.g. `32` in `(_ BitVec 32)`. -/
   | numeral (digits : NumeralBuf)
+  /-- Symbol, e.g. `up` in `(_ move up)`. -/
   | symbol (symbol : SymbolBuf)
   deriving Repr
 
-/-- An index of an indexed identifier. -/
+/-- View of an index of an identifier (numeral or symbol). -/
 inductive Index where
+  /-- Numeral, e.g. `32` in `(_ BitVec 32)`. -/
   | numeral (digits : Numeral)
+  /-- Symbol, e.g. `up` in `(_ move up)`. -/
   | symbol (symbol : Symbol)
   deriving Repr
 
+/-- Converts into `IndexBuf`. -/
 def Index.intoOwned : Index → IndexBuf
   | .numeral digits => .numeral digits.intoOwned
   | .symbol name => .symbol name.intoOwned
 
+/-- Views as `Index`. -/
 def IndexBuf.view : IndexBuf → Index
   | .numeral digits => .numeral digits.view
   | .symbol name => .symbol name.view
@@ -50,29 +87,36 @@ def Index.Internal.copy : Index → Index
   | .numeral digits => .numeral digits.intoOwned.view
   | .symbol name => .symbol name.intoOwned.view
 
-/-- Owned indices of an identifier, from which `Ident.indices` is viewed. -/
 /- LEAN: Rust's `SmtIndicesBuf`, from which `SmtIndices` is viewed; Lean's indices are an
 `Array` of the views (see `Ident`), which `view` gives. Each index is a view of a copy of its
 bytes that the buffer made, so the view needs no copy. -/
+/-- Owned indices of an identifier. -/
 structure IndicesBuf where
   private ofArray ::
   private entries : Array Index
 
 namespace IndicesBuf
 
+/-- Creates empty indices. -/
 def new : IndicesBuf := ⟨#[]⟩
 
+/-- Copies the index after the others. -/
 def push (self : IndicesBuf) (index : Index) : IndicesBuf :=
   ⟨self.entries.push (Index.Internal.copy index)⟩
 
+/-- Removes all indices. -/
 def clear (_ : IndicesBuf) : IndicesBuf := new
 
+/-- Views as an array of `Index`, the indices of an `Ident`. -/
 def view (self : IndicesBuf) : Array Index := self.entries
 
+/-- Returns the number of indices. -/
 def len (self : IndicesBuf) : Nat := self.entries.size
 
+/-- Returns `true` if there are no indices. -/
 def isEmpty (self : IndicesBuf) : Bool := self.entries.isEmpty
 
+/-- Returns the index at the position, or `none` if it is out of bounds. -/
 def get? (self : IndicesBuf) (index : Nat) : Option Index := self.entries[index]?
 
 @[no_expose] instance : Inhabited IndicesBuf := ⟨new⟩
@@ -86,34 +130,44 @@ def get? (self : IndicesBuf) (index : Nat) : Option Index := self.entries[index]
 
 end IndicesBuf
 
+/-- Owned identifier. -/
 structure IdentBuf where
+  /-- Name of the identifier. -/
   name : SymbolBuf
+  /-- Indices of the identifier. -/
   indices : IndicesBuf
   deriving Repr
 
-/-- An identifier: a symbol, with its indices if it is indexed. -/
 /- LEAN: Rust's `indices` are `SmtIndices`, a container of the views; here an array. -/
+/-- View of an identifier. -/
 structure Ident where
+  /-- Name of the identifier. -/
   name : Symbol
+  /-- Indices of the identifier. -/
   indices : Array Index
   deriving Repr
 
 namespace IdentBuf
 
-/-- An identifier that is a symbol alone, not indexed. -/
+/-- Creates a simple identifier: a name with no indices. -/
 def newSimple (name : SymbolBuf) : IdentBuf :=
   { name, indices := .new }
 
+/-- Views as `Ident`. -/
 def view (self : IdentBuf) : Ident :=
   { name := self.name.view, indices := self.indices.view }
 
 end IdentBuf
 
+/-- Converts into `IdentBuf`. -/
 def Ident.intoOwned (self : Ident) : IdentBuf :=
   { name := self.name.intoOwned, indices := self.indices.foldl IndicesBuf.push .new }
 
+/-- Owned qualified identifier. -/
 structure QualifiedIdentBuf (HandledSort : Type) where
+  /-- Identifier. -/
   ident : IdentBuf
+  /-- Sort that qualifies the identifier, if any. -/
   sort : Option HandledSort
   deriving Repr
 
@@ -121,58 +175,74 @@ namespace QualifiedIdentBuf
 
 variable {HandledSort : Type}
 
-/-- A qualified identifier that is a symbol alone, neither indexed nor qualified. -/
+/-- Creates a qualified identifier from a simple identifier, without a sort. -/
 def newSimple (name : SymbolBuf) : QualifiedIdentBuf HandledSort :=
   { ident := .newSimple name, sort := none }
 
-/-- An identifier, not qualified. -/
+/-- Creates a qualified identifier without a sort. -/
 def newUnqualified (ident : IdentBuf) : QualifiedIdentBuf HandledSort :=
   { ident, sort := none }
 
-/-- An identifier qualified with the sort. -/
+/-- Creates an identifier qualified by the sort. -/
 def newQualified (ident : IdentBuf) (sort : HandledSort) : QualifiedIdentBuf HandledSort :=
   { ident, sort := some sort }
 
 end QualifiedIdentBuf
 
-/-- A qualified identifier: an identifier, with the sort it is qualified with by `as`, if it is
-qualified. -/
+/-- View of a qualified identifier. -/
 structure QualifiedIdent (HandledSort : Type) where
+  /-- Identifier. -/
   ident : Ident
+  /-- Sort that qualifies the identifier, if any. -/
   sort : Option HandledSort
   deriving Repr
 
+/-- Converts into `QualifiedIdentBuf`. -/
 def QualifiedIdent.intoOwned {HandledSort : Type} (self : QualifiedIdent HandledSort) :
     QualifiedIdentBuf HandledSort :=
   { ident := self.ident.intoOwned, sort := self.sort }
 
-/-- Owned sort. -/
 /- LEAN: parameterised by the handled sorts, as `QualifiedIdentBuf` is. A sort is handed over
 flat, as its identifier and its argument sorts, so there is no view of a sort to convert from or
 to (Rust's `SmtSort::into_owned` and `SmtSortBuf::view_mut`); the fields are built from the
 parts handed over. -/
+/-- Owned sort. -/
 structure SortBuf (HandledSort : Type) where
+  /-- Identifier of the sort. -/
   ident : IdentBuf
+  /-- Arguments of the sort. -/
   args : Array HandledSort
   deriving Repr
 
+/-- Owned special constant (numeral, decimal, hexadecimal, binary, or string). -/
 inductive SpecialConstantBuf where
+  /-- Numeral, e.g. `0` or `42`. -/
   | numeral (digits : NumeralBuf)
+  /-- Decimal, e.g. `0.5` or `3.14`. -/
   | decimal (text : DecimalBuf)
+  /-- Hexadecimal, e.g. `#xA04`. -/
   | hexadecimal (digits : HexDigitsBuf)
+  /-- Binary, e.g. `#b0101`. -/
   | binary (digits : BinDigitsBuf)
+  /-- String literal, e.g. `"hello"` or `""`. -/
   | string (content : StringContentBuf)
   deriving BEq, Hashable, Repr
 
-/-- A constant, as a view of its token's content. -/
+/-- View of a special constant (numeral, decimal, hexadecimal, binary, or string). -/
 inductive SpecialConstant where
+  /-- Numeral, e.g. `0` or `42`. -/
   | numeral (digits : Numeral)
+  /-- Decimal, e.g. `0.5` or `3.14`. -/
   | decimal (text : Decimal)
+  /-- Hexadecimal, e.g. `#xA04`. -/
   | hexadecimal (digits : HexDigits)
+  /-- Binary, e.g. `#b0101`. -/
   | binary (digits : BinDigits)
+  /-- String literal, e.g. `"hello"` or `""`. -/
   | string (content : StringContent)
   deriving BEq, Hashable, Repr
 
+/-- Converts into `SpecialConstantBuf`. -/
 def SpecialConstant.intoOwned : SpecialConstant → SpecialConstantBuf
   | .numeral digits => .numeral digits.intoOwned
   | .decimal text => .decimal text.intoOwned
@@ -180,6 +250,7 @@ def SpecialConstant.intoOwned : SpecialConstant → SpecialConstantBuf
   | .binary digits => .binary digits.intoOwned
   | .string content => .string content.intoOwned
 
+/-- Views as `SpecialConstant`. -/
 def SpecialConstantBuf.view : SpecialConstantBuf → SpecialConstant
   | .numeral digits => .numeral digits.view
   | .decimal text => .decimal text.view
@@ -187,10 +258,10 @@ def SpecialConstantBuf.view : SpecialConstantBuf → SpecialConstant
   | .binary digits => .binary digits.view
   | .string content => .string content.view
 
-/-- Simple match pattern: a symbol or a wildcard. -/
+/-- Owned simple match pattern (symbol or wildcard). -/
 inductive SimplePatternBuf where
   /--
-  A symbol as a pattern.
+  Symbol as a pattern, e.g. `x` or `nil`.
 
   In the match pattern position, the symbol should be
   either a variable or a nullary constructor, and
@@ -199,20 +270,44 @@ inductive SimplePatternBuf where
   it should be a variable.
   -/
   | symbol (symbol : SymbolBuf)
-  /-- A wildcard (reserved word underscore `_`) as a pattern. -/
+  /--
+  Wildcard as a pattern.
+
+  The wildcard is the reserved word `_`.
+
+  The wildcard was introduced in SMT-LIB 2.7.
+  -/
   | wildcard
   deriving Repr
 
-/-- A symbol, or the wildcard `_`, in a pattern. -/
+/-- View of a simple match pattern (symbol or wildcard). -/
 inductive SimplePattern where
+  /--
+  Symbol as a pattern, e.g. `x` or `nil`.
+
+  In the match pattern position, the symbol should be
+  either a variable or a nullary constructor, and
+  it is not possible to determine syntactically which one it is.
+  In the constructor application argument position,
+  it should be a variable.
+  -/
   | symbol (symbol : Symbol)
+  /--
+  Wildcard as a pattern.
+
+  The wildcard is the reserved word `_`.
+
+  The wildcard was introduced in SMT-LIB 2.7.
+  -/
   | wildcard
   deriving Repr
 
+/-- Converts into `SimplePatternBuf`. -/
 def SimplePattern.intoOwned : SimplePattern → SimplePatternBuf
   | .symbol name => .symbol name.intoOwned
   | .wildcard => .wildcard
 
+/-- Views as `SimplePattern`. -/
 def SimplePatternBuf.view : SimplePatternBuf → SimplePattern
   | .symbol name => .symbol name.view
   | .wildcard => .wildcard
@@ -224,30 +319,36 @@ def SimplePattern.Internal.copy : SimplePattern → SimplePattern
   | .symbol name => .symbol name.intoOwned.view
   | .wildcard => .wildcard
 
-/-- Owned arguments of a constructor pattern, from which the `args` of `PatternApplication` are
-viewed. -/
 /- LEAN: Rust's `SmtSimplePatternsBuf`, from which `SmtSimplePatterns` is viewed; Lean's
 arguments are an `Array` of the views (see `PatternApplication`), which `view` gives. Each
 pattern is a view of a copy of its bytes that the buffer made, so the view needs no copy. -/
+/-- Owned arguments of a constructor pattern. -/
 structure SimplePatternsBuf where
   private ofArray ::
   private entries : Array SimplePattern
 
 namespace SimplePatternsBuf
 
+/-- Creates empty arguments. -/
 def new : SimplePatternsBuf := ⟨#[]⟩
 
+/-- Copies the argument after the others. -/
 def push (self : SimplePatternsBuf) (pattern : SimplePattern) : SimplePatternsBuf :=
   ⟨self.entries.push (SimplePattern.Internal.copy pattern)⟩
 
+/-- Removes all arguments. -/
 def clear (_ : SimplePatternsBuf) : SimplePatternsBuf := new
 
+/-- Views as an array of `SimplePattern`, the arguments of a `PatternApplication`. -/
 def view (self : SimplePatternsBuf) : Array SimplePattern := self.entries
 
+/-- Returns the number of arguments. -/
 def len (self : SimplePatternsBuf) : Nat := self.entries.size
 
+/-- Returns `true` if there are no arguments. -/
 def isEmpty (self : SimplePatternsBuf) : Bool := self.entries.isEmpty
 
+/-- Returns the argument at the position, or `none` if it is out of bounds. -/
 def get? (self : SimplePatternsBuf) (index : Nat) : Option SimplePattern := self.entries[index]?
 
 /-- The arguments viewed are as many as the buffer holds. -/
@@ -275,34 +376,41 @@ theorem Internal.len_ofViews (patterns : Array SimplePattern) :
 
 end SimplePatternsBuf
 
-/-- An application or a constructor pattern was to be built without arguments. -/
+/-- Error constructing an application or a constructor pattern without arguments. -/
 structure EmptyArgumentsError where
   deriving BEq, Hashable, Repr
 
 @[no_expose] instance : ToString EmptyArgumentsError :=
   ⟨fun _ => "no arguments provided where at least one is required"⟩
 
-/--
-A constructor applied to at least one variable or wildcard, as a match pattern to be handled.
--/
 /- LEAN: Rust's fields are private, so that the arguments cannot be empty, and read through the
 getters `constructor` and `args`; here the fields are public and the proof `nonempty` guards
 the arguments. Rust's `args` are `SmtSimplePatterns`, a container of the views; here an
 array. -/
+/--
+View of a constructor pattern.
+
+It is a constructor applied to at least one variable or wildcard.
+-/
 structure PatternApplication where
+  /-- Applied constructor. -/
   constructor : Symbol
+  /-- Arguments of the pattern. -/
   args : Array SimplePattern
   /-- There is at least one argument. -/
   nonempty : 0 < args.size
   deriving Repr
 
-/--
-A constructor applied to at least one variable or wildcard, from which `PatternApplication` is
-viewed.
--/
 /- LEAN: the fields are public, as `PatternApplication`'s are, with the proof `nonempty`. -/
+/--
+Owned constructor pattern.
+
+It is a constructor applied to at least one variable or wildcard.
+-/
 structure PatternApplicationBuf where
+  /-- Applied constructor. -/
   constructor : SymbolBuf
+  /-- Arguments of the pattern. -/
   args : SimplePatternsBuf
   /-- There is at least one argument. -/
   nonempty : 0 < args.len
@@ -314,11 +422,12 @@ namespace PatternApplication
 theorem Internal.size_pos {args : Array SimplePattern} (h : ¬args.isEmpty) : 0 < args.size :=
   Nat.pos_of_ne_zero fun hz => h (Array.isEmpty_iff_size_eq_zero.mpr hz)
 
-/-- The constructor applied to the arguments; an error if there are none. -/
+/-- Creates a pattern that applies `constructor` to `args` if `args` is nonempty. -/
 def new (constructor : Symbol) (args : Array SimplePattern) :
     Except EmptyArgumentsError PatternApplication :=
   if h : 0 < args.size then .ok ⟨constructor, args, h⟩ else .error {}
 
+/-- Converts into `PatternApplicationBuf`. -/
 def intoOwned (self : PatternApplication) : PatternApplicationBuf :=
   { constructor := self.constructor.intoOwned
     args := SimplePatternsBuf.Internal.ofViews self.args
@@ -328,40 +437,44 @@ end PatternApplication
 
 namespace PatternApplicationBuf
 
-/-- The constructor applied to the arguments; an error if there are none. -/
+/-- Creates a pattern that applies `constructor` to `args` if `args` is nonempty. -/
 def new (constructor : SymbolBuf) (args : SimplePatternsBuf) :
     Except EmptyArgumentsError PatternApplicationBuf :=
   if h : 0 < args.len then .ok ⟨constructor, args, h⟩ else .error {}
 
+/-- Destructures into the constructor and the arguments. -/
 def intoParts (self : PatternApplicationBuf) : SymbolBuf × SimplePatternsBuf :=
   (self.constructor, self.args)
 
+/-- Views as `PatternApplication`. -/
 def view (self : PatternApplicationBuf) : PatternApplication :=
   { constructor := self.constructor.view, args := self.args.view,
     nonempty := by rw [SimplePatternsBuf.size_view]; exact self.nonempty }
 
 end PatternApplicationBuf
 
-/-- Match pattern: a symbol, a wildcard, or a constructor application. -/
+/-- Owned match pattern (simple or constructor pattern). -/
 inductive PatternBuf where
-  /-- A simple match pattern, either a symbol or a wildcard. -/
+  /-- Simple match pattern, e.g. `x`, `nil` or `_`. -/
   | simple (pattern : SimplePatternBuf)
-  /-- A constructor applied to at least one variable or wildcard. -/
+  /-- Constructor pattern, e.g. `(cons h t)`. -/
   | application (application : PatternApplicationBuf)
   deriving Repr
 
-/-- The pattern of a case of `match`. -/
+/-- View of a match pattern (simple or constructor pattern). -/
 inductive Pattern where
-  /-- A simple match pattern, either a symbol or a wildcard. -/
+  /-- Simple match pattern, e.g. `x`, `nil` or `_`. -/
   | simple (pattern : SimplePattern)
-  /-- A constructor applied to at least one variable or wildcard. -/
+  /-- Constructor pattern, e.g. `(cons h t)`. -/
   | application (application : PatternApplication)
   deriving Repr
 
+/-- Converts into `PatternBuf`. -/
 def Pattern.intoOwned : Pattern → PatternBuf
   | .simple pattern => .simple pattern.intoOwned
   | .application app => .application app.intoOwned
 
+/-- Views as `Pattern`. -/
 def PatternBuf.view : PatternBuf → Pattern
   | .simple pattern => .simple pattern.view
   | .application app => .application app.view
@@ -376,26 +489,33 @@ def Pattern.Internal.copy : Pattern → Pattern
         args := app.args.map SimplePattern.Internal.copy
         nonempty := by rw [Array.size_map]; exact app.nonempty }
 
-/-- The two quantifiers. -/
+/-- Kind of a quantifier (existential or universal). -/
 inductive QuantifierKind where
+  /-- Existential quantifier (`exists`). -/
   | «exists»
+  /-- Universal quantifier (`forall`). -/
   | «forall»
   deriving BEq, Hashable, Repr
 
-/-- A term to be handled. -/
 /- LEAN: Rust's variants hold the structures `SmtQualifiedIdent { ident, sort }` and
 `SmtApplication { function, args }`; here their fields are the constructors' own, as Lean does
 not unbox a structure of several fields, so a nested structure would be allocated for every
 term handed over. -/
+/-- View of a term (special constant, qualified identifier, or application). -/
 inductive Term (HandledSort HandledTerm : Type) where
+  /-- Special constant, e.g. `42` or `"hello"`. -/
   | specialConstant (constant : SpecialConstant)
-  /-- A qualified identifier: Rust's `SmtQualifiedIdent { ident, sort }`, its fields flat. -/
+  /--
+  Qualified identifier, e.g. `x`, `(_ bv0 32)` or `(as nil (List Int))`.
+
+  The identifier and the sort that qualifies it, if any, are the fields of the variant.
+  -/
   | qualifiedIdent (ident : Ident) (sort : Option HandledSort)
   /--
-  A term that is an application: Rust's `SmtApplication { function, args }`, its fields flat,
-  the qualified identifier `function` as `function` and `sort`.
+  Application, e.g. `(+ x 1)`.
 
-  It is guaranteed that `args` are nonempty.
+  The applied function is the qualified identifier given by `function` and `sort`.
+  The arguments are never empty.
   -/
   | application (function : Ident) (sort : Option HandledSort) (args : Multiple HandledTerm)
       (nonempty : 0 < args.len)
@@ -403,29 +523,35 @@ inductive Term (HandledSort HandledTerm : Type) where
 
 /- LEAN: Rust's `SmtApplication::new`, which builds the application that `SmtTerm::Application`
 holds; here the term, as the application is handed over flat. -/
-/-- The term that applies the function to the arguments; an error if there are none. -/
+/-- Creates an application of `function` to `args` if `args` is nonempty. -/
 def Term.newApplication {HandledSort HandledTerm : Type} (function : Ident)
     (sort : Option HandledSort) (args : Multiple HandledTerm) :
     Except EmptyArgumentsError (Term HandledSort HandledTerm) :=
   if h : 0 < args.len then .ok (.application function sort args h) else .error {}
 
-/-- Owned term (special constant, qualified identifier, or application). -/
 /- LEAN: Rust's variants hold `SmtQualifiedIdentBuf` and `SmtApplicationBuf`; here their fields
 are the constructors' own, as those of `Term` are. -/
+/-- Owned term (special constant, qualified identifier, or application). -/
 inductive TermBuf (HandledSort HandledTerm : Type) where
+  /-- Special constant, e.g. `42` or `"hello"`. -/
   | specialConstant (constant : SpecialConstantBuf)
-  /-- A qualified identifier: Rust's `SmtQualifiedIdentBuf { ident, sort }`, its fields flat. -/
+  /--
+  Qualified identifier, e.g. `x`, `(_ bv0 32)` or `(as nil (List Int))`.
+
+  The identifier and the sort that qualifies it, if any, are the fields of the variant.
+  -/
   | qualifiedIdent (ident : IdentBuf) (sort : Option HandledSort)
   /--
-  A term that is an application: Rust's `SmtApplicationBuf { function, args }`, its fields flat,
-  the qualified identifier `function` as `function` and `sort`.
+  Application, e.g. `(+ x 1)`.
 
-  It is guaranteed that `args` are nonempty.
+  The applied function is the qualified identifier given by `function` and `sort`.
+  The arguments are never empty.
   -/
   | application (function : IdentBuf) (sort : Option HandledSort) (args : Array HandledTerm)
       (nonempty : 0 < args.size)
   deriving Repr
 
+/-- Converts into `TermBuf`. -/
 def Term.intoOwned {HandledSort HandledTerm : Type} :
     Term HandledSort HandledTerm → TermBuf HandledSort HandledTerm
   | .specialConstant constant => .specialConstant constant.intoOwned
@@ -436,28 +562,36 @@ def Term.intoOwned {HandledSort HandledTerm : Type} :
 
 /- LEAN: Rust's `SmtApplicationBuf::new`, which builds the application that
 `SmtTermBuf::Application` holds; here the term, as the application is held flat. -/
-/-- The term that applies the function to the arguments; an error if there are none. -/
+/-- Creates an application of `function` to `args` if `args` is nonempty. -/
 def TermBuf.newApplication {HandledSort HandledTerm : Type} (function : IdentBuf)
     (sort : Option HandledSort) (args : Array HandledTerm) :
     Except EmptyArgumentsError (TermBuf HandledSort HandledTerm) :=
   if h : 0 < args.size then .ok (.application function sort args h) else .error {}
 
-/-- An s-expression as the handler receives it, its items already handled. -/
+/--
+View of an S-expression (special constant, symbol, reserved word, keyword, or a list of
+S-expressions).
+-/
 inductive SExpr (HandledSExpr : Type) where
+  /-- Special constant, e.g. `42` or `"hello"`. -/
   | specialConstant (constant : SpecialConstant)
+  /-- Symbol, e.g. `x` or `|a b|`. -/
   | symbol (symbol : Symbol)
+  /-- Reserved word, e.g. `let` or `_`. -/
   | reserved (word : Lexicon.Reserved)
+  /-- Keyword, e.g. `:named`. -/
   | keyword (name : Keyword)
+  /-- List of S-expressions, e.g. `(a (b 1))`. -/
   | sExprs (items : Multiple HandledSExpr)
   deriving Repr
 
-/--
-The value of an attribute as the handler receives it, the s-expressions of a list value already
-handled. A list value is handed over as its items.
--/
+/-- View of an attribute value (special constant, symbol, or a list of S-expressions). -/
 inductive AttributeValue (HandledSExpr : Type) where
+  /-- Special constant, e.g. `2.6` in `:smt-lib-version 2.6`. -/
   | specialConstant (constant : SpecialConstant)
+  /-- Symbol, e.g. `sat` in `:status sat`. -/
   | symbol (symbol : Symbol)
+  /-- List of S-expressions, e.g. `(a 1)` in `:my-attribute (a 1)`. -/
   | sExprs (items : Multiple HandledSExpr)
   deriving Repr
 
@@ -466,13 +600,19 @@ Owned S-expression (special constant, symbol, reserved word, keyword, or a list 
 S-expressions).
 -/
 inductive SExprBuf (HandledSExpr : Type) where
+  /-- Special constant, e.g. `42` or `"hello"`. -/
   | specialConstant (constant : SpecialConstantBuf)
+  /-- Symbol, e.g. `x` or `|a b|`. -/
   | symbol (symbol : SymbolBuf)
+  /-- Reserved word, e.g. `let` or `_`. -/
   | reserved (word : Lexicon.Reserved)
+  /-- Keyword, e.g. `:named`. -/
   | keyword (name : KeywordBuf)
+  /-- List of S-expressions, e.g. `(a (b 1))`. -/
   | sExprs (items : Array HandledSExpr)
   deriving Repr
 
+/-- Converts into `SExprBuf`. -/
 def SExpr.intoOwned {HandledSExpr : Type} : SExpr HandledSExpr → SExprBuf HandledSExpr
   | .specialConstant constant => .specialConstant constant.intoOwned
   | .symbol name => .symbol name.intoOwned
@@ -480,6 +620,7 @@ def SExpr.intoOwned {HandledSExpr : Type} : SExpr HandledSExpr → SExprBuf Hand
   | .keyword name => .keyword name.intoOwned
   | .sExprs items => .sExprs items.asSlice
 
+/-- Views as `SExpr`. -/
 def SExprBuf.viewMut {HandledSExpr : Type} : SExprBuf HandledSExpr → SExpr HandledSExpr
   | .specialConstant constant => .specialConstant constant.view
   | .symbol name => .symbol name.view
@@ -489,17 +630,22 @@ def SExprBuf.viewMut {HandledSExpr : Type} : SExprBuf HandledSExpr → SExpr Han
 
 /-- Owned attribute value (special constant, symbol, or a list of S-expressions). -/
 inductive AttributeValueBuf (HandledSExpr : Type) where
+  /-- Special constant, e.g. `2.6` in `:smt-lib-version 2.6`. -/
   | specialConstant (constant : SpecialConstantBuf)
+  /-- Symbol, e.g. `sat` in `:status sat`. -/
   | symbol (symbol : SymbolBuf)
+  /-- List of S-expressions, e.g. `(a 1)` in `:my-attribute (a 1)`. -/
   | sExprs (items : Array HandledSExpr)
   deriving Repr
 
+/-- Converts into `AttributeValueBuf`. -/
 def AttributeValue.intoOwned {HandledSExpr : Type} :
     AttributeValue HandledSExpr → AttributeValueBuf HandledSExpr
   | .specialConstant constant => .specialConstant constant.intoOwned
   | .symbol name => .symbol name.intoOwned
   | .sExprs items => .sExprs items.asSlice
 
+/-- Views as `AttributeValue`. -/
 def AttributeValueBuf.viewMut {HandledSExpr : Type} :
     AttributeValueBuf HandledSExpr → AttributeValue HandledSExpr
   | .specialConstant constant => .specialConstant constant.view

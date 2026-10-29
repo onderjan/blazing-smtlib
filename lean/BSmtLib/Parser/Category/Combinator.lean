@@ -44,13 +44,13 @@ def closed (init : σ) : ListState σ ρ :=
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
+/- LEAN: Rust's `SmtParenMultipleParser`, `SmtClosedMultipleParser` and the maximum parsers,
+in one. -/
 /--
 A step of the list: the `(` first, if the list opens with one; between elements, a `)` ends the
 list, and with a maximum reached, nothing else may come; any other token goes to the inner
 parser, which starts the next element.
 -/
-/- LEAN: Rust's `SmtParenMultipleParser`, `SmtClosedMultipleParser` and the maximum parsers,
-in one. -/
 @[specialize inner]
 def step (init : σ) (inner : σ → Internal.Input → PM H (Internal.Step σ ρ)) (maximum : Option Nat)
     (self : ListState σ ρ) (token : Internal.Input) : PM H (Internal.Step (ListState σ ρ)
@@ -73,7 +73,7 @@ end ListState
 
 end Internal
 
-/-! ## The combinators (`SmtParse`)
+/-! ## The combinators
 
 Parsers built of other parsers, each having its inner parsers parse the cursor it is handed, in
 turn. An inner parser that finishes is back in its initial state, as every parser is, so a
@@ -154,8 +154,9 @@ end Internal
 open BSmtLib.Token (Cursor)
 
 /--
-A parser that parses with the first parser, then with the second, and finishes with both results
-(`SmtPairParser`).
+Parses two items sequentially.
+
+The result is a pair created from the inner parser results.
 -/
 structure PairParser (H P₁ P₂ : Type) {m : Type → Type} {E R₁ : Type} [Parse P₁ H m E R₁] where
   private mk ::
@@ -168,7 +169,7 @@ section
 
 variable {H P₁ P₂ : Type} {m : Type → Type} {E R₁ : Type} [Parse P₁ H m E R₁]
 
-/-- The pair of the parsers, before the first value. -/
+/-- Creates the parser of `first` followed by `second`. -/
 def PairParser.new (first : P₁) (second : P₂) : PairParser H P₁ P₂ :=
   { first, second, firstResult := none }
 
@@ -232,52 +233,58 @@ results. -/
 parsers that flatten the nested result when the last parser finishes. Here each is the nested
 pair parsers themselves, whose result is already the flat tuple, so it parses as they do. -/
 
-/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple3Parser`).
+/--
+Parses 3 items sequentially.
 
-Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
-before returning `ControlFlow.break`. -/
+The result is a tuple created from the inner parser results.
+-/
 abbrev Tuple3Parser (H P₁ P₂ P₃ : Type) {m : Type → Type} {E R₁ R₂ : Type}
     [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] :=
   PairParser H P₁ (PairParser H P₂ P₃)
 
-/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple4Parser`).
+/--
+Parses 4 items sequentially.
 
-Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
-before returning `ControlFlow.break`. -/
+The result is a tuple created from the inner parser results.
+-/
 abbrev Tuple4Parser (H P₁ P₂ P₃ P₄ : Type) {m : Type → Type} {E R₁ R₂ R₃ : Type}
     [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃] :=
   PairParser H P₁ (Tuple3Parser H P₂ P₃ P₄)
 
-/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple5Parser`).
+/--
+Parses 5 items sequentially.
 
-Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
-before returning `ControlFlow.break`. -/
+The result is a tuple created from the inner parser results.
+-/
 abbrev Tuple5Parser (H P₁ P₂ P₃ P₄ P₅ : Type) {m : Type → Type} {E R₁ R₂ R₃ R₄ : Type}
     [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃] [Parse P₄ H m E R₄] :=
   PairParser H P₁ (Tuple4Parser H P₂ P₃ P₄ P₅)
 
-/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple6Parser`).
+/--
+Parses 6 items sequentially.
 
-Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
-before returning `ControlFlow.break`. -/
+The result is a tuple created from the inner parser results.
+-/
 abbrev Tuple6Parser (H P₁ P₂ P₃ P₄ P₅ P₆ : Type) {m : Type → Type} {E R₁ R₂ R₃ R₄ R₅ : Type}
     [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃] [Parse P₄ H m E R₄]
     [Parse P₅ H m E R₅] :=
   PairParser H P₁ (Tuple5Parser H P₂ P₃ P₄ P₅ P₆)
 
-/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple7Parser`).
+/--
+Parses 7 items sequentially.
 
-Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
-before returning `ControlFlow.break`. -/
+The result is a tuple created from the inner parser results.
+-/
 abbrev Tuple7Parser (H P₁ P₂ P₃ P₄ P₅ P₆ P₇ : Type) {m : Type → Type}
     {E R₁ R₂ R₃ R₄ R₅ R₆ : Type} [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃]
     [Parse P₄ H m E R₄] [Parse P₅ H m E R₅] [Parse P₆ H m E R₆] :=
   PairParser H P₁ (Tuple6Parser H P₂ P₃ P₄ P₅ P₆ P₇)
 
-/-- Parses using each parser in turn, then returns the result tuple (`SmtTuple8Parser`).
+/--
+Parses 8 items sequentially.
 
-Preserves self-reset: if the inner parsers are self-resetting, moves back into the default state
-before returning `ControlFlow.break`. -/
+The result is a tuple created from the inner parser results.
+-/
 abbrev Tuple8Parser (H P₁ P₂ P₃ P₄ P₅ P₆ P₇ P₈ : Type) {m : Type → Type}
     {E R₁ R₂ R₃ R₄ R₅ R₆ R₇ : Type} [Parse P₁ H m E R₁] [Parse P₂ H m E R₂]
     [Parse P₃ H m E R₃] [Parse P₄ H m E R₄] [Parse P₅ H m E R₅] [Parse P₆ H m E R₆]
@@ -290,44 +297,42 @@ variable {H P₁ P₂ P₃ P₄ P₅ P₆ P₇ P₈ : Type} {m : Type → Type}
   {E R₁ R₂ R₃ R₄ R₅ R₆ R₇ : Type} [Parse P₁ H m E R₁] [Parse P₂ H m E R₂] [Parse P₃ H m E R₃]
   [Parse P₄ H m E R₄] [Parse P₅ H m E R₅] [Parse P₆ H m E R₆] [Parse P₇ H m E R₇]
 
-/-- The parsers in turn, before the first value. -/
+/-- Creates the parser with one inner parser per item, in order. -/
 def Tuple3Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) : Tuple3Parser H P₁ P₂ P₃ :=
   PairParser.new p₁ (PairParser.new p₂ p₃)
 
-/-- The parsers in turn, before the first value. -/
+/-- Creates the parser with one inner parser per item, in order. -/
 def Tuple4Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) : Tuple4Parser H P₁ P₂ P₃ P₄ :=
   PairParser.new p₁ (Tuple3Parser.new p₂ p₃ p₄)
 
-/-- The parsers in turn, before the first value. -/
+/-- Creates the parser with one inner parser per item, in order. -/
 def Tuple5Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) :
     Tuple5Parser H P₁ P₂ P₃ P₄ P₅ :=
   PairParser.new p₁ (Tuple4Parser.new p₂ p₃ p₄ p₅)
 
-/-- The parsers in turn, before the first value. -/
+/-- Creates the parser with one inner parser per item, in order. -/
 def Tuple6Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) (p₆ : P₆) :
     Tuple6Parser H P₁ P₂ P₃ P₄ P₅ P₆ :=
   PairParser.new p₁ (Tuple5Parser.new p₂ p₃ p₄ p₅ p₆)
 
-/-- The parsers in turn, before the first value. -/
+/-- Creates the parser with one inner parser per item, in order. -/
 def Tuple7Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) (p₆ : P₆) (p₇ : P₇) :
     Tuple7Parser H P₁ P₂ P₃ P₄ P₅ P₆ P₇ :=
   PairParser.new p₁ (Tuple6Parser.new p₂ p₃ p₄ p₅ p₆ p₇)
 
-/-- The parsers in turn, before the first value. -/
+/-- Creates the parser with one inner parser per item, in order. -/
 def Tuple8Parser.new (p₁ : P₁) (p₂ : P₂) (p₃ : P₃) (p₄ : P₄) (p₅ : P₅) (p₆ : P₆) (p₇ : P₇)
     (p₈ : P₈) : Tuple8Parser H P₁ P₂ P₃ P₄ P₅ P₆ P₇ P₈ :=
   PairParser.new p₁ (Tuple7Parser.new p₂ p₃ p₄ p₅ p₆ p₇ p₈)
 
 end
 
-/-- A parser that parses with the inner parser, then takes a `)`, and finishes with the inner
-result (`SmtClosedParser`). -/
+/-- Parses an item followed by a closing parenthesis. -/
 structure ClosedParser (H P : Type) {m : Type → Type} {E R : Type} [Parse P H m E R] where
   private mk ::
   private inner : PairParser H P CloseParenParser
 
-/-- A parser that takes a `(`, then parses with the inner parser, and finishes with its result
-(`SmtOpenedParser`). -/
+/-- Parses an opening parenthesis followed by an item. -/
 structure OpenedParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m] where
   private mk ::
   private inner : PairParser H OpenParenParser P
@@ -336,7 +341,7 @@ section
 
 variable {H P : Type} {m : Type → Type} {E R : Type} [Parse P H m E R]
 
-/-- The parser before the inner value. -/
+/-- Creates the parser with the inner parser. -/
 def ClosedParser.new (inner : P) : ClosedParser H P := ⟨.new inner .new⟩
 
 instance [Inhabited P] : Inhabited (ClosedParser H P) := ⟨.new default⟩
@@ -347,7 +352,7 @@ section
 
 variable {H P : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-/-- The parser before the `(`. -/
+/-- Creates the parser with the inner parser. -/
 def OpenedParser.new (inner : P) : OpenedParser H P := ⟨.new .new inner⟩
 
 instance [Inhabited P] : Inhabited (OpenedParser H P) := ⟨.new default⟩
@@ -371,7 +376,7 @@ variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 end
 
-/-- A parser of the inner parser's value enclosed in `(` and `)` (`SmtParenParser`). -/
+/-- Parses an item enclosed in parentheses. -/
 structure ParenParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m] {E R : Type}
     [Parse P H m E R] where
   private mk ::
@@ -381,7 +386,7 @@ section
 
 variable {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type} [Parse P H m E R]
 
-/-- The parser before the `(`. -/
+/-- Creates the parser with the inner parser. -/
 def ParenParser.new (inner : P) : ParenParser H P := ⟨.new (.new inner)⟩
 
 instance [Inhabited P] : Inhabited (ParenParser H P) := ⟨.new default⟩
@@ -400,11 +405,7 @@ variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 end
 
-/--
-A parser of values of the inner parser up to a `)`, which finishes with their results
-(`SmtClosedMultipleParser`). It does not take the `(` that the `)` closes; `ParenMultipleParser`
-does.
--/
+/-- Parses zero or more items followed by a closing parenthesis. -/
 structure ClosedMultipleParser (H P : Type) {m : Type → Type} {E R : Type} [Parse P H m E R]
     where
   private mk ::
@@ -417,7 +418,7 @@ section
 
 variable {H P : Type} {m : Type → Type} {E R : Type} [Parse P H m E R]
 
-/-- The parser before the first value. -/
+/-- Creates the parser with the inner parser. -/
 def ClosedMultipleParser.new (inner : P) : ClosedMultipleParser H P :=
   { inner, outside := true, items := #[] }
 
@@ -454,8 +455,7 @@ private def ClosedMultipleParser.turn :
 
 end
 
-/-- A parser of values of the inner parser enclosed in `(` and `)`, which finishes with their
-results (`SmtParenMultipleParser`). -/
+/-- Parses zero or more items enclosed in parentheses. -/
 structure ParenMultipleParser (H P : Type) {m : Type → Type} [Monad m] [Handler H m]
     {E R : Type} [Parse P H m E R] where
   private mk ::
@@ -465,7 +465,7 @@ section
 
 variable {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type} [Parse P H m E R]
 
-/-- The parser before the `(`. -/
+/-- Creates the parser with the inner parser. -/
 def ParenMultipleParser.new (inner : P) : ParenMultipleParser H P := ⟨.new (.new inner)⟩
 
 instance [Inhabited P] : Inhabited (ParenMultipleParser H P) := ⟨.new default⟩
@@ -485,9 +485,11 @@ variable {H P R : Type} {m : Type → Type} [Monad m] [Handler H m]
 end
 
 /--
-A parser of at most a maximum number of values of the inner parser up to a `)`, which finishes
-with their results (`SmtClosedMaximumParser`). A value beyond the maximum is a syntax error at
-its first token, which expected the `)`.
+Parses a number of items up to some maximum, followed by a closing parenthesis.
+
+The maximum can be changed by `ClosedMaximumParser.setMaxItems`.
+
+An item beyond the maximum is a syntax error (expected `)`); fewer items are accepted.
 -/
 structure ClosedMaximumParser (H P : Type) {m : Type → Type} {E R : Type} [Parse P H m E R]
     where
@@ -501,22 +503,23 @@ section
 
 variable {H P : Type} {m : Type → Type} {E R : Type} [Parse P H m E R]
 
-/-- The parser before the first value, allowing at most `maxItems` values. -/
+/-- Creates the parser with the inner parser and the maximum number of items. -/
 def ClosedMaximumParser.new (inner : P) (maxItems : Nat) : ClosedMaximumParser H P :=
   { maximum := maxItems, outside := true, results := #[], inner }
 
 /--
-Sets the maximum number of values.
+Sets the maximum number of items to be parsed.
 
-The maximum is only applied when deciding whether a next value is allowed: it does not affect
-the values parsed before or the value being parsed, so the parser may finish with more values
-than the maximum set while it parses.
+The maximum is only applied when deciding whether parsing a next element is allowed and does not
+affect previously parsed elements or the currently parsed element, meaning the parser may return
+more elements than the currently set maximum if this method is called in the middle of parsing
+elements.
 -/
 def ClosedMaximumParser.setMaxItems (self : ClosedMaximumParser H P) (maxItems : Nat) :
     ClosedMaximumParser H P :=
   { self with maximum := maxItems }
 
-/-- The maximum number of values. -/
+/-- Returns the maximum number of items to be parsed. -/
 def ClosedMaximumParser.maxItems (self : ClosedMaximumParser H P) : Nat :=
   self.maximum
 
@@ -556,8 +559,11 @@ private def ClosedMaximumParser.turn :
 end
 
 /--
-A parser of at most a maximum number of values of the inner parser enclosed in `(` and `)`, which
-finishes with their results (`SmtParenMaximumParser`).
+Parses a number of items up to some maximum, all enclosed in parentheses.
+
+The maximum can be changed by `ParenMaximumParser.setMaxItems`.
+
+An item beyond the maximum is a syntax error (expected `)`); fewer items are accepted.
 -/
 structure ParenMaximumParser (H P : Type) {m : Type → Type} {E R : Type} [Parse P H m E R] where
   private mk ::
@@ -568,22 +574,23 @@ section
 
 variable {H P : Type} {m : Type → Type} {E R : Type} [Parse P H m E R]
 
-/-- The parser before the `(`, allowing at most `maxItems` values. -/
+/-- Creates the parser with the inner parser and the maximum number of items. -/
 def ParenMaximumParser.new (inner : P) (maxItems : Nat) : ParenMaximumParser H P :=
   { isOpened := false, inner := .new inner maxItems }
 
 /--
-Sets the maximum number of values.
+Sets the maximum number of items to be parsed.
 
-The maximum is only applied when deciding whether a next value is allowed: it does not affect
-the values parsed before or the value being parsed, so the parser may finish with more values
-than the maximum set while it parses.
+The maximum is only applied when deciding whether parsing a next element is allowed and does not
+affect previously parsed elements or the currently parsed element, meaning the parser may return
+more elements than the currently set maximum if this method is called in the middle of parsing
+elements.
 -/
 def ParenMaximumParser.setMaxItems (self : ParenMaximumParser H P) (maxItems : Nat) :
     ParenMaximumParser H P :=
   { self with inner := self.inner.setMaxItems maxItems }
 
-/-- The maximum number of values. -/
+/-- Returns the maximum number of items to be parsed. -/
 def ParenMaximumParser.maxItems (self : ParenMaximumParser H P) : Nat :=
   self.inner.maxItems
 

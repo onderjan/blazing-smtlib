@@ -86,12 +86,13 @@ def Internal.Handle.view (self : Internal.Handle) (text : ByteArray) : Token :=
   | .comment => .comment (Comment.Internal.newUnchecked bytes)
   | .endOfFile => .endOfFile
 
-/-- A dynamic array of owned tokens. -/
+/-- Dynamic array of owned tokens. -/
 structure _root_.BSmtLib.Token.TokensBuf where
   private mk ::
   private text : ByteArray
   private handles : Array Internal.Handle
 
+/-- Creates an empty array. -/
 def new : TokensBuf := ⟨.empty, #[]⟩
 
 /-- Copies the token after the others. -/
@@ -99,12 +100,16 @@ def push (self : TokensBuf) (token : Token) : TokensBuf :=
   let (text, handle) := Internal.Handle.createByPush self.text token
   ⟨text, self.handles.push handle⟩
 
+/-- Removes all tokens. -/
 def clear (_ : TokensBuf) : TokensBuf := new
 
+/-- Returns the number of tokens. -/
 def len (self : TokensBuf) : Nat := self.handles.size
 
+/-- Returns `true` if there are no tokens. -/
 def isEmpty (self : TokensBuf) : Bool := self.handles.isEmpty
 
+/-- Returns the token at the position, or `none` if it is out of bounds. -/
 def get? (self : TokensBuf) (index : Nat) : Option Token :=
   self.handles[index]?.map (·.view self.text)
 

@@ -63,7 +63,7 @@ inductive TermNode (S T : Type) where
   | identifier (identifier : Identifier) (sort : Option S)
   | application (function : Identifier) (sort : Option S) (arguments : List T)
 
-/-- An s-expression, its items already handled. -/
+/-- An S-expression, its items already handled. -/
 inductive SExprNode (X : Type) where
   | constant (constant : Constant)
   | symbol (symbol : Symbol)
@@ -126,7 +126,7 @@ def ofTermNode {S T : Type} : Grammar.Nodes.Term S T → TermNode S T
   | .qualifiedIdent i s => .identifier (ofIdentifier i) s
   | .application i s args _ => .application (ofIdentifier i) s args.asSlice.toList
 
-/-- The s-expression node's content. -/
+/-- The S-expression node's content. -/
 def ofSExprNode {X : Type} : Grammar.Nodes.SExpr X → SExprNode X
   | .specialConstant c => .constant (ofConstant c)
   | .symbol s => .symbol (ofSymbol s)

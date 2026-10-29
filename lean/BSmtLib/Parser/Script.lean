@@ -17,18 +17,21 @@ open BSmtLib.Parser.Command BSmtLib.Handler
 open BSmtLib.Parser.Command.Internal
 open BSmtLib.Parser.Internal (PM call syntaxError versionError)
 
-/--
-The parser of a script (`SmtScriptParser`).
-
-It finishes at the end of the input: between commands, or after `exit`, after which its producer
-discards the rest of the input. A version declaration, at its `)`, is handled as `set-info`;
-then it is checked against the posture, then the producer switches to the version (it may
-refuse), then the handler; the new version holds from the next command. At the `)` of `exit`
-the handler is told of the command, then the producer discards the rest, and the script goes on
-to the end of the input.
--/
 /- LEAN: the constructor and the fields are private, as Rust's are; the library builds and reads
 the parser through `ScriptParser.Internal`. -/
+/--
+Parses an SMT-LIB script.
+
+An SMT-LIB script is a (possibly empty) sequence of commands.
+
+The parser is a loop over a `CommandParser`. If the `(exit)` command is encountered, the parser
+requests the cursor to discard everything after its closing parenthesis.
+
+A version declaration switches the version of the cursor if the posture allows it and the
+cursor accepts it; otherwise, parsing fails with a version error (`ParseErrorKind.version`).
+
+The parser returns a unit result on EOF.
+-/
 structure ScriptParser (H : Type) {m : Type → Type} [CommandHandler H m] where
   private mk ::
   private posture : Version.VersionPosture
@@ -41,7 +44,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 
-/-- The script parser before a script, under the posture. -/
+/-- Creates the parser with the version posture. -/
 def ScriptParser.new (posture : Version.VersionPosture) : ScriptParser H :=
   { posture, command := .awaiting, declarations := 0 }
 
@@ -161,7 +164,7 @@ def ScriptParser.Internal.arrive (parser : ScriptParser H) (token : Internal.Inp
   Internal.commandArrive (command parser) token
 
 /--
-In a non-standard command, the script parser hands the cursor to the handler's parser of the
+In a nonstandard command, the script parser hands the cursor to the handler's parser of the
 command's payload; after the command, it awaits the next one.
 -/
 @[inline]
@@ -176,7 +179,7 @@ def ScriptParser.Internal.handOver? {Z : Type} [Token.Cursor Z] (parser : Script
     | .error error => return (.stop (.error error) (.new (posture parser)), next)
     | .ok (some nonstandard) =>
       return (.goOn (mk (posture parser) (.nonstandard nonstandard) (declarations parser)), next)
-    -- a non-standard command cannot be the exit command
+    -- a nonstandard command cannot be the exit command
     | .ok none => return (.goOn (mk (posture parser) .awaiting (declarations parser)), next)
   | _ => none
 

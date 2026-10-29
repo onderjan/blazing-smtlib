@@ -80,7 +80,7 @@ end
 
 end Internal
 
-/-- The parser of one qualified identifier (`SmtQualifiedIdentParser`). -/
+/-- Parses a qualified identifier. -/
 structure QualifiedIdentParser (H : Type) {m : Type → Type} [Handler H m] where
   private mk ::
   private state : Internal.QualIdentState (Handler.«Sort» H)
@@ -89,7 +89,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-/-- The qualified identifier parser before a qualified identifier. -/
+/-- Creates the parser. -/
 def QualifiedIdentParser.new : QualifiedIdentParser H := ⟨.start⟩
 
 instance : Inhabited (QualifiedIdentParser H) := ⟨.new⟩

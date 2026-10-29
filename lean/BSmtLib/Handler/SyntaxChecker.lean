@@ -4,16 +4,20 @@ public import BSmtLib.Handler.CommandHandler
 
 public section
 
-/- LEAN: in Rust, `SmtSyntaxChecker` is in `traits.rs` with the handler classes. Its instance of
-`CommandHandler` names the parser of no values (`Empty`) as its non-standard parser, whose
+/- LEAN: in Rust, `SmtSyntaxChecker` is in `handler.rs` with the handler classes. Its instance of
+`CommandHandler` names the parser of no values (`Empty`) as its nonstandard parser, whose
 `Parse` instance is in `BSmtLib.Parser`, so it has a module of its own here, after
 `Handler.CommandHandler`; the root module `BSmtLib` imports it. -/
 
 namespace BSmtLib.Handler
 
 /- LEAN: Rust's unit struct; its calls run in `Id`. -/
-/-- A handler that checks the syntax only: every value it makes is `Unit`, every call succeeds,
-and it rejects every non-standard command with its name. -/
+/--
+Handler that checks compliance with SMT-LIB syntax.
+
+The checker accepts every node and every standard command, and refuses every nonstandard command
+with `NonstandardCommandError`.
+-/
 structure SyntaxChecker where
   deriving Repr, Inhabited
 

@@ -53,7 +53,7 @@ def termOf : Traversal.TermNode treeValues → Tree.Term
   | .identifier i s => .identifier (qualified i s)
   | .application i s args => .application (qualified i s) args
 
-/-- The s-expression the handler is told of. -/
+/-- The S-expression the handler is told of. -/
 def sExprOf : Traversal.SExprNode treeValues → Tree.SExpr
   | .constant c => .constant c
   | .symbol s => .symbol s
@@ -250,7 +250,7 @@ def termNodeT : Content.TermNode Tree.Sort Tree.Term → Traversal.TermNode tree
   | .identifier i s => .identifier (identifierT i) s
   | .application i s args => .application (identifierT i) s args
 
-/-- The formalism's node of an s-expression node. -/
+/-- The formalism's node of an S-expression node. -/
 def sExprNodeT : Content.SExprNode Tree.SExpr → Traversal.SExprNode treeValues
   | .constant c => .constant (constantT c)
   | .symbol s => .symbol (symbolT s)

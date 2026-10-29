@@ -8,7 +8,7 @@ namespace BSmtLib.Lexer.Recovery
 
 /- LEAN: Rust's uninhabited enum; an inductive type without constructors. -/
 /--
-The lexer stops at its first error.
+Marker for a lexer that stops at its first error.
 
 This is the default and can be used with any token consumer.
 -/
@@ -19,7 +19,7 @@ inductive FailFast : Type
 /- LEAN: Rust hides the type from the documentation (`#[doc(hidden)]`); Lean has no such
 attribute. -/
 /--
-The lexer recovers from errors (EXPERIMENTAL).
+Marker for a lexer that recovers from errors (EXPERIMENTAL).
 
 For recovery to be possible not just on the side of the lexer
 but also the token consumer, the token consumer must be able
@@ -56,7 +56,7 @@ of the Rust documentation, that the trait cannot be implemented outside of the c
 out, and recovery is called experimental but not documentation-hidden. The methods of the
 instance for `FailFast`, which Rust makes panic, are never called, and do nothing. -/
 /--
-Determines the lexer behaviour after an error occurs.
+Determines lexer behaviour after an error occurs.
 
 Currently, only fail-fast behaviour is supported,
 implemented by `FailFast` for every token consumer.

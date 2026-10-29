@@ -14,7 +14,7 @@ The identifier parser hands nothing over; its lemmas say which identifier it end
 identifier of the specification formalism (`BSmtLibSpec`) through the bridge, after the identifier's
 tokens.
 
-The sort parser is a stack parser like the s-expression parser (see `Facts.Proofs.Parser.SExpr`):
+The sort parser is a stack parser like the S-expression parser (see `Facts.Proofs.Parser.SExpr`):
 its lemma is stated for every stack of open applications, with the parser's "a sort is complete"
 step as the continuation (`sortPush`, after the handler's call). It runs the identifier parser
 inside two of its modes, taken over by `Runs.embed`. The arguments of an application are read

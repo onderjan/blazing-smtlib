@@ -345,13 +345,13 @@ theorem closedMultipleAttribute_rejects_after {version : Version}
 
 open BSmtLib.Parser.Category.SExpr.Internal (SExprState sExprStep)
 
-/-- The tokens of open lists of s-expressions, outermost first: each a `(` and its items so
+/-- The tokens of open lists of S-expressions, outermost first: each a `(` and its items so
 far. -/
 abbrev sExprFrameTokens (frames : List (List Tree.SExpr)) :
     List BSmtLibSpec.Grammar.SyntaxToken :=
   frames.flatMap fun items => .parenOpen :: Tree.SExpr.tokensAll items
 
-/-- From any stack, the s-expression parser reads the tokens of open lists with the traversal's
+/-- From any stack, the S-expression parser reads the tokens of open lists with the traversal's
 calls for their items, and is then between items, the lists open on the stack. -/
 theorem sExprFrames_runs {version : Version}
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
@@ -397,7 +397,7 @@ theorem sExprFrames_runs {version : Version}
     refine h₁.congr ?_ rfl
     simp [tick_noPoints, List.mapM_cons, bind_pure_comp]
 
-/-- A token that starts no s-expression and does not end a list: the s-expression parser
+/-- A token that starts no S-expression and does not end a list: the S-expression parser
 fails at it, on any stack. -/
 theorem sExprLevels_fails {version : Version} {token : Parser.Internal.Input}
     (hopen : token ≠ .parenOpen) (hclose : token ≠ .parenClose)
@@ -419,7 +419,7 @@ theorem sExprLevels_fails {version : Version} {token : Parser.Internal.Input}
   | _ => simp [sExprStep, Parser.Internal.syntaxError]
 
 /-- The attribute steps on a keyword, `(`, the tokens of valid items, of open lists and a token
-that starts no s-expression and does not end a list: they fail at that token with
+that starts no S-expression and does not end a list: they fail at that token with
 `expected #[.sExpr]`, having made the traversal's calls for the items. -/
 private theorem sExpr_value_runs {version : Version} (single : Bool)
     {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
@@ -441,7 +441,7 @@ private theorem sExpr_value_runs {version : Version} (single : Bool)
       ((fun _ => ()) <$> (adaptRun (Traversal.sExprs noPoints h items) >>= fun _ =>
         adaptRun (frames.mapM fun items => Traversal.sExprs noPoints h items)))
       fun _ => throw (.syntax (.expected #[.sExpr])) := by
-  -- the s-expression steps from the empty stack, to the failure
+  -- the S-expression steps from the empty stack, to the failure
   obtain ⟨build, hframesRuns⟩ := sExprFrames_runs (version := version) hA frames hframes hs []
   have hfail : ∀ handled, RunsS noPoints (sExprStep (H := H) version) (build handled) [token]
       (do tick noPoints token; (pure () : PM H Unit))
@@ -515,7 +515,7 @@ private theorem sExpr_value_runs {version : Version} (single : Bool)
 
 /--
 The parser of one attribute on a keyword, `(`, the tokens of valid items, of open lists of
-s-expressions and a token that starts no s-expression and does not end a list: it rejects that
+S-expressions and a token that starts no S-expression and does not end a list: it rejects that
 token with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedAttribute_rejects_sExpr {version : Version}
@@ -551,7 +551,7 @@ theorem closedAttribute_rejects_sExpr {version : Version}
 
 /--
 The parser of attributes up to a `)` on a keyword, `(`, the tokens of valid items, of open lists
-of s-expressions and a token that starts no s-expression and does not end a list: it rejects that
+of S-expressions and a token that starts no S-expression and does not end a list: it rejects that
 token with `expected #[.sExpr]`, having made the traversal's calls for the items.
 -/
 theorem closedMultipleAttribute_rejects_sExpr {version : Version}

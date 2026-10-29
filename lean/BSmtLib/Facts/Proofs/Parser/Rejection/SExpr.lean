@@ -9,9 +9,9 @@ import all BSmtLib.Parser.Category.Token
 @[expose] public section
 
 /-!
-# What s-expressions and attributes can still take
+# What S-expressions and attributes can still take
 
-The s-expression parser's state is its open lists, innermost first; after an s-expression in the
+The S-expression parser's state is its open lists, innermost first; after an S-expression in the
 innermost open list come the list's further items and its `)`, then what follows that list in
 turn (`sExprAfter`). The attribute parser reads attributes up to the `)` after them: exactly one
 for `set-info` and `set-option`, any number for an annotation, which wants at least one
@@ -36,17 +36,17 @@ section
 
 variable (version : BSmtLibSpec.Lexicon.Version)
 
-/-- A valid s-expression. -/
+/-- A valid S-expression. -/
 def SExprLang : Lang :=
   fun u => ∃ item : Tree.SExpr, item.Valid version ∧ u = toks item.tokens
 
-/-- What follows an s-expression in the innermost open list: the list's further items and its
+/-- What follows an S-expression in the innermost open list: the list's further items and its
 `)`, then what follows the list, outwards. -/
 def sExprAfter : List (Array Nat) → Lang
   | [] => eps
   | _ :: outer => cat (star (SExprLang version)) (cat (tok closeItem) (sExprAfter outer))
 
-/-- The remainders of the s-expression parser's states. -/
+/-- The remainders of the S-expression parser's states. -/
 def sExprRem : SExprState Nat → Lang
   | [] => SExprLang version
   | level :: outer => sExprAfter version (level :: outer)
@@ -64,7 +64,7 @@ theorem sExprRem_nonempty (levels : SExprState Nat) : ∃ u, sExprRem version le
   | nil => exact sExprLang_nonempty version
   | cons level outer => exact sExprAfter_nonempty version (level :: outer)
 
-/-- An s-expression, then what follows it, is a remainder of the parser before it. -/
+/-- An S-expression, then what follows it, is a remainder of the parser before it. -/
 theorem sExprRem_item {levels : SExprState Nat} {w v : List Received}
     (hw : SExprLang version w) (hv : sExprAfter version levels v) :
     sExprRem version levels (w ++ v) := by
@@ -101,13 +101,13 @@ theorem sExprs_rep {version : BSmtLibSpec.Lexicon.Version} {lo : Nat} {hi : Opti
   obtain ⟨items, hvalid, hlo, -, rfl⟩ := rep_trees h
   exact ⟨items, sExprValidAll_of hvalid, hlo, by simp [sExprTokensAll_eq, Function.comp_def]⟩
 
-/-- A list's items and its `)`, after its `(`, are an s-expression. -/
+/-- A list's items and its `)`, after its `(`, are an S-expression. -/
 theorem sExprLang_list {version : BSmtLibSpec.Lexicon.Version} {a : List Received}
     (h : star (SExprLang version) a) : SExprLang version (openItem :: (a ++ [closeItem])) := by
   obtain ⟨items, hvalid, -, rfl⟩ := sExprs_rep h
   exact ⟨.list items, hvalid, by simp [Tree.SExpr.tokens, paren, toks]⟩
 
-/-- The s-expression parser's step at the end of an s-expression: it is the result, or the next
+/-- The S-expression parser's step at the end of an S-expression: it is the result, or the next
 item of the innermost open list. -/
 theorem sExprComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : SExprState Nat}
     {item : Received} (levels : SExprState Nat) (handled : Nat)
@@ -118,7 +118,7 @@ theorem sExprComplete_advances {version : BSmtLibSpec.Lexicon.Version} {state : 
   | nil => exact fun _ => h [] rfl
   | cons level outer => exact fun _ => ⟨fun u hu => h u hu, sExprRem_nonempty version _⟩
 
-/-- Every step of the s-expression parser advances. -/
+/-- Every step of the S-expression parser advances. -/
 theorem sExprStep_advances (version : Version) :
     StepsAdvance version (sExprStep (H := List Event) version)
       (sExprRem (Bridge.version version))
@@ -266,7 +266,7 @@ theorem valueLang_list {a : List Received} (h : star (SExprLang version) a) :
 
 end
 
-/-- In a list value, the s-expression parser's step, with its result in the attribute parser's
+/-- In a list value, the S-expression parser's step, with its result in the attribute parser's
 state. -/
 theorem inside_advances (version : Version) (single need : Bool)
     (keyword : Keyword) (items : Array Nat) (sExpr : SExprState Nat) (outside : Bool)

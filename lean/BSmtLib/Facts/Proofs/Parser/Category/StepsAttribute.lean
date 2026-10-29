@@ -42,7 +42,7 @@ variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /--
 The items of an attribute's list value: from between items, the parser reads the tokens of
-s-expressions with the traversal's effects, and appends them to the items.
+S-expressions with the traversal's effects, and appends them to the items.
 -/
 theorem valueItems_runs (hA : TermAgrees h) (single : Bool) : (items : List Tree.SExpr) →
     Tree.SExpr.ValidAll (Bridge.version version) items →

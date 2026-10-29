@@ -13,72 +13,117 @@ root module `BSmtLib` imports this module, as it does the other modules of the l
 
 namespace BSmtLib.Lexicon.Reserved
 
-/-- General reserved words of the SMT-LIB2 grammar. -/
+/-- General reserved word, e.g. `_`, `as` or `let`. -/
 inductive GeneralReserved where
+  /-- Reserved word `BINARY`. -/
   | binary
+  /-- Reserved word `DECIMAL`. -/
   | decimal
+  /-- Reserved word `HEXADECIMAL`. -/
   | hexadecimal
+  /-- Reserved word `NUMERAL`. -/
   | numeral
+  /-- Reserved word `STRING`. -/
   | string
+  /-- Reserved word `_`. -/
   | underscore
+  /-- Reserved word `!`. -/
   | exclamationMark
+  /-- Reserved word `as`. -/
   | as
+  /-- Reserved word `lambda`. -/
   | lambda
+  /-- Reserved word `let`. -/
   | «let»
+  /-- Reserved word `exists`. -/
   | «exists»
+  /-- Reserved word `forall`. -/
   | «forall»
+  /-- Reserved word `match`. -/
   | «match»
+  /-- Reserved word `par`. -/
   | par
   deriving BEq, Hashable, Repr, Inhabited
 
-/--
-Reserved words naming standard SMT-LIB2 commands.
-
-Standard SMT-LIB2 commands are reserved words.
--/
+/-- Reserved word that names a standard command, e.g. `assert` or `check-sat`. -/
 inductive CommandNameReserved where
+  /-- Reserved word `assert`. -/
   | assert
+  /-- Reserved word `check-sat`. -/
   | checkSat
+  /-- Reserved word `check-sat-assuming`. -/
   | checkSatAssuming
+  /-- Reserved word `declare-const`. -/
   | declareConst
+  /-- Reserved word `declare-datatype`. -/
   | declareDatatype
+  /-- Reserved word `declare-datatypes`. -/
   | declareDatatypes
+  /-- Reserved word `declare-fun`. -/
   | declareFun
+  /-- Reserved word `declare-sort`. -/
   | declareSort
+  /-- Reserved word `declare-sort-parameter`. -/
   | declareSortParameter
+  /-- Reserved word `define-const`. -/
   | defineConst
+  /-- Reserved word `define-fun`. -/
   | defineFun
+  /-- Reserved word `define-fun-rec`. -/
   | defineFunRec
+  /-- Reserved word `define-funs-rec`. -/
   | defineFunsRec
+  /-- Reserved word `define-sort`. -/
   | defineSort
+  /-- Reserved word `echo`. -/
   | echo
+  /-- Reserved word `exit`. -/
   | exit
+  /-- Reserved word `get-assertions`. -/
   | getAssertions
+  /-- Reserved word `get-assignment`. -/
   | getAssignment
+  /-- Reserved word `get-info`. -/
   | getInfo
+  /-- Reserved word `get-model`. -/
   | getModel
+  /-- Reserved word `get-option`. -/
   | getOption
+  /-- Reserved word `get-proof`. -/
   | getProof
+  /-- Reserved word `get-unsat-assumptions`. -/
   | getUnsatAssumptions
+  /-- Reserved word `get-unsat-core`. -/
   | getUnsatCore
+  /-- Reserved word `get-value`. -/
   | getValue
+  /-- Reserved word `pop`. -/
   | pop
+  /-- Reserved word `push`. -/
   | push
+  /-- Reserved word `reset`. -/
   | reset
+  /-- Reserved word `reset-assertions`. -/
   | resetAssertions
+  /-- Reserved word `set-info`. -/
   | setInfo
+  /-- Reserved word `set-logic`. -/
   | setLogic
+  /-- Reserved word `set-option`. -/
   | setOption
   deriving BEq, Hashable, Repr, Inhabited
 
-/-- Reserved words in SMT-LIB2, including standard command names. -/
+/-- Reserved word (general or a command name), e.g. `let` or `check-sat`. -/
 inductive _root_.BSmtLib.Lexicon.Reserved where
+  /-- General reserved word, e.g. `_`, `as` or `let`. -/
   | general (reserved : Reserved.GeneralReserved)
+  /-- Reserved word that names a standard command, e.g. `assert` or `check-sat`. -/
   | commandName (reserved : Reserved.CommandNameReserved)
   deriving BEq, Hashable, Repr, Inhabited
 
 namespace GeneralReserved
 
+/-- Returns the spelling of the reserved word. -/
 def asStr : GeneralReserved → String
   | .binary => "BINARY"
   | .decimal => "DECIMAL"
@@ -107,6 +152,7 @@ end GeneralReserved
 
 namespace CommandNameReserved
 
+/-- Returns the spelling of the reserved word. -/
 def asStr : CommandNameReserved → String
   | .assert => "assert"
   | .checkSat => "check-sat"
@@ -141,8 +187,8 @@ def asStr : CommandNameReserved → String
   | .setLogic => "set-logic"
   | .setOption => "set-option"
 
-/-- Every command-name reserved word. -/
 /- LEAN: as `GeneralReserved.all`, not in Rust, whose macro builds the word table. -/
+/-- Every command-name reserved word. -/
 def all : Array CommandNameReserved :=
   #[.assert, .checkSat, .checkSatAssuming, .declareConst, .declareDatatype, .declareDatatypes,
     .declareFun, .declareSort, .declareSortParameter, .defineConst, .defineFun, .defineFunRec,
@@ -152,6 +198,7 @@ def all : Array CommandNameReserved :=
 
 end CommandNameReserved
 
+/-- Returns the spelling of the reserved word. -/
 def asStr : Reserved → String
   | .general word => word.asStr
   | .commandName word => word.asStr
@@ -181,7 +228,7 @@ private def since : Reserved → Version
   -- everything else is reserved since SMT-LIB 2.0
   | _ => .v2_0
 
-/-- Whether the word is reserved in the version. -/
+/-- Returns `true` if the word is reserved in the given version. -/
 @[inline]
 def isInVersion (self : Reserved) (version : Version) : Bool :=
   version ≥ self.since
@@ -224,15 +271,15 @@ def reservedSlot (symbol : ByteSlice) (nonempty : 0 < symbol.size) : Fin reserve
   let mid := symbol[len / 2]'(Nat.div_lt_self nonempty (by decide)) |>.toNat
   ⟨(first + last * 4 + len * 34 + mid * 54) % reservedSlots, Nat.mod_lt _ (by decide)⟩
 
+/- LEAN: Rust computes the table in a `static` at compile time. A Lean definition without
+arguments is computed once, when the module is loaded. The table is built as a vector of its
+fixed size, so that every write is within it; each word comes with the proof that it has a byte,
+which its slot needs. -/
 /--
 The reserved words by slot, each with the version that made it reserved.
 
 The empty word is used as a sentinel value for empty slots.
 -/
-/- LEAN: Rust computes the table in a `static` at compile time. A Lean definition without
-arguments is computed once, when the module is loaded. The table is built as a vector of its
-fixed size, so that every write is within it; each word comes with the proof that it has a byte,
-which its slot needs. -/
 def reservedTable : Array (ByteArray × Reserved × Version) :=
   let empty : Vector (ByteArray × Reserved × Version) reservedSlots :=
     Vector.replicate reservedSlots (ByteArray.empty, Reserved.general .underscore, Version.v2_5)
@@ -251,7 +298,7 @@ end Internal
 of its own, is a `#guard` in `BSmtLib.Facts.Asserts`, checked when the facts are built. A word
 that shared a slot would have been overwritten in the table by a later one. -/
 
-/-- The reserved word that the symbol spells in the version, if any. -/
+/-- Returns the reserved word that the symbol spells in the version, if any. -/
 @[inline]
 def fromBytes? (symbol : ByteSlice) (version : Version) : Option Reserved :=
   -- make sure that the symbol is not an empty word, which is a sentinel
@@ -265,7 +312,7 @@ def fromBytes? (symbol : ByteSlice) (version : Version) : Option Reserved :=
     -- if the symbol is equal to the reserved word and the version has it, return it
     if word.toByteSlice == symbol && version ≥ since then some reserved else none
 
-/-- Whether the reserved word is the name of a standard command. -/
+/-- Returns `true` if the reserved word is the name of a standard command. -/
 @[inline]
 def isCommandName : Reserved → Bool
   | .commandName _ => true
@@ -273,7 +320,7 @@ def isCommandName : Reserved → Bool
 
 namespace GeneralReserved
 
-/-- The word of this group that the symbol spells in the version, if any. -/
+/-- Returns the word of this group that the symbol spells in the version, if any. -/
 @[inline]
 def fromBytes? (symbol : ByteSlice) (version : Version) : Option GeneralReserved :=
   match Reserved.fromBytes? symbol version with
@@ -284,7 +331,7 @@ end GeneralReserved
 
 namespace CommandNameReserved
 
-/-- The word of this group that the symbol spells in the version, if any. -/
+/-- Returns the word of this group that the symbol spells in the version, if any. -/
 @[inline]
 def fromBytes? (symbol : ByteSlice) (version : Version) : Option CommandNameReserved :=
   match Reserved.fromBytes? symbol version with

@@ -300,7 +300,12 @@ end
 
 end Internal
 
-/-- The parser of one term (`SmtTermParser`). -/
+/--
+Parses a term.
+
+Returns the term that the handler returns for it, having handled its subterms first. A
+`Reader` reads a single term with it.
+-/
 structure TermParser (H : Type) {m : Type → Type} [Handler H m] where
   private mk ::
   private state : Internal.TermStateOf H
@@ -309,7 +314,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-/-- The term parser before a term. -/
+/-- Creates the parser. -/
 def TermParser.new : TermParser H := ⟨.init⟩
 
 instance : Inhabited (TermParser H) := ⟨.new⟩

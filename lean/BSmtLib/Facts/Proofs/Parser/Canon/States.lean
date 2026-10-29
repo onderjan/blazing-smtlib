@@ -68,7 +68,7 @@ instance : CanonId (Handler.«Sort» (List Event)) := inferInstanceAs (CanonId N
 instance : CanonId (Handler.Term (List Event)) := inferInstanceAs (CanonId Nat)
 instance : CanonId (Handler.Scope (List Event)) := inferInstanceAs (CanonId Nat)
 
-/-- The recording handler's s-expressions. -/
+/-- The recording handler's S-expressions. -/
 abbrev RSExpr := Handler.SExpr (List Event)
 /-- The recording handler's attributes. -/
 abbrev RAttribute := Handler.Attribute (List Event)

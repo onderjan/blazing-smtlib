@@ -58,7 +58,7 @@ end
 
 end Internal
 
-/-- The parser of one sorted variable (`SmtSortedVarParser`). -/
+/-- Parses a sorted variable (a symbol and a sort enclosed in parentheses). -/
 structure SortedVarParser (H : Type) {m : Type → Type} [Handler H m] where
   private mk ::
   private state : Internal.SortedVarState (Handler.«Sort» H)
@@ -67,7 +67,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-/-- The sorted variable parser before a sorted variable. -/
+/-- Creates the parser. -/
 def SortedVarParser.new : SortedVarParser H := ⟨.start⟩
 
 instance : Inhabited (SortedVarParser H) := ⟨.new⟩

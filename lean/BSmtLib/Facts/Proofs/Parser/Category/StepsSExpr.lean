@@ -8,7 +8,7 @@ import all BSmtLib.Parser.Category.SExpr
 @[expose] public section
 
 /-!
-# The s-expression parser's steps, keeping where they stop
+# The S-expression parser's steps, keeping where they stop
 
 The lemmas of `Facts.Proofs.Parser.SExpr`, for `RunsS`.
 -/
@@ -35,7 +35,7 @@ variable {points : Points (StateT H m)}
 variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 variable {version : Version}
 
-/-- An atom of an s-expression: the parser handles it at its token, then completes it. -/
+/-- An atom of an S-expression: the parser handles it at its token, then completes it. -/
 theorem sExprStep_atom (levels : SExprState (Handler.SExpr H))
     (token : Parser.Internal.Input)
     (node : Grammar.Nodes.SExpr (Handler.SExpr H))
@@ -50,8 +50,8 @@ theorem sExprStep_atom (levels : SExprState (Handler.SExpr H))
 mutual
 
 /--
-From any stack, the parser reads the tokens of an s-expression with the traversal's effects,
-then completes the s-expression on that stack.
+From any stack, the parser reads the tokens of an S-expression with the traversal's effects,
+then completes the S-expression on that stack.
 -/
 theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bridge.version version) →
     ∀ {tokens : List Parser.Internal.Input}, Stands tokens item.tokens →
@@ -103,7 +103,7 @@ theorem sExpr_runs (hA : TermAgrees h) : (item : Tree.SExpr) → item.Valid (Bri
 
 /--
 From a stack whose innermost list has the items so far, the parser reads the tokens of
-s-expressions with the traversal's effects, and appends them to that list.
+S-expressions with the traversal's effects, and appends them to that list.
 -/
 theorem sExprs_runs (hA : TermAgrees h) : (items : List Tree.SExpr) →
     Tree.SExpr.ValidAll (Bridge.version version) items →

@@ -24,16 +24,16 @@ and comments. The constructor and the fields are private, as Rust's are; the han
 parser are read-only fields, which stand as Rust's getters `handler` and `parser`, and the others
 are read by the library through `ParseAdapter.Internal`. -/
 /--
-Adapts a parser to the token consumer a lexer drives.
+Token consumer that adapts a parser to parse the consumed tokens.
 
-The adapter implements `Token.Consume`: it calls the parser,
-providing it the handler and additional persistent resources.
+The adapter implements `Token.Consume` and hands over to a parser that implements `Parse`,
+providing it the handler and the `ParseState`.
 -/
 structure ParseAdapter (H P : Type) where
   private mk ::
-  /-- Returns a reference to the handler. -/
+  /-- Returns the handler. -/
   handler : H
-  /-- Returns a reference to the adapted parser. -/
+  /-- Returns the adapted parser. -/
   parser : P
   /-- Whether the handler was told the version of the input being read. -/
   private versionSet : Bool
@@ -61,7 +61,7 @@ def modifyHandler (self : ParseAdapter H P) (f : H → H) : ParseAdapter H P :=
   let { handler, parser, versionSet, parseState } := self
   { handler := f handler, parser, versionSet, parseState }
 
-/-- Takes the parser back out of the adapter. -/
+/-- Destructures into the parser. -/
 def intoParser (self : ParseAdapter H P) : P :=
   self.parser
 

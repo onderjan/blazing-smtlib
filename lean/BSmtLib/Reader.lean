@@ -9,17 +9,17 @@ public section
 /-!
 # Reading SMT-LIB input: lexing and parsing
 
-Reading turns bytes into tokens (the lexer) and tokens into the syntactic categories and
-commands of SMT-LIB (the parser), which are delivered to a command handler in streaming
-fashion: the input is processed piece by piece and every category or command to be handled
-reaches the handler before the next one is read.
+Reading turns bytes into tokens (the `Lexer` module) and tokens into the syntactic categories
+and commands of SMT-LIB (the `Parser` module), which are delivered to a `CommandHandler` in
+streaming fashion: the input is processed piece by piece and every category or command to be
+handled reaches the handler before the next one is read.
 
 For simple usage, use `readSmt` and `readSmtFile`.
 
 `Reader` reads the same way from any sequence of buffers and keeps the parser's resources
 under the caller's control, so it is the entry point when the input does not arrive as one
-buffered reader or when the resources should serve several reads. The lexer and the parser can
-also be used on their own.
+buffered reader or when the resources should serve several reads. The `Lexer` and `Parser`
+modules can also be used on their own.
 -/
 
 open BSmtLib.Lexer.Error BSmtLib.Parser.Adapter BSmtLib.Parser.Script BSmtLib.Handler
@@ -28,17 +28,21 @@ namespace BSmtLib.Reader
 
 open Parser
 
-/-- Determines why reading has failed. -/
+/-- Why reading failed (I/O, lexical, syntax, version, or handler error). -/
 inductive ReadErrorKind (E : Type) where
-  /-- Reading from a file or a buffered reader failed. -/
+  /-- Opening or reading a file, or reading from a buffered reader, failed. -/
   | io (error : IO.Error)
-  /-- The input is not a valid sequence of SMT-LIB tokens. -/
+  /--
+  The input is not a valid sequence of SMT-LIB tokens, or a token follows what the parser
+  accepts.
+  -/
   | lexical (kind : LexicalErrorKind)
   /--
   The tokens do not form valid SMT-LIB syntactic categories or commands.
 
-  Commands with non-standard names are routed to the handler for processing, so they are
-  rejected with a `ReadErrorKind.handler` error cause instead.
+  A command whose name is not a standard command name of the version in force goes to
+  `Handler.CommandHandler.nonstandardCommand`, so its rejection is a `ReadErrorKind.handler`
+  error, e.g. `define-const` under SMT-LIB 2.6.
   -/
   | syntax (kind : SyntaxErrorKind)
   /-- The script declares a version that cannot be used. -/
@@ -63,13 +67,18 @@ message. -/
 /- LEAN: the constructor is private, as Rust's fields are, and the reader builds an error with
 `ReadError.Internal.new`. The fields are readable as `error.kind` and `error.span`, replacing
 the getters `kind`, `span` and `into_kind`. -/
-/-- An error that ended reading, including its span. -/
+/--
+Error that forced reading to stop.
+
+Its `ToString` gives the line and the column counted from one, while `Span.Location` counts
+them from zero.
+-/
 structure ReadError (E : Type) where
   private mk ::
-  /-- Determines why reading has failed. -/
+  /-- Returns the kind of the error. -/
   kind : ReadErrorKind E
   /--
-  Span where the error occurred.
+  Returns the span where the error occurred.
 
   For I/O errors, the returned span is empty,
   indicating the position where the reading failed.
@@ -112,7 +121,7 @@ instance {E : Type} : Inhabited (ReadError E) :=
   ⟨ReadError.Internal.new (.io (IO.userError "reading failed")) Span.Internal.newZero⟩
 
 /--
-The most useful location for deciphering the error.
+Returns the most useful location for deciphering the error.
 
 Guaranteed to be within the span.
 -/
@@ -130,15 +139,14 @@ def ReadError.location {E : Type} (self : ReadError E) : Span.Location :=
     | .version kind => toString kind
     | .handler error => toString error
 
-/-- The cause, at the line and the column of `location`, counted from one. -/
 @[no_expose] instance {E : Type} [ToString E] : ToString (ReadError E) where
   toString self :=
     let location := self.location
     s!"{self.kind} at line {location.line + 1}, column {location.column + 1}"
 
-/-- Converts the error of a parser, located at `span`, into a read error. -/
 /- LEAN: Rust's private `from_parse`. It is public here as the statements about the reader's
 errors in the facts about the public interface name it. -/
+/-- Converts the error of a parser, located at `span`, into a read error. -/
 def ReadError.ofParse {E : Type} (err : ParseError E) (span : Span) : ReadError E :=
   let kind := match err.kind with
     | .syntax err => ReadErrorKind.«syntax» err
@@ -146,9 +154,9 @@ def ReadError.ofParse {E : Type} (err : ParseError E) (span : Span) : ReadError 
     | .handler err => ReadErrorKind.handler err
   { kind, span }
 
-/-- Converts the error of a lexer over a parser into a read error. -/
 /- LEAN: Rust's `impl From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E>`, which Lean's
 conversion by name stands for. -/
+/-- Converts the error of a lexer over a parser into a read error. -/
 def ReadError.ofLex {E : Type} (err : LexerError (ParseError E)) : ReadError E :=
   let span := err.span
   match err.kind with
@@ -159,13 +167,13 @@ def ReadError.ofLex {E : Type} (err : LexerError (ParseError E)) : ReadError E :
 handler, which the caller keeps. Here the failure carries the handler, as the failed call left it.
 The failure will carry the reader when recovery is added. -/
 /--
-The failure of a read by a `Reader H P`, carrying the error that ended reading and the handler.
+Failure of a read by a `Reader H P`, carrying the error that ended reading and the handler.
 -/
 structure ReadFailure (H P : Type) {m : Type → Type} [Monad m] {E R : Type} [Parse P H m E R]
     where
-  /-- The error that ended reading. -/
+  /-- Error that ended reading. -/
   error : ReadError E
-  /-- The handler, as reading left it at the error. -/
+  /-- Handler, as reading left it at the error. -/
   handler : H
 
 instance {H P : Type} {m : Type → Type} [Monad m] {E R : Type} [Parse P H m E R] [Inhabited H] :
@@ -185,29 +193,30 @@ abbrev Internal.scriptParser (H : Type) {m : Type → Type} [CommandHandler H m]
 
 /- LEAN: Rust's reader holds a lexer over `SmtParseAdapter<'a, H, P>`, which borrows the
 handler. Here the reader owns the handler, which `handler` and `modifyHandler` reach, and which
-a failure carries. -/
+a failure carries.
+
+Rust's bound `H: SmtHandler` is the instance argument `Handler H m`. Rust's default
+parser `SmtScriptParser<H>` is the default of `P`, made where `Reader H` is written without a
+parser (`Internal.scriptParser`), as Rust checks its default against the bounds only where it is
+used: the script parser needs `CommandHandler H m`, which the bound `Handler H m` does not
+give. -/
 /--
-Streams SMT-LIB input from bytes to a command handler.
+Reads SMT-LIB input, delivering it to a handler.
 
 A reader owns its lexer, its parser, the parser resources, and the handler. Any parser can be
-used, and a convenience constructor `Reader.script` is provided for the common case of reading
+used, and a convenience method `Reader.script` is provided for the common case of reading
 SMT-LIB scripts.
 
 The input is read either whole, through `readFile` or `readAll`, or in pieces, using
 `readSlice` sequentially, followed by `readEof` once the input has ended. A piece may end
 anywhere, even inside a token.
 
-After a call of `readAll` or `readEof` that does not return an error, the reader is reset and
-can be reused. A call that returns an error gives no reader back, only the handler, which the
-failure carries.
+After the end of an input has been read without an error, the reader is reset and can be
+reused. A call that returns an error gives no reader back, only the handler, which the failure
+carries.
 
 For whole inputs, consider `readSmtFile` and `readSmt`.
 -/
-/- LEAN: Rust's bound `H: SmtHandler` is the instance argument `Handler H m`. Rust's default
-parser `SmtScriptParser<H>` is the default of `P`, made where `Reader H` is written without a
-parser (`Internal.scriptParser`), as Rust checks its default against the bounds only where it is
-used: the script parser needs `CommandHandler H m`, which the bound `Handler H m` does not
-give. -/
 structure _root_.BSmtLib.Reader (H : Type) {m : Type → Type} [Monad m] [Handler H m]
     (P : Internal.ParserOf H := by exact BSmtLib.Reader.Internal.scriptParser _) {E R : Type}
     [Parse P H m E R] where
@@ -221,9 +230,8 @@ variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 /--
 Creates a reader of an SMT-LIB script, whose commands are delivered to `handler`.
 
-The version under which the script is read can be changed by `set-info` commands. Therefore,
-the version-change posture and the initial version used before any commands are read must be
-provided.
+The posture limits the versions that the script may declare; `initialVersion` is in force until
+it declares one.
 -/
 def script (handler : H) (posture : Version.VersionPosture) (initialVersion : Version) :
     Reader H (ScriptParser H) :=
@@ -238,14 +246,18 @@ variable {H P : Type} {m : Type → Type} [Monad m] [Handler H m] {E R : Type} [
 /--
 Creates a reader of the input `parser` accepts, over `handler`.
 
-The version passed is the initial one. Parsers may request the lexer to change versions, and the
-lexer will always comply. No standard parser changes versions except for `ScriptParser`.
+The input is read in `version`. Of the library parsers, only `ScriptParser` changes it, on a
+version declaration.
+
+The input must be exactly what the parser accepts: a token after it is a lexical error of the
+kind `LexicalErrorKind.unexpectedTrailingToken`, and input that ends before it is a syntax
+error.
 -/
 def new (handler : H) (parser : P) (version : Version) : Reader H P :=
   { lexer := Lexer.new (ParseAdapter.new handler parser) version }
 
 /--
-The SMT-LIB version currently in force.
+Returns the version currently in force.
 
 The version can change if the token consumer asks for it from the cursor. The end of the input
 resets the version to the initial one.
@@ -254,9 +266,11 @@ def version (self : Reader H P) : Version :=
   self.lexer.version
 
 /--
-The location from which the input has been discarded, if set.
+Returns the location from which the input is discarded, if any.
 
-`ScriptParser` discards input after the `(exit)` command. No other standard parsers discard.
+`ScriptParser` discards the input after the `(exit)` command; no other library parser discards.
+The end of the input resets it to `none`, so after a successful `readAll`, `readFrom` or
+`readFile` it is always `none`.
 -/
 def discardedFrom (self : Reader H P) : Option Span.Location :=
   self.lexer.discardedFrom
@@ -335,19 +349,22 @@ def readAll (self : Reader H P) (input : ByteSlice) :
 
 /- LEAN: Rust's `read_from` takes `&mut self` and the buffered reader; this takes the reader and
 the buffered reader and gives both back, the buffered reader also after an error. The loop is the
-recursion, a tail call; it is `partial`, as a buffered reader may give bytes without end. -/
+recursion, a tail call; it is `partial`, as a buffered reader may give bytes without end.
+
+Parity defect, to be fixed in a later version. After an I/O error, Rust's reader stays
+usable and `read_from` can be called again to go on with the input. This gives back only the
+handler after an I/O error too, as after any other error, and so does `readFile`. -/
 /--
 Reads the content of the buffered reader.
 
 Returns the located parser result if successful, `none` if the parser broke its contract (see
 `readEof`), and the reader, reset; and, in any case, the buffered reader.
 
-The input is considered to end when the buffered reader returns no bytes. A failure while
-reading is reported as an I/O error with an empty span at the position reached.
+The input is considered to end when the buffered reader returns a zero-length buffer. A failure
+while reading is reported as an I/O error with an empty span at the position reached.
 
-The buffer content is consumed up to where the parser requests discarding the rest or fully if
-no such request was made. Once the parser has requested discarding, the end of the input is
-processed without reading further.
+Once the parser requests discarding the rest of the input, e.g. after `(exit)` in a script,
+the rest is left unread in the buffered reader.
 
 If an error occurs, the reader is not given back; the failure carries the handler.
 -/
@@ -398,7 +415,8 @@ Returns the located parser result if successful, `none` if the parser broke its 
 `readEof`), and the reader, reset.
 
 A failure to open the file is reported as an I/O error with an empty span at the start of the
-input. An I/O read error is reported as an empty span at the respective position.
+input. A failure while reading is reported as an I/O error with an empty span at the position
+reached.
 
 If an error occurs, the reader is not given back; the failure carries the handler.
 -/
@@ -426,8 +444,12 @@ variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 /- LEAN: Rust's `read_smt_file` lends the handler; here it is given and given back, also after
 an error, in the failure. -/
 /--
-Reads the SMT-LIB file at `path`, delivering its content to `handler`, and returns the handler;
-if reading fails, the failure carries it.
+Reads an SMT-LIB script from a file, delivering it to a handler.
+
+The script is read in SMT-LIB 2.7 until it declares its version, with the default posture
+(`Version.VersionPosture.default`).
+
+The handler is given back, in the failure if reading fails.
 
 This is a convenience function over `Reader`: the parser is dropped after reading, so its
 resources cannot be preserved for future use. Use `Reader` directly to keep the resources across
@@ -447,13 +469,17 @@ def readSmtFile {n : Type → Type} [Monad n] [MonadLiftT IO n] [MonadLiftT m n]
 here both are given and given back, also after an error: the handler in the failure, the buffered
 reader as `readFrom` gives it back. -/
 /--
-Reads SMT-LIB input from `bufReader`, delivering its content to `handler`, and returns the
-handler (in the failure, if reading fails) and the buffered reader.
+Reads an SMT-LIB script from a buffered reader, delivering it to a handler.
 
-The input is considered to end when the buffered reader returns no bytes.
+The script is read in SMT-LIB 2.7 until it declares its version, with the default posture
+(`Version.VersionPosture.default`).
 
-The buffer content is consumed up to where the parser requests discarding the rest or fully if
-no such request was made.
+The handler and the buffered reader are given back, the handler in the failure if reading
+fails.
+
+The input is considered to end when the buffered reader returns a zero-length buffer.
+
+After `(exit)`, the rest of the input is left unread in the buffered reader.
 
 This is a convenience function over `Reader`: the parser is dropped after reading, so its
 resources cannot be preserved for future use. Use `Reader` directly to keep the resources across

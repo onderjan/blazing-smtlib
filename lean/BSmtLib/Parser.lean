@@ -7,18 +7,38 @@ public import BSmtLib.Token.Cursor
 public section
 
 /-!
-# The parser
+# Parsers of syntactic categories, commands, and scripts, and parser combinators
 
-One parser for each syntactic category, for commands and for scripts, each of which takes the
-tokens of a cursor and calls a handler as the handler contract states; and the parse adapter,
-which runs a parser over the tokens a lexer hands over.
+A parser implements `Parse` and parses tokens, calling a handler that implements `Handler` to
+handle grammar constructs. The parser can be connected to a token producer through
+`ParseAdapter` that implements `Token.Consume` and `Token.ConsumeFrom` for all token cursors,
+and passes the handler and the parse state (`ParseState`) to the parser.
 
-This module holds what the parsers share: the errors of a parse, the resources shared by the
-parsers of one input (`ParseState`), the parsers' monad, and how a parser is called (`Parse`).
+Parsers for all SMT-LIB grammar nodes are provided. As it is unknown if an attribute is a
+name-only attribute (`:name`) or a name-value attribute (`:key value`) before the next parsed
+token, only parsers for attribute and multiple-attribute occurrences followed by a closing
+parenthesis are provided through `ClosedAttributeParser` and `ClosedMultipleAttributeParser`.
+This is enough to parse all attribute occurrences in standard SMT-LIB.
 
-A parser takes the tokens of a cursor (`Parse.parse`). Given a cursor with a token, it takes at
-least one, and returns whether it goes on, its result if it finished, or its error. A parser
-that finishes starts its next value from its initial state.
+A single SMT-LIB command can be parsed using `CommandParser`, which requires the handler to also
+implement `CommandHandler`.
+
+A whole SMT-LIB script can be parsed using `ScriptParser`. It automatically discards after
+`(exit)` by calling `Token.Cursor.discardRest` and switches SMT-LIB versions after the SMT-LIB
+command `(set-info :smt-lib-version <version>)` by requesting the cursor to switch through
+`Token.Cursor.setVersion` and informing the handler of the new version in force through
+`Handler.setVersion` if successful.
+
+A custom parser can be crafted using combinators:
+- sequential combinators `PairParser`, `Tuple3Parser` etc.,
+- parenthesis enclosers `OpenedParser`, `ClosedParser`, `ParenParser`,
+- multiple-item parsers `ClosedMultipleParser`, `ParenMultipleParser`, `ClosedMaximumParser`
+  and `ParenMaximumParser`.
+
+Additionally, `CommandPayloadParser` is provided to simplify implementing parsing of
+nonstandard commands for handlers that support them.
+
+If needed, a parser can also be implemented manually.
 -/
 
 namespace BSmtLib.Parser
@@ -30,79 +50,134 @@ open BSmtLib (Version Token)
 open BSmtLib.Lexicon.Reserved (GeneralReserved)
 
 
-/-- An item that a parser expected, in `SyntaxErrorKind.expected`. -/
+/--
+Syntax item expected by a parser.
+
+Used in `SyntaxErrorKind.expected`.
+-/
 inductive SyntaxExpected where
-  /-- A token of the category. -/
+  /-- Token of the given category. -/
   | token (category : TokenCategory)
-  /-- The reserved word. -/
+  /-- Reserved word, e.g. `_` or `as`. -/
   | reserved (word : Lexicon.Reserved)
-  /-- A symbol, simple or quoted. -/
+  /-- Symbol (quoted or unquoted), e.g. `x` or `|a b|`. -/
   | symbol
-  /-- An index of an identifier: a numeral or a symbol. -/
+  /-- Index of an identifier (a numeral or a symbol), e.g. `32` in `(_ BitVec 32)`. -/
   | index
+  /-- Identifier, e.g. `x` or `(_ bv0 32)`. -/
   | ident
+  /-- Sort, e.g. `Int` or `(Array Int Bool)`. -/
   | sort
+  /-- Term, e.g. `x` or `(+ x 1)`. -/
   | term
+  /-- S-expression, e.g. `a` or `(a (b 1))`. -/
   | sExpr
+  /-- Attribute, e.g. `:status sat` or `:named p`. -/
   | attribute
-  /-- What follows the opening parenthesis of a compound term. -/
+  /--
+  What follows the opening parenthesis of a compound term, e.g. `f` in `(f x)` or `let` in
+  `(let ((x 1)) x)`.
+  -/
   | operator
-  /-- The name of a command. -/
+  /-- Name of a command, e.g. `assert` or `check-sat`. -/
   | commandName
-  /-- A propositional literal: a symbol or its negation. -/
+  /-- Propositional literal (a symbol or its negation), e.g. `p` or `(not p)`. -/
   | propositionalLiteral
   deriving BEq, Hashable, Repr
 
-/-- A list that must not be empty, in `SyntaxErrorKind.empty`. -/
+/--
+List that was expected to be non-empty.
+
+Used in `SyntaxErrorKind.empty`.
+-/
 inductive NonEmptyList where
+  /-- Indices of an identifier, e.g. `32` in `(_ BitVec 32)`. -/
   | identIndices
+  /-- Arguments of a sort, e.g. `Int Bool` in `(Array Int Bool)`. -/
   | sortApplication
+  /-- Arguments of an application, e.g. `x 1` in `(+ x 1)`. -/
   | termApplication
+  /-- Bindings of `let`, e.g. `((x 1))` in `(let ((x 1)) x)`. -/
   | letBindings
+  /-- Attributes of an annotation, e.g. `:named p` in `(! x :named p)`. -/
   | annotation
+  /-- Variables of a quantifier, e.g. `((x Int))` in `(forall ((x Int)) p)`. -/
   | quantifierVars
+  /-- Variables of `lambda`, e.g. `((x Int))` in `(lambda ((x Int)) x)`. -/
   | lambdaVars
+  /-- Functions of `define-funs-rec`, e.g. `((f () Int) (g () Int))`. -/
   | functionSignatures
+  /-- Sorts of `declare-datatypes`, e.g. `((A 0) (B 0))`. -/
   | datatypeIntroductions
+  /-- Parameters of a datatype, e.g. `(T)` in `(par (T) ((c (f T))))`. -/
   | datatypeParameters
+  /--
+  Constructors of a datatype, e.g. `((c (f T)))` in `(par (T) ((c (f T))))`.
+
+  This arises only in the `par` form: without it, the first `(` opens a constructor.
+  -/
   | datatypeConstructors
+  /-- Arguments of a constructor pattern, e.g. `h t` in `(cons h t)`. -/
   | patternArguments
+  /-- Cases of `match`, e.g. `((nil 0) ((cons h t) h))`. -/
   | matchCases
+  /-- Terms of `get-value`, e.g. `(x y)` in `(get-value (x y))`. -/
   | getValueTerms
   deriving BEq, Hashable, Repr
 
-/-- An item of which fewer arrived than were announced, in `SyntaxErrorKind.missing`. -/
+/--
+Announced item that did not arrive (function body or datatype).
+
+Used in `SyntaxErrorKind.missing`.
+-/
 inductive MissingItem where
-  /-- A body of a function of `define-funs-rec`. -/
+  /--
+  Body of a function of `define-funs-rec`.
+
+  For example, `(define-funs-rec ((f () Int) (g () Int)) (1))` lacks the body of `g`.
+  -/
   | functionBody
-  /-- A datatype of `declare-datatypes`. -/
+  /--
+  Datatype of `declare-datatypes`.
+
+  For example, `(declare-datatypes ((A 0) (B 0)) (((a))))` lacks the datatype `B`.
+  -/
   | datatype
   deriving BEq, Hashable, Repr
 
-/-- What a syntax error expected or found wrong. -/
 /- LEAN: Rust's `SmtSyntaxErrorKind`. Rust's `Expected` holds a static slice; here it is an
 array, which the library builds from literals. -/
+/-- Why the syntax was rejected (expected item, empty list, or missing item). -/
 inductive SyntaxErrorKind where
-  /-- One of the items was expected here. -/
+  /-- One of the items was expected here, e.g. a term in `(assert)`. -/
   | expected (items : Array SyntaxExpected)
-  /-- A list that must not be empty is empty. -/
+  /-- A list that must not be empty is empty, e.g. the indices in `(_ BitVec)`. -/
   | empty (list : NonEmptyList)
-  /-- Fewer items arrived than were announced. -/
+  /--
+  Fewer items arrived than were announced, e.g. fewer bodies than functions in
+  `define-funs-rec`.
+  -/
   | missing (item : MissingItem)
   deriving BEq, Hashable, Repr
 
-/-- What is wrong with the version a script declares. -/
+/-- Why switching the version failed (unsupported version or too many declarations). -/
 inductive VersionErrorKind where
-  /-- The version is not one that can be switched to. -/
+  /--
+  The requested version was rejected as not supported, e.g. `3.0`.
+
+  The declared version is unknown (e.g. `3.0` or `foo`), not allowed by the posture, or
+  refused by the cursor.
+  -/
   | unsupported
-  /-- The script declares its version more times than the limit allows. -/
+  /--
+  The script declared its version more times than allowed.
+
+  The number is the maximum that the posture allows.
+  -/
   | tooManyDeclarations (limit : Nat)
   deriving BEq, Hashable, Repr
 
-/--
-The party that failed when a parse failed: the input's syntax, or the handler. The error has no
-location: it is at the last token the parser consumed, which its driver knows.
--/
+/-- Why parsing failed (syntax, version, or handler error). -/
 inductive ParseErrorKind (ε : Type) where
   /-- The tokens do not form the syntax the parser accepts. -/
   | syntax (kind : SyntaxErrorKind)
@@ -116,10 +191,10 @@ inductive ParseErrorKind (ε : Type) where
 structure of one field is represented by the field, so no box is needed. The constructor is
 private, as Rust's field is, and the library builds an error with `ParseError.Internal.new`. The
 kind is readable as `error.kind`, replacing the getters `kind` and `into_kind`. -/
-/-- Error emitted by a parser. -/
+/-- Error that forced parsing to stop. -/
 structure ParseError (E : Type) where
   private mk ::
-  /-- Why the parse failed. -/
+  /-- Returns the kind of the error. -/
   kind : ParseErrorKind E
   deriving BEq, Repr
 
@@ -204,8 +279,6 @@ private def SyntaxExpected.name : SyntaxExpected → String
     | .functionBody => "too few function bodies for `define-funs-rec`"
     | .datatype => "too few datatypes for `declare-datatypes`"
 
-/-- The items expected, the last joined by "or", with a serial comma before it if there are more
-than two; "unexpected token" if none are. -/
 @[no_expose] instance : ToString SyntaxErrorKind where
   toString
     | .expected expected =>
@@ -236,34 +309,36 @@ than two; "unexpected token" if none are. -/
 @[no_expose] instance {E : Type} [ToString E] : ToString (ParseError E) :=
   ⟨fun self => toString self.kind⟩
 
-/-- The error of the handler's error. -/
+/-- Creates a handler error. -/
 @[inline]
 def ParseError.handler {E : Type} (error : E) : ParseError E :=
   ParseError.Internal.new (.handler error)
 
-/-- The syntax error of the kind. -/
+/-- Creates a syntax error. -/
 @[inline]
 def ParseError.syntax {E : Type} (kind : SyntaxErrorKind) : ParseError E :=
   ParseError.Internal.new (.syntax kind)
 
-/-- The version error of the kind. -/
+/-- Creates a version error. -/
 @[inline]
 def ParseError.version {E : Type} (kind : VersionErrorKind) : ParseError E :=
   ParseError.Internal.new (.version kind)
 
 /- LEAN: Rust's `SmtParseState` holds the arena and the slots that the standard parsers share,
 all crate-private. The parsers of the port keep their state in themselves, so this one holds
-nothing; it is handed to every parser and given back unchanged. -/
+nothing; it is handed to every parser and given back unchanged. The command parser creates a
+fresh one for the parser of a nonstandard payload, where Rust passes its own on; as it holds
+nothing, the difference cannot be observed. -/
 /--
-The resources shared by the parsers of one input (`SmtParseState`).
+Current state of library parsers.
 
-It is made once for the root parser and handed on to the parsers it calls.
+The state is handed to every parser and given back unchanged.
 -/
 structure ParseState (H : Type) where
   private mk ::
 
-/-- Fresh resources. -/
 /- LEAN: Rust's `SmtParseState::new`. -/
+/-- Creates the parse state with fresh resources. -/
 def ParseState.new {H : Type} : ParseState H := ⟨⟩
 
 instance {H : Type} : Inhabited (ParseState H) := ⟨.new⟩
@@ -274,9 +349,14 @@ and the cursor; here the handler is the state of the monad, and the parser, the 
 the cursor are given back. The cursor is given back with the proof that the parser took a
 token of it if it had one: the rule that Rust states in words for `SmtConsumeFrom::consume`. -/
 /--
-A parser of SMT-LIB input with a handler (`SmtParse`): the parser of the type `P`, with the
-handler of the type `H` in the monad `m`, whose errors are of the type `E`, finishing with results
-of the type `R`.
+Parses a grammar item.
+
+A parser is handed tokens through a cursor until it breaks with its result, e.g. by a
+`ParseAdapter` or by a parser that contains it. A library parser that has broken with its
+result can parse the next item.
+
+The parser is of the type `P`, with the handler of the type `H` in the monad `m`, whose errors
+are of the type `E`, finishing with results of the type `R`.
 -/
 class Parse (P : Type) (H : Type) (m : outParam (Type → Type)) (E R : outParam Type) where
   /--
@@ -285,18 +365,20 @@ class Parse (P : Type) (H : Type) (m : outParam (Type → Type)) (E R : outParam
   If the cursor has a token, the parser takes at least one, whatever it returns, an error
   included.
 
-  If the parser returns `ControlFlow.continue`, it has taken all tokens it was handed and wants
-  more.
+  If the parser returns `ControlFlow.continue`, it means all tokens were handled and more are
+  wanted: the cursor given back must be empty.
 
-  If the parser returns `ControlFlow.break`, it has finished the input it accepts, taking exactly
-  its tokens, and returns its result. It is then back in its initial state, ready for the next
-  value.
+  If the parser returns `ControlFlow.break`, it means it finished the input it accepts (consuming
+  exactly its tokens), is returning a result and waiting for processing of the next value.
 
-  If the parser returns an error, it has failed at the last token it took. The state of the
-  parser it gives back is unspecified.
+  Returning an error means that the tokens do not form what the parser accepts, that a version
+  switch failed, or that the handler failed. The state of the parser, cursor, and parse state
+  given back is then unspecified.
 
-  The parse state holds the resources shared by the parsers of one input; it is given back with
-  the parser.
+  All library parsers that have an instance of `Parse` are fully self-resetting: after returning
+  `ControlFlow.break`, they are back in their initial state.
+
+  The parse state is given back with the parser.
   -/
   parse {Z : Type} [Token.Cursor Z] : P → ParseState H → (cursor : Z) →
     StateT H m (Except (ParseError E) (ControlFlow R) × P × ParseState H ×
@@ -343,21 +425,21 @@ on with a new state or finishes with a result. Before it takes a token it is tol
 has arrived, so that it can make the calls due at a token's arrival. A step may ask to act on the
 cursor: to switch the version, or to discard the rest of the input; the parser goes on once the
 cursor has done so. In a state in which a parser holds a parser of its own that takes a cursor
-(the command parser in a non-standard command), it hands the cursor to that parser instead of
+(the command parser in a nonstandard command), it hands the cursor to that parser instead of
 taking a token, and goes on as that parser's answer says. `Internal.parseByToken` takes the
 tokens of a cursor one by one with such a parser, handing the cursor over where it asks: it is
 the `parse` of each of them.
 -/
 
 
+/- LEAN: Rust's parsers match on `SmtToken`. The parser has a type of its own for it,
+with the constants as one constructor and whitespace and comments as one, which the loop makes
+from the syntax token (`Input.ofSyntax`). -/
 /--
 A token as the parsers take it: what it stands for in the version it was cut in, or the end of
 the input. Words reserved in the version are reserved words; every other simple or quoted
 symbol is a symbol.
 -/
-/- LEAN: Rust's parsers match on `SmtToken`. The parser has a type of its own for it,
-with the constants as one constructor and whitespace and comments as one, which the loop makes
-from the syntax token (`Input.ofSyntax`). -/
 inductive Input where
   | parenOpen
   | parenClose

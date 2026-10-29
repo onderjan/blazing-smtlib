@@ -7,20 +7,23 @@ public section
 /-!
 # How a command ended
 
-The outcome of the command parser at the end of a command (`SmtCommandOutcome`).
+The outcome of the command parser at the end of a command.
 -/
 
 namespace BSmtLib.Parser.Command
 
 open BSmtLib (Version)
 
-/-- How a command ended (`SmtCommandOutcome`). -/
+/--
+Outcome of parsing a command with `CommandParser` (command, version switch, exit, or end of
+file).
+-/
 inductive CommandOutcome where
-  /-- A command ended. -/
+  /-- A command other than `exit` and a version declaration was parsed, e.g. `(check-sat)`. -/
   | command
-  /-- A version declaration ended, handled as `set-info`; a script switches to the version. -/
+  /-- A version-switch command was parsed, e.g. `(set-info :smt-lib-version 2.6)`. -/
   | setVersion (version : Version)
-  /-- `exit` ended. -/
+  /-- The exit command `(exit)` was parsed. -/
   | exit
   /-- The end of the input was reached before a command. -/
   | endOfFile

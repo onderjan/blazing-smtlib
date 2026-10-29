@@ -63,12 +63,12 @@ end IdentState
 
 end Internal
 
-/-- The parser of one identifier (`SmtIdentParser`). -/
+/-- Parses an identifier. -/
 structure IdentParser where
   private mk ::
   private state : Internal.IdentState
 
-/-- The identifier parser before an identifier. -/
+/-- Creates the parser. -/
 def IdentParser.new : IdentParser := ⟨.start⟩
 
 instance : Inhabited IdentParser := ⟨.new⟩

@@ -29,7 +29,7 @@ inductive CommandState
   /-- After the `(` of a command, before its name. -/
   | opened
   | payload (state : Payload HandledSExpr HandledAttribute HandledSort HandledTerm Scope)
-  /-- In the payload of a non-standard command, with the parser the handler gave for it. -/
+  /-- In the payload of a nonstandard command, with the parser the handler gave for it. -/
   | nonstandard (parser : Nonstandard)
 
 /-- The command parser state of the handler. -/
@@ -40,11 +40,15 @@ abbrev CommandStateOf (H : Type) {m : Type → Type} [CommandHandler H m] :=
 end Internal
 
 /--
-The parser of one command (`SmtCommandParser`). It finishes after every command, and after the
-end of the input while it awaits a command.
+Parses an SMT-LIB command.
 
-A version declaration switches nothing: the version is a mode of a script. The parser reports
-the declaration in its outcome, and its caller decides; `exit` likewise.
+The parser finishes after every command, returning `ControlFlow.break` with a `CommandOutcome`
+that distinguishes the command `(exit)` and the version-switch command
+`(set-info :smt-lib-version <version>)` from the others. It also finishes after an EOF while
+awaiting a command. An EOF inside a command is a syntax error.
+
+To read a whole script, use `Parser.Script.ScriptParser`, which also switches versions on
+version declarations and discards the input after `(exit)`.
 -/
 structure CommandParser (H : Type) {m : Type → Type} [CommandHandler H m] where
   private mk ::
@@ -54,7 +58,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 
-/-- The command parser before a command. -/
+/-- Creates the parser. -/
 def CommandParser.new : CommandParser H := ⟨.awaiting⟩
 
 instance : Inhabited (CommandParser H) := ⟨.new⟩
@@ -69,7 +73,7 @@ variable {H : Type} {m : Type → Type} [Monad m] [CommandHandler H m]
 parser, and clears the state after the command. The parse state holds nothing here, so a fresh
 one is handed each time. -/
 /--
-Hands the cursor to the handler's parser of a non-standard command's payload: its error, or
+Hands the cursor to the handler's parser of a nonstandard command's payload: its error, or
 whether the command goes on in the parser given back (`some`) or ended at its `)` (`none`); and
 the cursor the parser gave back.
 -/
@@ -92,7 +96,7 @@ steps the parser by single tokens: it hands each token on in a producer of that 
 a parser they hold, so that the non-standard parser cannot switch the version and is called once
 per token. -/
 /--
-A step of a non-standard command's payload: the token goes to the handler's parser, and the
+A step of a nonstandard command's payload: the token goes to the handler's parser, and the
 command ends when that parser finishes, at the command's `)`.
 -/
 def Internal.nonstandardStep (version : Version) (parser : CommandHandler.NonstandardParser H)
@@ -103,13 +107,13 @@ def Internal.nonstandardStep (version : Version) (parser : CommandHandler.Nonsta
   match answer with
   | .error error => throw error.kind
   | .ok .continue => return .more (.nonstandard parser)
-  -- a non-standard command cannot be the exit command
+  -- a nonstandard command cannot be the exit command
   | .ok (.break ()) => return .done .command
 
 /--
 A step of the command parser: `(`, the command's name, its payload up to its `)`; or the end of
 the input between commands. A symbol as the name, even one spelled as a standard command's
-name, names a non-standard command.
+name, names a nonstandard command.
 -/
 def Internal.commandStep (version : Version) (self : Internal.CommandStateOf H)
     (token : Internal.Input) :
@@ -155,7 +159,7 @@ instance Internal.instParseByTokenCommandParser :
       match answer with
       | .error error => return (.stop (.error error) .new, next)
       | .ok (some nonstandard) => return (.goOn ⟨.nonstandard nonstandard⟩, next)
-      -- a non-standard command cannot be the exit command
+      -- a nonstandard command cannot be the exit command
       | .ok none => return (.stop (.ok (.break .command)) .new, next)
     | _ => none
 
@@ -169,29 +173,48 @@ parser's result type, which Rust reads from the parser's `SmtParse` impl, is a f
 `handle` can name it. Rust bounds `H` by `SmtCommandHandler`; here a `Handler` is enough, so
 that a handler's `CommandHandler` instance can name a payload parser of a rule for that same
 handler as its non-standard parser: Lean has no cycles between instances. -/
-/-- Determines how a single command should be handled by a command handler
-(`SmtCommandRule`). -/
+/--
+Handles the result of a command parsed by `CommandPayloadParser`.
+
+A rule separates parsing a command from handling it: `Parser` parses the rest of the command up
+to and including its closing parenthesis, and only then is `handle` called with the result. A
+command is thus handled once it has been read completely, like a standard command, and a command
+that fails to be read, e.g. `(minimize c` at the end of the input, is not handled at all.
+-/
 class CommandRule (R : Type) (H : Type) {m : outParam (Type → Type)} [Handler H m] where
-  /-- The parser of the command's payload. -/
+  /--
+  Parses the tokens after the name of the command, up to and including its closing parenthesis.
+
+  For example, the payload of `(minimize c)` is a term followed by the closing parenthesis, which
+  `Category.Combinator.ClosedParser H (Category.Term.TermParser H)` parses.
+
+  The closing parenthesis is a part of the payload because a payload that ends with an attribute
+  can only end with it: whether an attribute has a value is known only from the token after its
+  keyword, e.g. the `)` in `(set-option :print-success)`. Attributes are thus parsed together
+  with the closing parenthesis, by `Category.Attribute.ClosedAttributeParser` and
+  `Category.Attribute.ClosedMultipleAttributeParser`.
+  -/
   Parser : Type
-  /-- What the parser finishes with. -/
+  /-- Result of `Parser`. -/
   Result : Type
-  /-- The parser's instance of `Parse`, filled in by instance search. -/
+  /-- Instance of `Parse` of `Parser`, filled in by instance search. -/
   [parse : Parse Parser H m (Handler.Error H) Result]
-  /-- Handles the result of a command. -/
   /- LEAN: Rust's `handle(&mut self, handler, result)`: the rule is given and given back, as
   the handler is the state of the monad. -/
+  /--
+  Handles the result of the parser once the command has been read to its closing parenthesis.
+  -/
   handle : R → Result → ExceptT (Handler.Error H) (StateT H m) R
 
 /- The rule's parser's `Parse` instance, found from the rule's. -/
 attribute [instance_reducible, instance] CommandRule.parse
 
 /--
-A parser that processes the payload of a single command (starting after its name)
-(`SmtCommandPayloadParser`).
+Parses the payload of a single command, starting after its name.
 
-Preserves self-reset: if the inner parser is self-resetting, moves back into the default state
-before returning `ControlFlow.break`.
+The payload is parsed by the parser of the rule, and its result is handed to
+`CommandRule.handle` of the rule once the closing parenthesis of the command has been parsed.
+The parser can serve as the `Handler.CommandHandler.NonstandardParser` of a command handler.
 -/
 structure CommandPayloadParser (H R : Type) {m : Type → Type} [Handler H m]
     [CommandRule R H] where
@@ -203,12 +226,12 @@ section
 
 variable {H R : Type} {m : Type → Type} [Handler H m] [CommandRule R H]
 
-/-- The payload parser of the rule, over the rule's parser. -/
+/-- Creates the parser with the rule and the payload parser. -/
 def CommandPayloadParser.new (rule : R) (parser : CommandRule.Parser R H) :
     CommandPayloadParser H R :=
   ⟨rule, parser⟩
 
-/-- The payload parser of the rule, over the rule's default parser. -/
+/-- Creates the parser with the rule and its default payload parser. -/
 def CommandPayloadParser.withRule [Inhabited (CommandRule.Parser R H)] (rule : R) :
     CommandPayloadParser H R :=
   .new rule default

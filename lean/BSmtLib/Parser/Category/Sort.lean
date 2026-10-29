@@ -99,7 +99,12 @@ end
 
 end Internal
 
-/-- The parser of one sort (`SmtSortParser`). -/
+/--
+Parses a sort.
+
+Returns the sort that `Handler.handleSort` returns for it, having handled its argument sorts
+first.
+-/
 structure SortParser (H : Type) {m : Type → Type} [Handler H m] where
   private mk ::
   private state : Internal.SortState (Handler.«Sort» H)
@@ -108,7 +113,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-/-- The sort parser before a sort. -/
+/-- Creates the parser. -/
 def SortParser.new : SortParser H := ⟨.init⟩
 
 instance : Inhabited (SortParser H) := ⟨.new⟩

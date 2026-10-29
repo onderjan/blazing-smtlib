@@ -12,6 +12,37 @@ import all Std.Data.ByteSlice
 
 public section
 
+/-!
+# Lexer that produces tokens from input bytes, handing them over to a token consumer
+
+`Lexer` hands over tokens to a consumer that implements `Token.Consume` and `Token.ConsumeFrom`
+over `LexerCursor`. This can be a `Writer` or a parser adapted to a consumer via
+`Parser.ParseAdapter`. The lexer and an adapted parser together form `Reader`.
+
+A custom consumer can be used to process the tokens as desired. If `Token.ConsumeFrom` is
+implemented for `LexerCursor` specifically rather than generically over every `Token.Cursor`,
+the consumer can use the token spans exposed by the lexer.
+
+It is unspecified how the lexer batches the tokens, only that it provides at least one token per
+call and the consumer must consume at least one. The consumer is required to return a break
+value on EOF, and a non-EOF token that would be handed over after the break value results in an
+error with `Error.LexicalErrorKind.unexpectedTrailingToken`. The EOF token is handed over only
+if the consumer has not broken with a value before the end of the input. See
+`Token.ConsumeFrom.consume` for the details of the handover contract.
+
+The inputs can be passed to the lexer in two ways:
+
+- In full (the lexer hands the consumer an EOF token at the end): from a file (`Lexer.lexFile`),
+  a buffered reader (`Lexer.lexFrom`), or a full slice (`Lexer.lexAll`).
+- In parts using calls of `Lexer.lexSlice` followed by `Lexer.lexEof`; a part may end anywhere,
+  even inside a token.
+
+On successful consumer break, the lexer returns the result value augmented with the location
+where the value's last token ends and resets itself so it is prepared for lexing another input.
+On an error, the lexer returns `LexerError` or `LexerReadError` and, if it is fail-fast, gives
+back only its token consumer, and cannot be used again.
+-/
+
 open BSmtLib.Lexer.Cursor (LexerCursor LexerToken)
 
 namespace BSmtLib.Lexer
@@ -155,6 +186,12 @@ structure LexerCore where
 
 /- LEAN: Rust keeps the held result in the lexer as `Option<SmtLocated<C::Result>>`; the result
 type is the consumer's, which its instance of `Consume` gives, so the lexer takes the instance. -/
+/--
+Lexes SMT-LIB input, handing the tokens to a consumer.
+
+See the module documentation of `BSmtLib.Lexer` for how the tokens are handed over, how the
+input is given, and what happens at the end of an input and after an error.
+-/
 structure _root_.BSmtLib.Lexer (H : Type) {R E : Type} [Token.Consume H R E]
     (recovery : Type := Lexer.Recovery.FailFast) where
   private mk ::
@@ -165,14 +202,6 @@ structure _root_.BSmtLib.Lexer (H : Type) {R E : Type} [Token.Consume H R E]
   input. -/
   private held : Option (Span.Located R)
 
-/- LEAN: Rust's lexer methods take `&mut self` and return `Result<usize, Interrupted<..>>`,
-using `?` to pass an interruption up. In Lean the same is a monad: `StateT LexerCore` holds
-the lexer's fields as mutable state, `StateT H` the handler, and `ExceptT (Interrupted R E)`
-is the `Err` that `throw` raises and that passes up through every `←` like `?`. `ExceptT` is
-outermost so that the lexer's fields keep their changes when an interruption is thrown, as
-in Rust. The handler is a separate state so that it can be handed to `consume` without
-another reference to it remaining in the lexer's state, which would make the handler's
-updates copy it. -/
 /- LEAN: not in Rust. What a step of the lexer keeps true of its state, from which the loop over
 a slice is shown to end: the offset only grows from `low`, its value when the step started; and
 the offset and the tokens of the batch are at or after the floor (see `Interrupted`), and a
@@ -189,6 +218,14 @@ def LexerCore.Bound (floor : Option Nat) (low : Nat) (c : LexerCore) : Prop :=
     ∀ p, floor = some p → p ≤ c.offset ∧
       (c.state = .normal ∨ p ≤ c.tokenStart.offset ∨ p < c.offset) ∧ c.batch.StartsFrom p
 
+/- LEAN: Rust's lexer methods take `&mut self` and return `Result<usize, Interrupted<..>>`,
+using `?` to pass an interruption up. In Lean the same is a monad: `StateT LexerCore` holds
+the lexer's fields as mutable state, `StateT H` the handler, and `ExceptT (Interrupted R E)`
+is the `Err` that `throw` raises and that passes up through every `←` like `?`. `ExceptT` is
+outermost so that the lexer's fields keep their changes when an interruption is thrown, as
+in Rust. The handler is a separate state so that it can be handed to `consume` without
+another reference to it remaining in the lexer's state, which would make the handler's
+updates copy it. -/
 abbrev InnerM (H : Type) (m : Type → Type) := StateT LexerCore (StateT H m)
 
 /- LEAN: a step runs on the lexer state together with the proof that it is within the bounds,
@@ -415,14 +452,14 @@ def failWith (kind : Error.LexicalErrorKind) (position failure : USize) :
     location := c.locationAt failure
     stopAfter := fun _ _ _ h => nomatch h }
 
+/- LEAN: Rust panics if `position` is zero, which no caller passes: an error detected at a
+byte spans that byte. -/
 /--
 Fails with an error spanning the token up to `position`.
 
 Used for errors detected mid-run, e.g. forbidden byte in a string
 or a backslash in a quoted symbol.
 -/
-/- LEAN: Rust panics if `position` is zero, which no caller passes: an error detected at a
-byte spans that byte. -/
 def failAt (kind : Error.LexicalErrorKind) (position : USize) : LexM H m R E floor low α :=
   -- the byte before the position raised the error
   failWith kind position (position - 1)
@@ -622,13 +659,13 @@ def flushBatch : LexM H m R E floor low Unit := do
   let bytes := batch.bytes
   storeSpent (← handOver batch bytes fun p hp => (hbatch p hp).endsAfter)
 
+/- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
+which is empty after the flush, with the content buffer as its array of contents for the
+one token. -/
 /--
 Hands over a single token whose content is in the lexer's content buffer,
 spanning from `start` to `end`.
 -/
-/- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
-which is empty after the flush, with the content buffer as its array of contents for the
-one token. -/
 def handOverStored (ty : Token.TokenCategory) (start «end» : Span.Location)
     (hend : start.offset < «end».offset) (hfloor : ∀ p, floor = some p → p < «end».offset) :
     LexM H m R E floor low Unit := do
@@ -830,10 +867,10 @@ def leavePending (state : Helpers.LexerState) (start : Span.Location) (offset : 
         ⟨Nat.le_trans (hframe.2 p hp) (Nat.le_add_right _ _), .inr (.inl (hfloor p hp)),
           hbatch.2 p hp⟩⟩⟩
 
-/-- Hands the full batch held by the loop over, and gives it back empty, with the origin. -/
 /- LEAN: not inlined. Inlined into the loop of `lexNormalFrom`, the compiler reads the batch's
 array of contents, which the hand-over takes, right after each token is put into the batch,
 and so takes and drops a reference to it for every token. -/
+/-- Hands the full batch held by the loop over, and gives it back empty, with the origin. -/
 @[noinline]
 def flushHeld (batch : Token.Internal.TokenBatch) (origin : Nat)
     (hbatch : ∀ p, floor = some p → batch.StartsFrom p) :
@@ -846,6 +883,8 @@ def flushHeld (batch : Token.Internal.TokenBatch) (origin : Nat)
   return ⟨spent.clear origin, Token.Internal.TokenBatch.lastEnd_clear _ _,
     fun _ _ => Token.Internal.TokenBatch.startsFrom_clear _ _ _⟩
 
+/- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
+here a token that is not emitted is not written. -/
 /--
 Puts a fast-path token into the batch if `emit` is set, flushing the batch
 when it is full.
@@ -854,8 +893,6 @@ The content is from `contentStart` to `contentStop` in the input, and the span i
 current line, over `start` to `end` in the input. `offset` is the stream offset of the
 position `base`.
 -/
-/- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
-here a token that is not emitted is not written. -/
 @[inline]
 def pushFast (batch : Token.Internal.TokenBatch) (offset : Nat) (base : USize)
     (ty : Token.TokenCategory) (contentStart contentStop start «end» : USize) (emit : Bool)
@@ -882,14 +919,14 @@ def pushFast (batch : Token.Internal.TokenBatch) (offset : Nat) (base : USize)
   else
     return ⟨batch, Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_pushOnLine ..), hfrom⟩
 
+/- LEAN: Rust's `sink_slice` with borrowed content, which puts the token into the lexer's
+batch; here into the batch the loop holds. -/
 /--
 Puts a token lexed on the slow path into the batch, flushing the batch when it is full.
 
 The content is from `contentStart` to `contentStop` in the input, and the span from `start`
 to `tokenEnd` in the input. `offset` is the stream offset of the position `base`.
 -/
-/- LEAN: Rust's `sink_slice` with borrowed content, which puts the token into the lexer's
-batch; here into the batch the loop holds. -/
 @[inline]
 def pushBorrowed (batch : Token.Internal.TokenBatch) (offset : Nat) (base : USize)
     (ty : Token.TokenCategory)
@@ -1719,13 +1756,13 @@ is `consumed` plus it here. The loops are shown to end as `lexNormalFrom` is. Wh
 moves `consumed` on before its run, the position is kept with the proof that it is not
 before the one the call started from, which the code after the move is shown to end by. -/
 
+/- LEAN: `origin` is where the step started, as at `lexWhitespace`. -/
 /--
 Lexes the string literal in the legacy 2.0 mode.
 
 The legacy 2.0 mode has two backslash escapes, \" and \\.
 There are no other escapes.
 -/
-/- LEAN: `origin` is where the step started, as at `lexWhitespace`. -/
 def lexStringLiteralLegacy (input : CharClass.Input) (consumed origin : USize)
     (horigin : origin.toNat ≤ consumed.toNat) (tokenStart : Span.Location)
     (base : USize) (h : Started floor low tokenStart) :
@@ -2706,9 +2743,10 @@ section
 variable {H : Type} {R E : Type} [Token.Consume H R E]
 
 /--
-Constructs the lexer.
+Creates a lexer that stops at its first error.
 
-The lexer stops at its first error.
+Each input starts in `version`; the consumer can switch it within an input through the cursor
+(`Token.Cursor.setVersion`).
 -/
 def new (consumer : H) (version : Version) : Lexer H :=
   { handler := consumer,
@@ -2736,7 +2774,7 @@ def new (consumer : H) (version : Version) : Lexer H :=
 /- LEAN: Rust requires the consumer to recover by the bound `C: SmtRecover`; here by the
 instance argument, which the construction itself does not use. -/
 /--
-Constructs a lexer that recovers from errors (EXPERIMENTAL).
+Creates a lexer that recovers from errors (EXPERIMENTAL).
 
 Lexer recovery is implemented but experimental
 since the exact semantics have not yet been set in stone.
@@ -2757,7 +2795,7 @@ def currentLocation (self : Lexer H recovery) : Span.Location :=
   self.core.currentLocation
 
 /--
-The SMT-LIB version currently in force.
+Returns the version currently in force.
 
 The version can change if the token consumer asks for it from the
 cursor. The end of the input resets the version to the initial one.
@@ -2766,10 +2804,11 @@ def version (self : Lexer H recovery) : Version :=
   self.core.version
 
 /--
-Where the lexer began to discard the input, if it discards.
+Returns the location from which the input is discarded (if discarding).
 
-The consumer asks for discarding through its cursor. The lexer then drops everything it is fed
-and hands over nothing but the end of the input. The end of the input ends discarding.
+A consumer forces discarding from the location after consumed tokens
+by `Token.Cursor.discardRest`.
+The end of the input resets discarding, so it returns `none` again.
 -/
 def discardedFrom (self : Lexer H recovery) : Option Span.Location :=
   self.core.discardedFrom
@@ -2856,14 +2895,14 @@ def Lexer.AfterError (H : Type) [Token.Consume H R E] (recovery : Type) [Recover
     Type :=
   Lexer.Internal.AfterErrorOf H recovery (Recovers.recovers recovery)
 
+/- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed in a recovering lexer and
+the error continues at the end, where Rust panics on any slice but the end of the input. -/
 /--
 A recovering lexer whose end of the input raised an error.
 
 The input has ended, so only the end of the input can be lexed again,
 which completes the recovery.
 -/
-/- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed in a recovering lexer and
-the error continues at the end, where Rust panics on any slice but the end of the input. -/
 structure Lexer.PendingEof (H : Type) [Token.Consume H R E] (recovery : Type := Recovering)
     where
   private mk ::
@@ -2892,13 +2931,13 @@ def Lexer.Internal.AfterEofErrorOf (H : Type) [Token.Consume H R E] (recovery : 
   | false => H
   | true => Lexer.AfterEof H recovery
 
+/- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed, by whether the lexer
+recovers, as `AfterError` is for the other calls. -/
 /--
 What a lexer gives back after its end of the input failed: the token
 consumer for a lexer that stops at its first error, and what remains of a
 recovering one.
 -/
-/- LEAN: what Rust's `&mut self` leaves usable after `lex_eof` failed, by whether the lexer
-recovers, as `AfterError` is for the other calls. -/
 @[expose]
 def Lexer.AfterEofError (H : Type) [Token.Consume H R E] (recovery : Type)
     [Recovers recovery] : Type :=
@@ -2944,20 +2983,15 @@ with the result. If the caller does not keep the old lexer, it is updated in pla
 /--
 Lexes the given slice, sending the lexed tokens to the consumer.
 
-If the token consumer returns `ControlFlow.break` on some token, the
-lexer holds the result, located where the consumer broke, and goes on
-lexing what it is fed. Any token handed over after it, including those
-the consumer left in its cursor, is the error `UnexpectedTrailingToken`.
-The result is returned by `lexEof`.
+The slice is the next piece of the input and may end anywhere, even inside a token, which
+the next slice or `lexEof` completes. A value that the consumer breaks
+with is held back until `lexEof` returns it. Once the consumer has
+requested discarding the rest of the input, slices are ignored.
 
-If the consumer has the rest discarded, the lexer drops everything it is
-fed until the end of the input (see `discardedFrom`).
+Returns an error if the input is lexically malformed or the consumer fails.
 
-If an error occurs, a lexer that stops at its first error gives back
-only its token consumer. A recovering lexer makes the consumer abandon its unfinished work,
-drops the held result, and returns the error. `LexerError.continuesFrom`
-determines the location from which further lexing should be started for
-error recovery.
+If an error occurs, the fail-fast lexer gives back only its token consumer,
+and cannot be used again.
 -/
 def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
     [Recovery.Recovers recovery] [Recovery.LexerRecovery recovery H m]
@@ -2971,22 +3005,21 @@ def lexSlice [Monad m] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
     | .error err => .error (err, afterError (Internal.withHeld self none))
 
 /--
-Lexes end-of-file, sending the lexed tokens to the consumer.
+Lexes the end of file, sending the lexed tokens to the consumer.
 
-If the lexer holds a result, the end of the input is not handed over and
-the held result is returned. Otherwise the end-of-file token is handed
-over, also while the lexer discards, and the consumer must break on it:
-the result it breaks with is returned, with its location. A consumer
-that continues on the end-of-file token breaks its contract; the lexer
-then returns `none`.
+If there is any pending token, it is processed.
+Then, if a result value has been obtained from the consumer,
+it is returned. Otherwise, the EOF token is processed,
+and its result is returned. The lexer is then reset and can lex another input.
 
-The end of the input resets the lexer: the version to the initial one,
-discarding, the held result, and any partial token.
+Returns an error if the input is lexically malformed or the consumer fails.
 
-If an error occurs, a lexer that stops at its first error gives back
-only its token consumer. A recovering lexer makes the consumer abandon its unfinished work
-and returns the error. `LexerError.continuesFrom` determines the location
-from which further lexing should be started for error recovery.
+If an error occurs, the fail-fast lexer gives back only its token consumer,
+and cannot be used again.
+
+The contract of the token consumer forbids it from
+returning `ControlFlow.continue` on the EOF token,
+and the lexer returns `none` if it does.
 -/
 def lexEof [Monad m] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m]
     [Recovery.Recovers recovery] [Recovery.LexerRecovery recovery H m]
@@ -3021,11 +3054,20 @@ def PendingEof.lexEof [Monad m] [∀ batch, Token.ConsumeFrom H
     | .error err => .error (err, Internal.withHeld lexer none)
 
 /--
-Lexes the whole input including EOF at the end.
+Lexes the slice as the whole input, as `lexSlice` followed by
+`lexEof` does.
 
-Returns what `lexEof` does, and the lexer reset by the end of the input.
+Returns the located value that the consumer broke with. The lexer is then reset and can
+lex another input.
 
-If an error occurs, the lexer gives back only its token consumer.
+Returns an error if the input is lexically malformed or the consumer fails.
+
+If an error occurs, the lexer gives back only its token consumer,
+and cannot be used again.
+
+The contract of the token consumer forbids it from
+returning `ControlFlow.continue` on the EOF token,
+and the lexer returns `none` if it does.
 -/
 def lexAll [Monad m] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] (self : Lexer H)
     (input : ByteSlice) :
@@ -3037,17 +3079,28 @@ def lexAll [Monad m] [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] (sel
 
 /- LEAN: Rust's `lex_from` takes `&mut self` and the buffered reader; this takes the lexer and the
 buffered reader and gives both back, the buffered reader also after an error. The loop is the
-recursion, a tail call; it is `partial`, as a buffered reader may give bytes without end. -/
+recursion, a tail call; it is `partial`, as a buffered reader may give bytes without end.
+
+Parity defect, to be fixed in a later version. After an I/O error, Rust's lexer stays
+usable and `lex_from` can be called again to go on with the input. This gives back only the
+token consumer after an I/O error too, as after any other error, and so does `lexFile`. -/
 /--
 Lexes the content of the buffered reader as the whole input, including EOF at the end.
 
-The input is considered to end when the buffered reader returns no bytes. A failure while
-reading is reported as an I/O error with an empty span at the position reached.
+The input is considered to end when the buffered reader returns a zero-length buffer. A failure
+while reading is reported as an I/O error with an empty span at the position reached.
 
-The buffer content is consumed up to where the consumer requests discarding the rest or fully if
-no such request was made.
+Once the consumer requests discarding the rest of the input, the rest is left unread in the
+buffered reader.
 
 Otherwise, behaves as `lexAll`.
+
+If an error occurs, the lexer gives back only its token consumer,
+and cannot be used again.
+
+The contract of the token consumer forbids it from
+returning `ControlFlow.continue` on the EOF token,
+and the lexer returns `none` if it does.
 -/
 @[specialize]
 partial def lexFrom {B : Type} {n : Type → Type} [Monad m] [Monad n] [MonadLiftT m n]
@@ -3092,6 +3145,13 @@ Opens the file at `path` and lexes it as the whole input, as `lexFrom` does.
 
 A failure to open the file is reported as an I/O error with an empty span at the start of the
 input.
+
+If an error occurs, the lexer gives back only its token consumer,
+and cannot be used again.
+
+The contract of the token consumer forbids it from
+returning `ControlFlow.continue` on the EOF token,
+and the lexer returns `none` if it does.
 -/
 def lexFile {n : Type → Type} [Monad m] [Monad n] [MonadLiftT IO n] [MonadLiftT m n]
     [∀ batch, Token.ConsumeFrom H (LexerCursor batch) m] (self : Lexer H)

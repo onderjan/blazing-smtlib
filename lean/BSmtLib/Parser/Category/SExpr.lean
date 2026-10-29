@@ -7,7 +7,7 @@ public section
 /-!
 # S-expressions
 
-The parser of an s-expression, and the parser of one s-expression that a driver runs
+The parser of an S-expression, and the parser of one S-expression that a driver runs
 (`SExprParser`).
 -/
 
@@ -19,10 +19,10 @@ open BSmtLib.Parser.Internal (PM call syntaxError)
 
 namespace Internal
 
-/-- The state of the s-expression parser: the items of the open lists, innermost first. -/
+/-- The state of the S-expression parser: the items of the open lists, innermost first. -/
 abbrev SExprState (HandledSExpr : Type) := List (Array HandledSExpr)
 
-/-- An s-expression is complete: it is the result, or the next item of the innermost list. -/
+/-- An S-expression is complete: it is the result, or the next item of the innermost list. -/
 def sExprComplete {HandledSExpr : Type} (levels : SExprState HandledSExpr)
     (sExpr : HandledSExpr) : Internal.Step (SExprState HandledSExpr) HandledSExpr :=
   match levels with
@@ -34,8 +34,8 @@ section
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
 /--
-A step of the s-expression parser: an atom is handled at its token, a list at its `)`, its items
-before it. A reserved word is an s-expression from 2.6 on.
+A step of the S-expression parser: an atom is handled at its token, a list at its `)`, its items
+before it. A reserved word is an S-expression from 2.6 on.
 -/
 def sExprStep (version : Version) (self : SExprState (Handler.SExpr H)) (token : Internal.Input) :
     PM H (Internal.Step (SExprState (Handler.SExpr H)) (Handler.SExpr H)) := do
@@ -60,7 +60,12 @@ end
 
 end Internal
 
-/-- The parser of one s-expression (`SmtSExprParser`). -/
+/--
+Parses an S-expression.
+
+Returns the S-expression that `Handler.handleSExpr` returns for it, having handled the
+S-expressions inside it first.
+-/
 structure SExprParser (H : Type) {m : Type → Type} [Handler H m] where
   private mk ::
   private state : Internal.SExprState (Handler.SExpr H)
@@ -69,7 +74,7 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-/-- The s-expression parser before an s-expression. -/
+/-- Creates the parser. -/
 def SExprParser.new : SExprParser H := ⟨[]⟩
 
 instance : Inhabited (SExprParser H) := ⟨.new⟩

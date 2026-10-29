@@ -14,7 +14,7 @@ namespace BSmtLib.Token.TokensCursor
 not consumed; a push onto a cursor whose tokens are all consumed starts the array anew. Rust's
 lifetime of the tokens' bytes is the views' own: a view keeps the bytes it views. -/
 /--
-A cursor over a dynamic array of tokens.
+Cursor over a queue of syntax tokens.
 
 The cursor is consumed under a given version: it accepts a request
 for that version and refuses a switch to any other. If the consumer
@@ -33,7 +33,7 @@ structure _root_.BSmtLib.Token.TokensCursor where
   private versionInForce : Version
   deriving Repr
 
-/-- Constructs an empty cursor. -/
+/-- Creates an empty cursor that hands tokens over in `version`. -/
 def new (version : Version) : TokensCursor := ⟨#[], 0, false, version⟩
 
 /--

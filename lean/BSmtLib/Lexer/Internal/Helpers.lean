@@ -242,6 +242,10 @@ def mkAtByte (position : USize) : TokenEnd := { position, atByte := true }
 
 end TokenEnd
 
+/- LEAN: Rust keeps the content in a `BytesBuf` and clears it, keeping its allocation. Lean
+cannot shorten a `ByteArray` in place, so the lexer keeps its own buffer with a length, and the
+proof that the length is within the array, so that the content's bytes are read without a
+bounds check. -/
 /--
 The content of the token being lexed, accumulated across slices.
 
@@ -249,10 +253,6 @@ A byte array cannot be shortened in place, so the buffer keeps its bytes
 and the length of the content in use: clearing it only resets the length,
 and the bytes after it are overwritten as the content grows again.
 -/
-/- LEAN: Rust keeps the content in a `BytesBuf` and clears it, keeping its allocation. Lean
-cannot shorten a `ByteArray` in place, so the lexer keeps its own buffer with a length, and the
-proof that the length is within the array, so that the content's bytes are read without a
-bounds check. -/
 structure ContentBuffer where
   bytes : ByteArray
   len : Nat
@@ -319,11 +319,11 @@ def push (self : ContentBuffer) (byte : UInt8) : ContentBuffer :=
 
 end ContentBuffer
 
-/-- Where the bytes of a finished token are. -/
 /- LEAN: Rust borrows a sub-slice; here the content is the slice's array with the positions
 in it, from which the token is built without allocating a view. The positions come with the
 proof that they are in order and within the array, so that the content's bytes are read without
 a bounds check. -/
+/-- Where the bytes of a finished token are. -/
 inductive Content where
   /-- Accumulated in the lexer's token content. -/
   | stored

@@ -18,7 +18,7 @@ Fused: terms (without `match`, annotations and `as`), indexed identifiers, and t
 `assert`, `declare-fun`, `declare-const`, `define-fun`, `define-fun-rec`, `define-const`, `push`,
 `pop` and every command's last `)`; sorts, sorted variables and signatures by the functions of
 `Parser.Internal.Fused.Category`. Every other state is stepped by the port's own steps. In a
-non-standard command, the loop hands the cursor to the handler's parser of its payload
+nonstandard command, the loop hands the cursor to the handler's parser of its payload
 (`handOver`), as the parser's loop over single tokens does, and goes on after the command.
 
 The script parser's `parse` (`Fused.parse`) runs this loop on a batch cursor of the library's
@@ -279,7 +279,7 @@ def closingStep {batch : BatchTag} (posture : VersionPosture) (h : H) (declarati
       | _ => k <| .command h declarations .awaiting
   | _ => fail posture next h (.syntax (.expected #[.token .parenClose])) k
 
-/-- A command named by a symbol, a non-standard one: the handler gives its parser, which the
+/-- A command named by a symbol, a nonstandard one: the handler gives its parser, which the
 loop then hands the cursor to. -/
 @[inline]
 def startNonstandard {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : Nat)
@@ -398,7 +398,7 @@ def step {batch : BatchTag} (posture : VersionPosture) (h : H) (declarations : N
   else commandStep posture h declarations command token next k
 
 /--
-Hands `cursor`, which has a token, to the handler's parser of a non-standard command's payload,
+Hands `cursor`, which has a token, to the handler's parser of a nonstandard command's payload,
 and hands it the cursor again while it continues and tokens are left, as the loop over single
 tokens does (`Parser.Script.ScriptParser.Internal.handOver?`): the loop's result if the parser
 failed or continues, else the cursor after the command's `)`, with the handler. The cursors
@@ -450,7 +450,7 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : LexerCursor bat
     if hn : next.HasNext then
       match command with
       | .nonstandard parser => do
-        -- a non-standard command's parser takes the cursor
+        -- a nonstandard command's parser takes the cursor
         match ← handOver posture origin next h declarations parser next hn id
             (fun step => step.trans consumed) with
         | .inl result => return result
@@ -492,7 +492,7 @@ def loop {batch : BatchTag} (posture : VersionPosture) (origin : LexerCursor bat
     if hn : cursor.HasNext then
       match commandOf parser with
       | .nonstandard nonstandard => do
-        -- a non-standard command's parser takes the cursor
+        -- a nonstandard command's parser takes the cursor
         match ← handOver (postureOf parser) origin cursor h (declarationsOf parser) nonstandard
             cursor hn id (fun step => step.trans (follows.trans_consumed consumed)) with
         | .inl result => return result
@@ -545,14 +545,14 @@ def start {batch : BatchTag} (parser : ScriptParser H) (h : H) (token : LexerTok
     loop (postureOf parser) cursor h (declarationsOf parser) command false .assert .start []
       token next consumed
 
-/-- The loop over a hand-over that has a token: in a non-standard command, its parser takes the
+/-- The loop over a hand-over that has a token: in a nonstandard command, its parser takes the
 cursor first; else the loop takes the first token. -/
 @[inline]
 def begin {batch : BatchTag} (parser : ScriptParser H) (h : H) (cursor : LexerCursor batch)
     (has : cursor.HasNext) : m (LoopResult H cursor) :=
   match commandOf parser with
   | .nonstandard nonstandard => do
-    -- a non-standard command's parser takes the cursor
+    -- a nonstandard command's parser takes the cursor
     match ← handOver (postureOf parser) cursor cursor h (declarationsOf parser) nonstandard
         cursor has id id with
     | .inl result => return result

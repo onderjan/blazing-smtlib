@@ -13,7 +13,7 @@ import all BSmtLib.Parser.Category.Token
 The attribute parser reads attributes up to the `)` after them (an annotation), or exactly one
 attribute and the `)` after it (`set-info`, `set-option`). An attribute with a value is handled
 at the value's last token, before the token after it; one without at the token after its
-keyword, the `)` or the next keyword. The items of a list value are read by the s-expression
+keyword, the `)` or the next keyword. The items of a list value are read by the S-expression
 parser, run inside the attribute parser's `inside` mode.
 -/
 
@@ -39,7 +39,7 @@ theorem attribute_tokens (keyword : BSmtLibSpec.Regex.Chars) (value : Option Tre
     Tree.Attribute.tokens ⟨keyword, value⟩ = .keyword keyword :: valueTokens value := by
   cases value <;> rfl
 
-/-- The tokens of an s-expression start with a token other than `)`. -/
+/-- The tokens of an S-expression start with a token other than `)`. -/
 theorem sExpr_first {item : Tree.SExpr} {tokens : List Parser.Internal.Input}
     (hs : Stands tokens item.tokens) :
     ∃ token rest, tokens = token :: rest ∧ token ≠ .parenClose := by
@@ -71,7 +71,7 @@ variable {h : Traversal.Handler (StateT H m) (Handler.Error H) (valuesOf H)}
 
 /--
 The items of an attribute's list value: from between items, the parser reads the tokens of
-s-expressions with the traversal's effects, and appends them to the items.
+S-expressions with the traversal's effects, and appends them to the items.
 -/
 theorem valueItems_runs (hA : TermAgrees h) (single : Bool) : (items : List Tree.SExpr) →
     Tree.SExpr.ValidAll (Bridge.version version) items →

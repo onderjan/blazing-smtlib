@@ -10,7 +10,7 @@ import all BSmtLib.Parser.Category.Token
 /-!
 # The term parser against the traversal
 
-The term parser is a stack parser like the sort and s-expression parsers, and its proof has
+The term parser is a stack parser like the sort and S-expression parsers, and its proof has
 their shape (see `Facts.Proofs.Parser.SExpr`): `term_runs` holds for every stack of levels, with the
 parser's own "a term is complete" step (`termComplete`) as the continuation; the items of a level
 are a lemma of their own, from the stack with that level on top (`terms_runs` for the arguments

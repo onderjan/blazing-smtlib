@@ -14,15 +14,15 @@ namespace BSmtLib.Token.Cursor
 
 open BSmtLib.Lexer.Cursor
 
-/--
-A producer seen as a cursor of a batch of the library's lexer: the cursor, which is the producer
-itself, and the producer that a cursor after it stands for, which is that cursor itself.
--/
 /- LEAN: not in Rust. The library's fused script reader reads a batch cursor directly; a
 producer that is one gives itself as one through `Cursor.asBatch?`. The proofs that the
 producer's type is the batch cursor's and that `cursor` and `back` are the producer and the
 cursor themselves make sure that no producer can give the reader tokens other than its own;
 being proofs, they take no room in the view. -/
+/--
+A producer seen as a cursor of a batch of the library's lexer: the cursor, which is the producer
+itself, and the producer that a cursor after it stands for, which is that cursor itself.
+-/
 structure Internal.BatchView (Z : Type) (HasNext : Z → Prop) (Consumed : Z → Z → Prop)
     (z : Z) where
   /-- The tag of the cursor's batch. -/
@@ -77,22 +77,35 @@ the token, `attempt` with the proof that the extractor took a token. The default
 fields with defaults: `isEmpty`, with the law that it is true exactly if no token remains, and
 `consumeAll`, with the proof that it leaves no token, which comes after the laws its default
 needs. -/
-/-- A sequential producer of tokens. -/
+/--
+Sequential producer of tokens.
+
+The cursor can choose the type of tokens to produce, which allows a
+non-generic consumer to access more information from the token. However, the
+tokens must be viewable as syntax tokens using `Cursor.syntax`, and should be
+implemented as small views for good performance.
+
+To allow version-switching and discarding after `(exit)` in SMT-LIB scripts,
+the version currently in force must be provided by the cursor using
+`Cursor.version`, and the cursor can be requested to switch to another
+version by `Cursor.setVersion` or forced to start discarding tokens
+until EOF by `Cursor.discardRest`.
+-/
 class _root_.BSmtLib.Token.Cursor (Z : Type) where
   /--
-  The user type of the token.
+  Token that the cursor hands over.
 
-  The producer must implement `syntax` to view the user token type as a library type.
+  It is viewed as a syntax token by `syntax`.
   -/
   Token : Type
-  /-- Views the user token as a library token under the version in force. -/
+  /-- Views a token of this cursor as a syntax token in the version in force. -/
   «syntax» : Z → Token → _root_.BSmtLib.Token
   /-- Whether a token remains to be consumed. -/
   HasNext : Z → Prop
   /-- Whether a token remains to be consumed, decided. -/
   decideHasNext : (cursor : Z) → Decidable (HasNext cursor)
   /--
-  Whether the first producer comes from the second one by consuming at least one more token.
+  Whether the first cursor comes from the second one by consuming at least one more token.
   -/
   Consumed : Z → Z → Prop
   /--
@@ -100,22 +113,24 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
 
   Peeking must return `some` containing the next token that would be consumed if there is some
   such token waiting.
+
+  The caller must not forget to consume the token later if it should be taken.
   -/
   peek? : Z → Option Token
-  /-- Consumes the next token (if any). -/
+  /-- Consumes and returns the next token, or `none` if none is left. -/
   next? : (cursor : Z) → Option (Token × { next : Z // Consumed next cursor })
   /- LEAN: Rust's default is `peek().is_none()`. Lean's `peek?` has no law that ties it to the
   tokens that remain, so the default decides `HasNext`, which `next?_isSome` ties to `next?`;
   `isEmpty_iff` is the law of a producer that gives its own. -/
   /--
-  Returns whether the producer has no tokens left to consume.
+  Returns `true` if the cursor has no tokens left.
 
-  This must be true exactly if `peek?` or `next?` would produce `none`.
+  This must be `true` exactly if `peek?` or `next?` would produce `none`.
   -/
   isEmpty : Z → Bool := fun cursor => !@decide (HasNext cursor) (decideHasNext cursor)
-  /-- The lookahead window of `attempt`. -/
+  /-- Lookahead window, set to `Unit` if not implementing `attempt`. -/
   Lookahead : Type := Unit
-  /-- The window takes tokens of the producer's type. -/
+  /-- The window takes tokens of the cursor's type. -/
   [lookahead : _root_.BSmtLib.Token.Lookahead Lookahead Token]
   /--
   Attempts to consume several tokens at once (lookahead).
@@ -126,11 +141,9 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
   An extractor that runs out of tokens must return `none`.
   The window may end after any token.
 
-  This function can be provided for ultra-fast processing,
-  and the caller must ensure that a successful attempt results in
-  the same observable behaviour as when it failed one.
-  Use standard `next?` processing unless
-  absolutely necessary and supported by measurements.
+  A caller must behave the same whether an attempt succeeds or fails, so that an attempt
+  only speeds up consuming the tokens one by one with `next?`. A cursor that
+  does not support lookahead always returns `none`.
   -/
   attempt {α : Type} : (cursor : Z) →
     ((window : Lookahead) →
@@ -138,33 +151,31 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
         _root_.BSmtLib.Token.Lookahead.Consumed (T := Token) next window })) →
     Option (α × { next : Z // Consumed next cursor }) := fun _ _ => none
   /--
-  The SMT-LIB version that applies for currently consumed tokens.
+  Returns the SMT-LIB version that applies to the tokens currently consumed.
 
   The version is guaranteed not to change during a call to the consumer except as a result of
-  the consumer calling `setVersion` and the producer accepting.
+  the consumer calling `setVersion` and the cursor accepting.
   -/
   version : Z → Version
   /--
-  Sets the SMT-LIB version that should apply from now on.
+  Sets the version that applies from now on.
 
-  If the producer returns `.ok`, it has switched to the new version, and will return it in
+  If the cursor returns `.ok`, it has switched to the new version, and will return it in
   subsequent calls of `version`. The version change applies between the last consumed and first
-  unconsumed token, and the producer can adjust the non-consumed tokens so they correspond to
+  unconsumed token, and the cursor can adjust the non-consumed tokens so they correspond to
   the set version. There is no guarantee on their shape or whether any remain at all; the caller
   must not use any information gathered on them beforehand.
 
-  If the producer returns `.error`, it has refused the version set request. It guarantees that
+  If the cursor returns `.error`, it has refused the version set request. It guarantees that
   no changes were made, as if the method was never called.
   -/
   setVersion : Z → Version → Except VersionRefused Z
   /- LEAN: a producer that cannot discard, which Rust's panics with a message, is an obligation on
   the caller: the caller does not call it on such a producer. -/
   /--
-  Puts the producer into discarding: it drops everything it is fed and does not call its consumer
-  again, except once with the end of the input, which lies outside the discarded bytes.
+  Forces the cursor to discard all tokens before an EOF token.
 
-  Discarding is separate from the version, which the producer still answers, and lasts until the
-  end of the input.
+  It follows that the next token that the cursor hands over, if any, must be EOF.
   -/
   discardRest : Z → Z
   /- LEAN: not in Rust. Lean has no namespaces for fields, so this field of the library's own is
@@ -182,11 +193,11 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
   of a producer that has one, to give back the proof that it consumed a token after it took
   more or acted on the producer, and to take tokens until none remains. Rust states all but the
   last in words, and needs no proof that a loop ends. -/
-  /-- A producer that has a token gives it. -/
+  /-- A cursor that has a token gives it. -/
   next?_isSome {cursor : Z} : HasNext cursor → (next? cursor).isSome
   /-- Consuming more tokens after some were consumed consumes those too. -/
   consumed_trans {a b c : Z} : Consumed a b → Consumed b c → Consumed a c
-  /-- A producer cannot consume tokens without end. -/
+  /-- A cursor cannot consume tokens without end. -/
   consumed_wf : WellFounded Consumed
   /-- A version switch keeps the tokens consumed. -/
   setVersion_consumed {cursor origin next : Z} {version : Version} :
@@ -195,13 +206,13 @@ class _root_.BSmtLib.Token.Cursor (Z : Type) where
   discardRest_consumed {cursor origin : Z} :
     Consumed cursor origin → Consumed (discardRest cursor) origin
   /- LEAN: not in Rust, which states it in words: the law of `isEmpty`. -/
-  /-- Whether the producer has no tokens left is whether no token remains. -/
+  /-- Whether the cursor has no tokens left is whether no token remains. -/
   isEmpty_iff (cursor : Z) : isEmpty cursor = true ↔ ¬ HasNext cursor := by
     intro cursor; simp
   /- LEAN: Rust's `consume_all(&mut self)`, which returns the updated producer with the proof that
   no token is left, and that it consumed the tokens if there were any. Its default, Rust's loop
   over `next`, needs the laws above, so it comes after them. -/
-  /-- Consumes all tokens the producer has left to hand over. -/
+  /-- Consumes all tokens the cursor has left. -/
   consumeAll : (cursor : Z) →
       { next : Z // ¬ HasNext next ∧ (HasNext cursor → Consumed next cursor) } :=
     fun cursor =>

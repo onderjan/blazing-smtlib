@@ -9,7 +9,7 @@ public import BSmtLib.Facts.Proofs.Parser.Rejection.Unique
 
 Every reserved word among the tokens of a valid tree is reserved by the version the tree is valid
 in: the words that start constructs and commands are reserved by every version that has the
-construct, and a valid s-expression holds only words that the version reserves. So every item of
+construct, and a valid S-expression holds only words that the version reserves. So every item of
 what a parser takes, for a script or for commands that a declaration of a version that is not
 supported ends, is one that a lexer can hand over in the version in force (`takes_ofVersion`).
 -/

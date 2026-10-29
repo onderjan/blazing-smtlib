@@ -381,14 +381,14 @@ def errorWith (kind : LexicalErrorKind) (position failure : Nat) :
     location := c.locationAt failure
     stopAfter := fun _ _ _ h => nomatch h }
 
+/- LEAN: Rust panics if `position` is zero, which no caller passes: an error detected at a
+byte spans that byte. -/
 /--
 Error spanning the token up to `position`.
 
 Used for errors detected mid-run, e.g. forbidden byte in a string
 or a backslash in a quoted symbol.
 -/
-/- LEAN: Rust panics if `position` is zero, which no caller passes: an error detected at a
-byte spans that byte. -/
 def errorAt (kind : LexicalErrorKind) (position : Nat) :
     LexM H m R E floor low (Interrupted R E floor) :=
   -- the byte before the position raised the error
@@ -579,13 +579,13 @@ def Rust.flushBatch : LexM H m R E floor low Unit := do
   flushCursor (Lexer.Cursor.LexerCursor.Internal.new (← getCore).version batch.val) fun p hp =>
     Lexer.Cursor.LexerCursor.endsAfter_new (batch.property p hp).endsAfter _
 
+/- LEAN: the stored case of Rust's `sink_slice`, which hands the token over in a cursor of its
+own, after the batch. Here the cursor is over a batch of its own, of the one token, with the
+array of the content buffer as its array of contents. -/
 /--
 Hands over a single token whose content is in the lexer's content buffer,
 spanning from `start` to `end`.
 -/
-/- LEAN: the stored case of Rust's `sink_slice`, which hands the token over in a cursor of its
-own, after the batch. Here the cursor is over a batch of its own, of the one token, with the
-array of the content buffer as its array of contents. -/
 def Rust.sinkStoredAt (ty : Token.TokenCategory) (start «end» : Span.Location)
     (hend : start.offset < «end».offset) (hfloor : ∀ p, floor = some p → p < «end».offset) :
     LexM H m R E floor low Unit := do
@@ -604,11 +604,11 @@ def Rust.sinkStoredAt (ty : Token.TokenCategory) (start «end» : Span.Location)
     Lexer.Cursor.LexerCursor.endsAfter_new (Token.Internal.TokenBatch.endsAfter_pushLocated
       (fun _ h => absurd h (Nat.not_lt_zero _)) (hfloor p hp)) _
 
-/-- Hands over the end-of-file token, at the location, unless a result is held, which the end
-of the input confirms instead. -/
 /- LEAN: the end of file has no content; Rust's entry `None`, which the cursor gives as `&[]`.
 Here the content is the empty view at the start of the content buffer's array, as a token handed
 over alone has its content in that array (`Rust.sinkStoredAt`). -/
+/-- Hands over the end-of-file token, at the location, unless a result is held, which the end
+of the input confirms instead. -/
 def Rust.sinkEof (location : Span.Location) : LexM H m R E none low Unit := do
   if (← getCore).holding then
     -- the held result is returned without the end of the input handed over
@@ -624,11 +624,11 @@ def Rust.sinkEof (location : Span.Location) : LexM H m R E none low Unit := do
       (Nat.le_of_eq (Token.Internal.TokenBatch.lastEnd_clear _ _)) (.inr ⟨rfl, rfl⟩)
   flushCursor (Lexer.Cursor.LexerCursor.Internal.new c.version single) fun _ h => nomatch h
 
-/-- Hands the full batch held by the loop over, and gives it back empty, with the origin. -/
 /- LEAN: Rust stores the locals into the lexer and flushes the lexer's batch, which zeroes its
 length, and then zeroes the length in the locals. Here the lexer state gets the batch emptied,
 as the flush leaves it, the batch as it was is handed over, and the loop goes on with it
 emptied. -/
+/-- Hands the full batch held by the loop over, and gives it back empty, with the origin. -/
 @[inline]
 def Rust.flushHeld (batch : Token.Internal.TokenBatch) (origin : Nat)
     (hbatch : ∀ p, floor = some p → batch.StartsFrom p) :
@@ -647,6 +647,8 @@ def Rust.flushHeld (batch : Token.Internal.TokenBatch) (origin : Nat)
   return ⟨batch.clear origin, Token.Internal.TokenBatch.lastEnd_clear _ _,
     fun _ _ => Token.Internal.TokenBatch.startsFrom_clear _ _ _⟩
 
+/- LEAN: Rust's `FastState` has the length of the batch too; here the batch, which carries its
+length, is a local of the loop of `lexNormal` of its own (see there). -/
 /--
 Local state of `lexNormal`.
 
@@ -654,8 +656,6 @@ Locals improve performance of fast lexing over always going
 through the lexer and batch references. The struct allows
 loading/storing them together for better maintainability.
 -/
-/- LEAN: Rust's `FastState` has the length of the batch too; here the batch, which carries its
-length, is a local of the loop of `lexNormal` of its own (see there). -/
 structure FastState where
   /-- Current line. -/
   line : Nat
@@ -671,6 +671,11 @@ def FastState.load : LexM H m R E floor low FastState := do
 def FastState.store (self : FastState) : LexM H m R E floor low Unit :=
   modifyCore fun c => { c with line := self.line, lineStart := self.lineStart }
 
+/- LEAN: Rust writes the entry into the slot after the last token and counts it only if it is
+emitted, as the next token overwrites the slot. The batch has no operation that writes an entry
+without counting it, and a batch with the entry written that is then dropped would be a copy of
+the whole batch, as the batch without it is still referred to; so the entry is written only if
+the token is emitted. -/
 /--
 Writes a fast-path token into the next batch slot and counts it if `emit`
 is set, flushing the batch when it is full.
@@ -679,11 +684,6 @@ The content is from `contentStart` to `contentStop` in the slice, and the span i
 current line, over `start` to `end` in the slice. `offset` is the stream offset of the index
 `base`.
 -/
-/- LEAN: Rust writes the entry into the slot after the last token and counts it only if it is
-emitted, as the next token overwrites the slot. The batch has no operation that writes an entry
-without counting it, and a batch with the entry written that is then dropped would be a copy of
-the whole batch, as the batch without it is still referred to; so the entry is written only if
-the token is emitted. -/
 @[inline]
 def Rust.pushFast (input : ByteSlice) (batch : Token.Internal.TokenBatch) (locals : FastState)
     (offset : Nat)
@@ -918,14 +918,14 @@ def leavePending (state : LexerState) (start : Span.Location) (offset : Nat)
         ⟨Nat.le_trans (hframe.2 p hp) (Nat.le_add_right _ _), .inr (.inl (hfloor p hp)),
           hbatch.2 p hp⟩⟩⟩
 
+/- LEAN: Rust's `sink_slice` with borrowed content, which puts the token into the lexer's
+batch; here into the batch the loop holds. -/
 /--
 Puts a token lexed on the slow path into the batch, flushing the batch when it is full.
 
 The content is from `contentStart` to `contentStop` in the slice, and the span from `start`
 to `tokenEnd` in the slice. `offset` is the stream offset of the index `base`.
 -/
-/- LEAN: Rust's `sink_slice` with borrowed content, which puts the token into the lexer's
-batch; here into the batch the loop holds. -/
 @[inline]
 def pushBorrowed (input : ByteSlice) (batch : Token.Internal.TokenBatch) (offset : Nat) (base : Nat)
     (ty : Token.TokenCategory) (contentStart contentStop : Nat) (start : Span.Location)
@@ -1757,13 +1757,13 @@ is `consumed` plus it here. The loops are shown to end as `lexNormalFrom` is. Wh
 moves `consumed` on before its run, the index is kept with the proof that it is not
 before the one the call started from, which the code after the move is shown to end by. -/
 
+/- LEAN: `origin` is where the step started, as at `lexWhitespace`. -/
 /--
 Lexes the string literal in the legacy 2.0 mode.
 
 The legacy 2.0 mode has two backslash escapes, \" and \\.
 There are no other escapes.
 -/
-/- LEAN: `origin` is where the step started, as at `lexWhitespace`. -/
 def lexStringLiteralLegacy (input : ByteSlice) (consumed origin : Nat)
     (horigin : origin ≤ consumed) (tokenStart : Span.Location)
     (base : Nat) (h : Started floor low tokenStart) :

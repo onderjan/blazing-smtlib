@@ -79,12 +79,11 @@ end PatternState
 
 end Internal
 
-/-- The parser of one simple pattern: a symbol, or the wildcard `_` in a version that has it
-(`SmtSimplePatternParser`). -/
+/-- Parses a simple match pattern. -/
 structure SimplePatternParser where
   private mk ::
 
-/-- The simple pattern parser. -/
+/-- Creates the parser. -/
 def SimplePatternParser.new : SimplePatternParser := {}
 
 instance : Inhabited SimplePatternParser := ⟨.new⟩
@@ -118,13 +117,13 @@ instance : Parse SimplePatternParser H m (Handler.Error H) SimplePatternBuf wher
 
 end
 
-/-- The parser of one pattern (`SmtPatternParser`). -/
 /- LEAN: as Rust's, the parser names its handler, whose types it does not use. -/
+/-- Parses a match pattern. -/
 structure PatternParser (H : Type) where
   private mk ::
   private state : Internal.PatternState
 
-/-- The pattern parser before a pattern. -/
+/-- Creates the parser. -/
 def PatternParser.new {H : Type} : PatternParser H := ⟨.start⟩
 
 instance {H : Type} : Inhabited (PatternParser H) := ⟨.new⟩

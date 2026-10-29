@@ -134,7 +134,7 @@ info: 'BSmtLib.Facts.PublicApi.reading_resets' depends on axioms: [propext, Clas
 /--
 There is a handler told contents only over which the script reader builds the commands of every
 file. The handler's state is the version in force and a list of commands of the formalism. Its
-sorts, s-expressions, attributes and terms are those of the formalism. The reader starts in the
+sorts, S-expressions, attributes and terms are those of the formalism. The reader starts in the
 file's initial version, with the handler holding that version and no commands; it reads the file
 to the end and leaves the file's commands in the handler.
 -/

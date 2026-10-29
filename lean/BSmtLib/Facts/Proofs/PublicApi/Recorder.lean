@@ -69,7 +69,7 @@ def termNode : Content.TermNode Nat Nat → Traversal.TermNode Recorded
   | .identifier i s => .identifier (identifier i) s
   | .application i s args => .application (identifier i) s args
 
-/-- The formalism's s-expression node. -/
+/-- The formalism's S-expression node. -/
 def sExprNode : Content.SExprNode Nat → Traversal.SExprNode Recorded
   | .constant c => .constant (constant c)
   | .symbol s => .symbol (symbol s)

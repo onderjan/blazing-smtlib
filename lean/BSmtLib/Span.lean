@@ -16,6 +16,11 @@ Parsers and handlers do not interact with locations and spans.
 
 namespace BSmtLib.Span
 
+/- LEAN: the counts are `Nat`, Lean's arbitrary-precision natural numbers, where Rust has
+`u64`. In Rust, `u64` stands for "big enough"; `Nat` is exactly that, and small values are
+stored unboxed, so it costs little. The constructor is private, as Rust's fields are, and the
+library builds a location with `Location.Internal.new`; the fields are read-only and stand as
+Rust's getters. -/
 /--
 Location in a byte stream.
 
@@ -29,18 +34,13 @@ The location is guaranteed to be valid with respect to the offset and line/colum
 terminated line must contain at least one byte (LF), the offset must be equal to or greater than
 the sum of line and column.
 -/
-/- LEAN: the counts are `Nat`, Lean's arbitrary-precision natural numbers, where Rust has
-`u64`. In Rust, `u64` stands for "big enough"; `Nat` is exactly that, and small values are
-stored unboxed, so it costs little. The constructor is private, as Rust's fields are, and the
-library builds a location with `Location.Internal.new`; the fields are read-only and stand as
-Rust's getters. -/
 structure Location where
   private mk ::
-  /-- Zero-based byte offset. -/
+  /-- Returns the zero-based byte offset. -/
   offset : Nat
-  /-- Zero-based line number. -/
+  /-- Returns the zero-based line number. -/
   line : Nat
-  /-- Zero-based column number, measured in bytes. -/
+  /-- Returns the zero-based column number, measured in bytes. -/
   column : Nat
   /- LEAN: `deriving` is Rust's `#[derive]`: `BEq` is `PartialEq`, `Hashable` is `Hash`,
   `Repr` is `Debug`, `Ord` is `Ord`, which compares the offsets, then the lines, then the
@@ -66,10 +66,7 @@ namespace Location
 def Internal.new (offset line column : Nat) : Location :=
   { offset, line, column }
 
-/--
-The location at the offset, the line and the column; an error if the line and the column cannot
-be at the offset, as every line before and every column on the line take at least one byte.
--/
+/-- Creates a location from its offset, line and column if it is valid. -/
 def new (offset line column : Nat) : Except InvalidLocationError Location :=
   -- each line before ends with a line feed, each column is a byte
   if line + column ≤ offset then .ok (Internal.new offset line column) else .error {}
@@ -123,15 +120,17 @@ equal, `min` gives the first and `max` the second. -/
     | .gt => self
     | _ => other
 
-/-- Location directly at the byte stream start. -/
+/-- Returns the location directly at the byte stream start. -/
 @[expose, inline]
 def initial : Location :=
   Internal.new 0 0 0
 
+/-- Returns the location one byte further on the same line. -/
 @[expose, inline]
 def afterColumn (self : Location) : Location :=
   Internal.new (self.offset + 1) self.line (self.column + 1)
 
+/-- Returns the location after `c`, the byte at this location. -/
 @[expose, inline]
 def afterByte (self : Location) (c : UInt8) : Location :=
   /- LEAN: Lean has no byte literals like `b'\n'`; a character literal is converted with
@@ -143,16 +142,21 @@ def afterByte (self : Location) (c : UInt8) : Location :=
 
 end Location
 
-/-- Value located in a byte stream. -/
 /- LEAN: the constructor is private, as Rust's fields are, and the library builds a located value
 with `Located.Internal.new`. The fields are read-only accessor functions (`located.value`,
 `located.location`); they replace the Rust getters. `into_value` is the same as `value`, since
 Lean values are not moved out of. -/
+/--
+Value located in a byte stream.
+
+The location is where the last token of the value ends, e.g. offset 1 for the term read from
+`x   `. It is the end of the input only if the value ends there.
+-/
 structure Located (V : Type) where
   private mk ::
-  /-- Returns a reference to the value. -/
+  /-- Returns the value. -/
   value : V
-  /-- Returns the location. -/
+  /-- Returns the location where the last token of the value ends. -/
   location : Location
   deriving BEq, Hashable, Repr
 
@@ -186,6 +190,11 @@ theorem Located.Internal.new_inj {V : Type} {value value' : V} {location locatio
   · rintro ⟨rfl, rfl⟩
     rfl
 
+/- LEAN: Rust's span holds its two locations inline. A Lean structure holds a structure field
+as a pointer to a separate object, so a span of two `Location` fields would take three
+allocations. The span therefore holds the six numbers itself, and `start` and `end` are
+functions that build the locations when asked. The derived `Ord` compares the numbers in their
+order, which is Rust's order of the start, then the end. -/
 /--
 Span of an item in a byte stream.
 
@@ -196,11 +205,6 @@ the end is not before the start, and the bytes between them hold what separates 
 line, the column advances by exactly the number of bytes. On a later line, each line ended takes at
 least one byte (LF), and each column before the end takes one byte.
 -/
-/- LEAN: Rust's span holds its two locations inline. A Lean structure holds a structure field
-as a pointer to a separate object, so a span of two `Location` fields would take three
-allocations. The span therefore holds the six numbers itself, and `start` and `end` are
-functions that build the locations when asked. The derived `Ord` compares the numbers in their
-order, which is Rust's order of the start, then the end. -/
 structure _root_.BSmtLib.Span where
   private mk ::
   private startOffset : Nat
@@ -221,12 +225,14 @@ structure InvalidSpanError where
 
 @[no_expose] instance : ToString InvalidSpanError := ⟨fun _ => "invalid span"⟩
 
+/-- Returns the start of the span. -/
 @[inline]
 def start (self : Span) : Location :=
   Location.Internal.new self.startOffset self.startLine self.startColumn
 
 /- LEAN: `end` is a keyword in Lean, so the name is written in guillemets where it is
 declared; `span.end` works as usual. -/
+/-- Returns the end of the span. -/
 @[inline]
 def «end» (self : Span) : Location :=
   Location.Internal.new self.endOffset self.endLine self.endColumn
@@ -252,14 +258,14 @@ private def isAllowed (start «end» : Location) : Bool :=
     -- line takes one byte
     | .gt => «end».line - start.line + «end».column ≤ difference
 
-/-- The span from the start to the end; an error if the span would be invalid. -/
+/-- Creates a span from its start and end if it is valid. -/
 def new (start «end» : Location) : Except InvalidSpanError Span :=
   if isAllowed start «end» then .ok (Internal.newUnchecked start «end») else .error {}
 
+/- LEAN: not in Rust; it builds a span without building its locations first. -/
 /--
 A span given by the numbers of its two locations.
 -/
-/- LEAN: not in Rust; it builds a span without building its locations first. -/
 @[inline]
 def Internal.ofNumbers (startOffset startLine startColumn endOffset endLine endColumn : Nat) :
     Span :=
@@ -294,6 +300,7 @@ def Internal.newEmpty (location : Location) : Span :=
 def Internal.newZero : Span :=
   newEmpty Location.initial
 
+/-- Returns `true` if the span is empty. -/
 def isEmpty (self : Span) : Bool :=
   self.start == self.end
 

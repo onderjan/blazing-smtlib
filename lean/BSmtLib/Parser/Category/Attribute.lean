@@ -102,12 +102,12 @@ end
 
 end Internal
 
-/-- The parser of one attribute followed by a `)` (`SmtClosedAttributeParser`). -/
+/-- Parses an attribute followed by a closing parenthesis. -/
 structure ClosedAttributeParser (H : Type) {m : Type → Type} [Handler H m] where
   private mk ::
   private state : Internal.AttributeState (Handler.SExpr H) (Handler.Attribute H)
 
-/-- The parser of attributes up to the `)` after them (`SmtClosedMultipleAttributeParser`). -/
+/-- Parses multiple attributes followed by a closing parenthesis. -/
 structure ClosedMultipleAttributeParser (H : Type) {m : Type → Type} [Handler H m] where
   private mk ::
   private state : Internal.AttributeState (Handler.SExpr H) (Handler.Attribute H)
@@ -116,10 +116,10 @@ section
 
 variable {H : Type} {m : Type → Type} [Monad m] [Handler H m]
 
-/-- The parser before the attribute. -/
+/-- Creates the parser. -/
 def ClosedAttributeParser.new : ClosedAttributeParser H := ⟨.init⟩
 
-/-- The parser before the attributes. -/
+/-- Creates the parser. -/
 def ClosedMultipleAttributeParser.new : ClosedMultipleAttributeParser H := ⟨.init⟩
 
 instance : Inhabited (ClosedAttributeParser H) := ⟨.new⟩

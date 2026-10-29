@@ -79,49 +79,49 @@ def symbolStep (_ : Unit) (token : Internal.Input) : PM H (Internal.Step Unit Sy
 end
 
 end Internal
-/-! The parsers of single tokens (`SmtParse`). Each finishes at its first token, which must be of
-its kind, and needs no state. -/
+/-! The parsers of single tokens. Each finishes at its first token, which must be of its kind,
+and needs no state. -/
 
-/-- The parser of a symbol (`SmtSymbolParser`). -/
+/-- Parses a symbol. -/
 structure SymbolParser where
   private mk ::
 
-/-- The parser of a `(` (`SmtOpenParenParser`). -/
+/-- Parses an opening parenthesis. -/
 structure OpenParenParser where
   private mk ::
 
-/-- The parser of a `)` (`SmtCloseParenParser`). -/
+/-- Parses a closing parenthesis. -/
 structure CloseParenParser where
   private mk ::
 
-/-- The parser of a numeral (`SmtNumeralParser`). -/
+/-- Parses a numeral. -/
 structure NumeralParser where
   private mk ::
 
-/-- The parser of a keyword (`SmtKeywordParser`). -/
+/-- Parses a keyword. -/
 structure KeywordParser where
   private mk ::
 
-/-- The parser of a string literal (`SmtStringParser`). -/
+/-- Parses a string literal. -/
 structure StringParser where
   private mk ::
 
-/-- The symbol parser. -/
+/-- Creates the parser. -/
 def SymbolParser.new : SymbolParser := {}
 
-/-- The `(` parser. -/
+/-- Creates the parser. -/
 def OpenParenParser.new : OpenParenParser := {}
 
-/-- The `)` parser. -/
+/-- Creates the parser. -/
 def CloseParenParser.new : CloseParenParser := {}
 
-/-- The numeral parser. -/
+/-- Creates the parser. -/
 def NumeralParser.new : NumeralParser := {}
 
-/-- The keyword parser. -/
+/-- Creates the parser. -/
 def KeywordParser.new : KeywordParser := {}
 
-/-- The string literal parser. -/
+/-- Creates the parser. -/
 def StringParser.new : StringParser := {}
 
 instance : Inhabited SymbolParser := ⟨.new⟩

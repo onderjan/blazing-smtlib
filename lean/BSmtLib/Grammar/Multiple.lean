@@ -28,22 +28,22 @@ namespace BSmtLib.Grammar
 
 open BSmtLib.Lexicon.Value (SymbolBuf Symbol NumeralBuf Numeral)
 
+/- LEAN: Rust's `SmtMultiple`, a mutable borrow of the parser's stack; here the values
+themselves. -/
 /--
-Multiple values to be handled.
+View of multiple values.
 
 The values can be inspected, and a `for` loop goes through them in order.
 -/
-/- LEAN: Rust's `SmtMultiple`, a mutable borrow of the parser's stack; here the values
-themselves. -/
 structure Multiple (α : Type) where
   private mk ::
-  /-- The values, in order. -/
+  /-- Returns the values as an array. -/
   asSlice : Array α
 
 namespace Multiple
 
-/-- The values. -/
 /- LEAN: Rust's `SmtMultiple::new`, which borrows a stack of values. -/
+/-- Creates a view of all values of the array. -/
 @[inline]
 def new {α : Type} (asSlice : Array α) : Multiple α := ⟨asSlice⟩
 
@@ -53,9 +53,11 @@ theorem asSlice_new {α : Type} (asSlice : Array α) : (new asSlice).asSlice = a
 
 variable {α : Type}
 
+/-- Returns the number of values. -/
 @[inline]
 def len (self : Multiple α) : Nat := self.asSlice.size
 
+/-- Returns `true` if there are no values. -/
 @[inline]
 def isEmpty (self : Multiple α) : Bool := self.asSlice.isEmpty
 
@@ -70,6 +72,7 @@ theorem size_asSlice (self : Multiple α) : self.asSlice.size = self.len :=
 theorem len_pos_new {asSlice : Array α} (h : ¬asSlice.isEmpty) : 0 < (new asSlice).len :=
   Nat.pos_of_ne_zero fun hz => h (Array.isEmpty_iff_size_eq_zero.mpr hz)
 
+/-- Returns the value at the position, or `none` if it is out of bounds. -/
 @[inline]
 def get? (self : Multiple α) (index : Nat) : Option α := self.asSlice[index]?
 
@@ -84,8 +87,9 @@ def get? (self : Multiple α) (index : Nat) : Option α := self.asSlice[index]?
 /-! ## Named values -/
 
 /--
-Named values to be handled: each a symbol with a value,
-such as let bindings or sorted variables.
+View of named values.
+
+Each value is named by a symbol, such as in let bindings or sorted variables.
 
 The values can be inspected, and a `for` loop goes through them in order.
 -/
@@ -94,10 +98,18 @@ structure NamedValues (V : Type) where
   /-- The names with their values, in order. -/
   toArray : Array (Symbol × V)
 
-/-- Let bindings to be handled: the names with their terms. -/
+/--
+View of let bindings.
+
+It holds the names with their terms.
+-/
 abbrev Bindings (T : Type) := NamedValues T
 
-/-- Sorted variables to be handled: the names with their sorts. -/
+/--
+View of sorted variables.
+
+It holds the names with their sorts.
+-/
 abbrev SortedVars (S : Type) := NamedValues S
 
 namespace NamedValues
@@ -113,12 +125,15 @@ theorem Internal.toArray_new {V : Type} (toArray : Array (Symbol × V)) :
 
 variable {V : Type}
 
+/-- Returns the number of named values. -/
 @[inline]
 def len (self : NamedValues V) : Nat := self.toArray.size
 
+/-- Returns `true` if there are no named values. -/
 @[inline]
 def isEmpty (self : NamedValues V) : Bool := self.toArray.isEmpty
 
+/-- Returns the name and value at the position, or `none` if it is out of bounds. -/
 @[inline]
 def get? (self : NamedValues V) (index : Nat) : Option (Symbol × V) := self.toArray[index]?
 
@@ -129,9 +144,13 @@ def get? (self : NamedValues V) (index : Nat) : Option (Symbol × V) := self.toA
 
 end NamedValues
 
-/-- Owned named values, from which `NamedValues` is viewed. -/
 /- LEAN: each name is a view of a copy of its bytes that the buffer made, so the view needs no
 copy. -/
+/--
+Owned named values.
+
+Each value is named by a symbol, such as in let bindings or sorted variables.
+-/
 structure NamedValuesBuf (V : Type) where
   private ofArray ::
   private entries : Array (Symbol × V)
@@ -140,17 +159,23 @@ namespace NamedValuesBuf
 
 variable {V : Type}
 
+/-- Creates empty named values. -/
 def new : NamedValuesBuf V := ⟨#[]⟩
 
+/-- Adds the value named by `name` after the others. -/
 def push (self : NamedValuesBuf V) (name : Symbol) (value : V) : NamedValuesBuf V :=
   ⟨self.entries.push (name.intoOwned.view, value)⟩
 
+/-- Removes all named values. -/
 def clear (_ : NamedValuesBuf V) : NamedValuesBuf V := new
 
+/-- Views as `NamedValues`. -/
 def viewMut (self : NamedValuesBuf V) : NamedValues V := ⟨self.entries⟩
 
+/-- Returns the number of named values. -/
 def len (self : NamedValuesBuf V) : Nat := self.entries.size
 
+/-- Returns `true` if there are no named values. -/
 def isEmpty (self : NamedValuesBuf V) : Bool := self.entries.isEmpty
 
 @[no_expose] instance : Inhabited (NamedValuesBuf V) := ⟨new⟩
@@ -161,7 +186,11 @@ end NamedValuesBuf
 
 /-! ## Symbols -/
 
-/-- Symbols to be handled, such as the parameters of a sort definition. -/
+/--
+View of symbols.
+
+For example, the parameters of a sort definition.
+-/
 structure Symbols where
   private mk ::
   /-- The symbols, in order. -/
@@ -178,12 +207,15 @@ theorem Internal.toArray_new (toArray : Array Symbol) :
     (Internal.new toArray : Symbols).toArray = toArray :=
   (rfl)
 
+/-- Returns the number of symbols. -/
 @[inline]
 def len (self : Symbols) : Nat := self.toArray.size
 
+/-- Returns `true` if there are no symbols. -/
 @[inline]
 def isEmpty (self : Symbols) : Bool := self.toArray.isEmpty
 
+/-- Returns the symbol at the position, or `none` if it is out of bounds. -/
 @[inline]
 def get? (self : Symbols) (index : Nat) : Option Symbol := self.toArray[index]?
 
@@ -194,24 +226,34 @@ def get? (self : Symbols) (index : Nat) : Option Symbol := self.toArray[index]?
 
 end Symbols
 
-/-- Owned symbols, from which `Symbols` is viewed. -/
+/--
+Owned symbols.
+
+For example, the parameters of a sort definition.
+-/
 structure SymbolsBuf where
   private ofArray ::
   private entries : Array Symbol
 
 namespace SymbolsBuf
 
+/-- Creates empty symbols. -/
 def new : SymbolsBuf := ⟨#[]⟩
 
+/-- Copies the symbol after the others. -/
 def push (self : SymbolsBuf) (name : Symbol) : SymbolsBuf :=
   ⟨self.entries.push name.intoOwned.view⟩
 
+/-- Removes all symbols. -/
 def clear (_ : SymbolsBuf) : SymbolsBuf := new
 
+/-- Views as `Symbols`. -/
 def view (self : SymbolsBuf) : Symbols := ⟨self.entries⟩
 
+/-- Returns the number of symbols. -/
 def len (self : SymbolsBuf) : Nat := self.entries.size
 
+/-- Returns `true` if there are no symbols. -/
 def isEmpty (self : SymbolsBuf) : Bool := self.entries.isEmpty
 
 @[no_expose] instance : Inhabited SymbolsBuf := ⟨new⟩
@@ -222,8 +264,11 @@ end SymbolsBuf
 
 /-! ## Sort arities -/
 
-/-- Sort names with their arities to be handled, such as those
-declared by `declare-datatypes`. -/
+/--
+View of sort names with their arities.
+
+For example, those declared by `declare-datatypes`.
+-/
 structure SortArities where
   private mk ::
   /-- The names with their arities, in order. -/
@@ -240,12 +285,15 @@ theorem Internal.toArray_new (toArray : Array (Symbol × Numeral)) :
     (Internal.new toArray : SortArities).toArray = toArray :=
   (rfl)
 
+/-- Returns the number of sort names. -/
 @[inline]
 def len (self : SortArities) : Nat := self.toArray.size
 
+/-- Returns `true` if there are no sort names. -/
 @[inline]
 def isEmpty (self : SortArities) : Bool := self.toArray.isEmpty
 
+/-- Returns the sort name with its arity at the position, or `none` if it is out of bounds. -/
 @[inline]
 def get? (self : SortArities) (index : Nat) : Option (Symbol × Numeral) :=
   self.toArray[index]?
@@ -257,24 +305,34 @@ def get? (self : SortArities) (index : Nat) : Option (Symbol × Numeral) :=
 
 end SortArities
 
-/-- Owned sort names with their arities, from which `SortArities` is viewed. -/
+/--
+Owned sort names with their arities.
+
+For example, those declared by `declare-datatypes`.
+-/
 structure SortAritiesBuf where
   private ofArray ::
   private entries : Array (Symbol × Numeral)
 
 namespace SortAritiesBuf
 
+/-- Creates empty sort names with their arities. -/
 def new : SortAritiesBuf := ⟨#[]⟩
 
+/-- Adds a sort name with its arity after the others. -/
 def push (self : SortAritiesBuf) (name : Symbol) (arity : Numeral) : SortAritiesBuf :=
   ⟨self.entries.push (name.intoOwned.view, arity.intoOwned.view)⟩
 
+/-- Removes all sort names with their arities. -/
 def clear (_ : SortAritiesBuf) : SortAritiesBuf := new
 
+/-- Views as `SortArities`. -/
 def view (self : SortAritiesBuf) : SortArities := ⟨self.entries⟩
 
+/-- Returns the number of sort names. -/
 def len (self : SortAritiesBuf) : Nat := self.entries.size
 
+/-- Returns `true` if there are no sort names. -/
 def isEmpty (self : SortAritiesBuf) : Bool := self.entries.isEmpty
 
 @[no_expose] instance : Inhabited SortAritiesBuf := ⟨new⟩
@@ -286,8 +344,9 @@ end SortAritiesBuf
 /-! ## Datatype constructors -/
 
 /--
-Datatype constructors to be handled: each a name with its selectors,
-the selectors as sorted variables.
+View of datatype constructors.
+
+Each constructor has a name and selectors, the selectors as sorted variables.
 
 A `for` loop hands over each constructor with its selectors.
 -/
@@ -311,9 +370,11 @@ theorem Internal.toArray_new {S : Type} (toArray : Array (Symbol × SortedVars S
 
 variable {S : Type}
 
+/-- Returns the number of constructors. -/
 @[inline]
 def len (self : Constructors S) : Nat := self.toArray.size
 
+/-- Returns `true` if there are no constructors. -/
 @[inline]
 def isEmpty (self : Constructors S) : Bool := self.toArray.isEmpty
 
@@ -326,7 +387,11 @@ def isEmpty (self : Constructors S) : Bool := self.toArray.isEmpty
 
 end Constructors
 
-/-- Owned datatype constructors, from which `Constructors` is viewed. -/
+/--
+Owned datatype constructors.
+
+Each constructor has a name and selectors, the selectors as sorted variables.
+-/
 structure ConstructorsBuf (S : Type) where
   private ofArray ::
   private entries : Array (Symbol × SortedVars S)
@@ -335,25 +400,34 @@ namespace ConstructorsBuf
 
 variable {S : Type}
 
+/-- Creates empty datatype constructors. -/
 def new : ConstructorsBuf S := ⟨#[]⟩
 
 /-- Starts a constructor with no selectors; `pushSelector` adds them. -/
 def push (self : ConstructorsBuf S) (name : Symbol) : ConstructorsBuf S :=
   ⟨self.entries.push (name.intoOwned.view, ⟨#[]⟩)⟩
 
+/-- Returns the number of constructors. -/
 def len (self : ConstructorsBuf S) : Nat := self.entries.size
 
+/-- Returns `true` if there are no constructors. -/
 def isEmpty (self : ConstructorsBuf S) : Bool := self.entries.isEmpty
 
-/-- Adds a selector to the last constructor pushed. -/
 /- LEAN: Rust panics when no constructor was pushed; here the caller proves that one was. -/
+/--
+Adds a selector to the last constructor pushed.
+
+The caller proves that a constructor has been pushed.
+-/
 def pushSelector (self : ConstructorsBuf S) (name : Symbol) (sort : S) (_ : 0 < self.len) :
     ConstructorsBuf S :=
   ⟨self.entries.modify (self.entries.size - 1) fun (constructor, selectors) =>
     (constructor, ⟨selectors.toArray.push (name.intoOwned.view, sort)⟩)⟩
 
+/-- Removes all constructors. -/
 def clear (_ : ConstructorsBuf S) : ConstructorsBuf S := new
 
+/-- Views as `Constructors`. -/
 def viewMut (self : ConstructorsBuf S) : Constructors S := ⟨self.entries⟩
 
 @[no_expose] instance : Inhabited (ConstructorsBuf S) := ⟨new⟩
@@ -365,17 +439,20 @@ end ConstructorsBuf
 
 /-! ## Function signatures -/
 
-/--
-A function signature to be handled: the name, the parameters
-with their sorts, and the result sort.
--/
 /- LEAN: Rust's accessors are the fields; the parameters are an array, where Rust's `params` is an
 iterator. -/
+/--
+View of a function signature.
+
+It holds the name, the parameters with their sorts, and the result sort.
+-/
 structure FunctionSignature (HandledSort : Type) where
   private mk ::
+  /-- Returns the name of the function. -/
   name : Symbol
-  /-- The parameters with their sorts, in order. -/
+  /-- Returns the parameters with their sorts, in order. -/
   params : Array (Symbol × HandledSort)
+  /-- Returns the result sort of the function. -/
   resultSort : HandledSort
   deriving Repr
 
@@ -412,7 +489,11 @@ theorem Internal.new_eta (self : FunctionSignature HandledSort) :
 
 end FunctionSignature
 
-/-- Function signatures to be handled, such as those of `define-funs-rec`. -/
+/--
+View of function signatures.
+
+For example, those of `define-funs-rec`.
+-/
 structure FunctionSignatures (S : Type) where
   private mk ::
   /-- The signatures, in order. -/
@@ -432,12 +513,15 @@ theorem Internal.toArray_new {S : Type} (toArray : Array (FunctionSignature S)) 
 
 variable {S : Type}
 
+/-- Returns the number of signatures. -/
 @[inline]
 def len (self : FunctionSignatures S) : Nat := self.toArray.size
 
+/-- Returns `true` if there are no signatures. -/
 @[inline]
 def isEmpty (self : FunctionSignatures S) : Bool := self.toArray.isEmpty
 
+/-- Returns the signature at the position, or `none` if it is out of bounds. -/
 @[inline]
 def get? (self : FunctionSignatures S) (index : Nat) : Option (FunctionSignature S) :=
   self.toArray[index]?
@@ -451,10 +535,13 @@ def get? (self : FunctionSignatures S) (index : Nat) : Option (FunctionSignature
 
 end FunctionSignatures
 
-/-- Owned function signatures, from which `FunctionSignatures`
-and each `FunctionSignature` are viewed. -/
 /- LEAN: each name is a view of a copy of its bytes that the buffer made, so the view needs no
 copy. -/
+/--
+Owned function signatures.
+
+For example, those of `define-funs-rec`.
+-/
 structure FunctionSignaturesBuf (S : Type) where
   private ofArray ::
   private entries : Array (FunctionSignature S)
@@ -463,6 +550,7 @@ namespace FunctionSignaturesBuf
 
 variable {S : Type}
 
+/-- Creates empty function signatures. -/
 def new : FunctionSignaturesBuf S := ⟨#[]⟩
 
 /-- Starts a signature with no parameters; `pushParam` adds them. -/
@@ -470,22 +558,31 @@ def push (self : FunctionSignaturesBuf S) (name : Symbol) (resultSort : S) :
     FunctionSignaturesBuf S :=
   ⟨self.entries.push ⟨name.intoOwned.view, #[], resultSort⟩⟩
 
+/-- Returns the number of signatures. -/
 def len (self : FunctionSignaturesBuf S) : Nat := self.entries.size
 
+/-- Returns `true` if there are no signatures. -/
 def isEmpty (self : FunctionSignaturesBuf S) : Bool := self.entries.isEmpty
 
-/-- Adds a parameter to the last signature pushed. -/
 /- LEAN: Rust panics when no signature was pushed; here the caller proves that one was. -/
+/--
+Adds a parameter to the last signature pushed.
+
+The caller proves that a signature has been pushed.
+-/
 def pushParam (self : FunctionSignaturesBuf S) (name : Symbol) (sort : S) (_ : 0 < self.len) :
     FunctionSignaturesBuf S :=
   ⟨self.entries.modify (self.entries.size - 1) fun signature =>
     { signature with params := signature.params.push (name.intoOwned.view, sort) }⟩
 
+/-- Removes all signatures. -/
 def clear (_ : FunctionSignaturesBuf S) : FunctionSignaturesBuf S := new
 
+/-- Views as `FunctionSignatures`. -/
 def view (self : FunctionSignaturesBuf S) : FunctionSignatures S :=
   FunctionSignatures.Internal.new self.entries
 
+/-- Returns the signature at the position, or `none` if it is out of bounds. -/
 def get? (self : FunctionSignaturesBuf S) (index : Nat) : Option (FunctionSignature S) :=
   self.entries[index]?
 

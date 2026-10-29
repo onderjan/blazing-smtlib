@@ -33,7 +33,7 @@ theorem libVersion_eq (version : BSmtLibSpec.Lexicon.Version) :
   cases version <;> rfl
 
 /-- There is a handler told contents only, whose state is the version in force and a list of
-commands of the formalism and whose sorts, s-expressions, attributes and terms are those of
+commands of the formalism and whose sorts, S-expressions, attributes and terms are those of
 the formalism, such that the script reader over it, with the initial version and no commands,
 reads every file to the end and builds the file's commands. -/
 theorem builds_commands :

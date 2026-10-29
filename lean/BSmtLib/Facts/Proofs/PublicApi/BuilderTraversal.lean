@@ -10,7 +10,7 @@ public import BSmtLibSpec.Facts.Proofs.Parser.Equations
 
 The traversal, as the specification formalism (`BSmtLibSpec`) defines it, with the builder
 (`specBuilder`) and with token points and a producer that do nothing:
-- returns the tree itself and leaves the state as it is, for sorts, s-expressions, attributes and
+- returns the tree itself and leaves the state as it is, for sorts, S-expressions, attributes and
   terms;
 - adds a valid command to the commands built so far;
 - from a state with any version and no commands, builds the commands of a valid script, newest
@@ -78,7 +78,7 @@ theorem yields_call {returns : Traversal.Returns} (request : Traversal.Call tree
   rw [StateT.run_map, h]
   rfl
 
-/-! ## Sorts, s-expressions and attributes -/
+/-! ## Sorts, S-expressions and attributes -/
 
 /-- The builder as the formalism's handler. -/
 abbrev B : Traversal.Handler (StateT State Id) Unit treeValues := specBuilder

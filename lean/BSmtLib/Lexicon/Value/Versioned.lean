@@ -14,8 +14,8 @@ namespace BSmtLib.Lexicon.Value
 open BSmtLib.Lexicon (Reserved)
 open BSmtLib (Version)
 
-/-- Whether the bytes are allowed in a simple symbol and are not a reserved word of the given
-version. -/
+/-- Returns `true` if the bytes are allowed in a simple symbol and are not a reserved word of the
+given version. -/
 def SymbolBuf.isSimpleIn (value : ByteSlice) (version : Version) : Bool :=
   isUnquotedAllowed value && (Reserved.fromBytes? value version).isNone
 
@@ -30,8 +30,8 @@ the version, and quoted otherwise.
 def newIn (value : ByteSlice) (version : Version) : Except DisallowedBytesError Symbol :=
   if SymbolBuf.isSimpleIn value version then newUnquoted value else newQuoted value
 
-/-- Whether the symbol reads back as itself in the given version: it is quoted, or it is simple
-and the version does not reserve it. -/
+/-- Returns `true` if the symbol reads back as itself in the given version: it is quoted, or it is
+simple and not a reserved word of the version. -/
 def isSymbolIn (self : Symbol) (version : Version) : Bool :=
   self.isQuoted || (Reserved.fromBytes? self.asSlice version).isNone
 
@@ -54,8 +54,8 @@ the version, and quoted otherwise.
 def newIn (value : ByteArray) (version : Version) : Except DisallowedByteVecError SymbolBuf :=
   if isSimpleIn value.toByteSlice version then newUnquoted value else newQuoted value
 
-/-- Whether the symbol reads back as itself in the given version: it is quoted, or it is simple
-and the version does not reserve it. -/
+/-- Returns `true` if the symbol reads back as itself in the given version: it is quoted, or it is
+simple and not a reserved word of the version. -/
 def isSymbolIn (self : SymbolBuf) (version : Version) : Bool :=
   self.view.isSymbolIn version
 

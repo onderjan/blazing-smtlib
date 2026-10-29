@@ -15,24 +15,22 @@ open BSmtLib.Lexer.Cursor
 /- LEAN: Rust's `next(&mut self)` returns the token and advances the window in place; here the
 window after the token is returned, with the proof that it took the token, so that an extractor
 gives back the window it took its tokens from (`Cursor.attempt`). -/
-/-- A lookahead window for `Cursor.attempt` (`SmtLookahead`). -/
+/-- Lookahead window for `Cursor.attempt`. -/
 class _root_.BSmtLib.Token.Lookahead (W T : Type) where
   /-- Whether the first window comes from the second one by taking at least one more token. -/
   Consumed : W → W → Prop
   /-- Looks at the next token and advances the window. -/
   next? : (window : W) → Option (T × { next : W // Consumed next window })
-  /-- Views the user token as a library token. -/
+  /-- Views the user token as a syntax token. -/
   «syntax» : W → T → Token
 
 /- LEAN: Rust's `impl SmtLookahead<T> for ()`, whose `syntax` panics: the window gives no token
 to view. Here it views every token as the end of the file. -/
-/-- The window that gives no token, for producers without lookahead. -/
 instance {T : Type} : Lookahead Unit T where
   Consumed _ _ := False
   next? _ := none
   «syntax» _ _ := .endOfFile
 
-/-- The window of a lexer cursor takes the tokens of the batch after the cursor, in order. -/
 instance {batch : BatchTag} : Lookahead (LexerWindow batch) (LexerToken batch) where
   Consumed := LexerWindow.Consumed
   next? := LexerWindow.next?

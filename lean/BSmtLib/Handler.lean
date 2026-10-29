@@ -26,7 +26,7 @@ batch of tokens; a handler that keeps a name for long should keep a copy of it
 
 /- LEAN: Rust's traits `SmtHandler` and `SmtCommandHandler`. The associated types are fields
 of the class, and `&mut self` is the state of the monad `StateT H m` that every call runs in;
-the monad `m` is an `outParam`, determined by the handler's type, as the monad of `Consume` is.
+the monad `m` is an `outParam`, determined by the handler's type, as the monad of `ConsumeFrom` is.
 `Sort` is a keyword of Lean, hence the quotes on the field `«Sort»`. -/
 
 namespace BSmtLib.Handler
@@ -34,84 +34,231 @@ namespace BSmtLib.Handler
 open BSmtLib.Grammar.Nodes BSmtLib.Lexicon.Value BSmtLib.Grammar.Multiple
 
 /--
-The handler of the categories that terms are built from (`SmtHandler`).
+Handles grammar nodes (sorts, terms, etc.).
 
-A call that brings names into scope in a term (`startLet`, `startQuantifier`, `startLambda`,
-`startMatchCase`) returns a scope value, which the matching end call receives back. All bindings
-of a `let` and all sorted variables of a binder come in one start, in order. `startMatch` is an
-early check of the scrutinee; each case start and end receives the scrutinee again, and
-`endMatch` receives it with the cases, each a pattern and its handled body, at the match's `)`.
+A handler is called in a post-order traversal over the SMT-LIB abstract syntax tree: it handles
+the inner items (terms, sorts, etc.) first, then the outer items that only see the returned
+values. It can construct the abstract syntax tree or perform any other processing, e.g.
+immediately evaluating constant expressions.
 
-`setVersion` tells the handler the version in force, and cannot fail: the parse adapter calls it
-at the start of every input, before any other call, and the script parser after each version
-declaration, once the producer has switched.
+Commands are handled by `Handler.CommandHandler`, which extends this class.
 -/
 class _root_.BSmtLib.Handler (H : Type) (m : outParam (Type → Type)) where
-  /-- The handler's errors. -/
+  /-- Error returned by the handler on failure. -/
   Error : Type
-  /-- What the handler makes of an s-expression. -/
+  /--
+  S-expression that has been handled.
+
+  Returned by `handleSExpr`.
+  -/
   SExpr : Type
-  /-- What the handler makes of an attribute. -/
+  /--
+  Attribute that has been handled.
+
+  Returned by `handleAttribute`.
+  -/
   Attribute : Type
-  /-- What the handler makes of a sort. -/
+  /--
+  Sort that has been handled.
+
+  Returned by `handleSort`.
+  -/
   «Sort» : Type
-  /-- What the handler makes of a term. -/
+  /--
+  Term that has been handled.
+
+  Returned by `handleTerm`, `annotateTerm`, and the methods that end binders and `match`, such
+  as `endLet`.
+  -/
   Term : Type
-  /-- What the handler returns for a scope, and receives back at its end. -/
+  /--
+  Scope of a binder, returned at its start and given back at its end.
+
+  The binders are `let`, the quantifiers, `lambda`, and the cases of `match`. The body of a binder
+  is handled between its start and its end, so the handler can bring the bound variables into
+  scope at the start and keep in the scope what it needs to restore at the end, e.g. the
+  bindings that the bound variables shadow. If reading fails within a binder, its end method is
+  not called.
+
+  A bound variable shadows the variables and user-defined function symbols of the same name in
+  the enclosing scopes, but SMT-LIB prohibits it from having the name of a theory function symbol
+  of the current logic. Library parsers do not check this.
+  -/
   Scope : Type
-  /-- The version in force, at the start of every input and after a version declaration. -/
+  /--
+  Informs the handler of the version in force.
+
+  A caller must set the version before it calls the other methods, so that the handler can
+  process the nodes by the semantics of the version. A handler starts with the default `Version`
+  in force.
+
+  `Parser.Adapter.ParseAdapter` calls this method before any other, and
+  `Parser.Script.ScriptParser` calls it again when a script declares its version
+  (`set-info :smt-lib-version`).
+  -/
   setVersion : Version → StateT H m Unit
-  /-- A sort: its identifier and its argument sorts, none if it is not applied. -/
   /- LEAN: Rust's `handle_sort(SmtSort { ident, args })`; the fields of `SmtSort` are the
   arguments, as Lean does not unbox a structure of several fields, so a nested structure would
   be allocated for every sort handed over. -/
+  /--
+  Handles a sort.
+
+  The sort is given by its identifier and its argument sorts, which are none if the sort is not
+  applied.
+  -/
   handleSort : Ident → Grammar.Multiple «Sort» → ExceptT Error (StateT H m) «Sort»
-  /-- A term that binds nothing: a constant, a qualified identifier or an application. -/
+  /--
+  Handles a term (special constant, qualified identifier, or application).
+
+  Annotations, binders and `match` terms are terms too, but are handled by methods of their own
+  because of their structure: annotations by `annotateTerm`, binders by pairs of methods that
+  start and end their body, such as `startLet` and `endLet`, and `match` terms by `startMatch`
+  and the methods that follow it.
+  -/
   handleTerm : Grammar.Nodes.Term «Sort» Term → ExceptT Error (StateT H m) Term
-  /-- An s-expression. -/
+  /--
+  Handles an S-expression.
+
+  S-expressions mainly occur in attribute values, e.g. `a` and `(f x)` in
+  `:my-attribute (a (f x))`.
+  -/
   handleSExpr : Grammar.Nodes.SExpr SExpr → ExceptT Error (StateT H m) SExpr
-  /-- An attribute: its keyword and its value, if it has one. -/
+  /--
+  Handles an attribute.
+
+  The value is `none` for an attribute without a value, e.g. `:left-assoc`. Library parsers do
+  not check well-formedness of the attribute content, e.g. that `:named` has a symbol value.
+  -/
   handleAttribute : Keyword → Option (AttributeValue SExpr) →
     ExceptT Error (StateT H m) Attribute
-  /-- An annotated term, `(` `!` term attribute+ `)`, at its `)`. -/
+  /--
+  Annotates a term with attributes, e.g. `(! (> x 0) :named p)`.
+
+  The caller guarantees that there is at least one attribute.
+
+  SMT-LIB defines the name of a `:named` attribute at the annotation: the name can be used in
+  what is handled after this method, in the rest of the command and after it. SMT-LIB requires
+  the named term to contain no free variables and the name to be fresh, and allows `:pattern`
+  only on the body of a quantified term. Library parsers do not check this.
+  -/
   annotateTerm : Term → Grammar.Multiple Attribute → ExceptT Error (StateT H m) Term
-  /-- The bindings of a `let`, at the `)` after them, before its body. -/
+  /--
+  Starts a `let` term.
+
+  The bound terms are handled outside the scope of the `let`, before this method is called: in
+  `(let ((x 1) (y x)) (+ x y))`, the `x` bound to `y` is not the `x` that this `let` binds.
+
+  SMT-LIB requires the binding names to be distinct. Library parsers do not check this.
+  -/
   startLet : Bindings Term → ExceptT Error (StateT H m) Scope
-  /-- The end of a `let`, with its body, at its `)`. -/
+  /--
+  Ends a `let` term.
+
+  Receives the scope returned by the corresponding `startLet`.
+  -/
   endLet : Scope → Term → ExceptT Error (StateT H m) Term
-  /-- The variables of a quantifier, at the `)` after them, before its body. -/
+  /--
+  Starts a quantified term (`forall` or `exists`).
+
+  The variable names need not be distinct: the binder stands for nested binders of one variable
+  each, so a later variable shadows an earlier one of the same name.
+  -/
   startQuantifier : QuantifierKind → SortedVars «Sort» → ExceptT Error (StateT H m) Scope
-  /-- The end of a quantifier, with its body, at its `)`. -/
+  /--
+  Ends a quantified term (`forall` or `exists`).
+
+  Receives the scope returned by the corresponding `startQuantifier`.
+  -/
   endQuantifier : QuantifierKind → Scope → Term → ExceptT Error (StateT H m) Term
-  /-- The variables of a `lambda`, at the `)` after them, before its body. -/
+  /--
+  Starts a `lambda` term.
+
+  The variable names need not be distinct: the binder stands for nested binders of one variable
+  each, so a later variable shadows an earlier one of the same name.
+
+  Lambda terms were introduced in SMT-LIB 2.7.
+  -/
   startLambda : SortedVars «Sort» → ExceptT Error (StateT H m) Scope
-  /-- The end of a `lambda`, with its body, at its `)`. -/
+  /--
+  Ends a `lambda` term.
+
+  Receives the scope returned by the corresponding `startLambda`.
+
+  Lambda terms were introduced in SMT-LIB 2.7.
+  -/
   endLambda : Scope → Term → ExceptT Error (StateT H m) Term
-  /-- The scrutinee of a `match`, at its last token, before the first case. -/
+  /--
+  Starts a `match` term.
+
+  The scrutinee is the term that is matched, e.g. `l` in `(match l ((nil 0) ((cons h t) h)))`. At
+  least one case follows, each case started by `startMatchCase` and ended by `endMatchCase`,
+  after which `endMatch` ends the `match` term. A `match` in the body of a match case is nested
+  properly: it ends before the match case does.
+
+  Match terms were introduced in SMT-LIB 2.6.
+  -/
   startMatch : Term → ExceptT Error (StateT H m) Unit
-  /-- A case of a `match`: the scrutinee and the case's pattern, at the pattern's last token. -/
+  /--
+  Starts a case of a `match` term.
+
+  Returns the scope in which the body of the case is handled, e.g. with `h` and `t` bound for the
+  pattern `(cons h t)`. The case belongs to the innermost `match` that has been started and not
+  ended. A case ends before the next case of its `match` starts.
+
+  A constructor pattern has at least one argument, and its arguments are variables or the
+  wildcard `_`, even if a symbol has the name of a constructor, e.g. `nil` in `(cons h nil)`. A
+  simple pattern, e.g. `nil` or `x`, can be a constructor or a variable: library parsers do not
+  tell them apart. They do not check the names of constructors or their arities.
+
+  SMT-LIB requires the variables of a constructor pattern to be distinct, e.g. it prohibits
+  `(pair x x)`, while the wildcard can repeat, as in `(pair _ _)`. Library parsers do not check
+  this.
+
+  Match terms were introduced in SMT-LIB 2.6.
+  -/
   startMatchCase : Term → Pattern → ExceptT Error (StateT H m) Scope
-  /-- The end of a case of a `match`, with the scrutinee and its body, at the case's `)`. -/
+  /--
+  Ends a case of a `match` term.
+
+  Receives the scope returned by the corresponding `startMatchCase`. The result of this method
+  is given to `endMatch` as the case, next to its pattern.
+
+  Match terms were introduced in SMT-LIB 2.6.
+  -/
   endMatchCase : Scope → Term → Term → ExceptT Error (StateT H m) Term
-  /-- The end of a `match`: its scrutinee and its cases, at its `)`. -/
+  /--
+  Ends a `match` term.
+
+  The cases are in the order of the input, each with its pattern and the result of
+  `endMatchCase` for it. The caller guarantees that there is at least one case.
+
+  SMT-LIB requires a variable pattern among the cases unless every constructor of the sort of the
+  scrutinee has a case. Library parsers do not check this.
+
+  Match terms were introduced in SMT-LIB 2.6.
+  -/
   endMatch : Term → MatchCases Term → ExceptT Error (StateT H m) Term
 
 /- LEAN: Rust's `SmtNonstandardCommandError`, a tuple struct with a private field, which is named
 here. The constructor is private, as Rust's field is; the name is readable as `error.name`,
 replacing the getters `name` and `into_name`. Rust derives `Debug` and `Clone`; a Lean value is
 copied freely. -/
-/-- The error of `SyntaxChecker`: the name of the non-standard command it rejected. -/
+/--
+Error due to a nonstandard command.
+
+`SyntaxChecker` returns it for every nonstandard command.
+-/
 structure NonstandardCommandError where
   private mk ::
-  /-- The command's name. -/
+  /-- Returns the name of the nonstandard command. -/
   name : SymbolBuf
   deriving Repr
 
-/-- The error of the non-standard command of the name. -/
+/-- Creates the error for the nonstandard command named `name`. -/
 def NonstandardCommandError.new (name : SymbolBuf) : NonstandardCommandError :=
   { name }
 
-/-- Error of a `PartialCommandHandler`. -/
+/-- Error of a partial command handler (unsupported command or handler error). -/
 inductive PartialCommandError (E : Type) where
   /-- The handler does not implement the standard command. -/
   | unsupported (command : Lexicon.Reserved.CommandNameReserved)

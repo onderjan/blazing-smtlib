@@ -200,13 +200,13 @@ def flushBatch : WRustPort.LexM H m R E floor low Unit := do
   let bytes := batch.bytes
   storeSpent (← handOver batch bytes fun p hp => (hbatch p hp).endsAfter)
 
+/- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
+which is empty after the flush, with the content buffer as its array of contents for the
+one token. -/
 /--
 Hands over a single token whose content is in the lexer's content buffer,
 spanning from `start` to `end`.
 -/
-/- LEAN: Rust hands such a token over in a cursor of its own; here it goes in the batch,
-which is empty after the flush, with the content buffer as its array of contents for the
-one token. -/
 def handOverStored (ty : Token.TokenCategory) (start «end» : Span.Location)
     (hend : start.offset < «end».offset) (hfloor : ∀ p, floor = some p → p < «end».offset) :
     WRustPort.LexM H m R E floor low Unit := do
@@ -253,6 +253,10 @@ def flushHeld (batch : Token.Internal.TokenBatch) (origin : Nat)
   return ⟨spent.clear origin, Token.Internal.TokenBatch.lastEnd_clear _ _,
     fun _ _ => Token.Internal.TokenBatch.startsFrom_clear _ _ _⟩
 
+/- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
+here a token that is not emitted is not written. Rust keeps the line and the line start in
+locals of `lex_normal`; here they stay in the lexer state, which the fast path only reads, and
+the locals are empty. -/
 /--
 Puts a fast-path token into the batch if `emit` is set, flushing the batch
 when it is full.
@@ -261,10 +265,6 @@ The content is from `contentStart` to `contentStop` in the slice, and the span i
 current line, over `start` to `end` in the slice. `offset` is the stream offset of the
 index `base`.
 -/
-/- LEAN: Rust writes the entry even when it is not emitted, as the next token overwrites it;
-here a token that is not emitted is not written. Rust keeps the line and the line start in
-locals of `lex_normal`; here they stay in the lexer state, which the fast path only reads, and
-the locals are empty. -/
 @[inline]
 def pushFast (input : ByteSlice) (batch : Token.Internal.TokenBatch) (_locals : Unit) (offset : Nat)
     (base : Nat) (ty : Token.TokenCategory) (contentStart contentStop start «end» : Nat)

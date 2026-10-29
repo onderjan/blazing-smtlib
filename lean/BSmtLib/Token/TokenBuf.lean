@@ -11,23 +11,52 @@ open BSmtLib.Lexicon.Value
 
 namespace BSmtLib.Token.TokenBuf
 
-/-- An owned token, from which `Token` is viewed. -/
+/--
+Owned syntax token.
+
+Unlike `TokenCategory`, a syntax token depends on the version: an unquoted symbol that
+is a reserved word in the version is `TokenBuf.reserved`, and every other symbol is
+a `TokenBuf.symbol`.
+-/
 inductive _root_.BSmtLib.Token.TokenBuf where
+  /-- Opening parenthesis (`(`). -/
   | parenOpen
+  /-- Closing parenthesis (`)`). -/
   | parenClose
+  /-- Numeral, e.g. `0` or `42`. -/
   | numeral (value : NumeralBuf)
+  /-- Decimal, e.g. `0.5` or `3.14`. -/
   | decimal (value : DecimalBuf)
+  /-- Hexadecimal, e.g. `#xA04`. -/
   | hexadecimal (value : HexDigitsBuf)
+  /-- Binary, e.g. `#b0101`. -/
   | binary (value : BinDigitsBuf)
+  /-- String literal, e.g. `"hello"` or `""`. -/
   | string (value : StringContentBuf)
+  /-- Keyword, e.g. `:named`. -/
   | keyword (value : KeywordBuf)
+  /--
+  Symbol (quoted or unquoted), e.g. `x`, `+` or `|a b|`.
+
+  A quoted symbol is a symbol even if its content is a reserved word, such as `|let|`, and
+  so is a word reserved only in later versions, such as `lambda` before version 2.7.
+  -/
   | symbol (value : SymbolBuf)
+  /-- Reserved word, e.g. `let`, `_`, `check-sat`, or `lambda` from version 2.7. -/
   | reserved (value : Lexicon.Reserved)
+  /-- Whitespace, e.g. the space in `(assert p)`. -/
   | whitespace (value : WhitespaceBuf)
+  /-- Comment, e.g. `; note`. -/
   | comment (value : CommentBuf)
+  /--
+  End of file (EOF).
+
+  Marks the end of the input.
+  -/
   | endOfFile
   deriving Repr
 
+/-- Views as `Token`. -/
 def view : TokenBuf → Token
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose
@@ -47,6 +76,7 @@ end BSmtLib.Token.TokenBuf
 
 namespace BSmtLib.Token
 
+/-- Converts into `TokenBuf`. -/
 def intoOwned : Token → TokenBuf
   | .parenOpen => .parenOpen
   | .parenClose => .parenClose

@@ -13,7 +13,7 @@ import all BSmtLib.Parser.Category.Token
 one for each part of a list: the `(` that opens it (if it has its own), one element from
 between elements, and the `)` that ends it. A proof of a particular list goes by induction over
 its elements, joining these with `Runs.append`, as `sExprs_runs` does for the items of an
-s-expression list.
+S-expression list.
 
 An element is read by the inner parser from its initial state; the list takes the element's
 first token over from the state between elements (`Runs.first`), which is why that token must

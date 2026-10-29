@@ -17,9 +17,9 @@ namespace BSmtLib.Grammar.Multiple
 
 open BSmtLib.Grammar.Nodes (Pattern)
 
-/-- The cases of a match term to be handled: each a pattern with its handled body. -/
 /- LEAN: Rust's `SmtMatchCases`, parameterised by the handled terms, where Rust's is by the
 handler. -/
+/-- View of match cases. -/
 structure MatchCases (HandledTerm : Type) where
   private mk ::
   /-- The patterns with their bodies, in order. -/
@@ -40,12 +40,15 @@ theorem Internal.toArray_new {HandledTerm : Type} (toArray : Array (Pattern × H
 
 variable {HandledTerm : Type}
 
+/-- Returns the number of match cases. -/
 @[inline]
 def len (self : MatchCases HandledTerm) : Nat := self.toArray.size
 
+/-- Returns `true` if there are no match cases. -/
 @[inline]
 def isEmpty (self : MatchCases HandledTerm) : Bool := self.toArray.isEmpty
 
+/-- Returns the pattern and term at the position, or `none` if it is out of bounds. -/
 @[inline]
 def get? (self : MatchCases HandledTerm) (index : Nat) : Option (Pattern × HandledTerm) :=
   self.toArray[index]?

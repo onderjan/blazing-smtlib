@@ -15,7 +15,7 @@ namespace BSmtLib.Token.AppendTokens
 
 /- LEAN: Rust's `append_tokens(&self, &mut tokens)` returns the cursor with the tokens after
 those it had. -/
-/-- A value whose tokens can be put into a cursor. -/
+/-- Appends the tokens of a value to a cursor. -/
 class _root_.BSmtLib.Token.AppendTokens (α : Type) where
   /-- Puts the tokens of the value after those in the cursor. -/
   appendTokens : α → TokensCursor → TokensCursor

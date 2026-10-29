@@ -24,7 +24,10 @@ itself, so a token costs nothing; its batch tag is a type index and not stored. 
 are read through a cursor over its batch: `cursor.category token`, `cursor.content token`,
 `cursor.span token`. -/
 /--
-A token of the batch named `batch`.
+Lexer token.
+
+Lexer tokens are given out by `LexerCursor`. Each token includes its location span and can be
+viewed as `Token` via `LexerCursor.syntax`.
 
 A token is read through a cursor over its batch: the cursor it was taken from, or any cursor
 that the consumer's operations make from that one in the same hand-over. A token cannot be
@@ -99,10 +102,18 @@ namespace BSmtLib.Lexer.Cursor
 
 open BSmtLib.Token
 
-/--
-A cursor into a batch of tokens, from which elements are consumed sequentially.
+/- LEAN: Rust narrows the borrowed slices of the batch; here the cursor holds the whole batch
+and the range of it that it yields, from `first` to `stop`. A relex request moves `stop`,
+which needs no copy. `first` is the first token of the hand-over, Rust's `start`: the tokens
+from it to `nextIndex` are the consumed ones. `bounded` keeps the indices in order and within
+the batch, which the reads and the proofs about consumption below rest on.
 
-A parser reads a batch through a cursor: it consumes the tokens one at
+The batch is tagged by the type's parameter, which is not stored, and held in
+the field `batch`, which the reads use; `tagged` ties the two. -/
+/--
+Cursor into a batch of lexer tokens.
+
+A consumer reads a batch through a cursor: it consumes the tokens one at
 a time, can look at the next one, and can attempt to take several at once.
 However, it is not guaranteed how many tokens the batch will actually have,
 so an attempt is only useful for fast paths that fall back to slow paths
@@ -113,17 +124,14 @@ that the consumer's operations make from it are over the same batch and read
 every token taken from any of them. The cursor of another hand-over is over
 another batch.
 -/
-/- LEAN: Rust narrows the borrowed slices of the batch; here the cursor holds the whole batch
-and the range of it that it yields, from `first` to `stop`. A relex request moves `stop`,
-which needs no copy. `first` is the first token of the hand-over, Rust's `start`: the tokens
-from it to `nextIndex` are the consumed ones. `bounded` keeps the indices in order and within
-the batch, which the reads and the proofs about consumption below rest on.
-
-The batch is tagged by the type's parameter, which is not stored, and held in
-the field `batch`, which the reads use; `tagged` ties the two. -/
 structure LexerCursor (tag : BatchTag) where
   private mk ::
-  /-- The SMT-LIB version that applies to the tokens. -/
+  /--
+  Returns the SMT-LIB version that applies to the tokens currently consumed.
+
+  The version is guaranteed not to change during a call to the consumer except as a result of
+  the consumer calling `setVersion` and the producer accepting.
+  -/
   version : Version
   private batch : Internal.TokenBatch
   private tagged : tag = batch.tag
@@ -180,14 +188,14 @@ def Internal.new (version : Version) (batch : Internal.TokenBatch) : LexerCursor
     relexFlag := false, discardFlag := false,
     bounded := ⟨Nat.le_refl _, Nat.zero_le _, Nat.le_refl _⟩ }
 
+/- LEAN: Rust's `single` takes the version and the token, which carries its own data. A Lean
+token is read through its batch, so the new cursor is made from a cursor over the token's
+batch. -/
 /--
 Returns a cursor over a single token of this cursor's batch.
 
 This can be used for parsing one token using a cursor-parsing function.
 -/
-/- LEAN: Rust's `single` takes the version and the token, which carries its own data. A Lean
-token is read through its batch, so the new cursor is made from a cursor over the token's
-batch. -/
 @[inline]
 def Internal.single (self : LexerCursor batch) (version : Version) (token : LexerToken batch) :
     LexerCursor batch :=
@@ -195,9 +203,9 @@ def Internal.single (self : LexerCursor batch) (version : Version) (token : Lexe
     stop := token.index + 1, nextIndex := token.index, relexFlag := false, discardFlag := false,
     bounded := ⟨Nat.le_refl _, Nat.le_succ _, self.lt_len token⟩ }
 
-/-- Whether a token remains to be consumed. -/
 /- LEAN: not in Rust. That a token remains is the producer's law `Cursor.HasNext` for the
 cursor, which the consumers take as a proof; Rust's `is_empty` is its negation. -/
+/-- Whether a token remains to be consumed. -/
 def HasNext (self : LexerCursor batch) : Prop :=
   self.nextIndex < self.stop
 
@@ -218,12 +226,12 @@ switch drops them.
 def Internal.Follows (self origin : LexerCursor batch) : Prop :=
   self.first = origin.first ∧ self.stop ≤ origin.stop ∧ origin.nextIndex ≤ self.nextIndex
 
+/- LEAN: not in Rust. That a cursor took a token is the producer's law `Cursor.Consumed` for
+the cursor, by which the loops of the consumers end. -/
 /--
 Whether `self` comes from `origin` through the consumer's operations, with at
 least one more token consumed than `origin` has.
 -/
-/- LEAN: not in Rust. That a cursor took a token is the producer's law `Cursor.Consumed` for
-the cursor, by which the loops of the consumers end. -/
 def Consumed (self origin : LexerCursor batch) : Prop :=
   (Internal.Follows self) origin ∧ origin.nextIndex < self.nextIndex
 
@@ -250,7 +258,14 @@ theorem Consumed.trans {a b c : LexerCursor batch} (ab : a.Consumed b) (bc : b.C
     a.Consumed c :=
   ab.trans_follows bc.1
 
-/-- Returns the next token (if any) without consuming it. -/
+/--
+Returns the next token (if any) without consuming it.
+
+Peeking must return `some` containing the next token that would be consumed if there is some
+such token waiting.
+
+The caller must not forget to consume the token later if it should be taken.
+-/
 @[inline]
 def peek? (self : LexerCursor batch) : Option (LexerToken batch) :=
   if h : self.nextIndex < self.stop then some ⟨self.nextIndex, self.valid_of_lt_stop h⟩ else none
@@ -289,8 +304,10 @@ section
 variable {batch : BatchTag}
 
 /--
-The tokens ahead of a cursor, as the extractor of `LexerCursor.attempt` sees them: they can
-only be taken in order.
+Lookahead window for an attempt to extract tokens from a lexer cursor.
+
+This window is given by `LexerCursor` to the extraction function passed
+to `LexerCursor.attempt` so it can attempt extraction of multiple tokens.
 -/
 structure LexerWindow (tag : BatchTag) where
   private mk ::
@@ -307,10 +324,10 @@ private theorem LexerWindow.lt_len (self : LexerWindow batch) (token : LexerToke
     token.index < self.batch.len :=
   token.valid _ ((congrFun self.tagged self.batch).mpr rfl)
 
+/- LEAN: not in Rust. That a window took a token, as `Consumed` is for the cursor. -/
 /--
 Whether `self` comes from `origin` by taking at least one token from it.
 -/
-/- LEAN: not in Rust. That a window took a token, as `Consumed` is for the cursor. -/
 def LexerWindow.Consumed (self origin : LexerWindow batch) : Prop :=
   self.stop = origin.stop ∧ origin.nextIndex < self.nextIndex
 
@@ -318,8 +335,8 @@ theorem LexerWindow.Consumed.trans {a b c : LexerWindow batch} (ab : a.Consumed 
     (bc : b.Consumed c) : a.Consumed c :=
   ⟨ab.1.trans bc.1, Nat.lt_trans bc.2 ab.2⟩
 
-/-- Takes the next token of the window (if any). -/
 /- LEAN: Rust's `SmtLookahead::next` for `SmtLexerWindow`, with the proof that it took a token. -/
+/-- Looks at the next token and advances the window. -/
 @[inline]
 def LexerWindow.next? (self : LexerWindow batch) :
     Option (LexerToken batch × { w : LexerWindow batch // w.Consumed self }) :=
@@ -331,27 +348,30 @@ def LexerWindow.next? (self : LexerWindow batch) :
   else
     none
 
-/-- The category of the token. -/
 /- LEAN: Rust's `SmtLexerToken::category`, read through the window, as the token is an index into
 its batch (see `LexerToken`). -/
+/-- Returns the category of the token. -/
 @[inline]
 def LexerWindow.category (self : LexerWindow batch) (token : LexerToken batch) : TokenCategory :=
   self.batch.categoryOf token.index (self.lt_len token)
 
-/--
-The bytes of the token; empty for the end of file.
-
-The bytes are for use during the hand-over; to keep them, copy them.
--/
 /- LEAN: Rust's `SmtLexerToken::content`, read through the window, as the token is an index into
 its batch (see `LexerToken`). -/
+/--
+Returns the content of the token, as the lexicon type of its category holds it.
+
+The content is for use during the hand-over; to keep it, copy it.
+
+For example, the content is the bytes of `a b` for `|a b|` and of `named` for `:named`, and
+empty for the end of the input.
+-/
 @[inline]
 def LexerWindow.content (self : LexerWindow batch) (token : LexerToken batch) : ByteSlice :=
   self.batch.contentOf token.index (self.lt_len token)
 
-/-- The span of the token. -/
 /- LEAN: Rust's `SmtLexerToken::span`, read through the window, as the token is an index into its
 batch (see `LexerToken`). -/
+/-- Returns the span of the token. -/
 @[inline]
 def LexerWindow.span (self : LexerWindow batch) (token : LexerToken batch) : Span :=
   self.batch.spanOf token.index (self.lt_len token)
@@ -362,19 +382,23 @@ namespace LexerCursor
 
 variable {batch : BatchTag}
 
+/- LEAN: the extractor returns the window it took the tokens from, with the proof that it
+took at least one, where the Rust closure takes the window by `&mut`. -/
 /--
-Attempts to consume several tokens at once.
+Attempts to consume several tokens at once (lookahead).
 
 The extractor takes tokens from the window ahead of the cursor, in order.
 If it returns `some`, exactly the tokens it took are consumed, which must be at least one.
 If it returns `none`, nothing is consumed.
+An extractor that runs out of tokens must return `none`.
+The window may end after any token.
 
-The window ends where the cursor does, which may be after any token.
-An extractor that runs out of tokens must return `none`; the
-caller must then reach the same result by consuming token by token.
+This function can be provided for ultra-fast processing,
+and the caller must ensure that a successful attempt results in
+the same observable behaviour as when it failed one.
+Use standard `next?` processing unless
+absolutely necessary and supported by measurements.
 -/
-/- LEAN: the extractor returns the window it took the tokens from, with the proof that it
-took at least one, where the Rust closure takes the window by `&mut`. -/
 @[inline]
 def attempt (self : LexerCursor batch)
     (extract : (window : LexerWindow batch) →
@@ -454,7 +478,7 @@ theorem Consumed.lt_consumedEndOf {self origin : LexerCursor batch} (h : self.Co
   simpa only [Internal.consumedEndOf, Internal.TokenBatch.spanOf, Span.end_ofNumbers,
     Span.Location.Internal.offset_new] using h2
 
-/-- Consumes all tokens remaining in the cursor. -/
+/-- Consumes all tokens the producer has left to hand over. -/
 @[inline]
 def consumeAll (self : LexerCursor batch) : LexerCursor batch :=
   { self with nextIndex := self.stop, bounded := ⟨Nat.le_trans self.bounded.1 self.bounded.2.1,
@@ -467,7 +491,11 @@ theorem consumeAll_consumed {self : LexerCursor batch} (h : self.HasNext) :
     self.consumeAll.Consumed self :=
   ⟨self.consumeAll_follows, h⟩
 
-/-- Whether every token has been consumed. -/
+/--
+Returns `true` if the producer has no tokens left to consume.
+
+This must be true exactly if `peek?` or `next?` would produce `none`.
+-/
 @[inline]
 def isEmpty (self : LexerCursor batch) : Bool :=
   self.nextIndex ≥ self.stop
@@ -494,13 +522,16 @@ private def relex (self : LexerCursor batch) : LexerCursor batch :=
     bounded := ⟨self.bounded.1, Nat.le_refl _, Nat.le_trans self.bounded.2.1 self.bounded.2.2⟩ }
 
 /--
-Sets the SMT-LIB version that should apply from now on.
+Sets the version that applies from now on.
 
-The cursor never refuses: it switches to the new version, and returns it in subsequent calls
-of `version`. The version change applies between the last consumed and first unconsumed token,
-and the cursor can adjust the non-consumed tokens so they correspond to the set version. There
-is no guarantee on their shape or whether any remain at all; the caller must not use any
-information gathered on them beforehand.
+If the producer returns `.ok`, it has switched to the new version, and will return it in
+subsequent calls of `version`. The version change applies between the last consumed and first
+unconsumed token, and the producer can adjust the non-consumed tokens so they correspond to
+the set version. There is no guarantee on their shape or whether any remain at all; the caller
+must not use any information gathered on them beforehand.
+
+If the producer returns `.error`, it has refused the version set request. It guarantees that
+no changes were made, as if the method was never called.
 -/
 def setVersion (self : LexerCursor batch) (version : Version) :
     Except VersionRefused (LexerCursor batch) :=
@@ -530,12 +561,9 @@ def Internal.relexRequested (self : LexerCursor batch) : Bool :=
   self.relexFlag
 
 /--
-Puts the cursor into discarding: the rest of the input is dropped.
+Forces the producer to discard all tokens before an EOF token.
 
-The tokens not consumed through this cursor are dropped, so the cursor yields no more tokens,
-and the consumer is not called again, except once with the end of the input, which lies outside
-the discarded bytes. Discarding is separate from the version and lasts until the end of the
-input.
+It follows that the first produced token, if any, must be EOF.
 -/
 @[inline]
 def discardRest (self : LexerCursor batch) : LexerCursor batch :=
@@ -552,11 +580,11 @@ theorem discardRest_follows (self : LexerCursor batch) : (Internal.Follows self.
 def Internal.discardRequested (self : LexerCursor batch) : Bool :=
   self.discardFlag
 
+/- LEAN: Rust's `reset_consumed`. -/
 /--
 The cursor over the tokens not consumed yet, as a new hand-over in which nothing is
 consumed.
 -/
-/- LEAN: Rust's `reset_consumed`. -/
 @[inline]
 def Internal.resetConsumed (self : LexerCursor batch) : LexerCursor batch :=
   { self with first := self.nextIndex, bounded := ⟨Nat.le_refl _, self.bounded.2⟩ }
@@ -622,27 +650,30 @@ theorem hasNext_resetConsumed {self : LexerCursor batch} :
     (Internal.resetConsumed self).HasNext ↔ self.HasNext :=
   Iff.rfl
 
-/-- The category of the token. -/
 /- LEAN: Rust's `SmtLexerToken::category`, read through the cursor, as the token is an index into
 its batch (see `LexerToken`). -/
+/-- Returns the category of the token. -/
 @[inline]
 def category (self : LexerCursor batch) (token : LexerToken batch) : TokenCategory :=
   self.batch.categoryOf token.index (self.lt_len token)
 
-/--
-The bytes of the token; empty for the end of file.
-
-The bytes are for use during the hand-over; to keep them, copy them.
--/
 /- LEAN: Rust's `SmtLexerToken::content`, read through the cursor, as the token is an index into
 its batch (see `LexerToken`). -/
+/--
+Returns the content of the token, as the lexicon type of its category holds it.
+
+The content is for use during the hand-over; to keep it, copy it.
+
+For example, the content is the bytes of `a b` for `|a b|` and of `named` for `:named`, and
+empty for the end of the input.
+-/
 @[inline]
 def content (self : LexerCursor batch) (token : LexerToken batch) : ByteSlice :=
   self.batch.contentOf token.index (self.lt_len token)
 
-/-- The span of the token. -/
 /- LEAN: Rust's `SmtLexerToken::span`, read through the cursor, as the token is an index into its
 batch (see `LexerToken`). -/
+/-- Returns the span of the token. -/
 @[inline]
 def span (self : LexerCursor batch) (token : LexerToken batch) : Span :=
   self.batch.spanOf token.index (self.lt_len token)
@@ -800,7 +831,7 @@ end Internal
 /- LEAN: Rust's `SmtToken::from_lexer_token(token, version)` reads the token's category and
 content, which a Lean token keeps in its batch, so this reads them through a cursor over the
 batch. It is declared here, as the cursor's module imports `BSmtLib.Token`. -/
-/-- Construct the token kind from the token and version. -/
+/-- Views a lexer token, read through the cursor, as a syntax token in the version. -/
 @[inline]
 def _root_.BSmtLib.Token.fromLexerToken {batch : BatchTag} (cursor : LexerCursor batch)
     (token : LexerToken batch) (version : Version) : Token :=
@@ -810,16 +841,16 @@ namespace LexerCursor
 
 /- LEAN: Rust's `cursor.syntax(&token)`; `syntax` is a keyword in Lean, hence the quotes, which
 a call such as `cursor.syntax token` does not need. -/
-/-- Views the token as a library token under the version in force. -/
+/-- Views a token of this cursor as a syntax token in the version in force. -/
 @[inline]
 def «syntax» {batch : BatchTag} (self : LexerCursor batch) (token : LexerToken batch) : Token :=
   Token.fromLexerToken self token self.version
 
 end LexerCursor
 
-/-- Views the token as a library token under the version of the window. -/
 /- LEAN: Rust's `SmtLookahead::syntax` for `SmtLexerWindow`; `syntax` is a keyword in Lean, as
 for the cursor's. -/
+/-- Views the user token as a syntax token. -/
 @[inline]
 def LexerWindow.«syntax» {batch : BatchTag} (self : LexerWindow batch) (token : LexerToken batch) :
     Token :=

@@ -9,6 +9,32 @@ public import BSmtLib.Lexicon.Reserved
 
 public section
 
+/-!
+# Syntax tokens and classes for their manipulation
+
+A token is one unit of SMT-LIB input, e.g. `(`, `|quoted|`, or `"string"`. It is also a natural
+point around which **BSmtLib** is split: token consumers implement `Consume` and `ConsumeFrom`
+over a token cursor type that implements `Cursor`, and token producers call
+`ConsumeFrom.consume`, giving it the cursor to consume tokens from.
+
+The most important producer in the library is `Lexer`, but `TokensCursor` or a custom cursor
+can also be used. `Consume` is implemented by `Parser.ParseAdapter` and `Writer`.
+
+`Token` itself is an enumeration over lexical categories with a view into their content, with
+the end of file marker (EOF) represented as a token to simplify the API. Whitespace and comments
+are also `Token` categories, and a `Consume` implementation can choose whether those should be
+passed through via `Consume.isConcrete`. This can be used e.g. for pretty-printing while
+preserving comments.
+
+The cursor methods do not return `Token` directly, but values of type `Cursor.Token`, so that
+consumers implementing `ConsumeFrom` for a specific cursor type can use its additional token
+information, e.g. the span of a `Lexer.Cursor.LexerToken`, which `LexerCursor.span` gives. The
+tokens can be converted to syntax tokens using `Cursor.syntax`. For sanity, the cursor must make
+sure that the tokens produced are valid under its version in force announced by
+`Cursor.version`, e.g. unquoted `lambda` must be produced as `Token.symbol` in SMT-LIB 2.6, but
+`Token.reserved` in SMT-LIB 2.7. See `Cursor` for further information.
+-/
+
 /- LEAN: the public items of the Rust crate are in the namespace `BSmtLib`, without the prefix
 `Smt`: `SmtToken` is `BSmtLib.Token`. The internals of the lexer are in `BSmtLib.Lexer`.
 Variant and function names follow Lean conventions (`TokenCategory.parenOpen` for
@@ -16,19 +42,42 @@ Variant and function names follow Lean conventions (`TokenCategory.parenOpen` fo
 fields is a Rust enum. -/
 namespace BSmtLib.Token
 
+/--
+Category of a token.
+
+The category does not depend on the version: simple symbols and reserved words are both
+`TokenCategory.unquotedSymbol`.
+-/
 inductive TokenCategory where
+  /-- Opening parenthesis (`(`). -/
   | parenOpen
+  /-- Closing parenthesis (`)`). -/
   | parenClose
+  /-- Numeral, e.g. `0` or `42`. -/
   | numeral
+  /-- Decimal, e.g. `0.5` or `3.14`. -/
   | decimal
+  /-- Hexadecimal, e.g. `#xA04`. -/
   | hexadecimal
+  /-- Binary, e.g. `#b0101`. -/
   | binary
+  /-- String literal, e.g. `"hello"` or `""`. -/
   | string
+  /-- Keyword, e.g. `:named`. -/
   | keyword
+  /-- Unquoted symbol (simple symbol or reserved word), e.g. `x`, `+`, `let` or `check-sat`. -/
   | unquotedSymbol
+  /-- Quoted symbol, e.g. `|a b|` or `|let|`. -/
   | quotedSymbol
+  /-- Whitespace, e.g. the space in `(assert p)`. -/
   | whitespace
+  /-- Comment, e.g. `; note`. -/
   | comment
+  /--
+  End of file (EOF).
+
+  Marks the end of the input.
+  -/
   | endOfFile
   deriving BEq, Hashable, Repr, Inhabited
 
@@ -316,14 +365,14 @@ private theorem tokensInOrder_push {origin len : Nat} {types : ByteArray} {start
       rw [hE (i - 1) he]
       simpa [show i - 1 ≠ len by omega] using hprev
 
+/- LEAN: not inlined. Inlined into the lexer's loop, the compiler does not reuse the batch's
+cell: every token frees the old cell and allocates a new one. As a call of its own, the cell is
+updated in place when nothing else refers to it. -/
 /--
 Appends a token with the type, its content from `contentStart` to `contentStop` in `bytes`,
 and the span given by the numbers of its two locations. The token starts at or after the end
 of the last one, and has a byte unless it is the end of file.
 -/
-/- LEAN: not inlined. Inlined into the lexer's loop, the compiler does not reuse the batch's
-cell: every token frees the old cell and allocates a new one. As a call of its own, the cell is
-updated in place when nothing else refers to it. -/
 @[noinline]
 def push (self : TokenBatch) (ty : TokenCategory) (contentStart contentStop : Nat)
     (startOffset startLine startColumn endOffset endLine endColumn : Nat)
@@ -617,7 +666,11 @@ theorem get!_eq_getElem (array : ByteArray) {index : Nat} (h : index < array.siz
 end Internal.TokenBatch
 
 /- LEAN: Rust's `SmtVersionRefused`, without the prefix. -/
-/-- Producer refused to switch to a requested version. -/
+/--
+Error due to a refused version switch.
+
+Returned by `Cursor.setVersion`.
+-/
 structure VersionRefused where
   deriving BEq, Hashable, Repr, Inhabited
 
@@ -629,8 +682,13 @@ The method `consume` is in `ConsumeFrom` (`BSmtLib.Token.Cursor`), which is stat
 producer. The Rust blanket `impl SmtConsume for &mut T` has no counterpart, as Lean has no
 references. -/
 /--
-A sequential consumer of tokens, finishing with a value of type `R` and failing with an error
-of type `E`.
+Consumes tokens sequentially.
+
+`ConsumeFrom` defines the actual consumption function from a given
+cursor. The consumer returns a result of type `R` on success and an error of type `E` on
+failure.
+
+The most important consumer implemented in the library is `Parser.ParseAdapter`.
 -/
 class Consume (H : Type) (R E : outParam Type) where
   /- LEAN: the Rust associated constant `IS_CONCRETE`; a field without a default, so that every
@@ -638,14 +696,14 @@ class Consume (H : Type) (R E : outParam Type) where
   /--
   Whether the consumer consumes whitespace and comments.
 
-  If true, the consumer operates over concrete tokens:
+  If `true`, the consumer operates over concrete tokens:
   it can reconstruct the byte stream precisely thanks
   to the whitespace and comments. The caller must hand
   over the whitespace and comment tokens present between
   true syntactic tokens (unless the consumer specifically
   allows them to be omitted, as e.g. `Writer` does).
 
-  If false, the consumer operates over abstract tokens:
+  If `false`, the consumer operates over abstract tokens:
   it is not interested in whitespace and comments,
   and the caller must not hand them over for consumption.
   -/
@@ -653,19 +711,48 @@ class Consume (H : Type) (R E : outParam Type) where
 
 /- LEAN: Rust's `SmtToken`, the token as the library views it. The token of the lexer, which
 names its batch, is `Lexer.Cursor.LexerToken`. -/
+/--
+View of a syntax token.
+
+Unlike `Token.TokenCategory`, a syntax token depends on the version: an unquoted symbol that
+is a reserved word in the version is `Token.reserved`, and every other symbol is
+a `Token.symbol`.
+-/
 inductive _root_.BSmtLib.Token where
+  /-- Opening parenthesis (`(`). -/
   | parenOpen
+  /-- Closing parenthesis (`)`). -/
   | parenClose
+  /-- Numeral, e.g. `0` or `42`. -/
   | numeral (value : Lexicon.Value.Numeral)
+  /-- Decimal, e.g. `0.5` or `3.14`. -/
   | decimal (value : Lexicon.Value.Decimal)
+  /-- Hexadecimal, e.g. `#xA04`. -/
   | hexadecimal (value : Lexicon.Value.HexDigits)
+  /-- Binary, e.g. `#b0101`. -/
   | binary (value : Lexicon.Value.BinDigits)
+  /-- String literal, e.g. `"hello"` or `""`. -/
   | string (value : Lexicon.Value.StringContent)
+  /-- Keyword, e.g. `:named`. -/
   | keyword (value : Lexicon.Value.Keyword)
+  /--
+  Symbol (quoted or unquoted), e.g. `x`, `+` or `|a b|`.
+
+  A quoted symbol is a symbol even if its content is a reserved word, such as `|let|`, and
+  so is a word reserved only in later versions, such as `lambda` before version 2.7.
+  -/
   | symbol (value : Lexicon.Value.Symbol)
+  /-- Reserved word, e.g. `let`, `_`, `check-sat`, or `lambda` from version 2.7. -/
   | reserved (value : Lexicon.Reserved)
+  /-- Whitespace, e.g. the space in `(assert p)`. -/
   | whitespace (value : Lexicon.Value.Whitespace)
+  /-- Comment, e.g. `; note`. -/
   | comment (value : Lexicon.Value.Comment)
+  /--
+  End of file (EOF).
+
+  Marks the end of the input.
+  -/
   | endOfFile
   deriving Repr
 
@@ -676,7 +763,7 @@ open BSmtLib.Lexicon.Value
 /- LEAN: Rust's `from_lexer_token(token, version)` reads the token's category and content, which
 a Lean token keeps in its batch; this takes them read already, so that a cursor and a lookahead
 window view their tokens alike. `Token.fromLexerToken` is declared with the cursor. -/
-/-- Construct the token kind from the category and the content of a token, and the version. -/
+/-- Creates the token kind from the category and the content of a token, and the version. -/
 @[inline]
 def Internal.fromParts (category : TokenCategory) (content : ByteSlice)
     (version : Version) : Token :=
@@ -708,11 +795,16 @@ namespace of the writer, as `Token.writeSmt` fails with them and the writer's mo
 this one. -/
 namespace BSmtLib.Writer
 
-/-- Determines why writing a token has failed. -/
+/-- Why writing failed (I/O error or a reserved word not in the version). -/
 inductive WriteErrorKind where
   /-- Writing to the writer failed. -/
   | io (error : IO.Error)
-  /-- The reserved word is not reserved in the version, so no text in it is the token. -/
+  /--
+  The reserved word is not reserved in the version written in.
+
+  There is no way to write the reserved word, as its text would be read as a symbol,
+  e.g. the reserved word `lambda` in SMT-LIB 2.6.
+  -/
   | notInVersion (reserved : Lexicon.Reserved)
 
 /- LEAN: Rust's derived `Debug`. Lean's `IO.Error` has no `Repr`, so an I/O error is shown by its
@@ -728,10 +820,10 @@ message. -/
 
 /- LEAN: the constructor is private, as Rust's field is. The field is readable as `error.kind`,
 replacing the getters `kind` and `into_kind`. -/
-/-- An error that ended writing a token. -/
+/-- Error that forced writing to stop. -/
 structure WriteError where
   private mk ::
-  /-- Determines why writing has failed. -/
+  /-- Returns the kind of the error. -/
   kind : WriteErrorKind
   deriving Repr
 
@@ -801,17 +893,13 @@ writes it in pieces; the end of the input, which Rust writes in none, calls no `
 /--
 Writes the token as SMT-LIB text in the given version.
 
-No delimiter is written, only the SMT-LIB token as
-it should appear in a byte stream.
-2.0 string literals have backslashes always written escaped
-for sanity even if a single backslash would have been acceptable.
+Only the token is written, without delimiters. A symbol that spells a reserved word of the
+version is written quoted, so that it is read back as a symbol, e.g. `|lambda|` in SMT-LIB
+2.7. In SMT-LIB 2.0, every backslash in a string is written escaped, e.g. `"a\\q"` for the
+content `a\q`.
 
-If a simple symbol collides with a reserved word in the given
-version, it is written as a quoted symbol, so version upgrades
-are possible without problems.
-
-Returns an error if the reserved word is not present
-in the given version or if the underlying writer returns one.
+Returns an error if the token is a reserved word that is not reserved in the given version,
+or if writing fails.
 -/
 def writeSmt {n : Type → Type} [Monad n] [MonadLiftT IO n] (self : Token)
     (writer : IO.FS.Stream) (version : Version) : n (Except Writer.WriteError Unit) := do
