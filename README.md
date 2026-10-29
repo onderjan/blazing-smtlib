@@ -1,4 +1,6 @@
-# blazing-smtlib & BSmtLib: Fast, safe, dependency-free SMT-LIB parsing
+# blazing-smtlib & BSmtLib
+
+Fast, safe, dependency-free SMT-LIB parsing.
 
 **blazing-smtlib** is a high-performance strict parsing library for 
 [SMT-LIB 2](https://smt-lib.org/) in Rust with no dependencies and no 
