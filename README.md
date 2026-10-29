@@ -2,9 +2,8 @@
 
 Fast, safe, dependency-free SMT-LIB parsing.
 
-**blazing-smtlib** is a high-performance strict parsing library for 
-[SMT-LIB 2](https://smt-lib.org/) in Rust with no dependencies and no 
-unsafe code.
+The Rust library **blazing-smtlib** is a high-performance strict parsing library
+for [SMT-LIB 2](https://smt-lib.org/) with no dependencies and no unsafe code.
 **BSmtLib** is a port of **blazing-smtlib** to Lean 4, with the same
 architecture and public interface, adapted to Lean where needed.
 
