@@ -14,8 +14,12 @@ use crate::{
 /// An SMT-LIB script is a (possibly empty) sequence of commands.
 ///
 /// The parser is a loop over an [`SmtCommandParser`]. If the `(exit)` command is
-/// encountered, the parser requests the producer to discard everything after
+/// encountered, the parser requests the cursor to discard everything after
 /// its closing parenthesis.
+///
+/// A version declaration switches the version of the cursor if the posture allows it and the
+/// cursor accepts it; otherwise, parsing fails with a version error
+/// ([`SmtParseErrorKind::Version`](crate::parser::SmtParseErrorKind::Version)).
 ///
 /// The parser returns a unit result on EOF.
 pub struct SmtScriptParser<H: SmtCommandHandler> {

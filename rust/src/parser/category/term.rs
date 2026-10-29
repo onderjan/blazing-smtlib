@@ -18,6 +18,10 @@ use crate::{
 };
 
 /// Parses a term.
+///
+/// Returns the term that the handler returns for it, having handled its subterms first. An
+/// [`SmtReader`](crate::SmtReader) reads a single term with it.
+/// See [`SmtHandler`](crate::SmtHandler) for an example of usage.
 pub struct SmtTermParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

@@ -4,6 +4,12 @@ use crate::lexicon::SmtDecimal;
 ///
 /// A script declares the version it is written in with an attribute, e.g.
 /// `(set-info :smt-lib-version 2.6)`.
+///
+/// A version decides which words are reserved and which syntax is accepted, e.g. `lambda` and
+/// the wildcard `_` from 2.7 on, and `match` and `declare-datatype` from 2.6 on. Under an earlier
+/// version, the name of a later command is a symbol, so the command is nonstandard.
+///
+/// The default version is SMT-LIB 2.7.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, PartialOrd, Ord)]
 pub enum SmtVersion {
     /// Version 2.0.
@@ -64,12 +70,31 @@ impl SmtVersionPosture {
 }
 
 impl Default for SmtVersionPosture {
+    /// Returns the default posture.
+    ///
+    /// The default posture allows versions 2.5, 2.6 and 2.7, and at most one version declaration.
     fn default() -> Self {
         SmtVersionPostureBuilder::new().build()
     }
 }
 
 /// Builds a version posture.
+///
+/// For example, a posture that also allows SMT-LIB 2.0 and any number of version declarations:
+///
+/// ```
+/// use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, SmtVersionPostureBuilder};
+///
+/// let posture = SmtVersionPostureBuilder::new()
+///     .add_allowed(SmtVersion::V2_0)
+///     .set_max_declarations(None)
+///     .build();
+/// let mut handler = SmtSyntaxChecker;
+/// let mut reader = SmtReader::script(&mut handler, posture, SmtVersion::V2_7);
+/// reader
+///     .read_all(b"(set-info :smt-lib-version 2.0)\n(set-info :smt-lib-version 2.6)")
+///     .unwrap();
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtVersionPostureBuilder {
     allowed: Vec<SmtVersion>,
@@ -77,9 +102,7 @@ pub struct SmtVersionPostureBuilder {
 }
 
 impl SmtVersionPostureBuilder {
-    /// Creates a builder with the default posture.
-    ///
-    /// The default posture allows versions 2.5, 2.6 and 2.7, and at most one version declaration.
+    /// Creates a builder with the [default posture](SmtVersionPosture::default).
     pub fn new() -> Self {
         Self {
             allowed: vec![SmtVersion::V2_5, SmtVersion::V2_6, SmtVersion::V2_7],

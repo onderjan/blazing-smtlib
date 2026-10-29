@@ -109,6 +109,8 @@ impl SmtLocation {
     }
 
     /// Returns the location after `c`, the byte at this location.
+    ///
+    /// Panics if the offset would overflow.
     #[inline]
     pub fn after_byte(self, c: u8) -> Self {
         if c == b'\n' {
@@ -123,6 +125,8 @@ impl SmtLocation {
     }
 
     /// Returns the location one byte further on the same line.
+    ///
+    /// Panics if the offset would overflow.
     #[inline]
     pub fn after_column(self) -> Self {
         Self {

@@ -11,6 +11,19 @@ use crate::{
 };
 
 /// Parses a sort.
+///
+/// Returns the sort that [`handle_sort`](crate::SmtHandler::handle_sort) returns for it, having
+/// handled its argument sorts first.
+///
+/// For example, checking the syntax of a single sort:
+///
+/// ```
+/// use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, parser::SmtSortParser};
+///
+/// let mut handler = SmtSyntaxChecker;
+/// let mut reader = SmtReader::new(&mut handler, SmtSortParser::new(), SmtVersion::V2_7);
+/// reader.read_all(b"(Array Int Bool)").unwrap();
+/// ```
 pub struct SmtSortParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

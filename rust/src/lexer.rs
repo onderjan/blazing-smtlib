@@ -60,8 +60,10 @@
 //! least one token per call and the consumer must consume at least one. The
 //! consumer is required to return a break value on EOF, and a non-EOF token
 //! that would be handed over after the break value results in an error with
-//! [`SmtLexicalErrorKind::UnexpectedTrailingToken`]. See [`SmtLexer`] and
-//! [`SmtConsumeFrom::consume`] for the details of the handover contract.
+//! [`SmtLexicalErrorKind::UnexpectedTrailingToken`]. The EOF token is handed
+//! over only if the consumer has not broken with a value before the end of the
+//! input. See [`SmtConsumeFrom::consume`] for the details of the handover
+//! contract.
 //!
 //! The inputs can be passed to the lexer in two ways:
 //!
@@ -69,13 +71,13 @@
 //!   file ([`SmtLexer::lex_file`]), a buffered reader ([`SmtLexer::lex_from`]),
 //!   or a full slice ([`SmtLexer::lex_all`]).
 //! - In parts using calls of [`SmtLexer::lex_slice`] followed by
-//!   [`SmtLexer::lex_eof`].
+//!   [`SmtLexer::lex_eof`]; a part may end anywhere, even inside a token.
 //!
 //! On successful consumer break, the lexer returns the result value augmented
 //! with the location where the value's last token ends and resets itself so it is prepared for
 //! lexing another input. On an error, the lexer returns [`SmtLexerError`] or
-//! [`SmtLexerReadError`] and goes into a failure state where subsequent lexing
-//! will panic.
+//! [`SmtLexerReadError`]; after an error other than an I/O error, it goes into a
+//! failure state where subsequent lexing will panic.
 //!
 mod char_class;
 mod cursor;
@@ -118,25 +120,9 @@ use crate::{
 
 /// Lexes SMT-LIB input, handing the tokens to a consumer.
 ///
-/// The lexer lexes a byte stream into tokens that it sends
-/// to an implementation of [`SmtConsume`], which is expected
-/// to break with a value once it has finished processing
-/// and expects no more tokens belonging to the value.
-/// If any more tokens appear in the stream before
-/// its end, the lexer returns an error of the kind
-/// [`SmtLexicalErrorKind::UnexpectedTrailingToken`].
-///
-/// The EOF token is only produced if no value has been
-/// produced before the end of file, and the [`SmtConsume`]
-/// implementation is required by the contract to break
-/// with a value on it.
-///
-/// When [`SmtLexer::lex_eof`] or [`SmtLexer::lex_all`] returns
-/// successfully, the lexer is guaranteed to be reset
-/// and ready to lex another byte stream.
-///
-/// If an error occurs during lexing, the lexer moves
-/// into a failure state where all further lexing calls panic.
+/// See the [module documentation](self) for how the tokens are handed over, how the input is
+/// given, and what happens at the end of an input and after an error, and for an example of a
+/// custom consumer.
 pub struct SmtLexer<C: SmtConsume, R: SmtLexerRecovery<C> = SmtFailFast> {
     /// Consumer of produced tokens.
     consumer: C,
@@ -330,23 +316,25 @@ enum LexerState {
 
 impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     /// Creates a lexer that stops at its first error.
+    ///
+    /// Each input starts in `version`; the consumer can switch it within an input through the
+    /// cursor ([`SmtCursor::set_version`]).
     pub fn new(consumer: C, version: SmtVersion) -> Self {
         // construct the lexer normally
         // fail-fast is selected by the implementation generics
         Self::construct(consumer, version)
     }
 
-    /// Lexes the whole input including EOF at the end.
+    /// Lexes the slice as the whole input, as [`lex_slice`](Self::lex_slice) followed by
+    /// [`lex_eof`](Self::lex_eof) does.
     ///
-    /// If successful, the lexer is reset before returning
-    /// the token consumer result.
+    /// Returns the located value that the consumer broke with. The lexer is then reset and can
+    /// lex another input.
     ///
-    /// If an error occurs, the lexer moves into a failure state
-    /// where all further lexing calls panic.
+    /// Returns an error if the input is lexically malformed or the consumer fails.
     ///
-    /// The contract of the token consumer forbids it from
-    /// returning [`ControlFlow::Continue`] on the EOF token,
-    /// and the lexer panics if it does.
+    /// Panics if a previous call on this lexer returned an error other than an I/O error.
+    /// May panic if the consumer breaks the contract of [`SmtConsumeFrom::consume`].
     pub fn lex_all(
         &mut self,
         input: &[u8],
@@ -362,10 +350,13 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     /// a zero-length buffer. A failure while reading is reported as
     /// an I/O error with an empty span at the position reached.
     ///
-    /// The buffer content is consumed up to where the consumer requests
-    /// discarding the rest or fully if no such request was made.
+    /// Once the consumer requests discarding the rest of the input, the rest is left unread in the
+    /// buffered reader.
     ///
     /// Otherwise, behaves as [`lex_all`](Self::lex_all).
+    ///
+    /// Panics if a previous call on this lexer returned an error other than an I/O error.
+    /// May panic if the consumer breaks the contract of [`SmtConsumeFrom::consume`].
     pub fn lex_from<B: BufRead>(
         &mut self,
         mut buf_reader: B,
@@ -403,6 +394,9 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>> SmtLexer<C> {
     ///
     /// A failure to open the file is reported as an I/O error with an empty
     /// span at the start of the input.
+    ///
+    /// Panics if a previous call on this lexer returned an error other than an I/O error.
+    /// May panic if the consumer breaks the contract of [`SmtConsumeFrom::consume`].
     pub fn lex_file(
         &mut self,
         path: impl AsRef<Path>,
@@ -506,10 +500,15 @@ impl<C: SmtConsume, R: SmtLexerRecovery<C>> SmtLexer<C, R> {
 impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtLexer<C, R> {
     /// Lexes the given slice, sending the lexed tokens to the consumer.
     ///
-    /// If the consumer produces a result, the result is held back until EOF.
+    /// The slice is the next piece of the input and may end anywhere, even inside a token, which
+    /// the next slice or [`lex_eof`](Self::lex_eof) completes. A value that the consumer breaks
+    /// with is held back until [`lex_eof`](Self::lex_eof) returns it. Once the consumer has
+    /// requested discarding the rest of the input, slices are ignored.
     ///
-    /// If an error occurs, the fail-fast lexer moves into
-    /// a failure state and all further lexing calls panic.
+    /// Returns an error if the input is lexically malformed or the consumer fails.
+    ///
+    /// Panics if a previous call on this lexer returned an error other than an I/O error.
+    /// May panic if the consumer breaks the contract of [`SmtConsumeFrom::consume`].
     pub fn lex_slice(&mut self, slice: &[u8]) -> Result<(), SmtLexerError<C::Error>> {
         if self.discard {
             // pretend that we lexed everything we were given
@@ -555,14 +554,13 @@ impl<C: for<'a> SmtConsumeFrom<SmtLexerCursor<'a>>, R: SmtLexerRecovery<C>> SmtL
     /// If there is any pending token, it is processed.
     /// Then, if a result value has been obtained from the consumer,
     /// it is returned. Otherwise, the EOF token is processed,
-    /// and its result is returned.
+    /// and its result is returned. The lexer is then reset and can lex another input.
     ///
-    /// If an error occurs, the fail-fast lexer moves into
-    /// a failure state and all further lexing calls panic.
+    /// Returns an error if the input is lexically malformed or the consumer fails.
     ///
-    /// The contract of the token consumer forbids it from
-    /// returning [`ControlFlow::Continue`] on the EOF token,
-    /// and the lexer panics if it does.
+    /// Panics if a previous call on this lexer returned an error other than an I/O error.
+    /// May panic if the consumer breaks the contract of [`SmtConsumeFrom::consume`], e.g. by
+    /// returning [`ControlFlow::Continue`] on the EOF token.
     pub fn lex_eof(&mut self) -> Result<SmtLocated<C::Result>, SmtLexerError<C::Error>> {
         // the end of the input forces recovery
         let recovered = self.recovery_state.take().is_some();

@@ -558,11 +558,9 @@ pub trait SmtCursor {
     /// An extractor that runs out of tokens must return [`None`].
     /// The window may end after any token.
     ///
-    /// This function can be provided for ultra-fast processing,
-    /// and the caller must ensure that a successful attempt results in
-    /// the same observable behaviour as when it failed one.
-    /// Use standard [`SmtCursor::next`] processing unless
-    /// absolutely necessary and supported by measurements.
+    /// A caller must behave the same whether an attempt succeeds or fails, so that an attempt
+    /// only speeds up consuming the tokens one by one with [`next`](Self::next). A cursor that
+    /// does not support lookahead always returns [`None`].
     fn attempt<R>(&mut self, extract: impl Fn(&mut Self::Lookahead) -> Option<R>) -> Option<R> {
         let _ = extract;
         None
@@ -867,6 +865,10 @@ plain_append_tokens!(SmtComment, SmtCommentBuf, Comment);
 ///
 /// [`SmtConsumeFrom`] defines the actual consumption function from a given
 /// cursor.
+///
+/// The most important consumer implemented in the library is
+/// [`SmtParseAdapter`](crate::parser::SmtParseAdapter).
+/// See the [lexer module](crate::lexer) for an example of a custom consumer.
 pub trait SmtConsume {
     /// Result returned by the consumer on success.
     type Result;

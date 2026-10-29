@@ -102,6 +102,10 @@ use crate::{
 };
 
 /// Parses a grammar item.
+///
+/// A parser is handed tokens through a cursor until it breaks with its result, e.g. by an
+/// [`SmtParseAdapter`] or by a parser that contains it. A library parser that has broken with its
+/// result can parse the next item.
 pub trait SmtParse<H: SmtHandler + ?Sized> {
     /// Result returned by the parser on success.
     type Result;

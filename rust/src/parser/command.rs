@@ -24,6 +24,9 @@ use standard::{StandardCommandKind, StandardCommandParsers};
 /// and the version-switch command `(set-info :smt-lib-version <version>)`
 /// from the others. It also finishes after an EOF while awaiting a command.
 /// An EOF inside a command is a syntax error.
+///
+/// To read a whole script, use [`SmtScriptParser`](crate::parser::SmtScriptParser), which also
+/// switches versions on version declarations and discards the input after `(exit)`.
 pub struct SmtCommandParser<H: SmtCommandHandler> {
     state: CommandParserState<H>,
     standard_parsers: StandardCommandParsers<H>,
@@ -214,7 +217,7 @@ impl<H: SmtCommandHandler> SmtParse<H> for Infallible {
 /// read completely, like a standard command, and a command that fails to be read, e.g.
 /// `(minimize c` at the end of the input, is not handled at all.
 ///
-/// The documentation of [`SmtCommandHandler`] has an example.
+/// See [`SmtCommandHandler`] for an example.
 pub trait SmtCommandRule<H: SmtCommandHandler> {
     /// Parses the tokens after the name of the command, up to and including its closing
     /// parenthesis.

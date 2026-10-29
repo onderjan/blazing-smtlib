@@ -54,6 +54,9 @@ pub enum SmtReadErrorKind<E> {
 }
 
 /// Error that forced reading to stop.
+///
+/// Its [`Display`](fmt::Display) gives the line and the column counted from one, while
+/// [`SmtLocation`] counts them from zero.
 #[derive(Debug)]
 pub struct SmtReadError<E> {
     kind: SmtReadErrorKind<E>,
@@ -152,6 +155,9 @@ impl<E> From<SmtLexerError<SmtParseError<E>>> for SmtReadError<E> {
 
 /// Reads an SMT-LIB script from a file, delivering it to a handler.
 ///
+/// The script is read in SMT-LIB 2.7 until it declares its version, with the
+/// [default posture](SmtVersionPosture::default).
+///
 /// This is a convenience function over [`SmtReader`]: the parser
 /// is dropped after reading, so its resources cannot be preserved
 /// for future use. Use [`SmtReader`] directly to keep the
@@ -169,6 +175,9 @@ pub fn read_smt_file<H: SmtCommandHandler>(
 }
 
 /// Reads an SMT-LIB script from a buffered reader, delivering it to a handler.
+///
+/// The script is read in SMT-LIB 2.7 until it declares its version, with the
+/// [default posture](SmtVersionPosture::default).
 ///
 /// The input is considered to end when the buffered reader returns
 /// a zero-length buffer.
@@ -200,9 +209,25 @@ pub fn read_smt<H: SmtCommandHandler>(
 /// once the input has ended. A piece may end anywhere, even inside a token.
 ///
 /// After the end of an input has been read without an error, the reader is reset and can be
-/// reused.
+/// reused. After an error other than an I/O error, the reader cannot be used further.
 ///
 /// For whole inputs, consider [`read_smt_file`] and [`read_smt`].
+///
+/// For example, reading a script in pieces, then another script with the same reader:
+///
+/// ```
+/// use blazing_smtlib::{SmtReader, SmtSyntaxChecker, SmtVersion, SmtVersionPosture};
+///
+/// let mut handler = SmtSyntaxChecker;
+/// let mut reader =
+///     SmtReader::script(&mut handler, SmtVersionPosture::default(), SmtVersion::V2_7);
+/// // a piece may end anywhere, even inside a token
+/// reader.read_slice(b"(declare-const x In").unwrap();
+/// reader.read_slice(b"t)\n(assert (> x 0))").unwrap();
+/// reader.read_eof().unwrap();
+/// // the reader is reset and can read another script
+/// reader.read_all(b"(check-sat)").unwrap();
+/// ```
 pub struct SmtReader<'a, H: SmtHandler + ?Sized, P: SmtParse<H> = SmtScriptParser<H>> {
     lexer: SmtLexer<SmtParseAdapter<'a, H, P>>,
 }
@@ -232,10 +257,12 @@ impl<'a, H: SmtCommandHandler> SmtReader<'a, H> {
 impl<'a, H: SmtHandler + ?Sized, P: SmtParse<H>> SmtReader<'a, H, P> {
     /// Creates a reader of the input `parser` accepts, over `handler`.
     ///
-    /// The version passed is the initial one.
-    /// Parsers may request the lexer to change versions,
-    /// and the lexer will always comply.
-    /// No library parser changes versions except for [`SmtScriptParser`].
+    /// The input is read in `version`. Of the library parsers, only [`SmtScriptParser`] changes
+    /// it, on a version declaration.
+    ///
+    /// The input must be exactly what the parser accepts: a token after it is a lexical error of
+    /// the kind [`UnexpectedTrailingToken`](SmtLexicalErrorKind::UnexpectedTrailingToken), and
+    /// input that ends before it is a syntax error.
     pub fn new(handler: &'a mut H, parser: P, version: SmtVersion) -> Self {
         let lexer = SmtLexer::new(SmtParseAdapter::new(handler, parser), version);
         Self { lexer }

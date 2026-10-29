@@ -11,6 +11,9 @@ use crate::{
 };
 
 /// Parses an S-expression.
+///
+/// Returns the S-expression that [`handle_s_expr`](crate::SmtHandler::handle_s_expr) returns for
+/// it, having handled the S-expressions inside it first.
 pub struct SmtSExprParser<H: SmtHandler> {
     _priv: std::marker::PhantomData<H>,
 }

@@ -48,6 +48,9 @@ pub enum SmtLexicalExpected {
 }
 
 /// Error that forced lexing to stop.
+///
+/// Its [`Display`](fmt::Display) gives the line and the column counted from one, while
+/// [`SmtLocation`] counts them from zero.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmtLexerError<E> {
     kind: SmtLexerErrorKind<E>,
@@ -212,6 +215,9 @@ impl<E: Error + 'static> Error for SmtLexerError<E> {
 }
 
 /// Error that forced lexing from a buffered reader or a file to stop.
+///
+/// Its [`Display`](fmt::Display) gives the line and the column counted from one, while
+/// [`SmtLocation`] counts them from zero.
 #[derive(Debug)]
 pub struct SmtLexerReadError<E> {
     kind: SmtLexerReadErrorKind<E>,

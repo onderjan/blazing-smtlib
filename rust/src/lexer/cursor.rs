@@ -41,7 +41,10 @@ impl<'a> SmtLexerToken<'a> {
         }
     }
 
-    /// Returns the content of the token.
+    /// Returns the content of the token, as the lexicon type of its category holds it.
+    ///
+    /// For example, the content is `b"a b"` for `|a b|` and `b"named"` for `:named`, and empty for
+    /// the end of the input.
     #[inline]
     pub fn content(&self) -> &'a [u8] {
         match self.entry {

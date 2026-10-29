@@ -996,6 +996,8 @@ impl<N: SmtNodeTypes + ?Sized> SmtFunctionSignaturesBuf<N> {
     }
 
     /// Adds a parameter to the last signature pushed.
+    ///
+    /// Panics if no signature has been pushed.
     pub fn push_param(&mut self, name: SmtSymbol, sort: N::Sort) {
         assert!(
             !self.names.is_empty(),
@@ -1379,6 +1381,8 @@ impl<N: SmtNodeTypes + ?Sized> SmtConstructorsBuf<N> {
     }
 
     /// Adds a selector to the last constructor pushed.
+    ///
+    /// Panics if no constructor has been pushed.
     pub fn push_selector(&mut self, name: SmtSymbol, sort: N::Sort) {
         let index = self
             .names

@@ -15,11 +15,9 @@ use crate::{
 
 /// Current state of library parsers.
 ///
-/// Parsers that are constructed multiple times in locations where their use
-/// does not overlap can have unnecessarily duplicated resources (e.g.
-/// collections). This structure is only constructed once (usually by
-/// [`SmtParseAdapter`](super::SmtParseAdapter)) for the root parser and
-/// propagated to smaller parsers.
+/// A parser receives the state in [`SmtParse::parse`](super::SmtParse::parse) and passes it on
+/// to the parsers it drives. The state is created once for the root parser, usually by
+/// [`SmtParseAdapter`](super::SmtParseAdapter).
 pub struct SmtParseState<H: SmtHandler + ?Sized> {
     pub(crate) arena: Arena<H>,
     pub(crate) ident_slot: IdentSlot,

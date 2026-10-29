@@ -310,7 +310,8 @@ pub trait SmtHandler {
     /// The binders are `let`, the quantifiers, `lambda`, and the cases of `match`. The body of a
     /// binder is handled between its start and its end, so the handler can bring the bound
     /// variables into scope at the start and keep in the scope what it needs to restore at the
-    /// end, e.g. the bindings that the bound variables shadow.
+    /// end, e.g. the bindings that the bound variables shadow. If reading fails within a binder,
+    /// its end method is not called.
     ///
     /// A bound variable shadows the variables and user-defined function symbols of the same name
     /// in the enclosing scopes, but SMT-LIB prohibits it from having the name of a theory function
@@ -1287,7 +1288,7 @@ fn unsupported<T, E>(command: SmtCommandNameReserved) -> Result<T, SmtPartialCom
 /// [`SmtPartialCommandError::Unsupported`] for a standard command or with
 /// [`SmtPartialCommandError::UnsupportedNonstandard`] for a nonstandard command.
 ///
-/// The documentation of [`SmtCommandHandler`] has an example.
+/// See [`SmtCommandHandler`] for an example.
 pub trait SmtPartialCommandHandler:
     SmtHandler<Error = SmtPartialCommandError<Self::HandlerError>>
 {
