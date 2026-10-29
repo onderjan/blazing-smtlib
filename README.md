@@ -26,8 +26,13 @@ with generative AI used to port the code (as mechanically as possible).
 The SMT-LIB corpus and library tests are used to check that both behave
 identically.
 
-Commits are always done by a human, who reviews any generative-AI code.
-Any commit that non-trivially uses generative AI either starts with 
+Documentation (including examples) is either human-written or drafted
+by generative AI and reviewed, then reworked if necessary. The Lean
+documentation is ported from the Rust documentation by generative AI,
+changed only where needed due to the language differences.
+
+Commits are always done by a human, who reviews any generative-AI output.
+Any commit that non-trivially uses generative AI either starts with
 `Let <AI>...` (legacy style) or is signed off like so (new style):
 
 ```

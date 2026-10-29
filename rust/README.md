@@ -81,7 +81,9 @@ The core library code is human-written, with the shape of its API decided by the
 maintainer. Generative AI is used only for experiments and for carefully
 reviewed changes where the semantic shape is clear but implementing them by hand
 is cumbersome (when explicitly prompted to do them). Generative AI is used to
-write benchmarks and tests (including unit tests).
+write benchmarks and tests (including unit tests). Documentation (including
+examples) is either human-written or drafted by generative AI and reviewed, then
+reworked if necessary.
 
 See the [repository](https://github.com/onderjan/blazing-smtlib) for more
 information.
