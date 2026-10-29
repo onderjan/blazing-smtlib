@@ -1,5 +1,5 @@
 name = "bsmtlib"
-version = "0.1.0-alpha.3"
+version = "0.1.0"
 defaultTargets = ["BSmtLib", "BSmtLibSpec", "BSmtLibSpecFacts", "BSmtLibFacts"]
 
 # the library
