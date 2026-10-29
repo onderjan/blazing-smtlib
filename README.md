@@ -1,47 +1,37 @@
 # blazing-smtlib & BSmtLib: Fast, safe, dependency-free SMT-LIB parsing
 
-**blazing-smtlib** is a high-performance strict parsing library for
-[SMT-LIB 2](https://smt-lib.org/) in Rust, with no dependencies other than
-[std](https://doc.rust-lang.org/std/) and no unsafe code. SMT-LIB versions 2.0,
-2.5, 2.6, and 2.7 are supported, with 2.0 disabled by default due to its
-deprecated status. The library is designed for composability and, in addition
-to reading SMT-LIB scripts, supports reading and writing of e.g. bare SMT-LIB
-terms, commands, or full SMT-LIB solver responses using custom parsers.
-
+**blazing-smtlib** is a high-performance strict parsing library for 
+[SMT-LIB 2](https://smt-lib.org/) in Rust with no dependencies and no 
+unsafe code.
 **BSmtLib** is a port of **blazing-smtlib** to Lean 4, with the same
-architecture and public interface, adapted to Lean where needed. It has no
-dependencies other than the Lean standard library, is panic-free, and is proven
-to satisfy our formalised reading of the SMT-LIB standard.
+architecture and public interface, adapted to Lean where needed.
 
 ## Repository structure
 
-- [`rust/`](rust/README.md) – **blazing-smtlib**: the crate, its examples,
-  tests, and benchmarks; published on
-  [crates.io](https://crates.io/crates/blazing-smtlib) with its documentation on
-  [docs.rs](https://docs.rs/blazing-smtlib).
-- [`lean/`](lean/README.md) – **BSmtLib**: the library, the specification
-  (`BSmtLibSpec`), the proofs (`Facts`), and the audit of the build.
-- [`tools/`](tools/) – the drivers that run the Rust tests against **BSmtLib**
-  (`lean-driver`) and answer the same requests with **blazing-smtlib**
-  (`rust-lex-driver`).
+- [`rust/`](rust/README.md) – **blazing-smtlib**, the Rust library.
+  - [See the README.](rust/README.md)
+  - Published on [crates.io](https://crates.io/crates/blazing-smtlib).
+  - Documentation available on [docs.rs](https://docs.rs/blazing-smtlib).
+- [`lean/`](lean/README.md) – **BSmtLib**, the Lean port of the library.
+  - [See the README.](lean/README.md)
+- [`tools/`](tools/) – Tools for running Rust tests against **BSmtLib**.
 
-## Testing
+## Usability
 
-The Rust tests in `rust/tests` test both **blazing-smtlib** and **BSmtLib**:
-**blazing-smtlib** by default and **BSmtLib** through a driver
-(`tools/lean-driver`) that answers their requests with the Lean lexer,
-parser, and writer, as described in
-[`lean/driver-protocol.md`](lean/driver-protocol.md):
+Both **blazing-smtlib** and **BSmtLib** are zero-dependency libraries that do
+not use any unsafe code and are not susceptible to stack overflow by design.
+Additionally, **BSmtLib** is panic-free.
 
-```
-cd tools/lean-driver && lake build && cd ../../rust
-BLAZING_SMTLIB_LEAN_DRIVER=../tools/lean-driver/.lake/build/bin/lean-driver cargo test
-```
-
-Beyond the tests, both libraries behave identically on every file of the 2025
-SMT-LIB benchmark corpus.
+The libraries implement the whole syntax of SMT-LIB scripts for versions 2.0,
+2.5, 2.6, and 2.7, including switching between versions, and can parse all files
+from the 2025 SMT-LIB benchmark corpus. Additional SMT-LIB grammar constructs
+such as nonstandard commands or solver responses can be read using custom
+parsers.
 
 ## Speed and memory usage
+
+The libraries are optimised for speed, with a custom-written fast-path lexer,
+token batching, zero-copy tokens, and resource arenas.
 
 | Library                   | Lexing (MB/s) | Parsing (MB/s) |
 | ------------------------- | ------------: | -------------: |
