@@ -58,8 +58,10 @@ deeply nested input as its parsers nest into SMT-LIB constructs on the heap.
 The library is optimised for speed, with a custom-written fast-path lexer, token
 batching, zero-copy tokens, and resource arenas. In a 14-job parallel run on AMD
 Ryzen 9 9950X3D, given 9201 files sized from 200 kB to 200 MB from the 2025
-SMT-LIB benchmark corpus, each read from memory, it lexed at 1134 MB/s and
-parsed at 497 MB/s (geometric mean over files).
+SMT-LIB benchmark corpus
+([non-incremental](https://zenodo.org/records/16740866) and
+[incremental](https://zenodo.org/records/15493096)), each read from memory, it
+lexed at 1134 MB/s and parsed at 497 MB/s (geometric mean over files).
 
 Parsers provided by the library call handlers in a streaming fashion. A parser
 thus typically consumes a negligible amount of memory compared to a
